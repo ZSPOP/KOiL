@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -87,7 +88,15 @@ fun OilPriceDetailScreen(
                 imageVector = MiuixIcons.Back,
                 contentDescription = null,
                 tint = MiuixTheme.colorScheme.onBackground,
-                modifier = Modifier.clickable(onClick = onBack).padding(8.dp).size(24.dp),
+                modifier = Modifier
+                    // indication=null：去掉点击时的方形选中色卡（仅保留响应，无背景高亮）
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onBack,
+                    )
+                    .padding(8.dp)
+                    .size(24.dp),
             )
         },
     ) { _, topPadding, scrollBehavior, _ ->
@@ -180,7 +189,6 @@ fun OilPriceDetailScreen(
                                 label = stringResource(R.string.koil_pdb_latest_price),
                                 value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
                                 valueColor = MiuixTheme.colorScheme.onBackground,
-                                valueFontSize = 22.sp,
                             )
                             SummaryCell(
                                 modifier = Modifier.weight(1f),
