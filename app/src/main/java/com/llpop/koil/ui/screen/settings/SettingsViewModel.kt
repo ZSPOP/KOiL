@@ -170,11 +170,18 @@ class SettingsViewModel(
             }
             val pendingCount = pendingDao.countPending()
 
-            // 完整性缺口：窗口日覆盖数 < "今年已发生窗口数" 的省份数（阈值不含未来窗口，
-            // 否则所有省都会因"未来窗口尚无记录"而误报）
-            val incompleteProvinceCount = if (adjustmentCount > 0) {
+            // 完整性缺口：阈值 = "已调价窗口数"（排除搁浅窗口——搁浅不写记录，
+            // 计入会让所有省都差几个而误报），再容忍 2 个窗口的数据拉取缺口（各省数据源偶发缺窗口）
+            // 窗口是否调价过：窗口日 +1 在库内有记录（生效日 = 窗口日 + 1 天）
+            val adjustedWindowCount = windowDates.count { w ->
+                w <= todayStr && runCatching {
+                    priceDao.getByDate(LocalDate.parse(w).plusDays(1).toString()) != null
+                }.getOrDefault(false)
+            }
+            val incompleteProvinceCount = if (adjustedWindowCount > 0) {
+                val threshold = adjustedWindowCount - 2
                 OilPriceDbSyncer.PROVINCES.count { province ->
-                    runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0) < adjustmentCount
+                    runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0) < threshold
                 }
             } else {
                 0
