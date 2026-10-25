@@ -251,8 +251,8 @@
     <string name="koil_pdb_net_change">今年淨漲跌</string>
     <string name="koil_pdb_net_up">上漲 ¥%1$.2f</string>
     <string name="koil_pdb_net_down">下調 ¥%1$.2f</string>
-    <string name="koil_pdb_up">上調 +%1$.2f</string>
-    <string name="koil_pdb_down">下調 -%1$.2f</string>
+    <string name="koil_pdb_up">上調 ¥%1$.2f</string>
+    <string name="koil_pdb_down">下調 ¥%1$.2f</string>
     <string name="koil_pdb_flat">維持不變</string>
     <string name="koil_pdb_first_base">基準價</string>
     <string name="koil_pdb_view_detail">查看調價記錄</string>

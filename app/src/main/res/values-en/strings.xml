@@ -251,8 +251,8 @@
     <string name="koil_pdb_net_change">Net change (YTD)</string>
     <string name="koil_pdb_net_up">Up ¥%1$.2f</string>
     <string name="koil_pdb_net_down">Down ¥%1$.2f</string>
-    <string name="koil_pdb_up">Up +%1$.2f</string>
-    <string name="koil_pdb_down">Down -%1$.2f</string>
+    <string name="koil_pdb_up">Up ¥%1$.2f</string>
+    <string name="koil_pdb_down">Down ¥%1$.2f</string>
     <string name="koil_pdb_flat">Unchanged</string>
     <string name="koil_pdb_first_base">Baseline</string>
     <string name="koil_pdb_view_detail">View adjustments</string>

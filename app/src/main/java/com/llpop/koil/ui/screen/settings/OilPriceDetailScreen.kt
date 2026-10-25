@@ -4,7 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +18,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -40,7 +41,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -54,7 +57,7 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.ChevronBackward
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
@@ -79,7 +82,7 @@ fun OilPriceDetailScreen(
         title = stringResource(R.string.koil_pdb_detail_title),
         navigationIcon = {
             Icon(
-                imageVector = MiuixIcons.ChevronBackward,
+                imageVector = MiuixIcons.Back,
                 contentDescription = null,
                 tint = MiuixTheme.colorScheme.onBackgroundVariant,
                 modifier = Modifier.clickable(onClick = onBack).padding(8.dp).size(18.dp),
@@ -95,54 +98,30 @@ fun OilPriceDetailScreen(
             Spacer(Modifier.height(topPadding))
             Spacer(Modifier.height(4.dp))
 
-            // —— 省份选择（横向滑动 chips + 右侧渐隐/箭头提示）——
-            // 提示画在 LazyRow 自身的 drawWithContent 绘制层：只画不拦截触摸，
-            // 滑动/点击手势始终落在 chips 上（此前用兄弟节点覆盖会挡触摸）。
-            val provinceListState = rememberLazyListState()
+            // —— 省份选择（横向滑动 chips）——
+            // 用最朴素的基础 horizontalScroll（非 LazyRow）：排除懒加载/绘制层/兄弟覆盖
+            // 一切可能干扰手势的因素，保证横向滑动必定生效；进入时估算滚动到当前省。
+            val provinceScrollState = rememberScrollState()
             var provinceInitialScroll by remember { mutableStateOf(true) }
+            val density = LocalDensity.current
             LaunchedEffect(state.province) {
                 if (provinceInitialScroll) {
                     val idx = state.provinces.indexOf(state.province)
-                    if (idx >= 0) provinceListState.animateScrollToItem(idx)
+                    if (idx >= 0) {
+                        // chip 宽约 52dp（2-3 字）+ 间距 8dp
+                        val offsetPx = with(density) { idx * 60.dp.roundToPx() }
+                        provinceScrollState.scrollTo(offsetPx)
+                    }
                     provinceInitialScroll = false
                 }
             }
-            val provinceHintColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
-            LazyRow(
-                state = provinceListState,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(end = 44.dp),
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .drawWithContent {
-                        drawContent()
-                        // 右侧渐隐遮罩
-                        val gradW = size.width * 0.28f
-                        drawRect(
-                            brush = Brush.horizontalGradient(
-                                0f to Color.Transparent,
-                                1f to surfaceColor,
-                                startX = size.width - gradW,
-                                endX = size.width,
-                            ),
-                        )
-                        // 半透明右箭头提示
-                        val cx = size.width - 12.dp.toPx()
-                        val cy = size.height / 2f
-                        val s = 4.5.dp.toPx()
-                        val arrowPath = Path().apply {
-                            moveTo(cx - s, cy - s)
-                            lineTo(cx + s * 0.6f, cy)
-                            lineTo(cx - s, cy + s)
-                            close()
-                        }
-                        drawPath(
-                            path = arrowPath,
-                            color = provinceHintColor,
-                        )
-                    },
+                    .horizontalScroll(provinceScrollState),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.provinces, key = { it }) { p ->
+                state.provinces.forEach { p ->
                     ProvinceChip(
                         label = p,
                         selected = p == state.province,
@@ -345,13 +324,38 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
                     val step = wPx / (prices.size - 1)
                     return ((px - padLpx) / step).roundToInt().coerceIn(0, prices.size - 1)
                 }
-                // 滑动跟随：手指在曲线上拖动时实时显示该点日期+价格；松手保留最后查看的点
-                detectDragGestures(
-                    onDragStart = { pos -> selectedIndex = nearestIndex(pos.x) },
-                    onDragCancel = { selectedIndex = null },
-                ) { change, _ ->
-                    change.consume()
-                    selectedIndex = nearestIndex(change.position.x)
+                // 点击 + 横向拖动跟随：按住/横向拖动实时显示该点日期+价格；
+                // 纵向拖动不消费，让给外层滚动容器正常滚页
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var dragging = false
+                    val slop = viewConfiguration.touchSlop
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (change.isConsumed) break // 父级已消费（纵向滚动中）
+                        val pos = change.position
+                        if (!dragging) {
+                            val dx = pos.x - down.position.x
+                            val dy = pos.y - down.position.y
+                            // 横向意图（|dx| >= |dy|）且越过 slop 才进入跟随
+                            if (dx * dx + dy * dy >= slop * slop && kotlin.math.abs(dx) >= kotlin.math.abs(dy)) {
+                                dragging = true
+                                change.consume()
+                                selectedIndex = nearestIndex(pos.x)
+                            }
+                        } else {
+                            change.consume()
+                            selectedIndex = nearestIndex(pos.x)
+                        }
+                        if (change.changedToUp()) {
+                            if (!dragging) {
+                                // 纯点击：显示该点
+                                selectedIndex = nearestIndex(down.position.x)
+                            }
+                            break
+                        }
+                    }
                 }
             },
     ) {

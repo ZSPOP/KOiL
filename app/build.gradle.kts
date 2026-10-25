@@ -35,8 +35,8 @@ android {
         applicationId = "com.llpop.koil"
         minSdk = 33
         targetSdk = 37
-        versionCode = 165
-        versionName = "1.4.160"
+        versionCode = 166
+        versionName = "1.4.161"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
