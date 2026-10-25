@@ -75,7 +75,7 @@ fun OilPriceDetailScreen(
     val surfaceColor = MiuixTheme.colorScheme.surface
 
     KOiLScreenScaffold(
-        title = stringResource(R.string.pdb_detail_title),
+        title = stringResource(R.string.koil_pdb_detail_title),
         navigationIcon = {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -172,7 +172,7 @@ fun OilPriceDetailScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = stringResource(R.string.pdb_detail_empty),
+                        text = stringResource(R.string.koil_pdb_detail_empty),
                         fontSize = 14.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -194,20 +194,20 @@ fun OilPriceDetailScreen(
                     ) {
                         SummaryCell(
                             modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.pdb_up_count),
-                            value = stringResource(R.string.pdb_count_times, state.upCount),
+                            label = stringResource(R.string.koil_pdb_up_count),
+                            value = stringResource(R.string.koil_pdb_count_times, state.upCount),
                             valueColor = UpColor,
                         )
                         SummaryCell(
                             modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.pdb_down_count),
-                            value = stringResource(R.string.pdb_count_times, state.downCount),
+                            label = stringResource(R.string.koil_pdb_down_count),
+                            value = stringResource(R.string.koil_pdb_count_times, state.downCount),
                             valueColor = DownColor,
                         )
                         SummaryCell(
                             modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.pdb_stranded_count),
-                            value = stringResource(R.string.pdb_count_times, state.strandedCount),
+                            label = stringResource(R.string.koil_pdb_stranded_count),
+                            value = stringResource(R.string.koil_pdb_count_times, state.strandedCount),
                             valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                     }
@@ -225,13 +225,13 @@ fun OilPriceDetailScreen(
                     ) {
                         SummaryCell(
                             modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.pdb_net_change),
+                            label = stringResource(R.string.koil_pdb_net_change),
                             value = (if (state.netChange >= 0) "+" else "-") + "¥%.2f".format(kotlin.math.abs(state.netChange)),
                             valueColor = if (state.netChange >= 0) UpColor else DownColor,
                         )
                         SummaryCell(
                             modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.pdb_latest_price),
+                            label = stringResource(R.string.koil_pdb_latest_price),
                             value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
                             valueColor = MiuixTheme.colorScheme.onBackground,
                         )
@@ -524,14 +524,14 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
         when {
             diff == null -> {
                 Text(
-                    text = stringResource(R.string.pdb_first_base),
+                    text = stringResource(R.string.koil_pdb_first_base),
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
             }
             diff > 0.001 -> {
                 Text(
-                    text = stringResource(R.string.pdb_up, diff),
+                    text = stringResource(R.string.koil_pdb_up, diff),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = UpColor,
@@ -539,7 +539,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             }
             diff < -0.001 -> {
                 Text(
-                    text = stringResource(R.string.pdb_down, -diff),
+                    text = stringResource(R.string.koil_pdb_down, -diff),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = DownColor,
@@ -547,7 +547,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             }
             else -> {
                 Text(
-                    text = stringResource(R.string.pdb_flat),
+                    text = stringResource(R.string.koil_pdb_flat),
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )

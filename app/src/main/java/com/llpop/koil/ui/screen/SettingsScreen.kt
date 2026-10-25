@@ -131,7 +131,7 @@ fun SettingsScreen(
     }
 
     KOiLScreenScaffold(
-        title = stringResource(R.string.set_title),
+        title = stringResource(R.string.koil_set_title),
         modifier = modifier,
     ) { _, topPadding, scrollBehavior, _ ->
         Column(
@@ -158,7 +158,7 @@ fun SettingsScreen(
             Spacer(Modifier.height(topPadding))
 
         // ===== 通用 =====
-        SectionTitle(stringResource(R.string.set_section_general))
+        SectionTitle(stringResource(R.string.koil_set_section_general))
         SettingsCard {
             // 外观（主题模式）：对齐 Mishka 下拉弹窗选择（OverlayDropdownPreference）
             val themeModes = AppSettings.ThemeMode.entries
@@ -166,7 +166,7 @@ fun SettingsScreen(
             OverlayDropdownPreference(
                 items = themeModes.map { themeLabel(it) },
                 selectedIndex = themeModeIdx,
-                title = stringResource(R.string.set_appearance),
+                title = stringResource(R.string.koil_set_appearance),
                 summary = themeModes.getOrElse(themeModeIdx) { themeModes.first() }
                     .let { themeLabel(it) },
                 onSelectedIndexChange = { index ->
@@ -180,7 +180,7 @@ fun SettingsScreen(
             OverlayDropdownPreference(
                 items = languages.map { langLabel(it) },
                 selectedIndex = languageIdx,
-                title = stringResource(R.string.set_language),
+                title = stringResource(R.string.koil_set_language),
                 summary = languages.getOrElse(languageIdx) { languages.first() }
                     .let { langLabel(it) },
                 onSelectedIndexChange = { index ->
@@ -195,11 +195,11 @@ fun SettingsScreen(
         // Mishka 的底栏模式位于独立二级页「外观与主题」，其 Overlay 弹窗依赖 Scaffold 内
         // MiuixPopupHost 渲染；KOiL 为「外层 Scaffold + Pager + 页内 Scaffold」双层嵌套，
         // Overlay 宿主层级错位导致点击闪退。Window 版同样式同交互，但走系统 Dialog，不闪退。
-        SectionTitle(stringResource(R.string.set_section_nav))
+        SectionTitle(stringResource(R.string.koil_set_section_nav))
         SettingsCard {
             SettingSwitchRow(
-                            title = stringResource(R.string.set_floating_bar),
-                subtitle = stringResource(R.string.set_floating_bar_sub),
+                            title = stringResource(R.string.koil_set_floating_bar),
+                subtitle = stringResource(R.string.koil_set_floating_bar_sub),
                 checked = uiState.floatingBottomBar,
                 onCheckedChange = viewModel::setFloatingBottomBar,
             )
@@ -213,7 +213,7 @@ fun SettingsScreen(
                 OverlayDropdownPreference(
                     items = floatingStyles.map { styleLabel(it) },
                     selectedIndex = floatingStyleIdx,
-                    title = stringResource(R.string.set_floating_style),
+                    title = stringResource(R.string.koil_set_floating_style),
                     summary = floatingStyles.getOrElse(floatingStyleIdx) { floatingStyles.first() }
                         .let { styleLabel(it) },
                     onSelectedIndexChange = { index ->
@@ -229,7 +229,7 @@ fun SettingsScreen(
             OverlayDropdownPreference(
                 items = barModes.map { modeLabel(it) },
                 selectedIndex = barModeIdx,
-                title = stringResource(R.string.set_bar_mode),
+                title = stringResource(R.string.koil_set_bar_mode),
                 summary = barModes.getOrElse(barModeIdx) { barModes.first() }
                     .let { modeLabel(it) },
                 onSelectedIndexChange = { index ->
@@ -240,12 +240,12 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ===== 录入 =====
-        SectionTitle(stringResource(R.string.set_section_entry))
+        SectionTitle(stringResource(R.string.koil_set_section_entry))
         SettingsCard {
             // 定位开关：开启后自动定位省份并写入默认省份
             SettingSwitchRow(
-                title = stringResource(R.string.set_location),
-                subtitle = stringResource(R.string.set_location_sub),
+                title = stringResource(R.string.koil_set_location),
+                subtitle = stringResource(R.string.koil_set_location_sub),
                 checked = uiState.locationEnabled,
                 onCheckedChange = { on ->
                     viewModel.setLocationEnabled(on)
@@ -271,9 +271,9 @@ fun SettingsScreen(
                 OverlayDropdownPreference(
                     items = provinces,
                     selectedIndex = provinceIdx,
-                    title = stringResource(R.string.set_default_province),
+                    title = stringResource(R.string.koil_set_default_province),
                     summary = stringResource(
-                        R.string.set_default_province_sum,
+                        R.string.koil_set_default_province_sum,
                         provinces.getOrElse(provinceIdx) { provinces.first() },
                     ),
                     onSelectedIndexChange = { index ->
@@ -283,22 +283,22 @@ fun SettingsScreen(
             }
             SettingDivider()
             SettingSwitchRow(
-                title = stringResource(R.string.set_price_alert),
-                subtitle = stringResource(R.string.set_price_alert_sub),
+                title = stringResource(R.string.koil_set_price_alert),
+                subtitle = stringResource(R.string.koil_set_price_alert_sub),
                 checked = uiState.priceAlert,
                 onCheckedChange = viewModel::setPriceAlert,
             )
             SettingDivider()
             SettingSwitchRow(
-                title = stringResource(R.string.set_price_push),
-                subtitle = stringResource(R.string.set_price_push_sub),
+                title = stringResource(R.string.koil_set_price_push),
+                subtitle = stringResource(R.string.koil_set_price_push_sub),
                 checked = uiState.pricePush,
                 onCheckedChange = viewModel::setPricePush,
             )
             SettingDivider()
             SettingSwitchRow(
-                title = stringResource(R.string.set_keep_grade),
-                subtitle = stringResource(R.string.set_keep_grade_sub),
+                title = stringResource(R.string.koil_set_keep_grade),
+                subtitle = stringResource(R.string.koil_set_keep_grade_sub),
                 checked = uiState.keepLastGrade,
                 onCheckedChange = viewModel::setKeepLastGrade,
             )
@@ -310,9 +310,9 @@ fun SettingsScreen(
                 OverlayDropdownPreference(
                     items = oilGrades.map { "${it}#" },
                     selectedIndex = gradeIdx,
-                    title = stringResource(R.string.set_default_grade),
+                    title = stringResource(R.string.koil_set_default_grade),
                     summary = stringResource(
-                        R.string.set_default_grade_sum,
+                        R.string.koil_set_default_grade_sum,
                         oilGrades.getOrElse(gradeIdx) { oilGrades.first() },
                     ),
                     onSelectedIndexChange = { index ->
@@ -324,11 +324,11 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ===== 提醒与校验 =====
-        SectionTitle(stringResource(R.string.set_section_remind))
+        SectionTitle(stringResource(R.string.koil_set_section_remind))
         SettingsCard {
             StepperInputRow(
-                title = stringResource(R.string.set_abnormal),
-                summary = stringResource(R.string.set_abnormal_sum, uiState.abnormalThreshold.toInt()),
+                title = stringResource(R.string.koil_set_abnormal),
+                summary = stringResource(R.string.koil_set_abnormal_sum, uiState.abnormalThreshold.toInt()),
                 value = uiState.abnormalThreshold.toInt(),
                 range = 0..50,
                 step = 1,
@@ -338,8 +338,8 @@ fun SettingsScreen(
             )
             SettingDivider()
             StepperInputRow(
-                title = stringResource(R.string.set_deviation),
-                summary = stringResource(R.string.set_deviation_sum, uiState.deviationThreshold.toInt()),
+                title = stringResource(R.string.koil_set_deviation),
+                summary = stringResource(R.string.koil_set_deviation_sum, uiState.deviationThreshold.toInt()),
                 value = uiState.deviationThreshold.toInt(),
                 range = 1..50,
                 step = 1,
@@ -349,8 +349,8 @@ fun SettingsScreen(
             )
             SettingDivider()
             StepperInputRow(
-                title = stringResource(R.string.set_tank),
-                summary = stringResource(R.string.set_tank_sub),
+                title = stringResource(R.string.koil_set_tank),
+                summary = stringResource(R.string.koil_set_tank_sub),
                 value = uiState.tankCapacity.toInt(),
                 range = 5..200,
                 step = 5,
@@ -362,7 +362,7 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ===== 历史油价数据库（Web 版大卡片排版） =====
-        SectionTitle(stringResource(R.string.set_section_price_db))
+        SectionTitle(stringResource(R.string.koil_set_section_price_db))
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
@@ -383,9 +383,9 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = if (priceDbStatus.versionLabel != "V——") {
-                            stringResource(R.string.pdb_db_title, priceDbStatus.versionLabel)
+                            stringResource(R.string.koil_pdb_db_title, priceDbStatus.versionLabel)
                         } else {
-                            stringResource(R.string.pdb_db_title_plain)
+                            stringResource(R.string.koil_pdb_db_title_plain)
                         },
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
@@ -396,7 +396,7 @@ fun SettingsScreen(
                 if (priceDbStatus.incompleteProvinceCount > 0) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = stringResource(R.string.pdb_incomplete, priceDbStatus.incompleteProvinceCount),
+                        text = stringResource(R.string.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount),
                         fontSize = 12.sp,
                         color = Color(0xFFE53935),
                     )
@@ -412,7 +412,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(R.string.pdb_view_detail),
+                        text = stringResource(R.string.koil_pdb_view_detail),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
                         color = KOiLColors.Primary,
@@ -433,25 +433,25 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Place,
                         value = priceDbStatus.provinceCount.toString(),
-                        label = stringResource(R.string.pdb_provinces),
+                        label = stringResource(R.string.koil_pdb_provinces),
                     )
                     StatQuadItem(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.LocalGasStation,
                         value = priceDbStatus.gradeCount.toString(),
-                        label = stringResource(R.string.pdb_grades),
+                        label = stringResource(R.string.koil_pdb_grades),
                     )
                     StatQuadItem(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.CalendarMonth,
                         value = priceDbStatus.adjustmentCount.toString(),
-                        label = stringResource(R.string.pdb_adjustments),
+                        label = stringResource(R.string.koil_pdb_adjustments),
                     )
                     StatQuadItem(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Storage,
                         value = priceDbStatus.total.toString(),
-                        label = stringResource(R.string.pdb_records),
+                        label = stringResource(R.string.koil_pdb_records),
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -474,11 +474,11 @@ fun SettingsScreen(
                             w1Short != null && w2Short != null -> {
                                 Text(
                                     text = if (priceDbStatus.windowStranded) {
-                                        stringResource(R.string.pdb_adjust_stranded, w1Short, latestShort, w2Short)
+                                        stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort, w2Short)
                                     } else if (priceDbStatus.adjustWindowPrice != null) {
-                                        stringResource(R.string.pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!, w2Short)
+                                        stringResource(R.string.koil_pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!, w2Short)
                                     } else {
-                                        stringResource(R.string.pdb_adjust_stranded, w1Short, latestShort, w2Short)
+                                        stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort, w2Short)
                                     },
                                     fontSize = 12.sp,
                                     lineHeight = 15.sp,
@@ -487,7 +487,7 @@ fun SettingsScreen(
                             }
                             w2Short != null -> {
                                 Text(
-                                    text = stringResource(R.string.pdb_next_only, w2Short),
+                                    text = stringResource(R.string.koil_pdb_next_only, w2Short),
                                     fontSize = 12.sp,
                                     lineHeight = 15.sp,
                                     color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -495,7 +495,7 @@ fun SettingsScreen(
                             }
                             else -> {
                                 Text(
-                                    text = stringResource(R.string.pdb_not_checked),
+                                    text = stringResource(R.string.koil_pdb_not_checked),
                                     fontSize = 12.sp,
                                     lineHeight = 15.sp,
                                     color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -504,7 +504,7 @@ fun SettingsScreen(
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = stringResource(R.string.pdb_last_update, lastCheckedText),
+                            text = stringResource(R.string.koil_pdb_last_update, lastCheckedText),
                             fontSize = 12.sp,
                             lineHeight = 15.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -536,7 +536,7 @@ fun SettingsScreen(
                             }
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                text = stringResource(if (priceDbUpdating) R.string.pdb_updating else R.string.pdb_update_now),
+                                text = stringResource(if (priceDbUpdating) R.string.koil_pdb_updating else R.string.koil_pdb_update_now),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White,
@@ -556,7 +556,7 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = stringResource(R.string.pdb_pending_title),
+                        text = stringResource(R.string.koil_pdb_pending_title),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
@@ -577,7 +577,7 @@ fun SettingsScreen(
                                 )
                                 Text(
                                     text = stringResource(
-                                        R.string.set_primary_secondary_price,
+                                        R.string.koil_set_primary_secondary_price,
                                         item.primaryPrice ?: 0.0,
                                         item.secondaryPrice ?: 0.0,
                                     ),
@@ -586,7 +586,7 @@ fun SettingsScreen(
                                 )
                             }
                             Text(
-                                text = stringResource(R.string.set_accept_primary),
+                                text = stringResource(R.string.koil_set_accept_primary),
                                 fontSize = 11.sp,
                                 color = KOiLColors.Primary,
                                 modifier = Modifier
@@ -594,7 +594,7 @@ fun SettingsScreen(
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                             Text(
-                                text = stringResource(R.string.set_accept_secondary),
+                                text = stringResource(R.string.koil_set_accept_secondary),
                                 fontSize = 11.sp,
                                 color = KOiLColors.Primary,
                                 modifier = Modifier
@@ -602,7 +602,7 @@ fun SettingsScreen(
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                             Text(
-                                text = stringResource(R.string.set_ignore),
+                                text = stringResource(R.string.koil_set_ignore),
                                 fontSize = 11.sp,
                                 color = Color(0xFFE53935),
                                 modifier = Modifier
@@ -628,14 +628,14 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.set_price_db_auto),
+                            text = stringResource(R.string.koil_set_price_db_auto),
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = stringResource(R.string.pdb_auto_sub),
+                            text = stringResource(R.string.koil_pdb_auto_sub),
                             fontSize = 11.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
@@ -651,40 +651,40 @@ fun SettingsScreen(
         Spacer(Modifier.height(16.dp))
 
         // ===== 数据 =====
-        SectionTitle(stringResource(R.string.set_section_data))
+        SectionTitle(stringResource(R.string.koil_set_section_data))
         SettingsCard {
             SettingRow(
-                            title = stringResource(R.string.set_export_records),
-                subtitle = stringResource(R.string.set_export_records_sub),
-                value = stringResource(R.string.act_export),
+                            title = stringResource(R.string.koil_set_export_records),
+                subtitle = stringResource(R.string.koil_set_export_records_sub),
+                value = stringResource(R.string.koil_act_export),
                 onClick = viewModel::exportCsv,
             )
             SettingDivider()
             SettingRow(
-                            title = stringResource(R.string.set_import_records),
-                subtitle = stringResource(R.string.set_import_records_sub),
-                value = stringResource(R.string.act_import),
+                            title = stringResource(R.string.koil_set_import_records),
+                subtitle = stringResource(R.string.koil_set_import_records_sub),
+                value = stringResource(R.string.koil_act_import),
                 onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
             )
             SettingDivider()
             SettingRow(
-                            title = stringResource(R.string.set_backup),
-                subtitle = stringResource(R.string.set_backup_sub),
-                value = stringResource(R.string.act_backup),
+                            title = stringResource(R.string.koil_set_backup),
+                subtitle = stringResource(R.string.koil_set_backup_sub),
+                value = stringResource(R.string.koil_act_backup),
                 onClick = viewModel::exportBackup,
             )
             SettingDivider()
             SettingRow(
-                            title = stringResource(R.string.set_export_price_history),
-                subtitle = stringResource(R.string.set_export_price_history_sub),
-                value = stringResource(R.string.act_export),
+                            title = stringResource(R.string.koil_set_export_price_history),
+                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
+                value = stringResource(R.string.koil_act_export),
                 onClick = viewModel::exportOilPriceHistory,
             )
             SettingDivider()
             SettingRow(
-                            title = stringResource(R.string.set_restore),
-                subtitle = stringResource(R.string.set_restore_sub),
-                value = stringResource(R.string.act_restore),
+                            title = stringResource(R.string.koil_set_restore),
+                subtitle = stringResource(R.string.koil_set_restore_sub),
+                value = stringResource(R.string.koil_act_restore),
                 onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
             )
         }
@@ -716,7 +716,7 @@ fun SettingsScreen(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = stringResource(R.string.set_footer, com.llpop.koil.BuildConfig.VERSION_NAME),
+                text = stringResource(R.string.koil_set_footer, com.llpop.koil.BuildConfig.VERSION_NAME),
                 fontSize = 11.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
             )
@@ -732,14 +732,14 @@ fun SettingsScreen(
     importPreview?.let { preview ->
         val activeTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
         val tabs = listOf(
-            stringResource(R.string.import_tab_valid, preview.valid.size) to preview.valid,
-            stringResource(R.string.import_tab_dup, preview.duplicates.size) to preview.duplicates,
-            stringResource(R.string.import_tab_conflict, preview.mileageConflicts.size) to preview.mileageConflicts,
-            stringResource(R.string.import_tab_error, preview.errors.size) to preview.errors,
+            stringResource(R.string.koil_import_tab_valid, preview.valid.size) to preview.valid,
+            stringResource(R.string.koil_import_tab_dup, preview.duplicates.size) to preview.duplicates,
+            stringResource(R.string.koil_import_tab_conflict, preview.mileageConflicts.size) to preview.mileageConflicts,
+            stringResource(R.string.koil_import_tab_error, preview.errors.size) to preview.errors,
         )
         com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissImportPreview) {
             Column {
-                Text(stringResource(R.string.import_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
+                Text(stringResource(R.string.koil_import_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
@@ -784,8 +784,8 @@ fun SettingsScreen(
                                     Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = when (key) {
-                                            "format_error" -> stringResource(R.string.msg_format_error)
-                                            "duplicate" -> stringResource(R.string.msg_duplicate)
+                                            "format_error" -> stringResource(R.string.koil_msg_format_error)
+                                            "duplicate" -> stringResource(R.string.koil_msg_duplicate)
                                             else -> key
                                         },
                                         fontSize = 10.sp,
@@ -796,8 +796,8 @@ fun SettingsScreen(
                                     Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = when (key) {
-                                            "lt_prev" -> stringResource(R.string.msg_mileage_lt_prev, r.conflictArg)
-                                            "gt_next" -> stringResource(R.string.msg_mileage_gt_next, r.conflictArg)
+                                            "lt_prev" -> stringResource(R.string.koil_msg_mileage_lt_prev, r.conflictArg)
+                                            "gt_next" -> stringResource(R.string.koil_msg_mileage_gt_next, r.conflictArg)
                                             else -> key
                                         },
                                         fontSize = 10.sp,
@@ -807,16 +807,16 @@ fun SettingsScreen(
                             }
                         }
                         if (tabs[activeTab.value].second.isEmpty()) {
-                            Text(stringResource(R.string.import_no_data), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(vertical = 20.dp))
+                            Text(stringResource(R.string.koil_import_no_data), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(vertical = 20.dp))
                         }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f).height(40.dp)) { Text(stringResource(R.string.common_cancel), fontSize = 13.sp) }
+                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f).height(40.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
                     Spacer(Modifier.width(10.dp))
                     Button(onClick = viewModel::confirmImport, modifier = Modifier.weight(1f).height(40.dp)) {
-                        Text(stringResource(R.string.import_confirm, preview.valid.size), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.koil_import_confirm, preview.valid.size), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -1157,54 +1157,54 @@ private fun SettingSwitchRow(
 
 @Composable
 private fun themeLabel(mode: AppSettings.ThemeMode) = when (mode) {
-    AppSettings.ThemeMode.SYSTEM -> stringResource(R.string.theme_system)
-    AppSettings.ThemeMode.LIGHT -> stringResource(R.string.theme_light)
-    AppSettings.ThemeMode.DARK -> stringResource(R.string.theme_dark)
+    AppSettings.ThemeMode.SYSTEM -> stringResource(R.string.koil_theme_system)
+    AppSettings.ThemeMode.LIGHT -> stringResource(R.string.koil_theme_light)
+    AppSettings.ThemeMode.DARK -> stringResource(R.string.koil_theme_dark)
 }
 
 @Composable
 private fun langLabel(lang: AppSettings.Language) = when (lang) {
-    AppSettings.Language.SYSTEM -> stringResource(R.string.lang_system)
-    AppSettings.Language.ZH_CN -> stringResource(R.string.lang_zh_cn)
-    AppSettings.Language.ZH_TW -> stringResource(R.string.lang_zh_tw)
-    AppSettings.Language.EN -> stringResource(R.string.lang_en)
+    AppSettings.Language.SYSTEM -> stringResource(R.string.koil_lang_system)
+    AppSettings.Language.ZH_CN -> stringResource(R.string.koil_lang_zh_cn)
+    AppSettings.Language.ZH_TW -> stringResource(R.string.koil_lang_zh_tw)
+    AppSettings.Language.EN -> stringResource(R.string.koil_lang_en)
 }
 
 @Composable
 private fun styleLabel(style: FloatingBottomBarStyle) = when (style) {
-    FloatingBottomBarStyle.Miuix -> stringResource(R.string.style_miuix)
-    FloatingBottomBarStyle.IosLike -> stringResource(R.string.style_ios)
+    FloatingBottomBarStyle.Miuix -> stringResource(R.string.koil_style_miuix)
+    FloatingBottomBarStyle.IosLike -> stringResource(R.string.koil_style_ios)
 }
 
 @Composable
 private fun modeLabel(mode: BottomBarMode) = when (mode) {
-    BottomBarMode.IconAndText -> stringResource(R.string.mode_icon_text)
-    BottomBarMode.IconOnly -> stringResource(R.string.mode_icon_only)
+    BottomBarMode.IconAndText -> stringResource(R.string.koil_mode_icon_text)
+    BottomBarMode.IconOnly -> stringResource(R.string.koil_mode_icon_only)
 }
 
 /** 把 ViewModel 给出的结果通知 key 翻译为当前语言文案 */
 @Composable
 private fun formatNotice(key: String, args: List<Any>): String = when (key) {
-    "adopted" -> stringResource(R.string.msg_adopted)
-    "ignored" -> stringResource(R.string.msg_ignored)
-    "adopt_failed" -> stringResource(R.string.msg_adopt_failed)
-    "pdb_update_failed" -> stringResource(R.string.msg_pdb_update_failed, args.getOrElse(0) { "" })
-    "price_db_empty" -> stringResource(R.string.msg_price_db_empty)
-    "price_exported" -> stringResource(R.string.msg_price_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
-    "export_failed" -> stringResource(R.string.msg_export_failed, args.getOrElse(0) { "" })
-    "no_records" -> stringResource(R.string.msg_no_records)
-    "records_exported" -> stringResource(R.string.msg_records_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
-    "cannot_read" -> stringResource(R.string.msg_cannot_read)
-    "file_empty" -> stringResource(R.string.msg_file_empty)
-    "missing_columns" -> stringResource(R.string.msg_missing_columns)
-    "parse_failed" -> stringResource(R.string.msg_parse_failed, args.getOrElse(0) { "" })
-    "import_done" -> stringResource(R.string.msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
-    "backup_no_records" -> stringResource(R.string.msg_backup_no_records)
-    "restore_done" -> stringResource(R.string.msg_restore_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
-    "restore_failed" -> stringResource(R.string.msg_restore_failed, args.getOrElse(0) { "" })
-    "no_records_backup" -> stringResource(R.string.msg_no_records_backup)
-    "backup_done" -> stringResource(R.string.msg_backup_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
-    "backup_failed" -> stringResource(R.string.msg_backup_failed, args.getOrElse(0) { "" })
+    "adopted" -> stringResource(R.string.koil_msg_adopted)
+    "ignored" -> stringResource(R.string.koil_msg_ignored)
+    "adopt_failed" -> stringResource(R.string.koil_msg_adopt_failed)
+    "pdb_update_failed" -> stringResource(R.string.koil_msg_pdb_update_failed, args.getOrElse(0) { "" })
+    "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
+    "price_exported" -> stringResource(R.string.koil_msg_price_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "export_failed" -> stringResource(R.string.koil_msg_export_failed, args.getOrElse(0) { "" })
+    "no_records" -> stringResource(R.string.koil_msg_no_records)
+    "records_exported" -> stringResource(R.string.koil_msg_records_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "cannot_read" -> stringResource(R.string.koil_msg_cannot_read)
+    "file_empty" -> stringResource(R.string.koil_msg_file_empty)
+    "missing_columns" -> stringResource(R.string.koil_msg_missing_columns)
+    "parse_failed" -> stringResource(R.string.koil_msg_parse_failed, args.getOrElse(0) { "" })
+    "import_done" -> stringResource(R.string.koil_msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
+    "backup_no_records" -> stringResource(R.string.koil_msg_backup_no_records)
+    "restore_done" -> stringResource(R.string.koil_msg_restore_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
+    "restore_failed" -> stringResource(R.string.koil_msg_restore_failed, args.getOrElse(0) { "" })
+    "no_records_backup" -> stringResource(R.string.koil_msg_no_records_backup)
+    "backup_done" -> stringResource(R.string.koil_msg_backup_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "backup_failed" -> stringResource(R.string.koil_msg_backup_failed, args.getOrElse(0) { "" })
     else -> key
 }
 

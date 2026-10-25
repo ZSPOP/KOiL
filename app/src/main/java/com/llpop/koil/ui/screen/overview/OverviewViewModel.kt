@@ -3,7 +3,7 @@ package com.llpop.koil.ui.screen.overview
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.llpop.koil.data.local.dao.KOiLRecordDao
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
@@ -103,7 +103,7 @@ class OverviewViewModel(
     private val recordDao: KOiLRecordDao,
     private val settings: AppSettings,
     private val syncer: OilPriceDbSyncer,
-    private val priceDao: FuelPriceDao,
+    private val priceDao: KOiLPriceDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OverviewUiState())

@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.llpop.koil.R
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.flow.first
 import org.koin.core.context.GlobalContext
@@ -40,7 +40,7 @@ class OilPriceSyncWorker(
         val koin = GlobalContext.get()
         val settings = koin.get<AppSettings>()
         if (!settings.pricePush.first()) return
-        val dao = koin.get<FuelPriceDao>()
+        val dao = koin.get<KOiLPriceDao>()
 
         // 1) 调价生效通知：默认省 + 默认油号的最新生效日变化（库内 grade 为完整标签，如"92号汽油"）
         val province = settings.defaultProvince.first()
@@ -57,15 +57,15 @@ class OilPriceSyncWorker(
             } else if (newest.effectiveDate != lastNotified) {
                 val prev = dao.getPrevious(province, grade)
                 val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
-                val title = context.getString(R.string.noti_title_price_adjust)
+                val title = context.getString(R.string.koil_noti_title_price_adjust)
                 val message = if (prev != null && prev.effectiveDate < newest.effectiveDate) {
                     context.getString(
-                        R.string.noti_msg_price_adjust,
+                        R.string.koil_noti_msg_price_adjust,
                         province, gradeLabel, prev.price, newest.price,
                     )
                 } else {
                     context.getString(
-                        R.string.noti_msg_price_adjust,
+                        R.string.koil_noti_msg_price_adjust,
                         province, gradeLabel, newest.price, newest.price,
                     )
                 }
@@ -85,8 +85,8 @@ class OilPriceSyncWorker(
             if (next == tomorrow && reminded != next) {
                 OilPriceNotifier.notify(
                     context,
-                    context.getString(R.string.noti_title_window_tomorrow),
-                    context.getString(R.string.noti_msg_window_tomorrow, next),
+                    context.getString(R.string.koil_noti_title_window_tomorrow),
+                    context.getString(R.string.koil_noti_msg_window_tomorrow, next),
                 )
                 settings.setPriceLastWindowReminded(next)
             }

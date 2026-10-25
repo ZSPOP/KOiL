@@ -102,7 +102,7 @@ fun AddScreen(
         uiState.locateMessage?.let {
             Toast.makeText(
                 context,
-                context.getString(R.string.add_locate_switched, it),
+                context.getString(R.string.koil_add_locate_switched, it),
                 Toast.LENGTH_SHORT,
             ).show()
             viewModel.clearLocateMessage()
@@ -126,7 +126,7 @@ fun AddScreen(
     }
 
     KOiLScreenScaffold(
-        title = stringResource(R.string.add_title),
+        title = stringResource(R.string.koil_add_title),
         modifier = modifier,
     ) { _, topPadding, scrollBehavior, _ ->
         Column(
@@ -184,7 +184,7 @@ fun AddScreen(
                     FormField(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Speed,
-                        label = stringResource(R.string.add_field_mileage),
+                        label = stringResource(R.string.koil_add_field_mileage),
                         value = uiState.mileage,
                         onValueChange = viewModel::setMileage,
                         keyboardType = KeyboardType.Number,
@@ -194,7 +194,7 @@ fun AddScreen(
                     FormField(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.WaterDrop,
-                        label = stringResource(R.string.add_field_oil_amount),
+                        label = stringResource(R.string.koil_add_field_oil_amount),
                         value = uiState.oilAmount,
                         onValueChange = viewModel::setOilAmount,
                         keyboardType = KeyboardType.Decimal,
@@ -208,7 +208,7 @@ fun AddScreen(
                     FormField(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Money,
-                        label = stringResource(R.string.add_field_payable),
+                        label = stringResource(R.string.koil_add_field_payable),
                         value = uiState.payableAmount,
                         onValueChange = viewModel::setPayableAmount,
                         keyboardType = KeyboardType.Decimal,
@@ -218,7 +218,7 @@ fun AddScreen(
                     FormField(
                         modifier = Modifier.weight(1f),
                         icon = Icons.Filled.Money,
-                        label = stringResource(R.string.add_field_actual),
+                        label = stringResource(R.string.koil_add_field_actual),
                         value = uiState.actualAmount,
                         onValueChange = viewModel::setActualAmount,
                         keyboardType = KeyboardType.Decimal,
@@ -248,7 +248,7 @@ fun AddScreen(
             ),
         ) {
             Text(
-                text = if (uiState.isAdding) stringResource(R.string.add_adding) else stringResource(R.string.add_add_record),
+                text = if (uiState.isAdding) stringResource(R.string.koil_add_adding) else stringResource(R.string.koil_add_add_record),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
             )
@@ -291,7 +291,7 @@ private fun ProvincePickerDialog(
     KOiLGlassDialog(show = true, onDismissRequest = onDismiss) {
         Column {
             Text(
-                text = stringResource(R.string.add_pick_province),
+                text = stringResource(R.string.koil_add_pick_province),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
@@ -342,7 +342,7 @@ private fun ProvincePickerDialog(
                     .fillMaxWidth()
                     .height(44.dp),
             ) {
-                Text(stringResource(R.string.common_cancel), fontSize = 14.sp)
+                Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp)
             }
         }
     }
@@ -357,14 +357,14 @@ private fun PermissionDialog(
     KOiLGlassDialog(show = true, onDismissRequest = onDismiss) {
         Column {
             Text(
-                text = stringResource(R.string.add_loc_permission_title),
+                text = stringResource(R.string.koil_add_loc_permission_title),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                text = stringResource(R.string.add_loc_permission_message),
+                text = stringResource(R.string.koil_add_loc_permission_message),
                 fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
@@ -381,14 +381,14 @@ private fun PermissionDialog(
                         contentColor = MiuixTheme.colorScheme.onBackground,
                     ),
                 ) {
-                    Text(stringResource(R.string.add_loc_cancel), fontSize = 14.sp)
+                    Text(stringResource(R.string.koil_add_loc_cancel), fontSize = 14.sp)
                 }
                 Button(
                     onClick = onGrant,
                     modifier = Modifier.weight(1f).height(44.dp),
                     colors = ButtonDefaults.buttonColors(color = KOiLColors.Primary, contentColor = Color.White),
                 ) {
-                    Text(stringResource(R.string.add_loc_grant), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.koil_add_loc_grant), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -428,13 +428,13 @@ private fun OilPriceCard(
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.add_province_price, uiState.viewProvince),
+                        text = stringResource(R.string.koil_add_province_price, uiState.viewProvince),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Text(
-                        text = stringResource(R.string.add_price_db_version, uiState.versionLabel),
+                        text = stringResource(R.string.koil_add_price_db_version, uiState.versionLabel),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -449,7 +449,7 @@ private fun OilPriceCard(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.MyLocation,
-                        contentDescription = stringResource(R.string.add_locate_cd),
+                        contentDescription = stringResource(R.string.koil_add_locate_cd),
                         tint = containerText,
                         modifier = Modifier.size(14.dp),
                     )
@@ -537,10 +537,10 @@ private fun OilPriceCard(
                 val perLiter = uiState.perLiterEquivalent
                 val rising = forecast != null && forecast > 0
                 val suggestion = when {
-                    rising -> stringResource(R.string.add_suggest_early)
-                    forecast != null -> stringResource(R.string.add_suggest_wait)
-                    avgTrend > 0.5 -> stringResource(R.string.add_suggest_early)
-                    avgTrend < -0.5 -> stringResource(R.string.add_suggest_wait)
+                    rising -> stringResource(R.string.koil_add_suggest_early)
+                    forecast != null -> stringResource(R.string.koil_add_suggest_wait)
+                    avgTrend > 0.5 -> stringResource(R.string.koil_add_suggest_early)
+                    avgTrend < -0.5 -> stringResource(R.string.koil_add_suggest_wait)
                     else -> ""
                 }
                 val bgColor = if (dark) Color(0xFF17191D)
@@ -577,8 +577,8 @@ private fun OilPriceCard(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 text = buildString {
-                                    append(stringResource(R.string.add_window_prefix, nextDate.let { if (it.length >= 5) it.substring(5) else it }))
-                                    if (days >= 0) append(stringResource(R.string.add_window_days, days))
+                                    append(stringResource(R.string.koil_add_window_prefix, nextDate.let { if (it.length >= 5) it.substring(5) else it }))
+                                    if (days >= 0) append(stringResource(R.string.koil_add_window_days, days))
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
@@ -595,15 +595,15 @@ private fun OilPriceCard(
                             ) {
                                 if (forecast != null) {
                                     AdjustBadge(
-                                        text = stringResource(if (rising) R.string.add_forecast_up else R.string.add_forecast_down) +
+                                        text = stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
                                             "${kotlin.math.abs(forecast).toInt()}" +
-                                            stringResource(R.string.add_forecast_per_ton),
+                                            stringResource(R.string.koil_add_forecast_per_ton),
                                         color = textColor,
                                     )
                                 }
                                 if (perLiter != null) {
                                     AdjustBadge(
-                                        text = stringResource(R.string.add_approx_per_liter, kotlin.math.abs(perLiter)),
+                                        text = stringResource(R.string.koil_add_approx_per_liter, kotlin.math.abs(perLiter)),
                                         color = textColor,
                                     )
                                 }
@@ -667,7 +667,7 @@ private fun PriceCell(
             color = MiuixTheme.colorScheme.primary,
         )
         Text(
-            text = stringResource(R.string.add_unit_per_liter),
+            text = stringResource(R.string.koil_add_unit_per_liter),
             fontSize = 10.sp,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
@@ -700,7 +700,7 @@ private fun LastRecordBar(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.add_last_refuel),
+                    text = stringResource(R.string.koil_add_last_refuel),
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -715,7 +715,7 @@ private fun LastRecordBar(
                     )
                 } else {
                     Text(
-                        text = stringResource(R.string.add_no_record),
+                        text = stringResource(R.string.koil_add_no_record),
                         fontSize = 13.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -730,7 +730,7 @@ private fun LastRecordBar(
                         .padding(horizontal = 14.dp, vertical = 7.dp),
                 ) {
                     Text(
-                        text = stringResource(R.string.add_apply_last),
+                        text = stringResource(R.string.koil_add_apply_last),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color.White,
@@ -818,7 +818,7 @@ private fun GradeField(
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = stringResource(R.string.add_grade_title),
+                text = stringResource(R.string.koil_add_grade_title),
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
@@ -860,8 +860,8 @@ private fun GradeField(
         OverlayDropdownPopup(
             entry = DropdownEntry(
                 items = gradeLabels.map { g ->
-                    val label = if (g == "0") stringResource(R.string.add_grade_diesel)
-                    else stringResource(R.string.add_grade_gasoline, g)
+                    val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
+                    else stringResource(R.string.koil_add_grade_gasoline, g)
                     DropdownItem(
                         text = label,
                         selected = g == grade,
@@ -888,22 +888,22 @@ private fun GradeField(
 private fun PrecheckBanner(uiState: AddUiState) {
     val precheck = uiState.precheck
     val precheckText = when (precheck.messageKey) {
-        "duplicate" -> stringResource(R.string.precheck_duplicate)
+        "duplicate" -> stringResource(R.string.koil_precheck_duplicate)
         "mileage_decreased" -> stringResource(
-            R.string.precheck_mileage_decreased,
+            R.string.koil_precheck_mileage_decreased,
             precheck.messageArgs.firstOrNull() ?: 0,
         )
-        "over_payable" -> stringResource(R.string.precheck_over_payable)
-        "over_tank" -> stringResource(R.string.precheck_over_tank, precheck.messageArgs.firstOrNull() ?: 0)
-        "deviation" -> stringResource(R.string.precheck_deviation, precheck.messageArgs.firstOrNull() ?: 0.0)
+        "over_payable" -> stringResource(R.string.koil_precheck_over_payable)
+        "over_tank" -> stringResource(R.string.koil_precheck_over_tank, precheck.messageArgs.firstOrNull() ?: 0)
+        "deviation" -> stringResource(R.string.koil_precheck_deviation, precheck.messageArgs.firstOrNull() ?: 0.0)
         "ready" -> stringResource(
-            R.string.precheck_ready,
+            R.string.koil_precheck_ready,
             precheck.messageArgs.getOrNull(0) ?: 0.0,
             precheck.messageArgs.getOrNull(1) ?: 0.0,
         )
-        "added" -> stringResource(R.string.precheck_added)
-        "add_failed" -> stringResource(R.string.precheck_add_failed, precheck.messageArgs.firstOrNull() ?: "")
-        else -> stringResource(R.string.precheck_default)
+        "added" -> stringResource(R.string.koil_precheck_added)
+        "add_failed" -> stringResource(R.string.koil_precheck_add_failed, precheck.messageArgs.firstOrNull() ?: "")
+        else -> stringResource(R.string.koil_precheck_default)
     }
     val (bgColor, textColor) = when {
         precheck.isDuplicate || precheck.mileageDecreased ->

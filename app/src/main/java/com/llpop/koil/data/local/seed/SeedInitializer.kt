@@ -11,7 +11,7 @@ import kotlinx.serialization.json.Json
 /**
  * 首次启动预置数据灌入：
  * - koil_record：用户提供的 16 条历史加油记录（保留，测试用）
- * - fuel_prices：已改为联网灌库（方案X，见 OilPriceDbSyncer.initPriceDb），不再内置油价快照
+ * - koil_prices：已改为联网灌库（方案X，见 OilPriceDbSyncer.initPriceDb），不再内置油价快照
  * 仅在对应表为空时写入；失败静默（离线可用不依赖种子）。
  */
 object SeedInitializer {

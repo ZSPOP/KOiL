@@ -8,10 +8,10 @@ import androidx.room.Entity
  * 预置快照 + 公开数据源可选更新（默认关闭）。
  */
 @Entity(
-    tableName = "fuel_prices",
+    tableName = "koil_prices",
     primaryKeys = ["province", "grade", "effectiveDate"],
 )
-data class FuelPriceEntity(
+data class KOiLPriceEntity(
     val province: String,           // 广东
     val grade: String,              // 92号汽油 / 95号汽油 / 98号汽油 / 0号柴油
     val effectiveDate: String,      // yyyy-MM-dd

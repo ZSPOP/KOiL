@@ -2,6 +2,16 @@
 
 > 本文件随源码包分发，记录每个版本相对上一个版本的变更，便于跨环境接手开发时快速了解改动。
 
+## v1.4.159（versionCode 164）— 2026-10-25
+
+### ♻️ 命名统一（遵循「标识符优先以 KOiL 命名」规范）
+- **资源 key 全部加 `koil_` 前缀**：三语 strings.xml 共 272 个 key（`add_`/`ov_`/`stat_`/`set_`/`pdb_` 等）统一改为 `koil_add_*` / `koil_ov_*` ……，代码中全部 `R.string.xxx` 引用同步更新（仅编译期标识符，不影响运行）。
+- **Fuel 标识符改 KOiL**：`FuelPriceDao` → `KOiLPriceDao`、`FuelPriceEntity` → `KOiLPriceEntity`、`fuelPriceDao` → `koilPriceDao`（文件重命名 + 全工程引用同步）。
+- **数据库表名** `fuel_prices` → `koil_prices`：Room version 1→2，新增迁移 `ALTER TABLE fuel_prices RENAME TO koil_prices`——已安装用户升级**数据保留**，全新安装直接建新表。
+- **保留不动**：用户可见的英文界面文案（Refueling / fuel prices / Total fuel 等），非标识符，改反而错误。
+
+---
+
 ## 📌 跨环境交接约定（接手方请照做）
 
 为了让工程在多个开发环境之间往返搬运时**变更信息不丢失**，请每个环境的开发方遵守：

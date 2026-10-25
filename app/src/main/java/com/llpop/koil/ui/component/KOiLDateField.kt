@@ -59,7 +59,7 @@ fun KOiLDateField(
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = stringResource(R.string.add_date),
+                text = stringResource(R.string.koil_add_date),
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )

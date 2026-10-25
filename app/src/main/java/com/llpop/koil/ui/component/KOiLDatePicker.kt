@@ -93,8 +93,8 @@ fun KOiLDatePickerDialog(
     val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     // 三语文案
-    val weekLabels = stringArrayResource(R.array.cal_week)
-    val monthFormat = stringResource(R.string.cal_month)
+    val weekLabels = stringArrayResource(R.array.koil_cal_week)
+    val monthFormat = stringResource(R.string.koil_cal_month)
 
     // 入场动画由 AnchoredPopup 统一驱动（miuix spring 缩放 + tween 淡入），此处不再自带动画
 

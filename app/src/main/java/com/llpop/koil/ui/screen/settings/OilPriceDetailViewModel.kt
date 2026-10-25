@@ -2,8 +2,8 @@ package com.llpop.koil.ui.screen.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.llpop.koil.data.local.dao.FuelPriceDao
-import com.llpop.koil.data.local.entity.FuelPriceEntity
+import com.llpop.koil.data.local.dao.KOiLPriceDao
+import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
@@ -43,7 +43,7 @@ data class OilPriceDetailUiState(
 )
 
 class OilPriceDetailViewModel(
-    private val priceDao: FuelPriceDao,
+    private val priceDao: KOiLPriceDao,
     private val settings: AppSettings,
 ) : ViewModel() {
 
@@ -73,7 +73,7 @@ class OilPriceDetailViewModel(
     private suspend fun buildUiState(
         province: String,
         grade: String,
-        records: List<FuelPriceEntity>,
+        records: List<KOiLPriceEntity>,
         windowDates: String,
     ): OilPriceDetailUiState {
         var rise = 0.0

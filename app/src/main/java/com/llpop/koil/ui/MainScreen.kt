@@ -144,9 +144,9 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
 
             val navigationItems = listOf(
-                NavigationItem(label = stringResource(R.string.nav_add), icon = Icons.Filled.Edit),
-                NavigationItem(label = stringResource(R.string.nav_overview), icon = Icons.Filled.BarChart),
-                NavigationItem(label = stringResource(R.string.nav_settings), icon = Icons.Filled.Settings),
+                NavigationItem(label = stringResource(R.string.koil_nav_add), icon = Icons.Filled.Edit),
+                NavigationItem(label = stringResource(R.string.koil_nav_overview), icon = Icons.Filled.BarChart),
+                NavigationItem(label = stringResource(R.string.koil_nav_settings), icon = Icons.Filled.Settings),
             )
             val showLabels = barMode == BottomBarMode.IconAndText.storageValue
             val isFloatingStyleIos = floatingStyle == FloatingBottomBarStyle.IosLike.storageValue

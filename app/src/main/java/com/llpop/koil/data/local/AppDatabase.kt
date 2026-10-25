@@ -5,10 +5,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import androidx.sqlite.db.SupportSQLiteDatabase
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
-import com.llpop.koil.data.local.entity.FuelPriceEntity
+import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.local.entity.KOiLPricePendingEntity
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import java.io.File
@@ -16,16 +17,16 @@ import java.io.File
 @Database(
     entities = [
         KOiLRecordEntity::class,
-        FuelPriceEntity::class,
+        KOiLPriceEntity::class,
         KOiLPricePendingEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun KOiLRecordDao(): KOiLRecordDao
-    abstract fun fuelPriceDao(): FuelPriceDao
+    abstract fun koilPriceDao(): KOiLPriceDao
     abstract fun KOiLPricePendingDao(): KOiLPricePendingDao
 
     companion object {
@@ -45,9 +46,17 @@ abstract class AppDatabase : RoomDatabase() {
          * 2) 对照 schemas/<n>/xxx.json 与 schemas/<n+1>/xxx.json 编写 Migration(n, n+1)
          *    （ALTER TABLE / CREATE TABLE / 数据搬移），写入本数组；
          * 3) 禁止 fallbackToDestructiveMigration —— 会清空用户全部数据。
-         * 当前 version=1（首次发布，无历史版本，数组为空；升 2 时在此追加）。
+         *
+         * 1 → 2（v1.4.159 命名统一）：fuel_prices 表重命名为 koil_prices，
+         * 旧版本（version=1）已建表用户升级时重命名，数据保留；全新安装直接建新表。
          */
-        val MIGRATIONS: Array<Migration> = arrayOf()
+        val MIGRATIONS: Array<Migration> = arrayOf(
+            object : Migration(1, 2) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE fuel_prices RENAME TO koil_prices")
+                }
+            },
+        )
 
         @Volatile
         private var instance: AppDatabase? = null

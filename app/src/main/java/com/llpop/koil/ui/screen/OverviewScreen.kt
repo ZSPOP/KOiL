@@ -131,14 +131,14 @@ fun OverviewScreen(
     }
 
     val rangeLabels = listOf(
-        "all" to stringResource(R.string.range_all),
-        "year" to stringResource(R.string.range_year),
-        "6m" to stringResource(R.string.range_6m),
-        "3m" to stringResource(R.string.range_3m),
+        "all" to stringResource(R.string.koil_range_all),
+        "year" to stringResource(R.string.koil_range_year),
+        "6m" to stringResource(R.string.koil_range_6m),
+        "3m" to stringResource(R.string.koil_range_3m),
     )
 
     KOiLScreenScaffold(
-        title = stringResource(R.string.ov_title),
+        title = stringResource(R.string.koil_ov_title),
         modifier = modifier,
     ) { _, topPadding, scrollBehavior, _ ->
         Box(Modifier.fillMaxSize()) {
@@ -207,7 +207,7 @@ fun OverviewScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.ov_history),
+                    text = stringResource(R.string.koil_ov_history),
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
@@ -215,13 +215,13 @@ fun OverviewScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.ov_total_count_in_list, uiState.records.size),
+                    text = stringResource(R.string.koil_ov_total_count_in_list, uiState.records.size),
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    text = stringResource(R.string.ov_backfill),
+                    text = stringResource(R.string.koil_ov_backfill),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = KOiLColors.Primary,
@@ -232,7 +232,7 @@ fun OverviewScreen(
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text = stringResource(R.string.ov_scroll_more),
+                text = stringResource(R.string.koil_ov_scroll_more),
                 fontSize = 11.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                 modifier = Modifier.padding(start = 6.dp),
@@ -257,7 +257,7 @@ fun OverviewScreen(
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            text = stringResource(R.string.ov_month_count, monthRecords.size),
+                            text = stringResource(R.string.koil_ov_month_count, monthRecords.size),
                             fontSize = 11.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
@@ -286,7 +286,7 @@ fun OverviewScreen(
                 ) {
                     Text(
                         text = stringResource(
-                            R.string.ov_load_more,
+                            R.string.koil_ov_load_more,
                             uiState.records.size - visibleCount,
                         ),
                         fontSize = 13.sp,
@@ -346,7 +346,7 @@ fun OverviewScreen(
             widthFraction = 0.90f,
         ) {
             Column {
-                Text(stringResource(R.string.ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
+                Text(stringResource(R.string.koil_ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 // 加油省份（与设置页同款下拉列表）
                 ProvinceSelectField(province = uiState.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
@@ -365,21 +365,21 @@ fun OverviewScreen(
                 Spacer(Modifier.height(14.dp))
                 // 第二行：里程 + 加油量
                 Row {
-                    EditField(stringResource(R.string.add_field_mileage), uiState.backfillMileage, viewModel::setBackfillMileage, modifier = Modifier.weight(1f))
+                    EditField(stringResource(R.string.koil_add_field_mileage), uiState.backfillMileage, viewModel::setBackfillMileage, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(14.dp))
-                    EditField(stringResource(R.string.add_field_oil_amount), uiState.backfillOilAmount, viewModel::setBackfillOilAmount, modifier = Modifier.weight(1f))
+                    EditField(stringResource(R.string.koil_add_field_oil_amount), uiState.backfillOilAmount, viewModel::setBackfillOilAmount, modifier = Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(14.dp))
                 // 第三行：应付（可编辑，对齐编辑卡）+ 实付
                 Row {
                     EditField(
-                        stringResource(R.string.add_field_payable),
+                        stringResource(R.string.koil_add_field_payable),
                         uiState.backfillPayableAmount,
                         viewModel::setBackfillPayableAmount,
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(14.dp))
-                    EditField(stringResource(R.string.add_field_actual), uiState.backfillActualAmount, viewModel::setBackfillActualAmount, modifier = Modifier.weight(1f))
+                    EditField(stringResource(R.string.koil_add_field_actual), uiState.backfillActualAmount, viewModel::setBackfillActualAmount, modifier = Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(10.dp))
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
@@ -393,9 +393,9 @@ fun OverviewScreen(
                 PriceDeviationHint(uiState.backfillDeviationPct, uiState.backfillDeviationExceeded)
                 Spacer(Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.common_cancel), fontSize = 14.sp) }
+                    Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
                     Spacer(Modifier.width(12.dp))
-                    Button(onClick = viewModel::saveBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                    Button(onClick = viewModel::saveBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
                 }
             }
         }
@@ -404,17 +404,17 @@ fun OverviewScreen(
 
 @Composable
 private fun rangeLabel(range: String): String = when (range) {
-    "year" -> stringResource(R.string.range_year)
-    "6m" -> stringResource(R.string.range_6m)
-    "3m" -> stringResource(R.string.range_3m)
-    else -> stringResource(R.string.range_all)
+    "year" -> stringResource(R.string.koil_range_year)
+    "6m" -> stringResource(R.string.koil_range_6m)
+    "3m" -> stringResource(R.string.koil_range_3m)
+    else -> stringResource(R.string.koil_range_all)
 }
 
 @Composable
 private fun monthTitle(monthKey: String): String {
     val parts = monthKey.split("-")
     return if (parts.size == 2)
-        stringResource(R.string.ov_month_title, parts[0].toInt(), parts[1].toInt())
+        stringResource(R.string.koil_ov_month_title, parts[0].toInt(), parts[1].toInt())
     else monthKey
 }
 
@@ -446,14 +446,14 @@ private fun EmptyHistoryBox() {
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = stringResource(R.string.ov_empty_title),
+                text = stringResource(R.string.koil_ov_empty_title),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                text = stringResource(R.string.ov_empty_hint),
+                text = stringResource(R.string.koil_ov_empty_hint),
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
             )
@@ -478,7 +478,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.WaterDrop,
-                    label = stringResource(R.string.stat_avg_consumption),
+                    label = stringResource(R.string.koil_stat_avg_consumption),
                     value = "%.2f".format(stats.avgOilConsumption ?: 0.0),
                     unit = "L/100km",
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
@@ -486,9 +486,9 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Money,
-                    label = stringResource(R.string.stat_cost_per_km),
+                    label = stringResource(R.string.koil_stat_cost_per_km),
                     value = "%.3f".format(stats.avgCostPerKm ?: 0.0),
-                    unit = stringResource(R.string.stat_cost_unit),
+                    unit = stringResource(R.string.koil_stat_cost_unit),
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
                 )
             }
@@ -497,7 +497,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Speed,
-                    label = stringResource(R.string.stat_total_mileage),
+                    label = stringResource(R.string.koil_stat_total_mileage),
                     value = "${stats.totalDistance.toInt()}",
                     unit = "km",
                     comparePct = pct(stats.totalDistance, prev?.totalDistance),
@@ -505,7 +505,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.LocalGasStation,
-                    label = stringResource(R.string.stat_total_oil),
+                    label = stringResource(R.string.koil_stat_total_oil),
                     value = "${stats.totalOilAmount.toInt()}",
                     unit = "L",
                     comparePct = pct(stats.totalOilAmount, prev?.totalOilAmount),
@@ -516,7 +516,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
-                    label = stringResource(R.string.stat_total_cost),
+                    label = stringResource(R.string.koil_stat_total_cost),
                     value = "¥%.0f".format(stats.totalActual),
                     unit = "",
                     comparePct = pct(stats.totalActual, prev?.totalActual),
@@ -524,7 +524,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Receipt,
-                    label = stringResource(R.string.stat_total_payable),
+                    label = stringResource(R.string.koil_stat_total_payable),
                     value = "¥%.0f".format(stats.totalPayable),
                     unit = "",
                     comparePct = pct(stats.totalPayable, prev?.totalPayable),
@@ -540,7 +540,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = stringResource(R.string.ov_total_count, stats.totalCount),
+                    text = stringResource(R.string.koil_ov_total_count, stats.totalCount),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -548,10 +548,10 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 )
                 Text(
                     text = "%s ¥%.2f/%s · %s %d km".format(
-                        stringResource(R.string.stat_avg_price),
+                        stringResource(R.string.koil_stat_avg_price),
                         stats.avgUnitPriceActual ?: 0.0,
-                        stringResource(R.string.stat_price_unit),
-                        stringResource(R.string.stat_avg_distance),
+                        stringResource(R.string.koil_stat_price_unit),
+                        stringResource(R.string.koil_stat_avg_distance),
                         (stats.avgDistancePerReoil ?: 0.0).toInt(),
                     ),
                     fontSize = 11.sp,
@@ -559,7 +559,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.ov_vs_prev),
+                    text = stringResource(R.string.koil_ov_vs_prev),
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                 )
@@ -623,7 +623,7 @@ private fun StatCell(
             } else {
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = stringResource(R.string.ov_vs_prev),
+                    text = stringResource(R.string.koil_ov_vs_prev),
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                 )
@@ -651,7 +651,7 @@ private fun TrendChart(trend: List<TrendPoint>) {
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = stringResource(R.string.ov_trend),
+                    text = stringResource(R.string.koil_ov_trend),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackground,
@@ -661,11 +661,11 @@ private fun TrendChart(trend: List<TrendPoint>) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(KOiLColors.Primary))
                     Spacer(Modifier.width(3.dp))
-                    Text(stringResource(R.string.ov_legend_consumption), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                    Text(stringResource(R.string.koil_ov_legend_consumption), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
                     Spacer(Modifier.width(8.dp))
                     Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFF97316)))
                     Spacer(Modifier.width(3.dp))
-                    Text(stringResource(R.string.ov_legend_cost), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                    Text(stringResource(R.string.koil_ov_legend_cost), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -677,7 +677,7 @@ private fun TrendChart(trend: List<TrendPoint>) {
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = stringResource(R.string.ov_trend_insufficient),
+                        text = stringResource(R.string.koil_ov_trend_insufficient),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -830,25 +830,25 @@ private fun AbnormalAlertCard(
             Column(Modifier.weight(1f)) {
                 if (count > 0) {
                     Text(
-                        text = stringResource(R.string.ov_abnormal_count, count),
+                        text = stringResource(R.string.koil_ov_abnormal_count, count),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Text(
-                        text = stringResource(R.string.ov_abnormal_avg, avgConsumption ?: 0.0),
+                        text = stringResource(R.string.koil_ov_abnormal_avg, avgConsumption ?: 0.0),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                 } else {
                     Text(
-                        text = stringResource(R.string.ov_abnormal_empty),
+                        text = stringResource(R.string.koil_ov_abnormal_empty),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Text(
-                        text = stringResource(R.string.ov_abnormal_stable),
+                        text = stringResource(R.string.koil_ov_abnormal_stable),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -861,7 +861,7 @@ private fun AbnormalAlertCard(
                     color = KOiLColors.Primary,
                 )
                 Text(
-                    text = stringResource(R.string.ov_record_count, recordCount),
+                    text = stringResource(R.string.koil_ov_record_count, recordCount),
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -945,7 +945,7 @@ private fun RecordCard(
                     if (record.oilDays != null && !isInitial) {
                         Spacer(Modifier.width(6.dp))
                         Pill(
-                            text = stringResource(R.string.ov_oil_days, record.oilDays),
+                            text = stringResource(R.string.koil_ov_oil_days, record.oilDays),
                             color = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
                             textColor = MiuixTheme.colorScheme.onBackgroundVariant,
                             border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.2f),
@@ -954,7 +954,7 @@ private fun RecordCard(
                     if (isAbnormal) {
                         Spacer(Modifier.width(6.dp))
                         Pill(
-                            text = if (isHigh) stringResource(R.string.ov_high) else stringResource(R.string.ov_low),
+                            text = if (isHigh) stringResource(R.string.koil_ov_high) else stringResource(R.string.koil_ov_low),
                             color = accentColor.copy(alpha = 0.14f),
                             textColor = accentColor,
                             border = accentColor.copy(alpha = 0.3f),
@@ -974,7 +974,7 @@ private fun RecordCard(
                     Spacer(Modifier.weight(1f))
                     Icon(
                         imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.ov_more_actions),
+                        contentDescription = stringResource(R.string.koil_ov_more_actions),
                         tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                         modifier = Modifier
                             .size(20.dp)
@@ -988,7 +988,7 @@ private fun RecordCard(
                 if (prevRecord != null) {
                     Text(
                         text = stringResource(
-                            R.string.ov_prev_line,
+                            R.string.koil_ov_prev_line,
                             md(prevRecord.record.reoilDate),
                             (r.mileage - (record.distance ?: 0.0)).toInt(),
                             r.mileage.toInt(),
@@ -998,7 +998,7 @@ private fun RecordCard(
                     )
                 } else {
                     Text(
-                        text = stringResource(R.string.ov_current_mileage, r.mileage.toInt()),
+                        text = stringResource(R.string.koil_ov_current_mileage, r.mileage.toInt()),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -1016,7 +1016,7 @@ private fun RecordCard(
                         Row(modifier = Modifier.padding(vertical = 10.dp)) {
                             MetricCell(
                                 Modifier.weight(1f),
-                                label = stringResource(R.string.ov_metric_consumption),
+                                label = stringResource(R.string.koil_ov_metric_consumption),
                                 value = "%.2f".format(record.oilConsumption),
                                 unit = "L/100km",
                                 valueColor = accentColor,
@@ -1024,7 +1024,7 @@ private fun RecordCard(
                             )
                             MetricCell(
                                 Modifier.weight(1f),
-                                label = stringResource(R.string.ov_metric_cost),
+                                label = stringResource(R.string.koil_ov_metric_cost),
                                 value = "¥%.3f".format(record.costPerKm ?: 0.0),
                                 unit = "",
                                 valueColor = accentColor,
@@ -1032,7 +1032,7 @@ private fun RecordCard(
                             )
                             MetricCell(
                                 Modifier.weight(1f),
-                                label = stringResource(R.string.ov_metric_distance),
+                                label = stringResource(R.string.koil_ov_metric_distance),
                                 value = "${record.distance.toInt()}",
                                 unit = "km",
                                 valueColor = accentColor,
@@ -1054,7 +1054,7 @@ private fun RecordCard(
                             Text("ℹ", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f))
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = stringResource(R.string.ov_first_record),
+                                text = stringResource(R.string.koil_ov_first_record),
                                 fontSize = 11.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
@@ -1074,19 +1074,19 @@ private fun RecordCard(
                 Row(modifier = Modifier.fillMaxWidth()) {
                     RecordDetail(
                         Modifier.weight(1f),
-                        stringResource(R.string.col_oil_amount),
+                        stringResource(R.string.koil_col_oil_amount),
                         "%.1f".format(r.oilAmount),
                         "L",
                     )
                     RecordDetail(
                         Modifier.weight(1f),
-                        stringResource(R.string.col_actual),
+                        stringResource(R.string.koil_col_actual),
                         "¥%.2f".format(r.actualAmount),
                         "",
                     )
                     RecordDetail(
                         Modifier.weight(1f),
-                        stringResource(R.string.col_unit_price),
+                        stringResource(R.string.koil_col_unit_price),
                         "¥%.2f".format(record.unitPriceActual ?: 0.0),
                         "",
                         warn = false,
@@ -1200,7 +1200,7 @@ private fun Pill(
 private fun md(date: String): String {
     val parts = date.split("-")
     return if (parts.size == 3)
-        stringResource(R.string.ov_md_date, parts[1].toInt(), parts[2].toInt())
+        stringResource(R.string.koil_ov_md_date, parts[1].toInt(), parts[2].toInt())
     else date
 }
 
@@ -1281,7 +1281,7 @@ private fun SwipeActionRecordCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.Edit, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.ov_edit), fontSize = 10.sp, color = Color.White)
+                    Text(stringResource(R.string.koil_ov_edit), fontSize = 10.sp, color = Color.White)
                 }
             }
             Box(
@@ -1299,7 +1299,7 @@ private fun SwipeActionRecordCard(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Filled.Delete, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.ov_delete), fontSize = 10.sp, color = Color.White)
+                    Text(stringResource(R.string.koil_ov_delete), fontSize = 10.sp, color = Color.White)
                 }
             }
         }
@@ -1359,7 +1359,7 @@ private fun EditRecordDialog(
     ) {
         Column {
             Text(
-                text = stringResource(R.string.ov_edit_title),
+                text = stringResource(R.string.koil_ov_edit_title),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
@@ -1382,16 +1382,16 @@ private fun EditRecordDialog(
             Spacer(Modifier.height(14.dp))
             // 第二行：里程 + 加油量
             Row {
-                EditField(stringResource(R.string.add_field_mileage), uiState.editMileage, onMileageChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_mileage), uiState.editMileage, onMileageChange, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(14.dp))
-                EditField(stringResource(R.string.add_field_oil_amount), uiState.editOilAmount, onOilAmountChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_oil_amount), uiState.editOilAmount, onOilAmountChange, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(14.dp))
             // 第三行：应付（可编辑，对齐 Web 编辑弹窗）+ 实付
             Row {
-                EditField(stringResource(R.string.add_field_payable), uiState.editPayableAmount, onPayableChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_payable), uiState.editPayableAmount, onPayableChange, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(14.dp))
-                EditField(stringResource(R.string.add_field_actual), uiState.editActualAmount, onActualAmountChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_actual), uiState.editActualAmount, onActualAmountChange, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(10.dp))
             // 实付综合信息块（对齐 Web PaymentSummaryCard）
@@ -1408,12 +1408,12 @@ private fun EditRecordDialog(
                 Button(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f).height(44.dp),
-                ) { Text(stringResource(R.string.common_cancel), fontSize = 14.sp) }
+                ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
                 Spacer(Modifier.width(12.dp))
                 Button(
                     onClick = onSave,
                     modifier = Modifier.weight(1f).height(44.dp),
-                ) { Text(stringResource(R.string.common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
             }
         }
     }
@@ -1425,8 +1425,8 @@ private fun PriceDeviationHint(pct: Double?, exceeded: Boolean) {
     if (pct == null) return
     val (bg, fg) = if (exceeded) Color(0x1AFF9500) to Color(0xFFFF9500)
     else Color(0x1A34C759) to Color(0xFF34C759)
-    val text = if (exceeded) stringResource(R.string.precheck_deviation, pct)
-    else stringResource(R.string.precheck_price_ok)
+    val text = if (exceeded) stringResource(R.string.koil_precheck_deviation, pct)
+    else stringResource(R.string.koil_precheck_price_ok)
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1461,7 +1461,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
             )
             Spacer(Modifier.width(4.dp))
             Text(
-                text = stringResource(R.string.ov_field_province),
+                text = stringResource(R.string.koil_ov_field_province),
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
@@ -1486,7 +1486,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (province.isBlank()) stringResource(R.string.add_pick_province) else province,
+                    text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else province,
                     fontSize = 14.sp,
                     fontWeight = if (province.isBlank()) FontWeight.Normal else FontWeight.Bold,
                     color = if (province.isBlank()) MiuixTheme.colorScheme.onBackgroundVariant else MiuixTheme.colorScheme.onBackground,
@@ -1548,9 +1548,9 @@ private fun PaymentSummaryCard(
         val diff = payable!! - actual!!
         val pct = if (payable > 0) diff / payable * 100 else 0.0
         when {
-            diff > 0.005 -> { savingsText = stringResource(R.string.ps_savings, abs(diff), abs(pct)); savingsColor = green }
-            diff < -0.005 -> { savingsText = stringResource(R.string.ps_overpay, abs(diff)); savingsColor = amber }
-            else -> { savingsText = stringResource(R.string.ps_no_savings); savingsColor = gray }
+            diff > 0.005 -> { savingsText = stringResource(R.string.koil_ps_savings, abs(diff), abs(pct)); savingsColor = green }
+            diff < -0.005 -> { savingsText = stringResource(R.string.koil_ps_overpay, abs(diff)); savingsColor = amber }
+            else -> { savingsText = stringResource(R.string.koil_ps_no_savings); savingsColor = gray }
         }
     }
 
@@ -1562,9 +1562,9 @@ private fun PaymentSummaryCard(
         val diff = referencePrice!! - actualUnitPrice
         val pct = if (referencePrice > 0) diff / referencePrice * 100 else 0.0
         when {
-            diff > 0.005 -> { unitDiffText = stringResource(R.string.ps_save_per_l, abs(diff), abs(pct)); unitDiffColor = green }
-            diff < -0.005 -> { unitDiffText = stringResource(R.string.ps_dear_per_l, abs(diff), abs(pct)); unitDiffColor = amber }
-            else -> { unitDiffText = stringResource(R.string.ps_match_ref); unitDiffColor = gray }
+            diff > 0.005 -> { unitDiffText = stringResource(R.string.koil_ps_save_per_l, abs(diff), abs(pct)); unitDiffColor = green }
+            diff < -0.005 -> { unitDiffText = stringResource(R.string.koil_ps_dear_per_l, abs(diff), abs(pct)); unitDiffColor = amber }
+            else -> { unitDiffText = stringResource(R.string.koil_ps_match_ref); unitDiffColor = gray }
         }
     }
 
@@ -1584,7 +1584,7 @@ private fun PaymentSummaryCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(R.string.ps_payable_actual, payable!!, actual!!),
+                        text = stringResource(R.string.koil_ps_payable_actual, payable!!, actual!!),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier.weight(1f),
@@ -1600,8 +1600,8 @@ private fun PaymentSummaryCard(
                 ) {
                     Text(
                         text = buildString {
-                            append(stringResource(R.string.ps_actual_unit, actualUnitPrice))
-                            if (hasReference) append("  ·  ").append(stringResource(R.string.ps_ref_price, referencePrice!!))
+                            append(stringResource(R.string.koil_ps_actual_unit, actualUnitPrice))
+                            if (hasReference) append("  ·  ").append(stringResource(R.string.koil_ps_ref_price, referencePrice!!))
                         },
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -1657,7 +1657,7 @@ private fun GradePriceSelect(
                 modifier = Modifier.size(14.dp),
             )
             Spacer(Modifier.width(4.dp))
-            Text(text = stringResource(R.string.ov_grade), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+            Text(text = stringResource(R.string.koil_ov_grade), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
         }
         Spacer(Modifier.height(6.dp))
         Box(
@@ -1701,8 +1701,8 @@ private fun GradePriceSelect(
         ) {
             com.llpop.koil.ui.component.AnchoredDropdownColumn {
                 gradeLabels.forEachIndexed { index, g ->
-                    val label = if (g == "0") stringResource(R.string.add_grade_diesel)
-                    else stringResource(R.string.add_grade_gasoline, g)
+                    val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
+                    else stringResource(R.string.koil_add_grade_gasoline, g)
                     com.llpop.koil.ui.component.AnchoredDropdownItemRow(
                         text = label,
                         selected = g == grade,

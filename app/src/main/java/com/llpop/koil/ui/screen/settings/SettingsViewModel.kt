@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLPricePendingEntity
@@ -89,7 +89,7 @@ data class ParsedRecord(
 class SettingsViewModel(
     private val settings: AppSettings,
     private val recordDao: KOiLRecordDao,
-    private val priceDao: FuelPriceDao,
+    private val priceDao: KOiLPriceDao,
     private val pendingDao: KOiLPricePendingDao,
     private val syncer: OilPriceDbSyncer,
     private val locationHelper: LocationHelper,

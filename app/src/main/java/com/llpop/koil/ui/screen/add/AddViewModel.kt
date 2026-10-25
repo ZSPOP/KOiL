@@ -2,7 +2,7 @@ package com.llpop.koil.ui.screen.add
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.OilPriceDateUtil
@@ -83,7 +83,7 @@ private val GRADE_LABELS = mapOf(
 
 class AddViewModel(
     private val recordDao: KOiLRecordDao,
-    private val priceDao: FuelPriceDao,
+    private val priceDao: KOiLPriceDao,
     private val settings: AppSettings,
     private val locationHelper: LocationHelper,
     private val syncer: OilPriceDbSyncer,

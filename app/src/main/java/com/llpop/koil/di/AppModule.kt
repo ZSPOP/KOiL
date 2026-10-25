@@ -1,7 +1,7 @@
 package com.llpop.koil.di
 
 import com.llpop.koil.data.local.AppDatabase
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.location.LocationHelper
@@ -25,7 +25,7 @@ val appModule = module {
     singleOf(::OilPriceDbSyncer)
 
     single<KOiLRecordDao> { get<AppDatabase>().KOiLRecordDao() }
-    single<FuelPriceDao> { get<AppDatabase>().fuelPriceDao() }
+    single<KOiLPriceDao> { get<AppDatabase>().koilPriceDao() }
     single<KOiLPricePendingDao> { get<AppDatabase>().KOiLPricePendingDao() }
     singleOf(::LocationHelper)
 

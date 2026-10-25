@@ -27,10 +27,10 @@ object OilPriceNotifier {
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                context.getString(R.string.set_price_push),
+                context.getString(R.string.koil_set_price_push),
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
-                description = context.getString(R.string.set_price_push_sub)
+                description = context.getString(R.string.koil_set_price_push_sub)
             }
             nm.createNotificationChannel(channel)
         }

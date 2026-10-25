@@ -2,9 +2,9 @@ package com.llpop.koil.data.oil
 
 import androidx.room.withTransaction
 import com.llpop.koil.data.local.AppDatabase
-import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
-import com.llpop.koil.data.local.entity.FuelPriceEntity
+import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.local.entity.KOiLPricePendingEntity
 import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.async
@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class OilPriceDbSyncer(
     private val db: AppDatabase,
-    private val priceDao: FuelPriceDao,
+    private val priceDao: KOiLPriceDao,
     private val pendingDao: KOiLPricePendingDao,
     private val settings: AppSettings,
     private val network: OilPriceNetwork,
@@ -291,7 +291,7 @@ class OilPriceDbSyncer(
     // ===== 方案X：首次联网灌库（替代内置油价快照） =====
 
     /**
-     * 首拉当前省一整年曲线灌库（仅 fuel_prices 为空时执行，不覆盖老用户已有数据）。
+     * 首拉当前省一整年曲线灌库（仅 koil_prices 为空时执行，不覆盖老用户已有数据）。
      * 其余省份由 [seedRemainingProvinces] 在后台补全。无网或接口失败时静默跳过。
      */
     suspend fun initPriceDb() {
@@ -330,7 +330,7 @@ class OilPriceDbSyncer(
     }
 
     /**
-     * 拉单个省当年（1-1 至今）曲线并写入 fuel_prices（主键 province+grade+effectiveDate REPLACE），返回写入条数。
+     * 拉单个省当年（1-1 至今）曲线并写入 koil_prices（主键 province+grade+effectiveDate REPLACE），返回写入条数。
      * 去重压缩：仅存"价格有变化"的点（调价日）。偏差预检 getLatestPrice(≤date 最近价) 会回退到最近调价日价，
      * 非调价日沿用上次价的语义等价于逐日全存，故跳过重复价日可瘦身约 90% 且功能不变。
      * 生效日校正：传入 [adjustDates]（发改委权威窗口日）时，把 abapi 滞后日期归并到「≤它的最近窗口日」，
@@ -341,7 +341,7 @@ class OilPriceDbSyncer(
         if (points.isEmpty()) return 0
         val today = LocalDate.now().format(DATE_FMT)
         val yearStart = "${LocalDate.now().year}-01-01"
-        val entities = mutableListOf<FuelPriceEntity>()
+        val entities = mutableListOf<KOiLPriceEntity>()
         var last92: Double? = null
         var last95: Double? = null
         var last98: Double? = null
@@ -351,10 +351,10 @@ class OilPriceDbSyncer(
             // 只保留当年 1-1 至今（用户口径：首拉当年调价记录）
             if (pt.date < yearStart || pt.date > today) return@forEach
             val eff = if (adjustDates.isEmpty()) pt.date else addOneDay(adjustToWindow(pt.date, adjustDates))
-            pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) { entities.add(FuelPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last92 = v } }
-            pt.p95?.let { v -> if (last95 == null || kotlin.math.abs(v - last95!!) > 1e-9) { entities.add(FuelPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last95 = v } }
-            pt.p98?.let { v -> if (last98 == null || kotlin.math.abs(v - last98!!) > 1e-9) { entities.add(FuelPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last98 = v } }
-            pt.p0?.let { v -> if (last0 == null || kotlin.math.abs(v - last0!!) > 1e-9) { entities.add(FuelPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last0 = v } }
+            pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last92 = v } }
+            pt.p95?.let { v -> if (last95 == null || kotlin.math.abs(v - last95!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last95 = v } }
+            pt.p98?.let { v -> if (last98 == null || kotlin.math.abs(v - last98!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last98 = v } }
+            pt.p0?.let { v -> if (last0 == null || kotlin.math.abs(v - last0!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last0 = v } }
         }
         if (entities.isEmpty()) return 0
         entities.chunked(500).forEach { priceDao.insertAll(it) }
@@ -478,7 +478,7 @@ class OilPriceDbSyncer(
                 // 当日同键已存在则跳过
                 if (priceDao.getPrice(item.province, item.grade, item.effectiveDate) == null) {
                     priceDao.insert(
-                        FuelPriceEntity(
+                        KOiLPriceEntity(
                             province = item.province,
                             grade = item.grade,
                             effectiveDate = item.effectiveDate,
@@ -578,7 +578,7 @@ class OilPriceDbSyncer(
             // 生效日 = 归并窗口日 + 1；窗口日为空（从未成功推算）时用 today 原值，避免"today+1"假生效日
             val eff = getAdjustDates().let { if (it.isEmpty()) today else addOneDay(adjustToWindow(today, it)) }
 
-            val toInsert = mutableListOf<FuelPriceEntity>()
+            val toInsert = mutableListOf<KOiLPriceEntity>()
             val toPending = mutableListOf<KOiLPricePendingEntity>()
             var verified = 0
             var pending = 0
@@ -599,7 +599,7 @@ class OilPriceDbSyncer(
                     matches -> {
                         // 双源一致：自动入库
                         if (priceDao.getPrice(province, gradeLabel, eff) == null) {
-                            toInsert.add(FuelPriceEntity(province, gradeLabel, eff, pPrice!!, pSource, true))
+                            toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, pPrice!!, pSource, true))
                         }
                         verified++
                     }
@@ -626,7 +626,7 @@ class OilPriceDbSyncer(
                         val price = pPrice ?: sPrice
                         val source = if (pPrice != null) pSource else sSource
                         if (price != null && priceDao.getPrice(province, gradeLabel, eff) == null) {
-                            toInsert.add(FuelPriceEntity(province, gradeLabel, eff, price, source, true))
+                            toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, price, source, true))
                         }
                         verified++
                     }
