@@ -256,15 +256,13 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                             state = pagerState,
                             snapAnimationSpec = PagerNavigationSpringSpec,
                         )
-                        // 【对齐 Mishka】miuix 定制手势管线：跨轴拦截器接管左右滑动
-                        // （页面内垂直滚动与 Pager 横向滑动不打架）+ 配套嵌套滚动连接。
-                        // 手势滚动由拦截器节点调度，userScrollEnabled 关闭原生手势（Mishka 同参）
-                        val pagerGestureModifier = Modifier
-                            .fillMaxSize()
-                            .pagerGestureOverride(
-                                pagerState = pagerState,
-                                mode = PagerInterceptionMode.CrossAxisInterceptor,
-                            )
+                        // 【去拦截器原因】Miuix 的 pagerGestureOverride(CrossAxisInterceptor) 挂在
+                        // Pager（页面内容父级）上，父级优先判定横向 slop 并消费，导致页面内所有
+                        // 横向组件（调价记录页的省份横滑条/走势图拖动）永远抢不到手势；
+                        // userScrollEnabled=false 时 Pager 又不翻页 → 横向手势被整体吞掉。
+                        // 本 App 切 tab 走底部导航（springAnimateToPage），无需横滑翻页，
+                        // 故移除跨轴拦截器，让横向手势归还给页面内组件。
+                        val pagerGestureModifier = Modifier.fillMaxSize()
                         HorizontalPager(
                             state = pagerState,
                             modifier = pagerGestureModifier,
@@ -274,7 +272,6 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                             beyondViewportPageCount = 1,
                             overscrollEffect = null,
                             userScrollEnabled = false,
-                            pageNestedScrollConnection = PagerGestureNestedScrollConnection,
                             flingBehavior = pagerFlingBehavior,
                         ) { page ->
                             when (page) {

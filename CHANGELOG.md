@@ -2,6 +2,14 @@
 
 > 本文件随源码包分发，记录每个版本相对上一个版本的变更，便于跨环境接手开发时快速了解改动。
 
+## v1.4.163（versionCode 168）— 2026-10-25
+
+### 🐛 修复（重要）
+- **省份横滑/走势图拖动仍失效的真正根因**：MainScreen 的 HorizontalPager 挂了 Miuix `pagerGestureOverride(CrossAxisInterceptor)` 跨轴手势拦截器——它挂在 Pager（页面内容**父级**）上，父级优先判定横向手势并消费，页面内所有横向组件（省份横滑条、走势图拖动）永远抢不到；而 `userScrollEnabled=false` 使 Pager 自身又不翻页 → **横向手势被整体吞掉，页面毫无反应**（此即多版修复无效的根因，与遮罩/LazyRow/手势实现无关）。
+- **修复**：移除 Pager 跨轴拦截器及其配套嵌套滚动连接（`pagerGestureOverride` / `PagerInterceptionMode` / `PagerGestureNestedScrollConnection`）。切 tab 仍走底部导航（springAnimateToPage），无需横滑翻页；横向手势完全归还给页面内组件。
+
+---
+
 ## v1.4.162（versionCode 167）— 2026-10-25
 
 ### ✨ 优化
