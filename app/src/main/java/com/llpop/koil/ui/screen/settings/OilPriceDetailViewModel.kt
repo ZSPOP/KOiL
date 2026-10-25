@@ -25,10 +25,10 @@ data class PriceAdjustItem(
 /** 油价明细页状态：省份/油号选择 + 调价时间线 + 涨跌汇总 */
 data class OilPriceDetailUiState(
     val province: String = "广东",
-    val grade: String = "92",
+    val grade: String = "92号汽油",
     val provinces: List<String> = OilPriceDbSyncer.PROVINCES,
-    val grades: List<String> = OilPriceNetwork.GRADE_LABELS.keys.toList(),
-    val gradeLabels: Map<String, String> = OilPriceNetwork.GRADE_LABELS,
+    // 库内 grade 以完整标签存储（"92号汽油"），查询与显示一致
+    val grades: List<String> = OilPriceNetwork.GRADE_LABELS.values.toList(),
     val items: List<PriceAdjustItem> = emptyList(),
     val riseTotal: Double = 0.0,   // 今年累计上调（元/L）
     val fallTotal: Double = 0.0,   // 今年累计下调（元/L）
@@ -41,7 +41,7 @@ class OilPriceDetailViewModel(
 ) : ViewModel() {
 
     private val provinceFlow = MutableStateFlow("广东")
-    private val gradeFlow = MutableStateFlow("92")
+    private val gradeFlow = MutableStateFlow("92号汽油")
 
     val uiState = combine(provinceFlow, gradeFlow) { p, g -> p to g }
         .flatMapLatest { (p, g) ->
@@ -56,7 +56,7 @@ class OilPriceDetailViewModel(
     }
 
     fun selectGrade(grade: String) {
-        if (grade in OilPriceNetwork.GRADE_LABELS) gradeFlow.value = grade
+        if (grade in OilPriceNetwork.GRADE_LABELS.values) gradeFlow.value = grade
     }
 
     private fun buildUiState(

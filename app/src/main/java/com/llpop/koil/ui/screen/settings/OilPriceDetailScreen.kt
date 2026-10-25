@@ -110,7 +110,7 @@ fun OilPriceDetailScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.grades.forEach { g ->
                     GradeChip(
-                        label = state.gradeLabels[g] ?: g,
+                        label = g,
                         selected = g == state.grade,
                         onClick = { viewModel.selectGrade(g) },
                     )

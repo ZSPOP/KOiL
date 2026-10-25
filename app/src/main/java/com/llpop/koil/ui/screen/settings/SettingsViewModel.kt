@@ -170,10 +170,11 @@ class SettingsViewModel(
             }
             val pendingCount = pendingDao.countPending()
 
-            // 完整性缺口：窗口日覆盖数 < 应有量的省份数（补灌仍未覆盖完时设置页标红提示）
-            val incompleteProvinceCount = if (windowDates.isNotEmpty()) {
+            // 完整性缺口：窗口日覆盖数 < "今年已发生窗口数" 的省份数（阈值不含未来窗口，
+            // 否则所有省都会因"未来窗口尚无记录"而误报）
+            val incompleteProvinceCount = if (adjustmentCount > 0) {
                 OilPriceDbSyncer.PROVINCES.count { province ->
-                    runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0) < windowDates.size
+                    runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0) < adjustmentCount
                 }
             } else {
                 0

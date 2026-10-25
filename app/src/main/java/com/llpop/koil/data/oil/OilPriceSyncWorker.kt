@@ -42,11 +42,12 @@ class OilPriceSyncWorker(
         if (!settings.pricePush.first()) return
         val dao = koin.get<FuelPriceDao>()
 
-        // 1) 调价生效通知：默认省 + 默认油号的最新生效日变化
+        // 1) 调价生效通知：默认省 + 默认油号的最新生效日变化（库内 grade 为完整标签，如"92号汽油"）
         val province = settings.defaultProvince.first()
             .takeIf { it in OilPriceDbSyncer.PROVINCES } ?: OilPriceDbSyncer.PROVINCES[0]
-        val grade = settings.defaultOilGrade.first()
+        val gradeCode = settings.defaultOilGrade.first()
             .takeIf { it in OilPriceNetwork.GRADE_LABELS } ?: "92"
+        val grade = OilPriceNetwork.GRADE_LABELS[gradeCode] ?: gradeCode
         val newest = dao.getNewest(province, grade)
         if (newest != null) {
             val lastNotified = settings.priceLastNotifiedDate.first()
