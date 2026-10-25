@@ -302,20 +302,27 @@ class OilPriceDbSyncer(
         seedProvince(home, adjustDates)
     }
 
-    /** 后台补全缺失省份一整年曲线（幂等：只拉库内尚未覆盖的省，全部覆盖后直接跳过——根治每次冷启动重复联网灌库） */
+    /**
+     * 补全各省窗口日覆盖（幂等，REPLACE）。
+     * 判定标准：**窗口日覆盖数 < 应有量则重灌该省**，而非"省是否已在库"——
+     * 假生效日被清理后各省可能只剩零星记录却仍被判"已覆盖"，导致缺口永不补全。
+     * 窗口日历未就绪时跳过（避免降级用 abapi 原日期再产生假日期）；单省失败只留缺口，不阻塞其他省。
+     */
     suspend fun seedRemainingProvinces() {
         if (priceDao.count() == 0) return
         // 互斥：启动兜底与 checkAndUpdate 尾部可能同时触发，只允许一路执行
         if (!seedLock.compareAndSet(false, true)) return
         try {
-            val seeded = priceDao.distinctProvinces().toSet()
-            val missing = PROVINCES.filter { it !in seeded }
-            if (missing.isEmpty()) return
-            val skip = settings.defaultProvince.first().takeIf { it in PROVINCES } ?: PROVINCES[0]
             val adjustDates = getAdjustDates()
-            missing.forEach { province ->
-                seedProvince(province, adjustDates)
-                kotlinx.coroutines.delay(200)
+            if (adjustDates.isEmpty()) return
+            // 期望覆盖窗口日数（含搁浅窗口）；每省独立拉取，失败不影响其他省
+            val threshold = adjustDates.size
+            PROVINCES.forEach { province ->
+                val covered = runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
+                if (covered < threshold) {
+                    seedProvince(province, adjustDates)
+                    kotlinx.coroutines.delay(200)
+                }
             }
         } finally {
             seedLock.set(false)

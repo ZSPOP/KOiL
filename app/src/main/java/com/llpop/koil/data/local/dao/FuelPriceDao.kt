@@ -44,6 +44,10 @@ interface FuelPriceDao {
     @Query("SELECT COUNT(DISTINCT province) FROM fuel_prices")
     suspend fun countProvinces(): Int
 
+    /** 指定省份覆盖的生效日期数（完整性补灌判定：覆盖窗口日 < 应有量则重灌该省） */
+    @Query("SELECT COUNT(DISTINCT effectiveDate) FROM fuel_prices WHERE province = :province")
+    suspend fun countDatesForProvince(province: String): Int
+
     /** 覆盖油号数 */
     @Query("SELECT COUNT(DISTINCT grade) FROM fuel_prices")
     suspend fun countGrades(): Int
