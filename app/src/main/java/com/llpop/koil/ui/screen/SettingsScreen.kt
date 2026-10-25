@@ -102,7 +102,7 @@ fun SettingsScreen(
     // 油价明细子页（涨跌统计 + 走势 + 时间线）显隐：true 时整个设置页切换为明细页
     var showPriceDetail by rememberSaveable { mutableStateOf(false) }
     if (showPriceDetail) {
-        OilPriceDetailScreen(onBack = { showPriceDetail = false })
+        OilPriceDetailScreen(onBack = { showPriceDetail = false }, bottomPadding = bottomPadding)
         return
     }
 

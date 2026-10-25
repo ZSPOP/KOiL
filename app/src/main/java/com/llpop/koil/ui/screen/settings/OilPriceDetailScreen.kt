@@ -16,14 +16,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,12 +54,13 @@ private val UpColor = Color(0xFFE53935)
 private val DownColor = Color(0xFF43A047)
 
 /**
- * 油价明细页：省份/油号切换 → 今年累计涨跌汇总 + 价格走势图 + 调价时间线。
+ * 油价明细页：省份（下拉）/油号切换 → 今年累计涨跌汇总 + 价格走势图 + 调价时间线。
  * 由设置页「油價數據庫」卡片入口进入；返回手势/返回按钮回到设置页。
  */
 @Composable
 fun OilPriceDetailScreen(
     onBack: () -> Unit,
+    bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     viewModel: OilPriceDetailViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -92,15 +98,41 @@ fun OilPriceDetailScreen(
             }
             Spacer(Modifier.height(8.dp))
 
-            // —— 省份选择（横向滚动 chips）——
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // —— 省份选择（下拉菜单，31 省完整可见）——
+            var provinceMenuOpen by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(KOiLColors.Primary)
+                    .clickable { provinceMenuOpen = true }
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                items(state.provinces) { p ->
-                    ProvinceChip(
-                        label = p,
-                        selected = p == state.province,
-                        onClick = { viewModel.selectProvince(p) },
+                Text(
+                    text = state.province,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                )
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            DropdownMenu(
+                expanded = provinceMenuOpen,
+                onDismissRequest = { provinceMenuOpen = false },
+            ) {
+                state.provinces.forEach { p ->
+                    DropdownMenuItem(
+                        text = { Text(text = p, fontSize = 13.sp) },
+                        onClick = {
+                            viewModel.selectProvince(p)
+                            provinceMenuOpen = false
+                        },
                     )
                 }
             }
@@ -171,9 +203,10 @@ fun OilPriceDetailScreen(
             PriceTrendCanvas(items = state.items)
             Spacer(Modifier.height(8.dp))
 
-            // —— 调价时间线 ——
+            // —— 调价时间线（底部留出底栏高度，避免条目被遮挡）——
             LazyColumn(
                 modifier = Modifier.weight(1f),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = bottomPadding + 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items(state.items, key = { it.date }) { item ->
@@ -181,22 +214,6 @@ fun OilPriceDetailScreen(
                 }
             }
         }
-    }
-}
-
-/** 省份选择 chip */
-@Composable
-private fun ProvinceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-    val fg = if (selected) Color.White else MiuixTheme.colorScheme.onBackground
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-    ) {
-        Text(text = label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
     }
 }
 
