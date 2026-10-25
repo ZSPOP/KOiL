@@ -72,6 +72,15 @@ interface FuelPriceDao {
     @Query("SELECT * FROM fuel_prices WHERE effectiveDate = :date LIMIT 1")
     suspend fun getByDate(date: String): FuelPriceEntity?
 
+    @Query("SELECT * FROM fuel_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate ASC")
+    fun observeByProvinceGrade(province: String, grade: String): Flow<List<FuelPriceEntity>>
+
+    @Query("SELECT * FROM fuel_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate ASC")
+    suspend fun getByProvinceGrade(province: String, grade: String): List<FuelPriceEntity>
+
+    @Query("SELECT COUNT(*) FROM fuel_prices WHERE province = :province AND grade = :grade")
+    suspend fun countByProvinceGrade(province: String, grade: String): Int
+
     @Query("SELECT * FROM fuel_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate DESC LIMIT 1")
     suspend fun getNewest(province: String, grade: String): FuelPriceEntity?
 

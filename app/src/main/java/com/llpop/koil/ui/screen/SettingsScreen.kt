@@ -40,6 +40,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,6 +63,7 @@ import com.llpop.koil.ui.component.KOiLScreenScaffold
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import com.llpop.koil.ui.screen.settings.OilPriceDetailScreen
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
@@ -96,6 +98,13 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // 油价明细子页（涨跌统计 + 走势 + 时间线）显隐：true 时整个设置页切换为明细页
+    var showPriceDetail by rememberSaveable { mutableStateOf(false) }
+    if (showPriceDetail) {
+        OilPriceDetailScreen(onBack = { showPriceDetail = false })
+        return
+    }
 
     // 全局焦点管理 + 偏差输入框点击标志（用于"点击输入框外部即收起提交"，无需坐标计算）
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -281,6 +290,13 @@ fun SettingsScreen(
             )
             SettingDivider()
             SettingSwitchRow(
+                title = stringResource(R.string.set_price_push),
+                subtitle = stringResource(R.string.set_price_push_sub),
+                checked = uiState.pricePush,
+                onCheckedChange = viewModel::setPricePush,
+            )
+            SettingDivider()
+            SettingSwitchRow(
                 title = stringResource(R.string.set_keep_grade),
                 subtitle = stringResource(R.string.set_keep_grade_sub),
                 checked = uiState.keepLastGrade,
@@ -376,7 +392,40 @@ fun SettingsScreen(
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                 }
+                // —— 完整性缺口提示（补灌未覆盖完的省，红色警示）——
+                if (priceDbStatus.incompleteProvinceCount > 0) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.pdb_incomplete, priceDbStatus.incompleteProvinceCount),
+                        fontSize = 12.sp,
+                        color = Color(0xFFE53935),
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
+
+                // —— 查看调价记录入口（涨跌统计 + 走势 + 时间线明细页）——
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showPriceDetail = true }
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.pdb_view_detail),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = KOiLColors.Primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
 
                 // —— 统计四宫格（蓝色图标 + 数值 + 标签，对齐截图样式）——
                 Row(modifier = Modifier.fillMaxWidth()) {

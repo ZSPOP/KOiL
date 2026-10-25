@@ -82,6 +82,9 @@ class AppSettings(private val context: Context) {
         private val KEY_REMIND_THRESHOLD = doublePreferencesKey("KOiL-remind-threshold")
         private val KEY_ABNORMAL_THRESHOLD = doublePreferencesKey("KOiL-abnormal-threshold")
         private val KEY_PRICE_ALERT = booleanPreferencesKey("KOiL-price-alert")
+        private val KEY_PRICE_PUSH = booleanPreferencesKey("KOiL-price-push")
+        private val KEY_PRICE_LAST_NOTIFIED_DATE = stringPreferencesKey("KOiL-price-last-notified-date")
+        private val KEY_PRICE_LAST_WINDOW_REMINDED = stringPreferencesKey("KOiL-price-last-window-reminded")
         private val KEY_LOCATION_ENABLED = booleanPreferencesKey("KOiL-location-enabled")
         private val KEY_HAS_PROMPTED_LOCATION = booleanPreferencesKey("KOiL-has-prompted-location")
         private val KEY_PRICE_DB_AUTO_UPDATE = booleanPreferencesKey("KOiL-price-db-auto-update")
@@ -204,6 +207,26 @@ class AppSettings(private val context: Context) {
     val priceAlert: Flow<Boolean> = context.KOiLDataStore.data.map { it[KEY_PRICE_ALERT] ?: true }
     suspend fun setPriceAlert(on: Boolean) {
         context.KOiLDataStore.edit { it[KEY_PRICE_ALERT] = on }
+    }
+
+    // ---- 调价推送通知开关（koil-price-push，默认开）----
+    val pricePush: Flow<Boolean> = context.KOiLDataStore.data.map { it[KEY_PRICE_PUSH] ?: true }
+    suspend fun setPricePush(on: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_PUSH] = on }
+    }
+
+    // ---- 上次已推送调价的生效日（避免重复通知）----
+    val priceLastNotifiedDate: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_LAST_NOTIFIED_DATE] ?: "" }
+    suspend fun setPriceLastNotifiedDate(date: String) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_LAST_NOTIFIED_DATE] = date }
+    }
+
+    // ---- 上次已提醒的窗口日（窗口日前一天提醒去重）----
+    val priceLastWindowReminded: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_LAST_WINDOW_REMINDED] ?: "" }
+    suspend fun setPriceLastWindowReminded(date: String) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_LAST_WINDOW_REMINDED] = date }
     }
 
     // ---- 定位（koil-location-enabled）----

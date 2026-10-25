@@ -38,6 +38,7 @@ data class SettingsUiState(
     val remindThreshold: Double = AppSettings.DEFAULT_REMIND_THRESHOLD,
     val abnormalThreshold: Double = AppSettings.DEFAULT_ABNORMAL_THRESHOLD,
     val priceAlert: Boolean = false,
+    val pricePush: Boolean = true,
     val locationEnabled: Boolean = false,
     val priceDbAutoUpdate: Boolean = false,
     val deviationThreshold: Double = AppSettings.DEFAULT_DEVIATION_THRESHOLD,
@@ -125,6 +126,7 @@ class SettingsViewModel(
         val nextAdjustWindowDate: String? = null,   // 下一个调价窗口日
         val windowStranded: Boolean = false,        // 最近窗口搁浅（库内无该窗口调价记录）
         val adjustWindowPrice: String? = null,      // 最近窗口有调价时的价格文本（元/升）
+        val incompleteProvinceCount: Int = 0,       // 窗口日覆盖不足的省份数（完整性提示）
         val versionLabel: String = "V——",           // 版本号（V+最新调价窗口日，不受搁浅影响）
     )
     private val _priceDbStatus = MutableStateFlow(PriceDbStatus())
@@ -167,6 +169,15 @@ class SettingsViewModel(
                 priceDao.countAdjustments()
             }
             val pendingCount = pendingDao.countPending()
+
+            // 完整性缺口：窗口日覆盖数 < 应有量的省份数（补灌仍未覆盖完时设置页标红提示）
+            val incompleteProvinceCount = if (windowDates.isNotEmpty()) {
+                OilPriceDbSyncer.PROVINCES.count { province ->
+                    runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0) < windowDates.size
+                }
+            } else {
+                0
+            }
 
             val lastCheckTs = settings.priceDbLastCheckAt.first()
             val lastUpdatedAt = settings.priceDbLastUpdateDate.first()
@@ -253,6 +264,7 @@ class SettingsViewModel(
                 nextAdjustWindowDate = nextAdjustWindowDate,
                 windowStranded = windowStranded,
                 adjustWindowPrice = adjustWindowPrice,
+                incompleteProvinceCount = incompleteProvinceCount,
                 versionLabel = versionLabel,
             )
             _pendingItems.value = pendingDao.getPending()
@@ -342,6 +354,7 @@ class SettingsViewModel(
         settings.remindThreshold,
         settings.abnormalThreshold,
         settings.priceAlert,
+        settings.pricePush,
         settings.locationEnabled,
         settings.priceDbAutoUpdate,
         settings.deviationThreshold,
@@ -360,13 +373,14 @@ class SettingsViewModel(
             remindThreshold = args[6] as Double,
             abnormalThreshold = args[7] as Double,
             priceAlert = args[8] as Boolean,
-            locationEnabled = args[9] as Boolean,
-            priceDbAutoUpdate = args[10] as Boolean,
-            deviationThreshold = args[11] as Double,
-            priceDbCache = args[12] as String,
-            floatingBottomBar = args[13] as Boolean,
-            floatingBottomBarStyle = args[14] as String,
-            bottomBarMode = args[15] as String,
+            pricePush = args[9] as Boolean,
+            locationEnabled = args[10] as Boolean,
+            priceDbAutoUpdate = args[11] as Boolean,
+            deviationThreshold = args[12] as Double,
+            priceDbCache = args[13] as String,
+            floatingBottomBar = args[14] as Boolean,
+            floatingBottomBarStyle = args[15] as String,
+            bottomBarMode = args[16] as String,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
@@ -405,6 +419,9 @@ class SettingsViewModel(
 
     fun setPriceAlert(on: Boolean) =
         viewModelScope.launch { settings.setPriceAlert(on) }
+
+    fun setPricePush(on: Boolean) =
+        viewModelScope.launch { settings.setPricePush(on) }
 
     fun setLocationEnabled(on: Boolean) =
         viewModelScope.launch { settings.setLocationEnabled(on) }

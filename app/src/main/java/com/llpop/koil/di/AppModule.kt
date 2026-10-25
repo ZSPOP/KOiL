@@ -11,6 +11,7 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.MainViewModel
 import com.llpop.koil.ui.screen.add.AddViewModel
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
+import com.llpop.koil.ui.screen.settings.OilPriceDetailViewModel
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModelOf
@@ -32,4 +33,5 @@ val appModule = module {
     viewModelOf(::AddViewModel)
     viewModelOf(::OverviewViewModel)
     viewModelOf(::SettingsViewModel)
+    viewModelOf(::OilPriceDetailViewModel)
 }
