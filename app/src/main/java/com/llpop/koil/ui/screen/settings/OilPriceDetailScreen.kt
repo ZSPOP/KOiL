@@ -267,17 +267,17 @@ fun OilPriceDetailScreen(
                         text = stringResource(R.string.koil_pdb_col_price),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.width(72.dp),
+                        modifier = Modifier.width(70.dp),
                     )
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.koil_pdb_col_change),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                     )
                 }
-                state.items.asReversed().forEachIndexed { index, row ->
-                    AdjustTimelineRow(item = row, isLatest = index == 0)
+                state.items.asReversed().forEach { row ->
+                    AdjustTimelineRow(row)
                 }
             }
             Spacer(Modifier.height(bottomPadding + 24.dp))
@@ -575,10 +575,10 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
     }
 }
 
-/** 调价时间线单行（三列铺满）：日期(左) · 价格(中，16sp粗体，最新行主题色) · 涨跌幅(右贴边，幅度条chip) */
+/** 调价时间线单行（三列紧凑 + 第4列幅度条）：
+ *  日期(左) · 价格(左) · 涨跌幅(chip,左) · 幅度条(长度=调价幅度/1元基准，涨红跌绿) */
 @Composable
-private fun AdjustTimelineRow(item: PriceAdjustItem, isLatest: Boolean) {
-    val isBase = item.diff == null
+private fun AdjustTimelineRow(item: PriceAdjustItem) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -586,30 +586,52 @@ private fun AdjustTimelineRow(item: PriceAdjustItem, isLatest: Boolean) {
                 .padding(horizontal = 4.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 列1：日期（固定宽，左对齐；基準價行淡化）
+            // 列1：日期（固定宽，左对齐）
             Text(
                 text = item.label,
                 fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = if (isBase) 0.55f else 1f),
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
                 modifier = Modifier.width(56.dp),
             )
             Spacer(Modifier.width(8.dp))
-            // 列2：价格（固定宽，左对齐；最新行主题色突出，基準價行淡化）
+            // 列2：价格（固定宽，左对齐）
             Text(
                 text = "¥%.2f".format(item.price),
-                fontSize = 16.sp,
-                fontWeight = if (isBase) FontWeight.Normal else FontWeight.Bold,
-                color = when {
-                    isLatest -> KOiLColors.Primary
-                    isBase -> MiuixTheme.colorScheme.onBackground.copy(alpha = 0.55f)
-                    else -> MiuixTheme.colorScheme.onBackground
-                },
-                modifier = Modifier.width(72.dp),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MiuixTheme.colorScheme.onBackground,
+                modifier = Modifier.width(70.dp),
             )
-            // 弹性填充：涨跌幅列右对齐贴边，整行铺满不空右
-            Spacer(Modifier.weight(1f))
-            // 列3：涨跌幅 chip（右对齐，幅度条）
+            Spacer(Modifier.width(8.dp))
+            // 列3：涨跌幅 chip（箭头 + 文字）
             ActionChip(diff = item.diff)
+            Spacer(Modifier.width(8.dp))
+            // 列4：幅度条——长度正比于调价幅度（1 元为满条，最短 6% 保证可见），涨红跌绿
+            val diff = item.diff
+            val barColor = when {
+                diff == null -> null
+                diff > 0.001 -> UpColor
+                diff < -0.001 -> DownColor
+                else -> null
+            }
+            if (barColor != null) {
+                val frac = (kotlin.math.abs(diff!!).toFloat() / 1f).coerceIn(0.06f, 1f)
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.CenterStart,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(frac)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(barColor.copy(alpha = 0.8f)),
+                    )
+                }
+            } else {
+                // 基準價/持平：无幅度条，占位列保持对齐
+                Spacer(Modifier.weight(1f))
+            }
         }
         // 行间细分隔线
         Box(
@@ -651,16 +673,6 @@ private fun ActionChip(diff: Double?) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = fgColor,
-            )
-            Spacer(Modifier.width(3.dp))
-            // 幅度条：长度正比于调价幅度（全局基准 25dp，最小 3dp 保证可见）
-            val barLen = ((kotlin.math.abs(diff!!).toFloat() * 25f).coerceIn(3f, 25f)).dp
-            Box(
-                modifier = Modifier
-                    .width(barLen)
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(fgColor.copy(alpha = 0.5f)),
             )
             Spacer(Modifier.width(3.dp))
         }
