@@ -243,6 +243,9 @@
     <string name="koil_pdb_rise_total">今年累计上调</string>
     <string name="koil_pdb_fall_total">今年累计下调</string>
     <string name="koil_pdb_latest_price">最新价格</string>
+    <string name="koil_pdb_col_date">日期</string>
+    <string name="koil_pdb_col_action">调整</string>
+    <string name="koil_pdb_col_price">价格</string>
     <string name="koil_pdb_up_count">上调次数</string>
     <string name="koil_pdb_down_count">下调次数</string>
     <string name="koil_pdb_stranded_count">搁浅次数</string>
