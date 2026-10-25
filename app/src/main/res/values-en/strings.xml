@@ -230,13 +230,13 @@
     <string name="koil_msg_ignored">Ignored</string>
     <string name="koil_msg_adopt_failed">Adopt failed: selected source price is empty</string>
     <string name="koil_msg_pdb_update_failed">Update failed: %1$s</string>
-        <string name="koil_pdb_db_title">%1$s</string>
-    <string name="koil_pdb_db_title_plain">Pending check</string>
+        <string name="koil_pdb_db_title">Database version (%1$s)</string>
+    <string name="koil_pdb_db_title_plain">Database version (pending)</string>
 <string name="koil_pdb_stats">%1$d provinces %2$d grades %3$d adjustments %4$d records</string>
     <string name="koil_pdb_updated_and_until">Updated %1$s · Data to %2$s</string>
-    <string name="koil_pdb_adjust_stranded">Window %1$s (stranded, price held at %2$s), next window %3$s</string>
-    <string name="koil_pdb_adjust_adjusted">Window %1$s · adjusted to %2$s yuan/L, next window %3$s</string>
-    <string name="koil_pdb_next_only">Next adjustment window %1$s</string>
+    <string name="koil_pdb_adjust_stranded">Window %1$s (stranded, price held at %2$s)</string>
+    <string name="koil_pdb_adjust_adjusted">Window %1$s · adjusted to %2$s yuan/L</string>
+    <string name="koil_pdb_next_window">Next window: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>
     <string name="koil_pdb_detail_title">Price Adjustments</string>
     <string name="koil_pdb_back">Back to settings</string>
@@ -259,7 +259,7 @@
     <string name="koil_pdb_down">Down ¥%1$.2f</string>
     <string name="koil_pdb_flat">Unchanged</string>
     <string name="koil_pdb_first_base">Baseline</string>
-    <string name="koil_pdb_view_detail">View adjustments</string>
+    <string name="koil_pdb_view_detail">View</string>
     <string name="koil_pdb_incomplete">%1$d province(s) incomplete</string>
     <string name="koil_set_price_push">Price change notifications</string>
     <string name="koil_set_price_push_sub">System notification on adjustment &amp; day before window</string>

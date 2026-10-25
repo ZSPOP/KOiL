@@ -230,13 +230,13 @@
     <string name="koil_msg_ignored">已忽略</string>
     <string name="koil_msg_adopt_failed">採納失敗，所選源價格為空</string>
     <string name="koil_msg_pdb_update_failed">更新失敗：%1$s</string>
-        <string name="koil_pdb_db_title">%1$s</string>
-    <string name="koil_pdb_db_title_plain">待檢測</string>
+        <string name="koil_pdb_db_title">數據庫版本(%1$s)</string>
+    <string name="koil_pdb_db_title_plain">數據庫版本(待檢測)</string>
 <string name="koil_pdb_stats">%1$d 省份 %2$d 油號 %3$d 調價 %4$d 記錄</string>
     <string name="koil_pdb_updated_and_until">更新於 %1$s · 數據截至 %2$s</string>
-    <string name="koil_pdb_adjust_stranded">調整日 %1$s（擱淺，價格維持 %2$s），下一個調整日 %3$s</string>
-    <string name="koil_pdb_adjust_adjusted">調整日 %1$s · 調價至 %2$s 元/升，下一個調整日 %3$s</string>
-    <string name="koil_pdb_next_only">下一個調整日 %1$s</string>
+    <string name="koil_pdb_adjust_stranded">調整日 %1$s（擱淺，價格維持 %2$s）</string>
+    <string name="koil_pdb_adjust_adjusted">調整日 %1$s · 調價至 %2$s 元/升</string>
+    <string name="koil_pdb_next_window">下個窗口：%1$s</string>
     <string name="koil_pdb_not_checked">尚未檢測</string>
     <string name="koil_pdb_detail_title">調價記錄</string>
     <string name="koil_pdb_back">返回設定</string>
@@ -259,7 +259,7 @@
     <string name="koil_pdb_down">下調 ¥%1$.2f</string>
     <string name="koil_pdb_flat">維持不變</string>
     <string name="koil_pdb_first_base">基準價</string>
-    <string name="koil_pdb_view_detail">查看調價記錄</string>
+    <string name="koil_pdb_view_detail">查看</string>
     <string name="koil_pdb_incomplete">%1$d 省數據未拉取完整</string>
     <string name="koil_set_price_push">調價推送通知</string>
     <string name="koil_set_price_push_sub">調價生效與窗口日前推送系統通知</string>

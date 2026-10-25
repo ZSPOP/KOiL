@@ -50,6 +50,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -384,6 +387,20 @@ fun SettingsScreen(
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = stringResource(R.string.koil_pdb_view_detail),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = KOiLColors.Primary,
+                    )
+                    Spacer(Modifier.width(2.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = KOiLColors.Primary,
+                        modifier = Modifier.size(18.dp),
+                    )
                 }
                 // —— 完整性缺口提示（补灌未覆盖完的省，红色警示）——
                 if (priceDbStatus.incompleteProvinceCount > 0) {
@@ -395,31 +412,6 @@ fun SettingsScreen(
                     )
                 }
                 Spacer(Modifier.height(12.dp))
-
-                // —— 查看调价记录入口（涨跌统计 + 走势 + 时间线明细页，页面由 MainScreen 全屏承载，
-                //    脱离 HorizontalPager 以释放横向手势给明细页内组件）——
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenPriceDetail() }
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_pdb_view_detail),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = KOiLColors.Primary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                        modifier = Modifier.size(18.dp),
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
 
                 // —— 统计四宫格（蓝色图标 + 数值 + 标签，对齐截图样式）——
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -464,45 +456,41 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         val w1Short = priceDbStatus.adjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
                         val w2Short = priceDbStatus.nextAdjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
-                        when {
-                            w1Short != null && w2Short != null -> {
-                                Text(
-                                    text = if (priceDbStatus.windowStranded) {
-                                        stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort, w2Short)
-                                    } else if (priceDbStatus.adjustWindowPrice != null) {
-                                        stringResource(R.string.koil_pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!, w2Short)
-                                    } else {
-                                        stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort, w2Short)
-                                    },
-                                    fontSize = 12.sp,
-                                    lineHeight = 15.sp,
-                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                )
-                            }
-                            w2Short != null -> {
-                                Text(
-                                    text = stringResource(R.string.koil_pdb_next_only, w2Short),
-                                    fontSize = 12.sp,
-                                    lineHeight = 15.sp,
-                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                )
-                            }
-                            else -> {
-                                Text(
-                                    text = stringResource(R.string.koil_pdb_not_checked),
-                                    fontSize = 12.sp,
-                                    lineHeight = 15.sp,
-                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(4.dp))
+                        // 行1：調整日（单独一行，含搁浅/调价状态）
                         Text(
-                            text = stringResource(R.string.koil_pdb_last_update, lastCheckedText),
+                            text = when {
+                                w1Short != null && priceDbStatus.windowStranded ->
+                                    stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort)
+                                w1Short != null && priceDbStatus.adjustWindowPrice != null ->
+                                    stringResource(R.string.koil_pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!)
+                                w1Short != null ->
+                                    stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort)
+                                else ->
+                                    stringResource(R.string.koil_pdb_not_checked)
+                            },
                             fontSize = 12.sp,
                             lineHeight = 15.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
+                        Spacer(Modifier.height(4.dp))
+                        // 行2：下個窗口 + 最近更新（同一行）
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (w2Short != null) {
+                                Text(
+                                    text = stringResource(R.string.koil_pdb_next_window, w2Short),
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = stringResource(R.string.koil_pdb_last_update, lastCheckedText),
+                                fontSize = 12.sp,
+                                lineHeight = 15.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -683,34 +671,36 @@ fun SettingsScreen(
             )
         }
 
-        // 导出结果提示
+        // 导出/备份/更新结果提示：Toast 短暂提醒（自动消失，替代常驻卡片）
         val exportNotice by viewModel.exportMessage.collectAsState()
+        val toastContext = LocalContext.current
         val exportText = exportNotice.key?.let { formatNotice(it, exportNotice.args) }
-        if (exportText != null) {
-            Spacer(Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(KOiLColors.PrimaryContainer)
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-            ) {
-                Text(
-                    text = exportText,
-                    fontSize = 12.sp,
-                    color = KOiLColors.OnPrimaryContainer,
-                )
+        LaunchedEffect(exportNotice) {
+            if (exportText != null) {
+                android.widget.Toast.makeText(
+                    toastContext,
+                    exportText,
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                viewModel.clearExportMessage()
             }
         }
         Spacer(Modifier.height(24.dp))
 
-        // 关于
-        Box(
+        // 关于：KOiL（Unbounded 字体 20sp）+ 版本号（V 大写）
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = stringResource(R.string.koil_set_footer, com.llpop.koil.BuildConfig.VERSION_NAME),
+                text = "KOiL",
+                fontFamily = FontFamily(Font(R.font.unbounded_regular)),
+                fontSize = 20.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "V${com.llpop.koil.BuildConfig.VERSION_NAME}",
                 fontSize = 11.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
             )
