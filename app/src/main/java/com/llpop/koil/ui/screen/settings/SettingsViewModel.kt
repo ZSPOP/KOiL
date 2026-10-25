@@ -152,7 +152,17 @@ class SettingsViewModel(
             val latest = priceDao.maxDate() ?: ""
             val provinceCount = priceDao.countProvinces()
             val gradeCount = priceDao.countGrades()
-            val adjustmentCount = priceDao.countAdjustments()
+            // 调价次数：优先取"权威调价窗口日历"中今年已发生的窗口日数（含搁浅窗口），
+            // 符合"今年调价几次"的认知；窗口日历为空时才回退库内去重生效日期数
+            //（DISTINCT effectiveDate 会被降级假生效日污染，不可作为调价次数口径）
+            val windowDates = settings.priceDbAdjustDates.first()
+                .split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val todayStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
+            val adjustmentCount = if (windowDates.isNotEmpty()) {
+                windowDates.count { it <= todayStr }
+            } else {
+                priceDao.countAdjustments()
+            }
             val pendingCount = pendingDao.countPending()
 
             val lastCheckTs = settings.priceDbLastCheckAt.first()

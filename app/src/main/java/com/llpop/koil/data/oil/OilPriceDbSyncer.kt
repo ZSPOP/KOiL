@@ -87,16 +87,15 @@ class OilPriceDbSyncer(
         if (dates.isNotEmpty()) {
             cachedAdjustDates = dates
             settings.setPriceDbAdjustDates(dates)
-            // 一次性清理历史假生效日：删除 effectiveDate 不属于任何"窗口日+1"的孤立记录
-            //（此前窗口日为空时的降级路径曾把"原日期+1"（如 10-24→10-25）当生效日写入）
-            if (!settings.priceDbAdjustDatesLeaned.first()) {
-                val legal = dates.map { addOneDay(it) }.toSet()
-                val badDates = priceDao.distinctEffectiveDates().filter { it !in legal }
-                if (badDates.isNotEmpty()) {
-                    priceDao.getAll().filter { it.effectiveDate in badDates }
-                        .forEach { priceDao.deleteByKey(it.province, it.grade, it.effectiveDate) }
-                }
-                settings.setPriceDbAdjustDatesLeaned(true)
+            // 每次窗口日历就绪后幂等校验清理假生效日：
+            // 删除 effectiveDate 不属于任何"窗口日+1"的孤立记录
+            //（此前窗口日历为空时的降级路径曾把"原日期+1"（如 10-24→10-25）当生效日写入，
+            //   若不清除，COUNT(DISTINCT effectiveDate) 会被污染成远超真实调价次数的假数字）
+            val legal = dates.map { addOneDay(it) }.toSet()
+            val badDates = priceDao.distinctEffectiveDates().filter { it !in legal }
+            if (badDates.isNotEmpty()) {
+                priceDao.getAll().filter { it.effectiveDate in badDates }
+                    .forEach { priceDao.deleteByKey(it.province, it.grade, it.effectiveDate) }
             }
         }
         // 新机制首次跑通：一次性清空旧机制（双源当日价核验）遗留的假 pending，避免堆积
