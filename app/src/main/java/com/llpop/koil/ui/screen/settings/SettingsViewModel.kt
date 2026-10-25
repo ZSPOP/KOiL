@@ -147,6 +147,9 @@ class SettingsViewModel(
     /** 刷新油价库状态：统计 + 配置真实字段 + pending 列表 */
     fun loadPriceDbStatus() {
         viewModelScope.launch {
+            // 先按已缓存的权威窗口日历幂等清理孤立假生效日（如降级灌入的 09-27），
+            // 再统计，保证"价格维持日 / 调价次数 / 记录数"不被假日期污染
+            syncer.purgeIllegalEffectiveDatesIfReady()
             // SQL 聚合统计（替代全表 getAll 内存统计，数据量大时不再卡顿）
             val total = priceDao.count()
             val latest = priceDao.maxDate() ?: ""
