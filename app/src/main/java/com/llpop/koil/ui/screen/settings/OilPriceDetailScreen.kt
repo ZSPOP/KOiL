@@ -89,153 +89,154 @@ fun OilPriceDetailScreen(
             )
         },
     ) { _, topPadding, scrollBehavior, _ ->
-        Column(
+        // —— 明细页整体滚动容器（对齐一级页：整页滚动，顶栏随滚动折叠）——
+        // 省份条/油号/汇总卡/走势图/时间线全部作为列表项，滚动行为与设置页完全一致
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .padding(horizontal = 12.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                top = topPadding + 4.dp,
+                bottom = bottomPadding + 24.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Spacer(Modifier.height(topPadding))
-            Spacer(Modifier.height(4.dp))
-
             // —— 省份选择（横向滑动 chips）——
-            // 用最朴素的基础 horizontalScroll（非 LazyRow）：排除懒加载/绘制层/兄弟覆盖
-            // 一切可能干扰手势的因素，保证横向滑动必定生效；进入时估算滚动到当前省。
-            val provinceScrollState = rememberScrollState()
-            var provinceInitialScroll by remember { mutableStateOf(true) }
-            val density = LocalDensity.current
-            LaunchedEffect(state.province) {
-                if (provinceInitialScroll) {
-                    val idx = state.provinces.indexOf(state.province)
-                    if (idx >= 0) {
-                        // chip 宽约 52dp（2-3 字）+ 间距 8dp
-                        val offsetPx = with(density) { idx * 60.dp.roundToPx() }
-                        provinceScrollState.scrollTo(offsetPx)
+            item(Modifier.padding(bottom = 10.dp)) {
+                // 用最朴素的基础 horizontalScroll（非 LazyRow）：排除懒加载/绘制层/兄弟覆盖
+                // 一切可能干扰手势的因素，保证横向滑动必定生效；进入时估算滚动到当前省。
+                val provinceScrollState = rememberScrollState()
+                var provinceInitialScroll by remember { mutableStateOf(true) }
+                val density = LocalDensity.current
+                LaunchedEffect(state.province) {
+                    if (provinceInitialScroll) {
+                        val idx = state.provinces.indexOf(state.province)
+                        if (idx >= 0) {
+                            // chip 宽约 52dp（2-3 字）+ 间距 8dp
+                            val offsetPx = with(density) { idx * 60.dp.roundToPx() }
+                            provinceScrollState.scrollTo(offsetPx)
+                        }
+                        provinceInitialScroll = false
                     }
-                    provinceInitialScroll = false
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(provinceScrollState),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.provinces.forEach { p ->
+                        ProvinceChip(
+                            label = p,
+                            selected = p == state.province,
+                            onClick = { viewModel.selectProvince(p) },
+                        )
+                    }
                 }
             }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(provinceScrollState),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                state.provinces.forEach { p ->
-                    ProvinceChip(
-                        label = p,
-                        selected = p == state.province,
-                        onClick = { viewModel.selectProvince(p) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
 
             // —— 油号选择 ——
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                state.grades.forEach { g ->
-                    GradeChip(
-                        label = g,
-                        selected = g == state.grade,
-                        onClick = { viewModel.selectGrade(g) },
-                    )
+            item(Modifier.padding(bottom = 12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.grades.forEach { g ->
+                        GradeChip(
+                            label = g,
+                            selected = g == state.grade,
+                            onClick = { viewModel.selectGrade(g) },
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(12.dp))
 
             if (state.items.isEmpty()) {
                 // —— 空态 ——
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 60.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_pdb_detail_empty),
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
-                return@Column
-            }
-
-            // —— 涨跌汇总卡（卡片容器是 Box 布局，多个子项必须包 Column 防止重叠）——
-            KOiLBlurBackground(
-                modifier = Modifier.fillMaxWidth(),
-                cornerRadius = 20f,
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // —— 第一行：最新价格（前）+ 今年净涨跌（后）——
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                    ) {
-                        SummaryCell(
-                            modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.koil_pdb_latest_price),
-                            value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
-                            valueColor = MiuixTheme.colorScheme.onBackground,
-                        )
-                        SummaryCell(
-                            modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.koil_pdb_net_change),
-                            value = if (state.netChange >= 0) {
-                                stringResource(R.string.koil_pdb_net_up, state.netChange)
-                            } else {
-                                stringResource(R.string.koil_pdb_net_down, -state.netChange)
-                            },
-                            valueColor = if (state.netChange >= 0) UpColor else DownColor,
-                        )
-                    }
+                item {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(0.5.dp)
-                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                    )
-                    // —— 第二行：上调次数 / 下调次数 / 搁浅次数 ——
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(vertical = 60.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        SummaryCell(
-                            modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.koil_pdb_up_count),
-                            value = stringResource(R.string.koil_pdb_count_times, state.upCount),
-                            valueColor = UpColor,
-                        )
-                        SummaryCell(
-                            modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.koil_pdb_down_count),
-                            value = stringResource(R.string.koil_pdb_count_times, state.downCount),
-                            valueColor = DownColor,
-                        )
-                        SummaryCell(
-                            modifier = Modifier.weight(1f),
-                            label = stringResource(R.string.koil_pdb_stranded_count),
-                            value = stringResource(R.string.koil_pdb_count_times, state.strandedCount),
-                            valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                        Text(
+                            text = stringResource(R.string.koil_pdb_detail_empty),
+                            fontSize = 14.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                     }
                 }
-            }
-            Spacer(Modifier.height(12.dp))
+            } else {
+                // —— 涨跌汇总卡（卡片容器是 Box 布局，多个子项必须包 Column 防止重叠）——
+                item(Modifier.padding(bottom = 12.dp)) {
+                    KOiLBlurBackground(
+                        modifier = Modifier.fillMaxWidth(),
+                        cornerRadius = 20f,
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // —— 第一行：最新价格（前）+ 今年净涨跌（后）——
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            ) {
+                                SummaryCell(
+                                    modifier = Modifier.weight(1f),
+                                    label = stringResource(R.string.koil_pdb_latest_price),
+                                    value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
+                                    valueColor = MiuixTheme.colorScheme.onBackground,
+                                )
+                                SummaryCell(
+                                    modifier = Modifier.weight(1f),
+                                    label = stringResource(R.string.koil_pdb_net_change),
+                                    value = if (state.netChange >= 0) {
+                                        stringResource(R.string.koil_pdb_net_up, state.netChange)
+                                    } else {
+                                        stringResource(R.string.koil_pdb_net_down, -state.netChange)
+                                    },
+                                    valueColor = if (state.netChange >= 0) UpColor else DownColor,
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(0.5.dp)
+                                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                            )
+                            // —— 第二行：上调次数 / 下调次数 / 搁浅次数 ——
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                            ) {
+                                SummaryCell(
+                                    modifier = Modifier.weight(1f),
+                                    label = stringResource(R.string.koil_pdb_up_count),
+                                    value = stringResource(R.string.koil_pdb_count_times, state.upCount),
+                                    valueColor = UpColor,
+                                )
+                                SummaryCell(
+                                    modifier = Modifier.weight(1f),
+                                    label = stringResource(R.string.koil_pdb_down_count),
+                                    value = stringResource(R.string.koil_pdb_count_times, state.downCount),
+                                    valueColor = DownColor,
+                                )
+                                SummaryCell(
+                                    modifier = Modifier.weight(1f),
+                                    label = stringResource(R.string.koil_pdb_stranded_count),
+                                    value = stringResource(R.string.koil_pdb_count_times, state.strandedCount),
+                                    valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                        }
+                    }
+                }
 
-            // —— 价格走势图 ——
-            PriceTrendCanvas(items = state.items)
-            Spacer(Modifier.height(8.dp))
+                // —— 价格走势图 ——
+                item(Modifier.padding(bottom = 8.dp)) {
+                    PriceTrendCanvas(items = state.items)
+                }
 
-            // —— 调价时间线（最新在上；底部留足底栏高度避免遮挡）——
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                    bottom = (bottomPadding + 64.dp).coerceAtLeast(88.dp),
-                ),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
+                // —— 调价时间线（最新在上；无底栏，底部留白 24dp）——
                 items(state.items.asReversed(), key = { it.date }) { item ->
                     AdjustTimelineRow(item)
                 }

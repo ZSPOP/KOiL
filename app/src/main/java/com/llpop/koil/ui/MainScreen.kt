@@ -166,6 +166,8 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             Scaffold(
                     containerColor = Color.Transparent,
                     bottomBar = {
+                        // 二级全屏页（调价记录明细页）隐藏底部导航（对齐 Mishka 二级路由页规范）
+                        if (!showOilPriceDetail) {
                         if (floatingBottomBar) {
                             if (isFloatingStyleIos) {
                                 // iOS 液态玻璃悬浮导航条（Mishka 移植）
@@ -235,6 +237,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                 }
                             }
                         }
+                        }
                     },
                 ) { innerPadding ->
                     // 参考 Mishka：页面容器全屏（内容延伸到悬浮条下方，
@@ -276,10 +279,10 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                             )
                         if (showOilPriceDetail) {
                             // 调价记录明细页：全屏承载在 Pager 之外（对齐 Mishka 二级路由页），
-                            // 横向手势完全归页面内组件所有
+                            // 横向手势完全归页面内组件所有；无底栏，底部留白用系统导航条 inset
                             OilPriceDetailScreen(
                                 onBack = { showOilPriceDetail = false },
-                                bottomPadding = bottomPad,
+                                bottomPadding = innerPadding.calculateBottomPadding(),
                             )
                         } else {
                             HorizontalPager(
