@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,19 +24,24 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +50,7 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.theme.KOiLColors
+import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -69,47 +76,39 @@ fun OilPriceDetailScreen(
 
     KOiLScreenScaffold(
         title = stringResource(R.string.pdb_detail_title),
-    ) { _, topPadding, _, _ ->
+        navigationIcon = {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier.clickable(onClick = onBack).padding(8.dp).size(20.dp),
+            )
+        },
+    ) { _, topPadding, scrollBehavior, _ ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .padding(horizontal = 12.dp),
         ) {
             Spacer(Modifier.height(topPadding))
+            Spacer(Modifier.height(4.dp))
 
-            // —— 返回行 ——
-            Row(
-                modifier = Modifier
-                    .clickable(onClick = onBack)
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = null,
-                    tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.pdb_back),
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-
-            // —— 省份选择（横向滑动 chips，右侧渐隐提示可滑动；自动滚动到当前省）——
+            // —— 省份选择（横向滑动 chips，右侧渐隐提示可滑动；进入时自动滚动到当前省）——
             val provinceListState = rememberLazyListState()
+            var provinceInitialScroll by remember { mutableStateOf(true) }
             LaunchedEffect(state.province) {
-                val idx = state.provinces.indexOf(state.province)
-                if (idx >= 0) provinceListState.animateScrollToItem(idx)
+                if (provinceInitialScroll) {
+                    val idx = state.provinces.indexOf(state.province)
+                    if (idx >= 0) provinceListState.animateScrollToItem(idx)
+                    provinceInitialScroll = false
+                }
             }
             Box(modifier = Modifier.fillMaxWidth()) {
                 LazyRow(
                     state = provinceListState,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(end = 28.dp),
+                    contentPadding = PaddingValues(end = 40.dp),
                 ) {
                     items(state.provinces, key = { it }) { p ->
                         ProvinceChip(
@@ -119,26 +118,34 @@ fun OilPriceDetailScreen(
                         )
                     }
                 }
-                // 右侧渐隐遮罩 + 滑动箭头提示（还有更多省份）
-                Row(
+                // 右侧渐隐遮罩 + 滑动箭头提示：用 Canvas 绘制（无触摸节点），
+                // 不拦截 LazyRow 的滑动/点击手势（之前用 Row 覆盖导致滑不动）
+                val arrowHintColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
+                Canvas(
                     modifier = Modifier
                         .matchParentSize()
-                        .padding(start = 110.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                0f to Color.Transparent,
-                                0.55f to Color.Transparent,
-                                1f to surfaceColor,
-                            )
-                        ),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(start = 120.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.size(16.dp),
+                    drawRect(
+                        brush = Brush.horizontalGradient(
+                            0f to Color.Transparent,
+                            0.45f to Color.Transparent,
+                            1f to surfaceColor,
+                        ),
+                    )
+                // 半透明右箭头（提示可滑动）
+                val cx = size.width - 8.dp.toPx()
+                    val cy = size.height / 2f
+                    val s = 4.5.dp.toPx()
+                    val arrowPath = Path().apply {
+                        moveTo(cx - s, cy - s)
+                        lineTo(cx + s * 0.6f, cy)
+                        lineTo(cx - s, cy + s)
+                        close()
+                    }
+                    drawPath(
+                        path = arrowPath,
+                        color = arrowHintColor,
                     )
                 }
             }
@@ -173,60 +180,62 @@ fun OilPriceDetailScreen(
                 return@Column
             }
 
-            // —— 涨跌汇总卡 ——
+            // —— 涨跌汇总卡（卡片容器是 Box 布局，多个子项必须包 Column 防止重叠）——
             KOiLBlurBackground(
                 modifier = Modifier.fillMaxWidth(),
                 cornerRadius = 20f,
             ) {
-                // —— 第一行：上调次数 / 下调次数 / 搁浅次数 ——
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    SummaryCell(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_up_count),
-                        value = stringResource(R.string.pdb_count_times, state.upCount),
-                        valueColor = UpColor,
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // —— 第一行：上调次数 / 下调次数 / 搁浅次数 ——
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        SummaryCell(
+                            modifier = Modifier.weight(1f),
+                            label = stringResource(R.string.pdb_up_count),
+                            value = stringResource(R.string.pdb_count_times, state.upCount),
+                            valueColor = UpColor,
+                        )
+                        SummaryCell(
+                            modifier = Modifier.weight(1f),
+                            label = stringResource(R.string.pdb_down_count),
+                            value = stringResource(R.string.pdb_count_times, state.downCount),
+                            valueColor = DownColor,
+                        )
+                        SummaryCell(
+                            modifier = Modifier.weight(1f),
+                            label = stringResource(R.string.pdb_stranded_count),
+                            value = stringResource(R.string.pdb_count_times, state.strandedCount),
+                            valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
                     )
-                    SummaryCell(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_down_count),
-                        value = stringResource(R.string.pdb_count_times, state.downCount),
-                        valueColor = DownColor,
-                    )
-                    SummaryCell(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_stranded_count),
-                        value = stringResource(R.string.pdb_count_times, state.strandedCount),
-                        valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                )
-                // —— 第二行：净涨跌（累计上调−累计下调）+ 最新价格 ——
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    SummaryCell(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_net_change),
-                        value = (if (state.netChange >= 0) "+" else "-") + "¥%.2f".format(kotlin.math.abs(state.netChange)),
-                        valueColor = if (state.netChange >= 0) UpColor else DownColor,
-                    )
-                    SummaryCell(
-                        modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_latest_price),
-                        value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
-                        valueColor = MiuixTheme.colorScheme.onBackground,
-                    )
+                    // —— 第二行：净涨跌（累计上调−累计下调）+ 最新价格 ——
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        SummaryCell(
+                            modifier = Modifier.weight(1f),
+                            label = stringResource(R.string.pdb_net_change),
+                            value = (if (state.netChange >= 0) "+" else "-") + "¥%.2f".format(kotlin.math.abs(state.netChange)),
+                            valueColor = if (state.netChange >= 0) UpColor else DownColor,
+                        )
+                        SummaryCell(
+                            modifier = Modifier.weight(1f),
+                            label = stringResource(R.string.pdb_latest_price),
+                            value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
+                            valueColor = MiuixTheme.colorScheme.onBackground,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -235,10 +244,12 @@ fun OilPriceDetailScreen(
             PriceTrendCanvas(items = state.items)
             Spacer(Modifier.height(8.dp))
 
-            // —— 调价时间线（最新在上；底部留出底栏高度避免遮挡）——
+            // —— 调价时间线（最新在上；底部留足底栏高度避免遮挡）——
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = bottomPadding + 24.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                    bottom = (bottomPadding + 64.dp).coerceAtLeast(88.dp),
+                ),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 items(state.items.asReversed(), key = { it.date }) { item ->
@@ -305,17 +316,33 @@ private fun SummaryCell(
     }
 }
 
-/** 价格走势折线图（横轴=调价次序，纵轴=价格） */
+/** 价格走势折线图（横轴=调价次序，纵轴=价格）；点击数据点显示日期+价格 */
 @Composable
 private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
     val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
     val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
     val lineColor = KOiLColors.Primary
+    val bubbleBg = MiuixTheme.colorScheme.surfaceContainer
+    val bubbleBorder = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.25f)
+    val dotInnerColor = MiuixTheme.colorScheme.surface
+    val onBgColor = MiuixTheme.colorScheme.onBackground
     val prices = items.map { it.price }
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(150.dp),
+            .height(150.dp)
+            .pointerInput(prices.size) {
+                detectTapGestures { pos ->
+                    if (prices.size > 1) {
+                        val padLpx = 38.dp.toPx()
+                        val wPx = size.width - padLpx - 12.dp.toPx()
+                        val step = wPx / (prices.size - 1)
+                        val idx = ((pos.x - padLpx) / step).roundToInt().coerceIn(0, prices.size - 1)
+                        selectedIndex = if (selectedIndex == idx) null else idx
+                    }
+                }
+            },
     ) {
         if (prices.isEmpty()) return@Canvas
         val padL = 38.dp.toPx()
@@ -377,6 +404,71 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
         // 端点圆点
         drawCircle(color = lineColor, radius = 3.dp.toPx(), center = Offset(xAt(0), yAt(prices.first())))
         drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(xAt(prices.size - 1), yAt(prices.last())))
+
+        // 选中点：竖虚线 + 放大圆点 + 气泡（日期 + 价格）
+        val sel = selectedIndex
+        if (sel != null && sel in prices.indices) {
+            val sx = xAt(sel)
+            val sy = yAt(prices[sel])
+            drawLine(
+                color = labelColor.copy(alpha = 0.8f),
+                start = Offset(sx, padT),
+                end = Offset(sx, size.height - padB),
+                strokeWidth = 1.dp.toPx(),
+            )
+            drawCircle(color = lineColor, radius = 5.dp.toPx(), center = Offset(sx, sy))
+            drawCircle(
+                color = dotInnerColor,
+                radius = 2.dp.toPx(),
+                center = Offset(sx, sy),
+            )
+            // 气泡文字
+            val bubbleText = "${items[sel].label}  ¥%.2f".format(items[sel].price)
+            drawContext.canvas.nativeCanvas.apply {
+                val paint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.argb(
+                        255,
+                        (onBgColor.red * 255).toInt(),
+                        (onBgColor.green * 255).toInt(),
+                        (onBgColor.blue * 255).toInt(),
+                    )
+                    textSize = 10.dp.toPx()
+                    isAntiAlias = true
+                }
+                val textW = paint.measureText(bubbleText)
+                val bubbleW = textW + 12.dp.toPx()
+                val bubbleH = 20.dp.toPx()
+                // 气泡优先放在点上方；上方空间不足则放下方（且不压日期刻度）
+                val above = sy - bubbleH - 8.dp.toPx() > padT
+                val bubbleY = if (above) {
+                    sy - bubbleH - 8.dp.toPx()
+                } else {
+                    (sy + 10.dp.toPx()).coerceAtMost(size.height - padB - bubbleH)
+                }
+                val bubbleX = (sx - bubbleW / 2).coerceIn(padL, size.width - padR - bubbleW)
+                // 画圆角矩形气泡
+                drawRoundRect(
+                    color = bubbleBg,
+                    topLeft = Offset(bubbleX, bubbleY),
+                    size = androidx.compose.ui.geometry.Size(bubbleW, bubbleH),
+                    cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                )
+                drawRoundRect(
+                    color = bubbleBorder,
+                    topLeft = Offset(bubbleX, bubbleY),
+                    size = androidx.compose.ui.geometry.Size(bubbleW, bubbleH),
+                    cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
+                )
+                drawText(
+                    bubbleText,
+                    bubbleX + 6.dp.toPx(),
+                    bubbleY + 14.dp.toPx(),
+                    paint,
+                )
+            }
+        }
+
         // 日期标签：首、尾 + 中间等距 2 个（点少时只画首尾，避免重叠）
         drawContext.canvas.nativeCanvas.apply {
             val paint = android.graphics.Paint().apply {
@@ -406,13 +498,14 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
     }
 }
 
-/** 调价时间线单行：日期 · 价格 · 涨跌 badge */
+/** 调价时间线单行：日期 · 价格 · 涨跌 badge（SpaceBetween 铺满整行，不再右侧留白） */
 @Composable
 private fun AdjustTimelineRow(item: PriceAdjustItem) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -426,7 +519,6 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onBackground,
-            modifier = Modifier.width(88.dp),
         )
         val diff = item.diff
         when {

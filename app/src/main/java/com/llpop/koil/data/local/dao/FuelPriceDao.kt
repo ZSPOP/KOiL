@@ -78,6 +78,10 @@ interface FuelPriceDao {
     @Query("SELECT * FROM fuel_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate ASC")
     suspend fun getByProvinceGrade(province: String, grade: String): List<FuelPriceEntity>
 
+    /** 指定省+油号+生效日期是否已有记录（该省该油号某窗口是否调价过） */
+    @Query("SELECT * FROM fuel_prices WHERE province = :province AND grade = :grade AND effectiveDate = :date LIMIT 1")
+    suspend fun getByProvinceGradeDate(province: String, grade: String, date: String): FuelPriceEntity?
+
     @Query("SELECT COUNT(*) FROM fuel_prices WHERE province = :province AND grade = :grade")
     suspend fun countByProvinceGrade(province: String, grade: String): Int
 

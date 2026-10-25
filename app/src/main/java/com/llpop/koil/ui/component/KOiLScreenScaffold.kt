@@ -32,6 +32,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun KOiLScreenScaffold(
     title: String,
     modifier: Modifier = Modifier,
+    navigationIcon: (@Composable () -> Unit)? = null,
     content: @Composable (
         innerPadding: PaddingValues,
         topPadding: Dp,
@@ -54,6 +55,7 @@ fun KOiLScreenScaffold(
             BlurredBar(backdrop = backdrop, blurActive = blurActive) {
                 TopAppBar(
                     title = title,
+                    navigationIcon = navigationIcon ?: {},
                     color = barColor,
                     scrollBehavior = scrollBehavior,
                 )
