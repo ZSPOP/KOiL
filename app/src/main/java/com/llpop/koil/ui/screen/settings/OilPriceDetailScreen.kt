@@ -23,6 +23,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -32,6 +33,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -129,19 +133,46 @@ fun OilPriceDetailScreen(
                     provinceInitialScroll = false
                 }
             }
+            // 省份选择：左右箭头（提示可滑动 + 点击切换，边界变灰）+ 横向滑动 chips
+            val curIdx = state.provinces.indexOf(state.province)
+            val arrowOn = KOiLColors.Primary
+            val arrowOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.25f)
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(provinceScrollState),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                state.provinces.forEach { p ->
-                    ProvinceChip(
-                        label = p,
-                        selected = p == state.province,
-                        onClick = { viewModel.selectProvince(p) },
-                    )
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = "上一个省份",
+                    tint = if (curIdx > 0) arrowOn else arrowOff,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .clickable(enabled = curIdx > 0) { viewModel.selectPrevProvince() },
+                )
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(provinceScrollState),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    state.provinces.forEach { p ->
+                        ProvinceChip(
+                            label = p,
+                            selected = p == state.province,
+                            onClick = { viewModel.selectProvince(p) },
+                        )
+                    }
                 }
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = "下一个省份",
+                    tint = if (curIdx < state.provinces.size - 1) arrowOn else arrowOff,
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .clickable(enabled = curIdx < state.provinces.size - 1) { viewModel.selectNextProvince() },
+                )
             }
             Spacer(Modifier.height(10.dp))
 
@@ -576,7 +607,8 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
 }
 
 /** 调价时间线单行（三列紧凑 + 第4列幅度条）：
- *  日期(左) · 价格(左) · 涨跌幅(chip,左) · 幅度条(长度=调价幅度/1元基准，涨红跌绿) */
+ *  日期(左) · 价格(左) · 涨跌幅(chip,左) · 幅度条(长度=调价幅度/1元基准，涨红跌绿)；
+ *  搁浅行：日期/价格/标签全灰，chip 显示「擱淺」，尾部显示「維持 X 價格」（无幅度条） */
 @Composable
 private fun AdjustTimelineRow(item: PriceAdjustItem) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -586,51 +618,86 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
                 .padding(horizontal = 4.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 列1：日期（固定宽，左对齐）
+            // 列1：日期（固定宽，左对齐；搁浅行加深灰）
             Text(
                 text = item.label,
                 fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                color = if (item.isStranded) {
+                    MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
+                } else {
+                    MiuixTheme.colorScheme.onBackgroundVariant
+                },
                 modifier = Modifier.width(56.dp),
             )
             Spacer(Modifier.width(8.dp))
-            // 列2：价格（固定宽，左对齐）
+            // 列2：价格（固定宽，左对齐；搁浅行灰色显示维持价）
             Text(
                 text = "¥%.2f".format(item.price),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = MiuixTheme.colorScheme.onBackground,
+                color = if (item.isStranded) {
+                    MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f)
+                } else {
+                    MiuixTheme.colorScheme.onBackground
+                },
                 modifier = Modifier.width(70.dp),
             )
             Spacer(Modifier.width(8.dp))
-            // 列3：涨跌幅 chip（箭头 + 文字）
-            ActionChip(diff = item.diff)
-            Spacer(Modifier.width(8.dp))
-            // 列4：幅度条——长度正比于调价幅度（1 元为满条，最短 6% 保证可见），涨红跌绿
-            val diff = item.diff
-            val barColor = when {
-                diff == null -> null
-                diff > 0.001 -> UpColor
-                diff < -0.001 -> DownColor
-                else -> null
-            }
-            if (barColor != null) {
-                val frac = (kotlin.math.abs(diff!!).toFloat() / 1f).coerceIn(0.06f, 1f)
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.CenterStart,
+            // 列3：涨跌幅 chip（箭头 + 文字）；搁浅 = 灰色「擱淺」chip
+            if (item.isStranded) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(frac)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(barColor.copy(alpha = 0.8f)),
+                    Text(
+                        text = "擱淺",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                 }
             } else {
-                // 基準價/持平：无幅度条，占位列保持对齐
-                Spacer(Modifier.weight(1f))
+                ActionChip(diff = item.diff)
+            }
+            Spacer(Modifier.width(8.dp))
+            // 列4：调价 → 幅度条（长度正比于调价幅度，1 元为满条，最短 6% 保证可见，涨红跌绿）；
+            //       搁浅 → 「維持 09-25 價格」说明（无幅度条）
+            if (item.isStranded) {
+                Text(
+                    text = "維持 ${item.keptFrom ?: "—"} 價格",
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.weight(1f),
+                )
+            } else {
+                val diff = item.diff
+                val barColor = when {
+                    diff == null -> null
+                    diff > 0.001 -> UpColor
+                    diff < -0.001 -> DownColor
+                    else -> null
+                }
+                if (barColor != null) {
+                    val frac = (kotlin.math.abs(diff!!).toFloat() / 1f).coerceIn(0.06f, 1f)
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(frac)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(barColor.copy(alpha = 0.8f)),
+                        )
+                    }
+                } else {
+                    // 基準價/持平：无幅度条，占位列保持对齐
+                    Spacer(Modifier.weight(1f))
+                }
             }
         }
         // 行间细分隔线
