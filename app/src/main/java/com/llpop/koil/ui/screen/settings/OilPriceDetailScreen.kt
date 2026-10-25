@@ -236,12 +236,20 @@ fun OilPriceDetailScreen(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— 价格走势图 ——
-                PriceTrendCanvas(items = state.items)
+                // —— 价格走势图（套圆角卡片，与汇总卡视觉统一）——
+                KOiLBlurBackground(
+                    modifier = Modifier.fillMaxWidth(),
+                    cornerRadius = 20f,
+                ) {
+                    PriceTrendCanvas(
+                        items = state.items,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
 
                 // —— 调价时间线（最新在上）——
-                // 表头：日期 | 调整 | 价格，与数据行列对齐，让用户知道每列含义
+                // 表头：日期 調整（左组）｜ 價格（右对齐），与数据行列对齐，让用户知道每列含义
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -252,9 +260,8 @@ fun OilPriceDetailScreen(
                         text = stringResource(R.string.koil_pdb_col_date),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.width(56.dp),
                     )
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(10.dp))
                     Text(
                         text = stringResource(R.string.koil_pdb_col_action),
                         fontSize = 11.sp,
@@ -335,9 +342,9 @@ private fun SummaryCell(
 
 /** 价格走势折线图（横轴=调价次序，纵轴=价格）；点击数据点显示日期+价格 */
 @Composable
-private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
+private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = Modifier) {
     val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
-    val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
+    val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f)
     val lineColor = KOiLColors.Primary
     val bubbleBg = MiuixTheme.colorScheme.surfaceContainer
     val bubbleBorder = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.25f)
@@ -346,7 +353,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
     val prices = items.map { it.price }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     Canvas(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(170.dp)
             .pointerInput(prices.size) {
@@ -428,7 +435,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
                         (labelColor.green * 255).toInt(),
                         (labelColor.blue * 255).toInt(),
                     )
-                    textSize = 9.dp.toPx()
+                    textSize = 10.dp.toPx()
                 }
                 drawText("%.2f".format(pv), 2.dp.toPx(), y + 3.dp.toPx(), paint)
             }
@@ -546,7 +553,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
                     (labelColor.green * 255).toInt(),
                     (labelColor.blue * 255).toInt(),
                 )
-                textSize = 9.dp.toPx()
+                textSize = 10.dp.toPx()
             }
             val n = prices.size
             val labelIdx = if (n >= 8) listOf(0, n / 4, n / 2, n * 3 / 4, n - 1).distinct() else listOf(0, n - 1)
@@ -566,47 +573,30 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
     }
 }
 
-/** 调价时间线单行：日期（左灰）· 动作+幅度（中）· 价格（右大号），底部细分隔线 */
+/** 调价时间线单行（方案一·两段式）：左组（日期+動作chip）· 右价格，扫读路径最短 */
 @Composable
 private fun AdjustTimelineRow(item: PriceAdjustItem) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 8.dp),
+                .padding(horizontal = 4.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // 左组：日期（灰）
             Text(
                 text = item.label,
-                fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                modifier = Modifier.width(56.dp),
-            )
-            Spacer(Modifier.weight(1f))
-            // 中间：动作 + 幅度
-            val diff = item.diff
-            val actionText = when {
-                diff == null -> stringResource(R.string.koil_pdb_first_base)
-                diff > 0.001 -> stringResource(R.string.koil_pdb_up, diff)
-                diff < -0.001 -> stringResource(R.string.koil_pdb_down, -diff)
-                else -> stringResource(R.string.koil_pdb_flat)
-            }
-            val actionColor = when {
-                diff == null -> MiuixTheme.colorScheme.onBackgroundVariant
-                diff > 0.001 -> UpColor
-                diff < -0.001 -> DownColor
-                else -> MiuixTheme.colorScheme.onBackgroundVariant
-            }
-            Text(
-                text = actionText,
                 fontSize = 12.sp,
-                fontWeight = if (diff != null) FontWeight.SemiBold else FontWeight.Normal,
-                color = actionColor,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
+            Spacer(Modifier.width(10.dp))
+            // 左组：動作 chip（淡色底圆角 + ↑↓箭头 + 文字）
+            ActionChip(diff = item.diff)
             Spacer(Modifier.weight(1f))
+            // 右：价格（加粗右对齐，每行焦点）
             Text(
                 text = "¥%.2f".format(item.price),
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
@@ -617,6 +607,48 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
                 .fillMaxWidth()
                 .height(0.5.dp)
                 .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.06f)),
+        )
+    }
+}
+
+/** 動作 chip：淡红/淡绿圆角底 + 方向箭头（↑红/↓绿）+ 文字；基準價/持平为灰色无箭头 */
+@Composable
+private fun ActionChip(diff: Double?) {
+    val neutralBg = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
+    val neutralFg = MiuixTheme.colorScheme.onBackgroundVariant
+    val (bgColor, fgColor, arrow) = when {
+        diff == null -> Triple(neutralBg, neutralFg, null)
+        diff > 0.001 -> Triple(UpColor.copy(alpha = 0.12f), UpColor, "↑")
+        diff < -0.001 -> Triple(DownColor.copy(alpha = 0.12f), DownColor, "↓")
+        else -> Triple(neutralBg, neutralFg, null)
+    }
+    val actionText = when {
+        diff == null -> stringResource(R.string.koil_pdb_first_base)
+        diff > 0.001 -> stringResource(R.string.koil_pdb_up, diff)
+        diff < -0.001 -> stringResource(R.string.koil_pdb_down, -diff)
+        else -> stringResource(R.string.koil_pdb_flat)
+    }
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (arrow != null) {
+            Text(
+                text = arrow,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = fgColor,
+            )
+            Spacer(Modifier.width(3.dp))
+        }
+        Text(
+            text = actionText,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = fgColor,
         )
     }
 }
