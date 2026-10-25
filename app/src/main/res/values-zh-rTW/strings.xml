@@ -249,6 +249,8 @@
     <string name="koil_pdb_stranded_count">擱淺次數</string>
     <string name="koil_pdb_count_times">%1$d 次</string>
     <string name="koil_pdb_net_change">今年淨漲跌</string>
+    <string name="koil_pdb_net_up">上漲 ¥%1$.2f</string>
+    <string name="koil_pdb_net_down">下調 ¥%1$.2f</string>
     <string name="koil_pdb_up">上調 +%1$.2f</string>
     <string name="koil_pdb_down">下調 -%1$.2f</string>
     <string name="koil_pdb_flat">維持不變</string>

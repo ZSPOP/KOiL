@@ -99,20 +99,14 @@ class OilPriceDetailViewModel(
             )
         }
 
-        // 搁浅次数：权威窗口日历「今年已发生窗口」中，**该省该油号**在窗口日+1 无生效记录的数量。
-        // 判定与 upCount/downCount 同源（records），保证：上調+下調+擱淺 = 今年已发生窗口数。
+        // 搁浅次数 = 今年已发生窗口数 − 上调次数 − 下调次数。
+        // 说明：records 首条为「基準價」（无前一条可比较方向，不计上调/下调），但其窗口
+        // 已发生且有记录（非搁浅）；若用「窗口+1 无记录」判定，首条窗口会两头不计，
+        // 导致 上調+下調+擱淺 恒比窗口数少 1。改用差集口径后总数恒等于窗口数。
         val today = LocalDate.now().toString()
         val occurredWindows = windowDates
             .split(",").map { it.trim() }.filter { it.isNotBlank() && it <= today }
-        val strandedCount = occurredWindows.count { w ->
-            runCatching {
-                priceDao.getByProvinceGradeDate(
-                    province,
-                    grade,
-                    LocalDate.parse(w).plusDays(1).toString(),
-                ) == null
-            }.getOrDefault(false)
-        }
+        val strandedCount = (occurredWindows.size - upCount - downCount).coerceAtLeast(0)
 
         return OilPriceDetailUiState(
             province = province,
