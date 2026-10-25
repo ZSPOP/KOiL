@@ -84,8 +84,8 @@ fun OilPriceDetailScreen(
             Icon(
                 imageVector = MiuixIcons.Back,
                 contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                modifier = Modifier.clickable(onClick = onBack).padding(8.dp).size(18.dp),
+                tint = MiuixTheme.colorScheme.onBackground,
+                modifier = Modifier.clickable(onClick = onBack).padding(8.dp).size(24.dp),
             )
         },
     ) { _, topPadding, scrollBehavior, _ ->
