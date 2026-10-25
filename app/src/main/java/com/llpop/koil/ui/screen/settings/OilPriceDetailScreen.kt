@@ -249,7 +249,7 @@ fun OilPriceDetailScreen(
                 Spacer(Modifier.height(8.dp))
 
                 // —— 调价时间线（最新在上）——
-                // 表头：日期 調整（左组）｜ 價格（右对齐），与数据行列对齐，让用户知道每列含义
+                // 表头：日期 价格 涨跌幅（三列左对齐，与数据行列对齐）
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -260,16 +260,18 @@ fun OilPriceDetailScreen(
                         text = stringResource(R.string.koil_pdb_col_date),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.width(56.dp),
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_col_action),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                    )
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = stringResource(R.string.koil_pdb_col_price),
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.width(70.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.koil_pdb_col_change),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                     )
@@ -573,7 +575,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
     }
 }
 
-/** 调价时间线单行（方案一·两段式）：左组（日期+動作chip）· 右价格，扫读路径最短 */
+/** 调价时间线单行（三列紧凑）：日期(左) · 价格(左) · 涨跌幅(左，箭头chip)，列间距小 */
 @Composable
 private fun AdjustTimelineRow(item: PriceAdjustItem) {
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -583,23 +585,25 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
                 .padding(horizontal = 4.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 左组：日期（灰）
+            // 列1：日期（固定宽，左对齐）
             Text(
                 text = item.label,
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier.width(56.dp),
             )
-            Spacer(Modifier.width(10.dp))
-            // 左组：動作 chip（淡色底圆角 + ↑↓箭头 + 文字）
-            ActionChip(diff = item.diff)
-            Spacer(Modifier.weight(1f))
-            // 右：价格（加粗右对齐，每行焦点）
+            Spacer(Modifier.width(8.dp))
+            // 列2：价格（固定宽，左对齐）
             Text(
                 text = "¥%.2f".format(item.price),
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = MiuixTheme.colorScheme.onBackground,
+                modifier = Modifier.width(70.dp),
             )
+            Spacer(Modifier.width(8.dp))
+            // 列3：涨跌幅（左对齐，箭头chip）
+            ActionChip(diff = item.diff)
         }
         // 行间细分隔线
         Box(

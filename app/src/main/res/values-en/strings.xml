@@ -247,6 +247,7 @@
     <string name="koil_pdb_col_date">Date</string>
     <string name="koil_pdb_col_action">Change</string>
     <string name="koil_pdb_col_price">Price</string>
+    <string name="koil_pdb_col_change">Change</string>
     <string name="koil_pdb_up_count">Rises</string>
     <string name="koil_pdb_down_count">Falls</string>
     <string name="koil_pdb_stranded_count">No-change windows</string>
