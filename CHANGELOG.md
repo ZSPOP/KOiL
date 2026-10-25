@@ -2,6 +2,15 @@
 
 > 本文件随源码包分发，记录每个版本相对上一个版本的变更，便于跨环境接手开发时快速了解改动。
 
+## v1.4.164（versionCode 169）— 2026-10-25
+
+### 🏗️ 架构调整（对齐 Mishka，根治横向手势冲突）
+- **背景**：参照 Mishka 源码发现，其所有二级页（如外观设置页）都是**独立路由页**（`NavDisplay`+`entry<Route>`），**不在主界面 HorizontalPager 内**，所以其"介面縮放"滑动条不受 Pager 手势拦截器影响、可正常左右滑动；而 KOiL 的调价记录明细页此前在 Pager 内的设置页里（状态切换渲染），被 Miuix `pagerGestureOverride(CrossAxisInterceptor)` 跨轴拦截器（挂 Pager 父级）吞掉全部横向手势。
+- **修复**：调价记录明细页**提升为 MainScreen 级全屏页**（`showOilPriceDetail` 状态，脱离 HorizontalPager 渲染）——省份横滑条、走势图拖动等横向手势完整归页面内组件；同时**恢复 Pager 跨轴拦截器**（主界面架构回到与 Mishka 一致）。
+- 设置页"調價記錄"入口改为回调 `onOpenPriceDetail`，由 MainScreen 承载明细页。
+
+---
+
 ## v1.4.163（versionCode 168）— 2026-10-25
 
 ### 🐛 修复（重要）

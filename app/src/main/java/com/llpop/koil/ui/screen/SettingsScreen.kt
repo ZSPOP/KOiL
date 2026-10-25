@@ -63,7 +63,6 @@ import com.llpop.koil.ui.component.KOiLScreenScaffold
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import com.llpop.koil.ui.screen.settings.OilPriceDetailScreen
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
@@ -95,16 +94,10 @@ private val GRADES = listOf("92", "95", "98", "0")
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    onOpenPriceDetail: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-    // 油价明细子页（涨跌统计 + 走势 + 时间线）显隐：true 时整个设置页切换为明细页
-    var showPriceDetail by rememberSaveable { mutableStateOf(false) }
-    if (showPriceDetail) {
-        OilPriceDetailScreen(onBack = { showPriceDetail = false }, bottomPadding = bottomPadding)
-        return
-    }
 
     // 全局焦点管理 + 偏差输入框点击标志（用于"点击输入框外部即收起提交"，无需坐标计算）
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -403,11 +396,12 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— 查看调价记录入口（涨跌统计 + 走势 + 时间线明细页）——
+                // —— 查看调价记录入口（涨跌统计 + 走势 + 时间线明细页，页面由 MainScreen 全屏承载，
+                //    脱离 HorizontalPager 以释放横向手势给明细页内组件）——
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showPriceDetail = true }
+                        .clickable { onOpenPriceDetail() }
                         .padding(vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {

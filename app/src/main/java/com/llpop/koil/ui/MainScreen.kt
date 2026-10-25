@@ -25,8 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +45,7 @@ import com.llpop.koil.ui.component.liquid.IosLiquidGlassNavigationBar
 import com.llpop.koil.ui.screen.AddScreen
 import com.llpop.koil.ui.screen.OverviewScreen
 import com.llpop.koil.ui.screen.SettingsScreen
+import com.llpop.koil.ui.screen.settings.OilPriceDetailScreen
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLTheme
@@ -142,6 +146,9 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             val pagerState = rememberPagerState(pageCount = { 3 })
             val scope = rememberCoroutineScope()
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
+            // 调价记录明细页开关：true 时在 Pager 之外全屏显示（对齐 Mishka 二级路由页，
+            // 脱离 Pager 的手势拦截器，页面内横向组件可自由滑动）
+            var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
 
             val navigationItems = listOf(
                 NavigationItem(label = stringResource(R.string.koil_nav_add), icon = Icons.Filled.Edit),
@@ -256,28 +263,46 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                             state = pagerState,
                             snapAnimationSpec = PagerNavigationSpringSpec,
                         )
-                        // 【去拦截器原因】Miuix 的 pagerGestureOverride(CrossAxisInterceptor) 挂在
-                        // Pager（页面内容父级）上，父级优先判定横向 slop 并消费，导致页面内所有
-                        // 横向组件（调价记录页的省份横滑条/走势图拖动）永远抢不到手势；
-                        // userScrollEnabled=false 时 Pager 又不翻页 → 横向手势被整体吞掉。
-                        // 本 App 切 tab 走底部导航（springAnimateToPage），无需横滑翻页，
-                        // 故移除跨轴拦截器，让横向手势归还给页面内组件。
-                        val pagerGestureModifier = Modifier.fillMaxSize()
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = pagerGestureModifier,
-                            verticalAlignment = Alignment.Top,
-                            // 预载相邻页：滑动时页面已组合完毕，动画帧只有绘制无组合，
-                            // 避免切换时整页首帧组合造成的掉帧（v1.4.7 失败因 glassActive 每帧重组，已移除）
-                            beyondViewportPageCount = 1,
-                            overscrollEffect = null,
-                            userScrollEnabled = false,
-                            flingBehavior = pagerFlingBehavior,
-                        ) { page ->
-                            when (page) {
-                                0 -> AddScreen(modifier = contentModifier, bottomPadding = bottomPad)
-                                1 -> OverviewScreen(modifier = contentModifier, bottomPadding = bottomPad)
-                                2 -> SettingsScreen(modifier = contentModifier, bottomPadding = bottomPad)
+                        // 【对齐 Mishka】miuix 定制手势管线：跨轴拦截器接管左右滑动
+                        // （页面内垂直滚动与 Pager 横向滑动不打架）+ 配套嵌套滚动连接。
+                        // 注意：拦截器仅作用于 Pager 内三个 tab 页；调价记录明细页已提升为
+                        // MainScreen 级全屏页（脱离 Pager，见下方 if(showOilPriceDetail)），
+                        // 因此其省份横滑条/走势图拖动不受拦截器影响（同 Mishka 二级页）。
+                        val pagerGestureModifier = Modifier
+                            .fillMaxSize()
+                            .pagerGestureOverride(
+                                pagerState = pagerState,
+                                mode = PagerInterceptionMode.CrossAxisInterceptor,
+                            )
+                        if (showOilPriceDetail) {
+                            // 调价记录明细页：全屏承载在 Pager 之外（对齐 Mishka 二级路由页），
+                            // 横向手势完全归页面内组件所有
+                            OilPriceDetailScreen(
+                                onBack = { showOilPriceDetail = false },
+                                bottomPadding = bottomPad,
+                            )
+                        } else {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = pagerGestureModifier,
+                                verticalAlignment = Alignment.Top,
+                                // 预载相邻页：滑动时页面已组合完毕，动画帧只有绘制无组合，
+                                // 避免切换时整页首帧组合造成的掉帧（v1.4.7 失败因 glassActive 每帧重组，已移除）
+                                beyondViewportPageCount = 1,
+                                overscrollEffect = null,
+                                userScrollEnabled = false,
+                                pageNestedScrollConnection = PagerGestureNestedScrollConnection,
+                                flingBehavior = pagerFlingBehavior,
+                            ) { page ->
+                                when (page) {
+                                    0 -> AddScreen(modifier = contentModifier, bottomPadding = bottomPad)
+                                    1 -> OverviewScreen(modifier = contentModifier, bottomPadding = bottomPad)
+                                    2 -> SettingsScreen(
+                                        modifier = contentModifier,
+                                        bottomPadding = bottomPad,
+                                        onOpenPriceDetail = { showOilPriceDetail = true },
+                                    )
+                                }
                             }
                         }
                     }
