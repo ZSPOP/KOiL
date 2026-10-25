@@ -53,6 +53,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -694,7 +695,15 @@ fun SettingsScreen(
         ) {
             Text(
                 text = "KOiL",
-                fontFamily = FontFamily(Font(R.font.unbounded_regular)),
+                // Unbounded 可变字体（wght 200-900）：显式设置 wght=700，确保 Bold 字重真正生效
+                fontFamily = FontFamily(
+                    Font(
+                        R.font.unbounded_variable,
+                        weight = FontWeight.Bold,
+                        variationSettings = FontVariation.Settings(FontVariation.weight(700)),
+                    )
+                ),
+                fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
             )

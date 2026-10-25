@@ -2,7 +2,21 @@
 
 > 本文件随源码包分发，记录每个版本相对上一个版本的变更，便于跨环境接手开发时快速了解改动。
 
-## v1.4.173（versionCode 178）— 2026-10-25
+## v1.4.177（versionCode 182）— 2026-10-26（基于 v1.4.173 基线）
+
+### 🔤 底部「KOiL」字重真正生效 Bold
+- **修正**：此前（v1.4.174~176）只加了 `FontWeight.Bold`，但字体只有单个可变字体文件
+  `unbounded_regular.ttf`，Compose 不会把 Bold 自动映射到 wght 轴 → **字从未变粗**（用户实测确认）。
+- **正确实现**：从字体官方仓库 **w3f/unbounded**（github.com/w3f/unbounded）下载**可变字体**
+  `Variable/Unbounded-Variable.ttf`（fvar 表 wght 200-900）→ `res/font/unbounded_variable.ttf`（唯一字体文件），
+  用 Compose `FontVariation.Settings(FontVariation.weight(700))` 显式设置 wght=700（API 26+ 可变字体，
+  Compose 1.11.1 支持）→ 底部 KOiL 渲染为真正的 Bold；同时移除旧的 regular/bold 单字重文件。
+- **本版基线 = v1.4.173**：油价卡片四项改造、窗口两行布局、导出提醒 Toast、底部品牌区（Unbounded 20sp）
+  全部保留；**不含** v1.4.174~176 的窗口推算/ndrc 抓取改动（按用户要求退回）。
+- 数据源：apizero 不可达时窗口日显示待檢測（173 原样行为）。
+
+---
+
 
 ### 🏷️ 油价数据库卡片改造（用户要求）
 - **标题行**：「V20261015」→「數據庫版本(V20261015)」（待检测态 →「數據庫版本(待檢測)」，三语同步）；右侧原「查看調價記錄」入口上移到标题行，文案精简为「查看」+ 箭头小图标，与版本号同一行、垂直居中。
