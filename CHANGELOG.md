@@ -1,3 +1,19 @@
+## v1.4.179（versionCode 184）— 2026-10-26（基于 v1.4.178）
+
+### 🔧 修复「查看」点不动（油价记录页进不去）
+- **问题**：数据库卡右上角「查看」无点击响应——v1.4.173 基线里查看按钮只有文字+箭头图标、
+  没有 clickable 绑定；v1.4.174 修过但 178 基于 173 基线重建时未合入。
+- **修复**：查看按钮改为可点击 Row（clip + clickable → onOpenPriceDetail()，与 174 同款），
+  点击进入油价历史明细页。
+
+### 🔤 KOiL 品牌字 Bold 真正生效（原生可变字体轴）
+- **问题**：177/178 用 Compose `FontVariation.Settings(FontVariation.weight(700))` 设置可变字体
+  wght=700，APK 内字体文件（res/en.ttf = 568KB 可变字体）打包正确但**渲染仍未变粗**——
+  Compose FontVariation 在资源字体（res/font）上有兼容问题。
+- **修复**：改用 **Android 原生 `Typeface.Builder(resources, R.font.unbounded_variable)
+  .setFontVariationSettings("'wght' 700")`**（API 26+ 官方可变字体方式，不依赖 Compose
+  FontVariation 层）；API < 26 回退 sans-serif Bold。字体文件仍是 Unbounded-Variable.ttf（wght 200-900）。
+
 ## v1.4.178（versionCode 183）— 2026-10-26（基于 v1.4.173 基线）
 
 ### 🎯 油价数据库「窗口日/版本号」锚点 5 级回退链（修复待檢測/无法灌入）

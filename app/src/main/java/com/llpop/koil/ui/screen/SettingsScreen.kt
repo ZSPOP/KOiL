@@ -389,19 +389,27 @@ fun SettingsScreen(
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Spacer(Modifier.weight(1f))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_view_detail),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = KOiLColors.Primary,
-                    )
-                    Spacer(Modifier.width(2.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = KOiLColors.Primary,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { onOpenPriceDetail() }
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_pdb_view_detail),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = KOiLColors.Primary,
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            tint = KOiLColors.Primary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
                 }
                 // —— 完整性缺口提示（补灌未覆盖完的省，红色警示）——
                 if (priceDbStatus.incompleteProvinceCount > 0) {
@@ -693,16 +701,13 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // KOiL 品牌字：Unbounded 可变字体（wght 200-900）——Compose FontVariation 在资源字体上
+            // 有兼容问题（177/178 实测未变粗）；改用 XML font resource 声明可变轴
+            // （res/font/unbounded.xml：android:fontVariationSettings="'wght' 700"），
+            // 由 Android 原生加载器应用可变轴，绕开 Compose FontVariation 层，Bold 真正生效。
             Text(
                 text = "KOiL",
-                // Unbounded 可变字体（wght 200-900）：显式设置 wght=700，确保 Bold 字重真正生效
-                fontFamily = FontFamily(
-                    Font(
-                        R.font.unbounded_variable,
-                        weight = FontWeight.Bold,
-                        variationSettings = FontVariation.Settings(FontVariation.weight(700)),
-                    )
-                ),
+                fontFamily = FontFamily(Font(R.font.unbounded, weight = FontWeight.Bold)),
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
