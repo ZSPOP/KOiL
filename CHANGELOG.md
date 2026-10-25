@@ -2,6 +2,15 @@
 
 > 本文件随源码包分发，记录每个版本相对上一个版本的变更，便于跨环境接手开发时快速了解改动。
 
+## v1.4.172（versionCode 177）— 2026-10-25
+
+### ✍️ 设置页字号与颜色统一（用户要求，按截图基准 = Miuix 渲染）
+- **统一基准**：Miuix 0.9.4 `BasicComponent` 默认渲染 = 标题 `headline1`（17sp Medium onBackground）、副标题/右侧值 `body2`（14sp onSurfaceVariantSummary / onSurfaceVariantActions）。下拉组件标题字号由库内固定、调用处无法覆盖，因此 KOiL 自研设置行**迁就 Miuix 默认**实现整页统一（6 处 Miuix 下拉保留原样，交互不变）。
+- **所有设置行左侧标题统一 17sp Medium**：SettingRow（汇出/汇入/备份/恢复等）、StepperInputRow（油箱容量等）、SettingSwitchRow（定位/油价提醒/油价推送/记住油号等）、自动更新内联行、待确认更新标题，全部 15sp→17sp。
+- **所有设置行副标题（描述文字）统一 14sp**：11sp→14sp，颜色统一为 `onSurfaceVariantSummary`（原 onBackgroundVariant）。
+- **右侧当前值统一 14sp `onSurfaceVariantActions`**：SettingRow 右侧值由主题色 Primary 改为与 Miuix 渲染一致的灰蓝，整页右侧值颜色一致。
+- 数据/标签类小字（待确认列表项、footer 版本号、导入明细、统计项 label）保持 11sp 不动。
+
 ## v1.4.171（versionCode 176）— 2026-10-25
 
 ### 🎨 调价时间线定稿（三列紧凑 + 第4列幅度条，用户指定）

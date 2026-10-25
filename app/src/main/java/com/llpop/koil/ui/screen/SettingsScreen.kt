@@ -551,7 +551,7 @@ fun SettingsScreen(
                     Spacer(Modifier.height(12.dp))
                     Text(
                         text = stringResource(R.string.koil_pdb_pending_title),
-                        fontSize = 15.sp,
+                        fontSize = 17.sp,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -623,15 +623,15 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         Text(
                             text = stringResource(R.string.koil_set_price_db_auto),
-                            fontSize = 15.sp,
+                            fontSize = 17.sp,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.height(2.dp))
                         Text(
                             text = stringResource(R.string.koil_pdb_auto_sub),
-                            fontSize = 11.sp,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            fontSize = 14.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
                     }
                     Switch(
@@ -873,21 +873,21 @@ private fun SettingRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
         Text(
             text = value,
             fontSize = 14.sp,
-            color = KOiLColors.Primary,
+            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
             fontWeight = FontWeight.Medium,
         )
         if (showArrow) {
@@ -982,15 +982,15 @@ private fun StepperInputRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = summary,
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
         Spacer(Modifier.width(10.dp))
@@ -1131,15 +1131,15 @@ private fun SettingSwitchRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 15.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
         Switch(
