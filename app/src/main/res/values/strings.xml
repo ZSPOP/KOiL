@@ -243,6 +243,11 @@
     <string name="pdb_rise_total">今年累计上调</string>
     <string name="pdb_fall_total">今年累计下调</string>
     <string name="pdb_latest_price">最新价格</string>
+    <string name="pdb_up_count">上调次数</string>
+    <string name="pdb_down_count">下调次数</string>
+    <string name="pdb_stranded_count">搁浅次数</string>
+    <string name="pdb_count_times">%1$d 次</string>
+    <string name="pdb_net_change">今年净涨跌</string>
     <string name="pdb_up">上调 +%1$.2f</string>
     <string name="pdb_down">下调 -%1$.2f</string>
     <string name="pdb_flat">维持不变</string>

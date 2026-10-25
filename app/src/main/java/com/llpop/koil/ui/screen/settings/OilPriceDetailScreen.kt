@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,23 +17,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
@@ -65,6 +65,7 @@ fun OilPriceDetailScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     BackHandler(onBack = onBack)
+    val surfaceColor = MiuixTheme.colorScheme.surface
 
     KOiLScreenScaffold(
         title = stringResource(R.string.pdb_detail_title),
@@ -98,41 +99,46 @@ fun OilPriceDetailScreen(
             }
             Spacer(Modifier.height(8.dp))
 
-            // —— 省份选择（下拉菜单，31 省完整可见）——
-            var provinceMenuOpen by remember { mutableStateOf(false) }
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(KOiLColors.Primary)
-                    .clickable { provinceMenuOpen = true }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = state.province,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
-                )
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    imageVector = Icons.Filled.ArrowDropDown,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
+            // —— 省份选择（横向滑动 chips，右侧渐隐提示可滑动；自动滚动到当前省）——
+            val provinceListState = rememberLazyListState()
+            LaunchedEffect(state.province) {
+                val idx = state.provinces.indexOf(state.province)
+                if (idx >= 0) provinceListState.animateScrollToItem(idx)
             }
-            DropdownMenu(
-                expanded = provinceMenuOpen,
-                onDismissRequest = { provinceMenuOpen = false },
-            ) {
-                state.provinces.forEach { p ->
-                    DropdownMenuItem(
-                        text = { Text(text = p, fontSize = 13.sp) },
-                        onClick = {
-                            viewModel.selectProvince(p)
-                            provinceMenuOpen = false
-                        },
+            Box(modifier = Modifier.fillMaxWidth()) {
+                LazyRow(
+                    state = provinceListState,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(end = 28.dp),
+                ) {
+                    items(state.provinces, key = { it }) { p ->
+                        ProvinceChip(
+                            label = p,
+                            selected = p == state.province,
+                            onClick = { viewModel.selectProvince(p) },
+                        )
+                    }
+                }
+                // 右侧渐隐遮罩 + 滑动箭头提示（还有更多省份）
+                Row(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .padding(start = 110.dp)
+                        .background(
+                            Brush.horizontalGradient(
+                                0f to Color.Transparent,
+                                0.55f to Color.Transparent,
+                                1f to surfaceColor,
+                            )
+                        ),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
@@ -172,22 +178,48 @@ fun OilPriceDetailScreen(
                 modifier = Modifier.fillMaxWidth(),
                 cornerRadius = 20f,
             ) {
+                // —— 第一行：上调次数 / 下调次数 / 搁浅次数 ——
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
                     SummaryCell(
                         modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_rise_total),
-                        value = "+¥%.2f/L".format(state.riseTotal),
+                        label = stringResource(R.string.pdb_up_count),
+                        value = stringResource(R.string.pdb_count_times, state.upCount),
                         valueColor = UpColor,
                     )
                     SummaryCell(
                         modifier = Modifier.weight(1f),
-                        label = stringResource(R.string.pdb_fall_total),
-                        value = "-¥%.2f/L".format(state.fallTotal),
+                        label = stringResource(R.string.pdb_down_count),
+                        value = stringResource(R.string.pdb_count_times, state.downCount),
                         valueColor = DownColor,
+                    )
+                    SummaryCell(
+                        modifier = Modifier.weight(1f),
+                        label = stringResource(R.string.pdb_stranded_count),
+                        value = stringResource(R.string.pdb_count_times, state.strandedCount),
+                        valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                )
+                // —— 第二行：净涨跌（累计上调−累计下调）+ 最新价格 ——
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    SummaryCell(
+                        modifier = Modifier.weight(1f),
+                        label = stringResource(R.string.pdb_net_change),
+                        value = (if (state.netChange >= 0) "+" else "-") + "¥%.2f".format(kotlin.math.abs(state.netChange)),
+                        valueColor = if (state.netChange >= 0) UpColor else DownColor,
                     )
                     SummaryCell(
                         modifier = Modifier.weight(1f),
@@ -203,17 +235,33 @@ fun OilPriceDetailScreen(
             PriceTrendCanvas(items = state.items)
             Spacer(Modifier.height(8.dp))
 
-            // —— 调价时间线（底部留出底栏高度，避免条目被遮挡）——
+            // —— 调价时间线（最新在上；底部留出底栏高度避免遮挡）——
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = bottomPadding + 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                items(state.items, key = { it.date }) { item ->
+                items(state.items.asReversed(), key = { it.date }) { item ->
                     AdjustTimelineRow(item)
                 }
             }
         }
+    }
+}
+
+/** 省份选择 chip（横向滑动） */
+@Composable
+private fun ProvinceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    val bg = if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
+    val fg = if (selected) Color.White else MiuixTheme.colorScheme.onBackground
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(bg)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(text = label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
     }
 }
 
@@ -329,7 +377,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
         // 端点圆点
         drawCircle(color = lineColor, radius = 3.dp.toPx(), center = Offset(xAt(0), yAt(prices.first())))
         drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(xAt(prices.size - 1), yAt(prices.last())))
-        // 首尾日期标签
+        // 日期标签：首、尾 + 中间等距 2 个（点少时只画首尾，避免重叠）
         drawContext.canvas.nativeCanvas.apply {
             val paint = android.graphics.Paint().apply {
                 color = android.graphics.Color.argb(
@@ -340,10 +388,20 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>) {
                 )
                 textSize = 9.dp.toPx()
             }
-            drawText(items.first().label, padL, size.height - 6.dp.toPx(), paint)
-            val lastLabel = items.last().label
-            val lastX = xAt(prices.size - 1)
-            drawText(lastLabel, lastX, size.height - 6.dp.toPx(), paint)
+            val n = prices.size
+            val labelIdx = if (n >= 8) listOf(0, n / 4, n / 2, n * 3 / 4, n - 1).distinct() else listOf(0, n - 1)
+            labelIdx.forEach { i ->
+                val label = items[i].label
+                val x = xAt(i)
+                val textW = paint.measureText(label)
+                // 首标签左对齐、尾标签右对齐、中间居中对齐，避免越界
+                val drawX = when (i) {
+                    0 -> padL
+                    n - 1 -> (x - textW).coerceAtLeast(padL)
+                    else -> (x - textW / 2).coerceIn(padL, padL + w - textW)
+                }
+                drawText(label, drawX, size.height - 6.dp.toPx(), paint)
+            }
         }
     }
 }

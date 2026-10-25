@@ -244,6 +244,11 @@
     <string name="pdb_rise_total">Total rises (YTD)</string>
     <string name="pdb_fall_total">Total falls (YTD)</string>
     <string name="pdb_latest_price">Latest price</string>
+    <string name="pdb_up_count">Rises</string>
+    <string name="pdb_down_count">Falls</string>
+    <string name="pdb_stranded_count">No-change windows</string>
+    <string name="pdb_count_times">%1$d</string>
+    <string name="pdb_net_change">Net change (YTD)</string>
     <string name="pdb_up">Up +%1$.2f</string>
     <string name="pdb_down">Down -%1$.2f</string>
     <string name="pdb_flat">Unchanged</string>
