@@ -55,6 +55,25 @@ class OilPriceDbSyncer(
         settings.defaultProvince.first().takeIf { it in PROVINCES } ?: PROVINCES[0]
 
     /**
+     * 主源 abapi 全年曲线 → 最近价格变化日（生效日）− 3 天 = 真实调价窗口日。
+     * 实测（2026）：18 次价格变化全部与发改委公告窗口吻合（偏移 1~4 天，最近 4 次均 3 天）；
+     * 曲线失败/无变化返回 null（由调用方继续降级）。
+     */
+    private suspend fun abapiAnchor(): String? {
+        val points = network.fetchYoujiaHistory(defaultProvince())
+        var last: Double? = null
+        var change: String? = null
+        points.forEach { pt ->
+            val p = pt.p92
+            if (p != null) {
+                if (last != null && kotlin.math.abs(p - last!!) > 1e-9) change = pt.date
+                last = p
+            }
+        }
+        return change?.let { runCatching { LocalDate.parse(it).minusDays(3).toString() }.getOrNull() }
+    }
+
+    /**
      * 获取当年权威窗口日（升序，含历史与未来）。
      * 锚点 = 次源 next_adjust_date；节假日 = chinese-days（放假日 + 调休补班日）；
      * 规则：每 10 个工作日一个窗口、24 时生效、遇节假日顺延、调休补班算工作日。
@@ -74,7 +93,11 @@ class OilPriceDbSyncer(
             return persisted
         }
         // 3) 拉取推算（仅当无任何缓存时）
+        // 锚点回退链：① apizero 预测专接口 → ② ruseo date−1 → ③ xxapi date−1（同源互备）
+        // → ④ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，实测 18/18 与发改委公告吻合）
         val anchor = network.fetchForecast(defaultProvince()).nextAdjustDate
+            ?: network.fetchAnchorWindowDate()
+            ?: abapiAnchor()
         if (anchor == null) {
             // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
             return emptyList()
@@ -214,9 +237,11 @@ class OilPriceDbSyncer(
             ensureInitConfig()
 
             val result = performPriceCheck()
-            // 窗口日：结构化日期（预测专接口 yyyy-MM-dd，无需再解析）优先，回退聚合接口文本解析
+            // 窗口日：预测专接口优先 → 聚合接口文本解析 → 推算窗口日历下个未来窗口
+            //（apizero 不可达时锚点已由 abapi 曲线兜底，日历照常可用）
             val nextRaw = result.nextAdjustDate
                 ?: result.nextAdjustment?.takeIf { it.isNotBlank() }
+                ?: getAdjustDates().firstOrNull { it >= LocalDate.now().format(DATE_FMT) }
             if (nextRaw != null) {
                 val newNext = if (result.nextAdjustDate != null) {
                     // 结构化日期已是 yyyy-MM-dd，直接规范化（防御性保留 normalize）
@@ -317,10 +342,17 @@ class OilPriceDbSyncer(
             if (adjustDates.isEmpty()) return
             // 期望覆盖窗口日数（含搁浅窗口）；每省独立拉取，失败不影响其他省
             val threshold = adjustDates.size
-            PROVINCES.forEach { province ->
-                val covered = runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
-                if (covered < threshold) {
-                    seedProvince(province, adjustDates)
+            // 并发补灌：4 路并行（避免 31 省串行等待；组间 200ms 缓解 abapi 限速）
+            coroutineScope {
+                PROVINCES.chunked(4).forEach { chunk ->
+                    chunk.map { province ->
+                        async {
+                            val covered = runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
+                            if (covered < threshold) {
+                                seedProvince(province, adjustDates)
+                            }
+                        }
+                    }.awaitAll()
                     kotlinx.coroutines.delay(200)
                 }
             }

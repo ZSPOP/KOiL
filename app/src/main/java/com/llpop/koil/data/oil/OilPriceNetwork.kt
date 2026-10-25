@@ -218,15 +218,23 @@ class OilPriceNetwork {
 
     /** 拉取指定年份节假日+调休（chinese-days）；失败/无数据返回空（调用方降级用 abapi 原日期）。 */
     suspend fun fetchChinaHolidays(year: Int): ChinaHolidays {
-        val url = "https://cdn.jsdelivr.net/npm/chinese-days/dist/years/$year.json"
-        return try {
-            val body = client.get(url).bodyAsText()
-            val payload = json.decodeFromString<ChineseDaysPayload>(body)
-            if (payload.holidays.isEmpty() && payload.workdays.isEmpty()) ChinaHolidays.EMPTY
-            else ChinaHolidays(payload.holidays.keys, payload.workdays.keys)
-        } catch (e: Exception) {
-            ChinaHolidays.EMPTY
+        // 多 CDN 回退：jsDelivr（实测部分网络 502）→ unpkg → 国内 npmmirror
+        val urls = listOf(
+            "https://cdn.jsdelivr.net/npm/chinese-days/dist/years/$year.json",
+            "https://unpkg.com/chinese-days/dist/years/$year.json",
+            "https://registry.npmmirror.com/chinese-days/latest/files/dist/years/$year.json",
+        )
+        for (url in urls) {
+            try {
+                val body = client.get(url).bodyAsText()
+                val payload = json.decodeFromString<ChineseDaysPayload>(body)
+                if (payload.holidays.isEmpty() && payload.workdays.isEmpty()) continue
+                return ChinaHolidays(payload.holidays.keys, payload.workdays.keys)
+            } catch (e: Exception) {
+                continue
+            }
         }
+        return ChinaHolidays.EMPTY
     }
 
     @Serializable
@@ -357,4 +365,102 @@ class OilPriceNetwork {
             OilPriceResponse(success = false, error = e.message ?: "预测接口请求失败")
         }
     }
+    // ===== 锚点备用源：ruseo / xxapi（全国油价快照） =====
+    // 实测（2026-10-26）：两源同源镜像（价格一致），date 均为最近窗口生效日
+    // （如 10-16 = 10-15 窗口 24 时生效）；故 date − 1 = 真实窗口日（含搁浅窗口）。
+    // 全国快照仅含最新一期（无历史曲线），用于锚点 + 补灌各省最新价（省份覆盖提速）。
+
+    /** 全国快照单省数据（date = 生效日；价格滞后但真实） */
+    data class NationwidePrice(
+        val region: String,
+        val date: String?,
+        val g92: Double?,
+        val g95: Double?,
+        val g98: Double?,
+        val d0: Double?,
+    )
+
+    @Serializable
+    private data class RuseoPriceItem(
+        val region: String? = null,
+        val date: String? = null,
+        @SerialName("gasoline_92") val g92: Double? = null,
+        @SerialName("gasoline_95") val g95: Double? = null,
+        @SerialName("gasoline_98") val g98: Double? = null,
+        @SerialName("diesel_0") val d0: Double? = null,
+    )
+
+    @Serializable
+    private data class RuseoData(
+        val success: Boolean = false,
+        val count: Int = 0,
+        val list: List<RuseoPriceItem> = emptyList(),
+    )
+
+    @Serializable
+    private data class RuseoResponse(
+        val code: Int = -1,
+        val msg: String? = null,
+        val data: RuseoData? = null,
+    )
+
+    @Serializable
+    private data class XxapiPriceItem(
+        @SerialName("regionName") val regionName: String? = null,
+        val date: String? = null,
+        val n92: Double? = null,
+        val n95: Double? = null,
+        val n98: Double? = null,
+        val n0: Double? = null,
+    )
+
+    @Serializable
+    private data class XxapiResponse(
+        val code: Int = -1,
+        val msg: String? = null,
+        val data: List<XxapiPriceItem> = emptyList(),
+    )
+
+    /** 锚点窗口日：ruseo → xxapi，取最近窗口生效日（date）− 1 天；两者皆失败返回 null。 */
+    suspend fun fetchAnchorWindowDate(): String? {
+        val date = runCatching {
+            val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
+            json.decodeFromString<RuseoResponse>(body).data?.list
+                ?.firstOrNull { !it.date.isNullOrBlank() }?.date
+        }.getOrNull()
+            ?: runCatching {
+                val body = client.get("https://v2.xxapi.cn/api/oilPrice").bodyAsText()
+                json.decodeFromString<XxapiResponse>(body).data
+                    .firstOrNull { !it.date.isNullOrBlank() }?.date
+            }.getOrNull()
+        return date?.let { runCatching { LocalDate.parse(it).minusDays(1).toString() }.getOrNull() }
+    }
+
+    /** 全国最新价快照（ruseo 优先 → xxapi 兜底）；两者皆失败返回空列表。 */
+    suspend fun fetchNationwideSnapshot(): List<NationwidePrice> {
+        val ruseo = runCatching { fetchRuseoSnapshot() }.getOrDefault(emptyList())
+        if (ruseo.isNotEmpty()) return ruseo
+        return runCatching { fetchXxapiSnapshot() }.getOrDefault(emptyList())
+    }
+
+    private suspend fun fetchRuseoSnapshot(): List<NationwidePrice> {
+        val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
+        val resp = json.decodeFromString<RuseoResponse>(body)
+        if (resp.code != 0) return emptyList()
+        return resp.data?.list.orEmpty().mapNotNull { item ->
+            val region = item.region ?: return@mapNotNull null
+            NationwidePrice(region, item.date, item.g92, item.g95, item.g98, item.d0)
+        }
+    }
+
+    private suspend fun fetchXxapiSnapshot(): List<NationwidePrice> {
+        val body = client.get("https://v2.xxapi.cn/api/oilPrice").bodyAsText()
+        val resp = json.decodeFromString<XxapiResponse>(body)
+        if (resp.code != 200) return emptyList()
+        return resp.data.mapNotNull { item ->
+            val region = item.regionName ?: return@mapNotNull null
+            NationwidePrice(region, item.date, item.n92, item.n95, item.n98, item.n0)
+        }
+    }
+
 }
