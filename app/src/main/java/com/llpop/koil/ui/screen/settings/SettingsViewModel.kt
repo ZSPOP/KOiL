@@ -1,0 +1,817 @@
+package com.llpop.koil.ui.screen.settings
+
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.llpop.koil.data.local.dao.FuelPriceDao
+import com.llpop.koil.data.local.dao.KOiLPricePendingDao
+import com.llpop.koil.data.local.dao.KOiLRecordDao
+import com.llpop.koil.data.local.entity.KOiLPricePendingEntity
+import com.llpop.koil.data.local.entity.KOiLRecordEntity
+import com.llpop.koil.data.location.LocationHelper
+import com.llpop.koil.data.oil.OilPriceDbSyncer
+import com.llpop.koil.data.oil.OilPriceDateUtil
+import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.ExportHelper
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Date
+import java.util.Locale
+
+data class SettingsUiState(
+    val themeMode: AppSettings.ThemeMode = AppSettings.ThemeMode.SYSTEM,
+    val language: AppSettings.Language = AppSettings.Language.SYSTEM,
+    val defaultProvince: String = "广东",
+    val defaultOilGrade: String = "92",
+    val tankCapacity: Float = AppSettings.DEFAULT_TANK_CAPACITY,
+    val keepLastGrade: Boolean = false,
+    val remindThreshold: Double = AppSettings.DEFAULT_REMIND_THRESHOLD,
+    val abnormalThreshold: Double = AppSettings.DEFAULT_ABNORMAL_THRESHOLD,
+    val priceAlert: Boolean = false,
+    val locationEnabled: Boolean = false,
+    val priceDbAutoUpdate: Boolean = false,
+    val deviationThreshold: Double = AppSettings.DEFAULT_DEVIATION_THRESHOLD,
+    val priceDbCache: String = "",
+    val exportMessage: String = "",
+    val priceDbLatestDate: String = "",
+    val priceDbTotal: Int = 0,
+    val priceDbProvinceCount: Int = 0,
+    val priceDbPendingCount: Int = 0,
+    val pendingItems: List<KOiLPricePendingEntity> = emptyList(),
+    val showPendingPanel: Boolean = false,
+    val importPreview: ImportPreview? = null,
+    // 导航栏（参考 Mishka 悬浮导航体系）
+    val floatingBottomBar: Boolean = true,
+    val floatingBottomBarStyle: String = "miuix",
+    val bottomBarMode: String = "icon_and_text",
+)
+
+/** CSV 导入预览（四分组） */
+data class ImportPreview(
+    val valid: List<ParsedRecord> = emptyList(),
+    val duplicates: List<ParsedRecord> = emptyList(),
+    val mileageConflicts: List<ParsedRecord> = emptyList(),
+    val errors: List<ParsedRecord> = emptyList(),
+)
+
+/** 本地化导出/结果通知：key 对应 strings.xml，args 为占位符参数（UI 层 stringResource 翻译） */
+data class ExportNotice(
+    val key: String? = null,
+    val args: List<Any> = emptyList(),
+)
+
+/** 解析后的单条记录（错误/冲突以 key 表示，由 UI 层翻译） */
+data class ParsedRecord(
+    val date: String = "",
+    val mileage: Double = 0.0,
+    val oilAmount: Double = 0.0,
+    val actualAmount: Double = 0.0,
+    val payableAmount: Double = 0.0,
+    val oilGrade: String? = null,
+    val oilPrice: Double? = null,
+    val province: String? = null,
+    val errorKey: String? = null,
+    val conflictKey: String? = null,
+    val conflictArg: Int = 0,
+)
+
+class SettingsViewModel(
+    private val settings: AppSettings,
+    private val recordDao: KOiLRecordDao,
+    private val priceDao: FuelPriceDao,
+    private val pendingDao: KOiLPricePendingDao,
+    private val syncer: OilPriceDbSyncer,
+    private val locationHelper: LocationHelper,
+    private val context: Context,
+) : ViewModel() {
+
+    private val _exportMessage = MutableStateFlow(ExportNotice())
+    val exportMessage: StateFlow<ExportNotice> = _exportMessage.asStateFlow()
+
+
+
+    // ===== 油价库状态 =====
+    data class PriceDbStatus(
+        val latestDate: String = "",
+        val total: Int = 0,
+        val provinceCount: Int = 0,
+        val gradeCount: Int = 0,
+        val adjustmentCount: Int = 0,
+        val pendingCount: Int = 0,
+        // 真实状态字段（对齐 Web OilPriceDbStatusResponse）
+        val initialized: Boolean = false,
+        val lastPriceChangeDate: String? = null,
+        val lastWindowChecked: String? = null,
+        val versionDate: String? = null,
+        val lastCheckedAt: Long = 0,
+        val lastUpdatedAt: String? = null,
+        val initializedAt: Long = 0,
+        val autoUpdateEnabled: Boolean = false,
+        val checkIntervalHours: Int = 8,
+        val lastUpdateMessage: String? = null,
+        val isStranded: Boolean = false,
+        // 调价窗口（方案 B：10 个工作日推算）
+        val adjustWindowDate: String? = null,       // 最近调价窗口日（从最近实际调价日推 10 工作日）
+        val nextAdjustWindowDate: String? = null,   // 下一个调价窗口日
+        val windowStranded: Boolean = false,        // 最近窗口搁浅（库内无该窗口调价记录）
+        val adjustWindowPrice: String? = null,      // 最近窗口有调价时的价格文本（元/升）
+        val versionLabel: String = "V——",           // 版本号（V+最新调价窗口日，不受搁浅影响）
+    )
+    private val _priceDbStatus = MutableStateFlow(PriceDbStatus())
+    val priceDbStatus: StateFlow<PriceDbStatus> = _priceDbStatus.asStateFlow()
+
+    private val _pendingItems = MutableStateFlow<List<KOiLPricePendingEntity>>(emptyList())
+    val pendingItems: StateFlow<List<KOiLPricePendingEntity>> = _pendingItems.asStateFlow()
+
+    private val _showPendingPanel = MutableStateFlow(false)
+    val showPendingPanel: StateFlow<Boolean> = _showPendingPanel.asStateFlow()
+
+    private val _priceDbUpdating = MutableStateFlow(false)
+    val priceDbUpdating: StateFlow<Boolean> = _priceDbUpdating.asStateFlow()
+
+    private val _importPreview = MutableStateFlow<ImportPreview?>(null)
+    val importPreview: StateFlow<ImportPreview?> = _importPreview.asStateFlow()
+
+    fun togglePendingPanel() { _showPendingPanel.value = !_showPendingPanel.value }
+
+    /** 刷新油价库状态：统计 + 配置真实字段 + pending 列表 */
+    fun loadPriceDbStatus() {
+        viewModelScope.launch {
+            // SQL 聚合统计（替代全表 getAll 内存统计，数据量大时不再卡顿）
+            val total = priceDao.count()
+            val latest = priceDao.maxDate() ?: ""
+            val provinceCount = priceDao.countProvinces()
+            val gradeCount = priceDao.countGrades()
+            val adjustmentCount = priceDao.countAdjustments()
+            val pendingCount = pendingDao.countPending()
+
+            val lastCheckTs = settings.priceDbLastCheckAt.first()
+            val lastUpdatedAt = settings.priceDbLastUpdateDate.first()
+            val initAt = settings.priceDbInitAt.first()
+            val lastMsg = settings.priceDbCache.first()
+            val lastWindowChecked = settings.priceDbLastWindowChecked.first()
+            val autoEnabled = settings.priceDbAutoUpdate.first()
+
+            // 对齐 Web getStatus：versionDate/isStranded 判定
+            var versionDate: String? = null
+            var isStranded = false
+            when {
+                latest.isNotBlank() && lastWindowChecked.isNotBlank() && lastWindowChecked > latest -> {
+                    versionDate = lastWindowChecked
+                    isStranded = true
+                }
+                latest.isNotBlank() -> versionDate = latest
+                lastWindowChecked.isNotBlank() -> versionDate = lastWindowChecked
+            }
+
+            // 调价窗口（接口官方调价日历滚动存档）：W1=上次接口预告的 next（已过窗口），W2=当前接口预告
+            // 日期规范化：兼容接口返回的 "2026-10-29" / "2026/10/29" / "10月29日" 等多种格式
+            val prevWindow = OilPriceDateUtil.normalize(settings.priceDbPrevNextAdjustment.first())
+            val nextWindow = OilPriceDateUtil.normalize(settings.priceDbNextAdjustment.first())
+            var adjustWindowDate: String? = prevWindow
+            var nextAdjustWindowDate: String? = nextWindow
+            // 接口 next 已过期时顺延一个周期显示（与录入页 effectiveNext 一致），避免显示过去窗口
+            if (nextAdjustWindowDate != null) {
+                val nextDate = runCatching { LocalDate.parse(nextAdjustWindowDate!!, DateTimeFormatter.ofPattern("yyyy-MM-dd")) }.getOrNull()
+                if (nextDate != null && nextDate.isBefore(LocalDate.now())) {
+                    nextAdjustWindowDate = nextDate.plusDays(14).toString()
+                }
+            }
+            // W1（最近已过调价窗口）优先级：① 接口 prev 存档（滚动窗口链）→ ② next − 14 天推算
+            //（首次同步 prev 未形成时，10-29 → 10-15，真实窗口）→ ③ 最后兜底 lastWindowChecked
+            //（仅当接口无任何窗口信息时；注意核对当天可能不是调价窗口日，故不能作为首选）
+            if (adjustWindowDate == null) {
+                val nextDate = runCatching { LocalDate.parse(nextAdjustWindowDate ?: "", DateTimeFormatter.ofPattern("yyyy-MM-dd")) }.getOrNull()
+                if (nextDate != null) {
+                    adjustWindowDate = nextDate.minusDays(14).toString()
+                } else {
+                    val checkedDate = OilPriceDateUtil.normalize(lastWindowChecked)
+                    if (checkedDate != null) {
+                        adjustWindowDate = checkedDate
+                    }
+                }
+            }
+            var windowStranded = false
+            var adjustWindowPrice: String? = null
+            if (adjustWindowDate != null) {
+                // W1 窗口有调价记录 → 未搁浅，显示调价后价格；否则搁浅，维持 latest 价格
+                // 全国统一调价窗口：任一省任一油号在该窗口有记录即可判定未搁浅（单条查询，无需全表）
+                val w1Row = priceDao.getByDate(adjustWindowDate)
+                if (w1Row != null) {
+                    windowStranded = false
+                    adjustWindowPrice = "%.2f".format(w1Row.price)
+                } else {
+                    windowStranded = true
+                }
+            }
+
+            // 版本号：V + 最新调价窗口日（不受搁浅影响）；无存档显示 V——
+            val versionLabel = adjustWindowDate?.replace("-", "")?.let { "V$it" } ?: "V——"
+
+            _priceDbStatus.value = PriceDbStatus(
+                latestDate = latest,
+                total = total,
+                provinceCount = provinceCount,
+                gradeCount = gradeCount,
+                adjustmentCount = adjustmentCount,
+                pendingCount = pendingCount,
+                initialized = total > 0,
+                lastPriceChangeDate = latest.ifBlank { null },
+                lastWindowChecked = lastWindowChecked.ifBlank { null },
+                versionDate = versionDate,
+                lastCheckedAt = lastCheckTs,
+                lastUpdatedAt = lastUpdatedAt.ifBlank { null },
+                initializedAt = initAt,
+                autoUpdateEnabled = autoEnabled,
+                checkIntervalHours = (OilPriceDbSyncer.CHECK_INTERVAL_MS / (60 * 60 * 1000)).toInt(),
+                lastUpdateMessage = lastMsg.ifBlank { null },
+                isStranded = isStranded,
+                adjustWindowDate = adjustWindowDate,
+                nextAdjustWindowDate = nextAdjustWindowDate,
+                windowStranded = windowStranded,
+                adjustWindowPrice = adjustWindowPrice,
+                versionLabel = versionLabel,
+            )
+            _pendingItems.value = pendingDao.getPending()
+        }
+    }
+
+    /** 立即更新：真联网检查（force=true，绕过开关与 8h 节流） */
+    fun checkPriceDbNow() {
+        if (_priceDbUpdating.value) return
+        _priceDbUpdating.value = true
+        viewModelScope.launch {
+            try {
+                syncer.checkAndUpdate(force = true)
+            } catch (e: Exception) {
+                _exportMessage.value = ExportNotice("pdb_update_failed", listOf(e.message ?: ""))
+            } finally {
+                _priceDbUpdating.value = false
+                loadPriceDbStatus()
+            }
+        }
+    }
+
+    fun acceptPending(id: Long, usePrimary: Boolean) {
+        viewModelScope.launch {
+            val ok = syncer.acceptPending(id, usePrimary)
+            _pendingItems.value = pendingDao.getPending()
+            _priceDbStatus.value = _priceDbStatus.value.copy(pendingCount = _pendingItems.value.size)
+            _exportMessage.value = ExportNotice(if (ok) "adopted" else "adopt_failed")
+            loadPriceDbStatus()
+        }
+    }
+
+    fun ignorePending(id: Long) {
+        viewModelScope.launch {
+            syncer.ignorePending(id)
+            _pendingItems.value = pendingDao.getPending()
+            _priceDbStatus.value = _priceDbStatus.value.copy(pendingCount = _pendingItems.value.size)
+            _exportMessage.value = ExportNotice("ignored")
+            loadPriceDbStatus()
+        }
+    }
+
+    /** 导出油价历史库为 CSV */
+    fun exportOilPriceHistory() {
+        viewModelScope.launch {
+            try {
+                val all = priceDao.getAll()
+                if (all.isEmpty()) {
+                    _exportMessage.value = ExportNotice("price_db_empty")
+                    return@launch
+                }
+                val header = "省份,油号,生效日期,价格(元/升),来源"
+                val lines = mutableListOf(header)
+                for (p in all) {
+                    lines.add(
+                        listOf(
+                            p.province,
+                            p.grade,
+                            p.effectiveDate,
+                            "%.2f".format(p.price),
+                            p.source ?: "内置",
+                        ).joinToString(",")
+                    )
+                }
+                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val fileName = "KOiL-oil-price-history-$timestamp.csv"
+                // 输出到用户可浏览的公共位置（Download/KOiL/，不再写入私有 files 目录）
+                val saved = ExportHelper.saveToDownloads(context, fileName, "\uFEFF" + lines.joinToString("\n"))
+                if (saved == null) {
+                    _exportMessage.value = ExportNotice("export_failed", listOf("保存失败"))
+                    return@launch
+                }
+                _exportMessage.value = ExportNotice("price_exported", listOf(all.size, saved))
+            } catch (e: Exception) {
+                _exportMessage.value = ExportNotice("export_failed", listOf(e.message ?: ""))
+            }
+        }
+    }
+
+    val uiState: StateFlow<SettingsUiState> = combine<Any, SettingsUiState>(
+        settings.themeMode,
+        settings.language,
+        settings.defaultProvince,
+        settings.defaultOilGrade,
+        settings.tankCapacity,
+        settings.keepLastGrade,
+        settings.remindThreshold,
+        settings.abnormalThreshold,
+        settings.priceAlert,
+        settings.locationEnabled,
+        settings.priceDbAutoUpdate,
+        settings.deviationThreshold,
+        settings.priceDbCache,
+        settings.floatingBottomBar,
+        settings.floatingBottomBarStyle,
+        settings.bottomBarMode,
+    ) { args ->
+        SettingsUiState(
+            themeMode = args[0] as AppSettings.ThemeMode,
+            language = args[1] as AppSettings.Language,
+            defaultProvince = args[2] as String,
+            defaultOilGrade = args[3] as String,
+            tankCapacity = args[4] as Float,
+            keepLastGrade = args[5] as Boolean,
+            remindThreshold = args[6] as Double,
+            abnormalThreshold = args[7] as Double,
+            priceAlert = args[8] as Boolean,
+            locationEnabled = args[9] as Boolean,
+            priceDbAutoUpdate = args[10] as Boolean,
+            deviationThreshold = args[11] as Double,
+            priceDbCache = args[12] as String,
+            floatingBottomBar = args[13] as Boolean,
+            floatingBottomBarStyle = args[14] as String,
+            bottomBarMode = args[15] as String,
+        )
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
+
+    fun setThemeMode(mode: AppSettings.ThemeMode) =
+        viewModelScope.launch { settings.setThemeMode(mode) }
+
+    fun setLanguage(lang: AppSettings.Language) =
+        viewModelScope.launch { settings.setLanguage(lang) }
+
+    fun setFloatingBottomBar(on: Boolean) =
+        viewModelScope.launch { settings.setFloatingBottomBar(on) }
+
+    fun setFloatingBottomBarStyle(style: String) =
+        viewModelScope.launch { settings.setFloatingBottomBarStyle(style) }
+
+    fun setBottomBarMode(mode: String) =
+        viewModelScope.launch { settings.setBottomBarMode(mode) }
+
+    fun setDefaultProvince(province: String) =
+        viewModelScope.launch { settings.setDefaultProvince(province) }
+
+    fun setDefaultOilGrade(grade: String) =
+        viewModelScope.launch { settings.setDefaultOilGrade(grade) }
+
+    fun setTankCapacity(capacity: Float) =
+        viewModelScope.launch { settings.setTankCapacity(capacity) }
+
+    fun setKeepLastGrade(keep: Boolean) =
+        viewModelScope.launch { settings.setKeepLastGrade(keep) }
+
+    fun setRemindThreshold(km: Double) =
+        viewModelScope.launch { settings.setRemindThreshold(km) }
+
+    fun setAbnormalThreshold(pct: Double) =
+        viewModelScope.launch { settings.setAbnormalThreshold(pct) }
+
+    fun setPriceAlert(on: Boolean) =
+        viewModelScope.launch { settings.setPriceAlert(on) }
+
+    fun setLocationEnabled(on: Boolean) =
+        viewModelScope.launch { settings.setLocationEnabled(on) }
+
+    /** 定位并写入默认省份；有权限且定位成功返回 true，无权限返回 false（调用方应请求权限） */
+    fun locateAndSetProvince(onSuccess: (String) -> Unit = {}) {
+        viewModelScope.launch {
+            if (!locationHelper.hasPermission()) return@launch
+            val province = locationHelper.getCurrentProvince()
+            if (!province.isNullOrBlank()) {
+                settings.setDefaultProvince(province)
+                onSuccess(province)
+            }
+        }
+    }
+
+    fun hasLocationPermission(): Boolean = locationHelper.hasPermission()
+
+    fun setPriceDbAutoUpdate(on: Boolean) =
+        viewModelScope.launch { settings.setPriceDbAutoUpdate(on) }
+
+    fun setDeviationThreshold(pct: Double) =
+        viewModelScope.launch {
+            // §7.5 偏差阈值范围 0-50%
+            val clamped = pct.coerceIn(0.0, 50.0)
+            settings.setDeviationThreshold(clamped)
+        }
+
+    /**
+     * 导出加油记录为 CSV（§8.7 格式，20 列），写入应用 files 目录。
+     * 导出后 _exportMessage 显示文件路径或错误信息。
+     */
+    fun exportCsv() {
+        viewModelScope.launch {
+            try {
+                val records = recordDao.getRange("1970-01-01", "2999-12-31")
+                    .sortedBy { it.reoilDate }
+                if (records.isEmpty()) {
+                    _exportMessage.value = ExportNotice("no_records")
+                    return@launch
+                }
+
+                val header = "加油日期,上次加油日期,油号,加油量(L),油价(元/L),应付金额(元),实付金额(元)," +
+                    "本次里程(km),上次里程(km),行驶里程(km),上次加油量(L),上次实付金额(元)," +
+                    "应付单价(元/L),实付单价(元/L),用油天数,平均油耗(L/100km),每公里成本(元/km)," +
+                    "油耗状态,省份,来源"
+
+                val lines = mutableListOf(header)
+                val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                var prev: KOiLRecordEntity? = null
+                for (r in records) {
+                    val distance = prev?.let { r.mileage - it.mileage }
+                    val oilDays = prev?.let {
+                        val d1 = LocalDate.parse(r.reoilDate, dateFmt)
+                        val d0 = LocalDate.parse(it.reoilDate, dateFmt)
+                        java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
+                    }
+                    val unitPayable = if (r.oilAmount > 0) "%.2f".format(r.payableAmount / r.oilAmount) else "-"
+                    val unitActual = if (r.oilAmount > 0) "%.2f".format(r.actualAmount / r.oilAmount) else "-"
+                    val consumption = if (distance != null && distance >= 100)
+                        "%.2f".format(r.oilAmount / distance * 100) else "-"
+                    val costPerKm = if (distance != null && distance >= 100)
+                        "%.2f".format(r.actualAmount / distance) else "-"
+
+                    lines.add(
+                        listOf(
+                            r.reoilDate,
+                            prev?.reoilDate ?: "-",
+                            "${r.oilGrade ?: "-"}号",
+                            "%.2f".format(r.oilAmount),
+                            r.oilPrice?.let { "%.2f".format(it) } ?: "-",
+                            "%.2f".format(r.payableAmount),
+                            "%.2f".format(r.actualAmount),
+                            "%.0f".format(r.mileage),
+                            prev?.let { "%.0f".format(it.mileage) } ?: "-",
+                            distance?.let { "%.0f".format(it) } ?: "-",
+                            prev?.let { "%.2f".format(it.oilAmount) } ?: "-",
+                            prev?.let { "%.2f".format(it.actualAmount) } ?: "-",
+                            unitPayable,
+                            unitActual,
+                            oilDays?.toString() ?: "-",
+                            consumption,
+                            costPerKm,
+                            "正常",
+                            r.province ?: "-",
+                            r.source ?: "-",
+                        ).joinToString(",")
+                    )
+                    prev = r
+                }
+
+                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val fileName = "KOiL-records-$timestamp.csv"
+                // 输出到用户可浏览的公共位置（Download/KOiL/，不再写入私有 files 目录）
+                val saved = ExportHelper.saveToDownloads(context, fileName, "\uFEFF" + lines.joinToString("\n"))
+                if (saved == null) {
+                    _exportMessage.value = ExportNotice("export_failed", listOf("保存失败"))
+                    return@launch
+                }
+                _exportMessage.value = ExportNotice("records_exported", listOf(records.size, saved))
+            } catch (e: Exception) {
+                _exportMessage.value = ExportNotice("export_failed", listOf(e.message ?: ""))
+            }
+        }
+    }
+
+    fun clearExportMessage() { _exportMessage.value = ExportNotice() }
+
+    /**
+     * 预览 CSV 导入（§7.8）：解析文件，分为 valid/duplicate/mileage_conflict/errors 四组，不入库。
+     */
+    fun previewCsv(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: run { _exportMessage.value = ExportNotice("cannot_read"); return@launch }
+
+                val lines = content.lines().filter { it.isNotBlank() }
+                if (lines.size < 2) {
+                    _exportMessage.value = ExportNotice("file_empty")
+                    return@launch
+                }
+
+                val headers = lines[0].split(",").map { it.trim().removeBOM() }
+                val dateIdx = findColumn(headers, listOf("加油日期", "日期", "reoilDate", "date"))
+                val mileageIdx = findColumn(headers, listOf("本次里程", "里程", "里程表", "mileage"))
+                val oilAmountIdx = findColumn(headers, listOf("加油量", "油量", "oilAmount", "fuel"))
+                val actualIdx = findColumn(headers, listOf("实付金额", "实付", "actualAmount", "actual"))
+                val payableIdx = findColumn(headers, listOf("应付金额", "应付", "payableAmount", "payable"))
+                val gradeIdx = findColumn(headers, listOf("油号", "油品", "oilGrade", "grade"))
+                val priceIdx = findColumn(headers, listOf("油价", "单价", "oilPrice", "price"))
+                val provinceIdx = findColumn(headers, listOf("省份", "省市", "province"))
+
+                if (dateIdx < 0 || mileageIdx < 0 || oilAmountIdx < 0 || actualIdx < 0) {
+                    _exportMessage.value = ExportNotice("missing_columns")
+                    return@launch
+                }
+
+                val existing = recordDao.getRange("1970-01-01", "2999-12-31")
+                val existingSet = existing.map { "${it.reoilDate}|${it.mileage}" }.toSet()
+                val sortedExisting = existing.sortedBy { it.reoilDate }
+
+                val valid = mutableListOf<ParsedRecord>()
+                val duplicates = mutableListOf<ParsedRecord>()
+                val mileageConflicts = mutableListOf<ParsedRecord>()
+                val errors = mutableListOf<ParsedRecord>()
+
+                for (line in lines.drop(1)) {
+                    val cols = line.split(",")
+                    val date = cols.getOrNull(dateIdx)?.trim()?.normalizeDate() ?: ""
+                    val mileage = cols.getOrNull(mileageIdx)?.toDoubleOrNull()
+                    val oilAmount = cols.getOrNull(oilAmountIdx)?.toDoubleOrNull()
+                    val actual = cols.getOrNull(actualIdx)?.toDoubleOrNull()
+
+                    // 错误组：格式错误
+                    if (date.isBlank() || !date.matches(Regex("""\d{4}-\d{2}-\d{2}""")) ||
+                        mileage == null || oilAmount == null || actual == null ||
+                        mileage <= 0 || oilAmount <= 0 || actual < 0
+                    ) {
+                        errors.add(ParsedRecord(date = date, errorKey = "format_error"))
+                        continue
+                    }
+
+                    val payable = cols.getOrNull(payableIdx)?.toDoubleOrNull() ?: actual
+                    val grade = cols.getOrNull(gradeIdx)?.trim()?.removeSuffix("号")?.removeSuffix("#")
+                    val price = cols.getOrNull(priceIdx)?.toDoubleOrNull()
+                    val province = cols.getOrNull(provinceIdx)?.trim()
+
+                    val parsed = ParsedRecord(
+                        date = date, mileage = mileage, oilAmount = oilAmount,
+                        actualAmount = actual, payableAmount = payable,
+                        oilGrade = grade, oilPrice = price, province = province,
+                    )
+
+                    // 重复组：同日同里程已存在
+                    if (existingSet.contains("$date|$mileage")) {
+                        duplicates.add(parsed.copy(errorKey = "duplicate"))
+                        continue
+                    }
+
+                    // 里程冲突组：与前后记录里程顺序不一致
+                    val prevRecord = sortedExisting.lastOrNull { it.reoilDate < date || (it.reoilDate == date && it.mileage < mileage) }
+                    val nextRecord = sortedExisting.firstOrNull { it.reoilDate > date || (it.reoilDate == date && it.mileage > mileage) }
+                    var conflictKey: String? = null
+                    var conflictArg = 0
+                    if (prevRecord != null && mileage < prevRecord.mileage) {
+                        conflictKey = "lt_prev"
+                        conflictArg = prevRecord.mileage.toInt()
+                    } else if (nextRecord != null && mileage > nextRecord.mileage) {
+                        conflictKey = "gt_next"
+                        conflictArg = nextRecord.mileage.toInt()
+                    }
+                    if (conflictKey != null) {
+                        mileageConflicts.add(parsed.copy(conflictKey = conflictKey, conflictArg = conflictArg))
+                        continue
+                    }
+
+                    valid.add(parsed)
+                }
+
+                _importPreview.value = ImportPreview(
+                    valid = valid, duplicates = duplicates,
+                    mileageConflicts = mileageConflicts, errors = errors,
+                )
+                _exportMessage.value = ExportNotice()
+            } catch (e: Exception) {
+                _exportMessage.value = ExportNotice("parse_failed", listOf(e.message ?: ""))
+            }
+        }
+    }
+
+    /** 确认导入：将 valid 组写入数据库 */
+    fun confirmImport() {
+        val preview = _importPreview.value ?: return
+        viewModelScope.launch {
+            var imported = 0
+            for (r in preview.valid) {
+                try {
+                    recordDao.insert(
+                        KOiLRecordEntity(
+                            reoilDate = r.date, mileage = r.mileage, oilAmount = r.oilAmount,
+                            payableAmount = r.payableAmount, actualAmount = r.actualAmount,
+                            oilPrice = r.oilPrice, oilGrade = r.oilGrade, province = r.province,
+                            source = "csv_import",
+                        )
+                    )
+                    imported++
+                } catch (_: Exception) { }
+            }
+            _importPreview.value = null
+            val skipped = preview.duplicates.size + preview.mileageConflicts.size + preview.errors.size
+            _exportMessage.value = ExportNotice("import_done", listOf(imported, skipped))
+        }
+    }
+
+    fun dismissImportPreview() { _importPreview.value = null }
+
+    /**
+     * 从完整备份 JSON 恢复数据（§7.10 反向操作）。
+     * 解析 records + settings，写入数据库和 DataStore。
+     */
+    fun importBackup(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: run { _exportMessage.value = ExportNotice("cannot_read"); return@launch }
+
+                val json = org.json.JSONObject(content)
+                val recordsArr = json.optJSONArray("records")
+                if (recordsArr == null || recordsArr.length() == 0) {
+                    _exportMessage.value = ExportNotice("backup_no_records")
+                    return@launch
+                }
+
+                var imported = 0
+                var skipped = 0
+                for (i in 0 until recordsArr.length()) {
+                    val r = recordsArr.getJSONObject(i)
+                    try {
+                        recordDao.insert(
+                            KOiLRecordEntity(
+                                reoilDate = r.getString("date"),
+                                mileage = r.getDouble("mileage"),
+                                oilAmount = r.getDouble("oilAmount"),
+                                payableAmount = r.optDouble("payableAmount", 0.0),
+                                actualAmount = r.getDouble("actualAmount"),
+                                oilPrice = if (r.isNull("oilPrice")) null else r.optDouble("oilPrice"),
+                                oilGrade = r.optString("oilGrade").takeIf { it.isNotEmpty() },
+                                province = r.optString("province").takeIf { it.isNotEmpty() },
+                                source = r.optString("source", "backup_restore"),
+                            )
+                        )
+                        imported++
+                    } catch (_: Exception) { skipped++ }
+                }
+
+                // 恢复设置
+                val settingsObj = json.optJSONObject("settings")
+                if (settingsObj != null) {
+                    settingsObj.optString("themeMode")?.let {
+                        runCatching { settings.setThemeMode(AppSettings.ThemeMode.valueOf(it)) }
+                    }
+                    settingsObj.optString("language")?.let {
+                        runCatching { settings.setLanguage(AppSettings.Language.valueOf(it)) }
+                    }
+                    settingsObj.optString("defaultProvince")?.takeIf { it.isNotEmpty() }?.let { settings.setDefaultProvince(it) }
+                    settingsObj.optString("defaultGrade")?.takeIf { it.isNotEmpty() }?.let { settings.setDefaultOilGrade(it) }
+                    if (!settingsObj.isNull("tankCapacity")) settings.setTankCapacity(settingsObj.getDouble("tankCapacity").toFloat())
+                    if (!settingsObj.isNull("keepLastGrade")) settings.setKeepLastGrade(settingsObj.getBoolean("keepLastGrade"))
+                    if (!settingsObj.isNull("remindThreshold")) settings.setRemindThreshold(settingsObj.getDouble("remindThreshold"))
+                    if (!settingsObj.isNull("abnormalThreshold")) settings.setAbnormalThreshold(settingsObj.getDouble("abnormalThreshold"))
+                    if (!settingsObj.isNull("deviationThreshold")) settings.setDeviationThreshold(settingsObj.getDouble("deviationThreshold"))
+                    if (!settingsObj.isNull("priceAlert")) settings.setPriceAlert(settingsObj.getBoolean("priceAlert"))
+                    if (!settingsObj.isNull("locationEnabled")) settings.setLocationEnabled(settingsObj.getBoolean("locationEnabled"))
+                    if (!settingsObj.isNull("priceDbAutoUpdate")) settings.setPriceDbAutoUpdate(settingsObj.getBoolean("priceDbAutoUpdate"))
+                }
+
+                _exportMessage.value = ExportNotice("restore_done", listOf(imported, skipped))
+            } catch (e: Exception) {
+                _exportMessage.value = ExportNotice("restore_failed", listOf(e.message ?: ""))
+            }
+        }
+    }
+
+    private fun findColumn(headers: List<String>, candidates: List<String>): Int {
+        for ((i, h) in headers.withIndex()) {
+            if (candidates.any { h.startsWith(it, ignoreCase = true) }) return i
+        }
+        return -1
+    }
+
+    private fun String.removeBOM(): String = if (startsWith("\uFEFF")) substring(1) else this
+
+    private fun String.normalizeDate(): String = replace("/", "-").let {
+        val parts = it.split("-")
+        if (parts.size == 3) {
+            "%04d-%02d-%02d".format(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+        } else it
+    }
+
+    /**
+     * 完整备份（§7.10）：导出 JSON，包含全部记录（含派生字段）+ 设置项。
+     * 文件名：KOiL_完整备份_YYYYMMDD.json，version 1。
+     */
+    fun exportBackup() {
+        viewModelScope.launch {
+            try {
+                val records = recordDao.getRange("1970-01-01", "2999-12-31")
+                    .sortedBy { it.reoilDate }
+                if (records.isEmpty()) {
+                    _exportMessage.value = ExportNotice("no_records_backup")
+                    return@launch
+                }
+
+                // 计算派生字段
+                val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                val recordList = mutableListOf<Map<String, Any?>>()
+                var prev: KOiLRecordEntity? = null
+                for (r in records) {
+                    val distance = prev?.let { r.mileage - it.mileage }
+                    val oilDays = prev?.let {
+                        val d1 = LocalDate.parse(r.reoilDate, dateFmt)
+                        val d0 = LocalDate.parse(it.reoilDate, dateFmt)
+                        java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
+                    }
+                    val consumption = if (distance != null && distance >= 100)
+                        Math.round(r.oilAmount / distance * 100 * 100) / 100.0 else null
+                    val costPerKm = if (distance != null && distance >= 100)
+                        Math.round(r.actualAmount / distance * 100) / 100.0 else null
+
+                    recordList.add(
+                        mapOf(
+                            "date" to r.reoilDate,
+                            "mileage" to r.mileage,
+                            "oilAmount" to r.oilAmount,
+                            "payableAmount" to r.payableAmount,
+                            "actualAmount" to r.actualAmount,
+                            "oilPrice" to r.oilPrice,
+                            "oilGrade" to r.oilGrade,
+                            "province" to r.province,
+                            "source" to r.source,
+                            "distance" to distance,
+                            "oilDays" to oilDays,
+                            "oilConsumption" to consumption,
+                            "costPerKm" to costPerKm,
+                        )
+                    )
+                    prev = r
+                }
+
+                // 设置项
+                val settingsMap = mapOf(
+                    "themeMode" to settings.themeMode.first().name,
+                    "language" to settings.language.first().name,
+                    "defaultProvince" to settings.defaultProvince.first(),
+                    "defaultGrade" to settings.defaultOilGrade.first(),
+                    "tankCapacity" to settings.tankCapacity.first(),
+                    "keepLastGrade" to settings.keepLastGrade.first(),
+                    "remindThreshold" to settings.remindThreshold.first(),
+                    "abnormalThreshold" to settings.abnormalThreshold.first(),
+                    "deviationThreshold" to settings.deviationThreshold.first(),
+                    "priceAlert" to settings.priceAlert.first(),
+                    "locationEnabled" to settings.locationEnabled.first(),
+                    "priceDbAutoUpdate" to settings.priceDbAutoUpdate.first(),
+                )
+
+                val backup = mapOf(
+                    "version" to 1,
+                    "exportTime" to SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()),
+                    "recordCount" to records.size,
+                    "records" to recordList,
+                    "settings" to settingsMap,
+                )
+
+                // 手动构建 JSON（避免额外依赖）
+                val json = buildJsonString(backup)
+                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val fileName = "KOiL_完整备份_$timestamp.json"
+                // 输出到用户可浏览的公共位置（Download/KOiL/，不再写入私有 files 目录）
+                val saved = ExportHelper.saveToDownloads(context, fileName, json)
+                if (saved == null) {
+                    _exportMessage.value = ExportNotice("backup_failed", listOf("保存失败"))
+                    return@launch
+                }
+                _exportMessage.value = ExportNotice("backup_done", listOf(records.size, saved))
+            } catch (e: Exception) {
+                _exportMessage.value = ExportNotice("backup_failed", listOf(e.message ?: ""))
+            }
+        }
+    }
+
+    private fun buildJsonString(obj: Any?): String = when (obj) {
+        null -> "null"
+        is Map<*, *> -> obj.entries.joinToString(",", "{", "}") { (k, v) ->
+            "\"$k\":${buildJsonString(v)}"
+        }
+        is List<*> -> obj.joinToString(",", "[", "]") { buildJsonString(it) }
+        is String -> "\"${obj.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        is Number -> obj.toString()
+        is Boolean -> obj.toString()
+        else -> "\"$obj\""
+    }
+}

@@ -1,0 +1,1162 @@
+package com.llpop.koil.ui.screen
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.llpop.koil.R
+import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.ui.component.KOiLBlurBackground
+import com.llpop.koil.ui.component.KOiLGlassDialog
+import com.llpop.koil.ui.component.KOiLScreenScaffold
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import com.llpop.koil.ui.screen.settings.SettingsUiState
+import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.ui.theme.BottomBarMode
+import com.llpop.koil.ui.theme.FloatingBottomBarStyle
+import com.llpop.koil.ui.theme.KOiLColors
+import org.koin.androidx.compose.koinViewModel
+import kotlinx.coroutines.delay
+import kotlin.ranges.ClosedFloatingPointRange
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+private val PROVINCES = listOf(
+    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
+    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
+    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
+    "新疆", "海南", "宁夏", "青海", "西藏",
+)
+private val GRADES = listOf("92", "95", "98", "0")
+
+/**
+ * 设置页（M4：14 项设置完整实现）
+ */
+@Composable
+fun SettingsScreen(
+    modifier: Modifier = Modifier,
+    bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    viewModel: SettingsViewModel = koinViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    // 全局焦点管理 + 偏差输入框点击标志（用于"点击输入框外部即收起提交"，无需坐标计算）
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val tappedOnField = remember { mutableStateOf(false) }
+
+    val importLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { viewModel.previewCsv(it) } }
+
+    val backupLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { viewModel.importBackup(it) } }
+
+    // 定位权限请求：授权后立即定位并写入默认省份
+    val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        val granted = permissions.entries.any { it.value }
+        if (granted) viewModel.locateAndSetProvince()
+    }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        viewModel.loadPriceDbStatus()
+    }
+
+    KOiLScreenScaffold(
+        title = stringResource(R.string.set_title),
+        modifier = modifier,
+    ) { _, topPadding, scrollBehavior, _ ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp)
+                // 点击输入框外部任意位置 = 收起焦点并提交（requireUnconsumed=false 确保子按钮消费后仍触发）
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        val up = waitForUpOrCancellation()
+                        if (up != null) {
+                            if (!tappedOnField.value) {
+                                focusManager.clearFocus()
+                            }
+                            tappedOnField.value = false
+                        }
+                    }
+                },
+        ) {
+            // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
+            Spacer(Modifier.height(topPadding))
+
+        // ===== 通用 =====
+        SectionTitle(stringResource(R.string.set_section_general))
+        SettingsCard {
+            // 外观（主题模式）：对齐 Mishka 下拉弹窗选择（OverlayDropdownPreference）
+            val themeModes = AppSettings.ThemeMode.entries
+            val themeModeIdx = themeModes.indexOf(uiState.themeMode).coerceAtLeast(0)
+            OverlayDropdownPreference(
+                items = themeModes.map { themeLabel(it) },
+                selectedIndex = themeModeIdx,
+                title = stringResource(R.string.set_appearance),
+                summary = themeModes.getOrElse(themeModeIdx) { themeModes.first() }
+                    .let { themeLabel(it) },
+                onSelectedIndexChange = { index ->
+                    viewModel.setThemeMode(themeModes[index])
+                },
+            )
+            SettingDivider()
+            // 语言：对齐 Mishka 下拉弹窗选择
+            val languages = AppSettings.Language.entries
+            val languageIdx = languages.indexOf(uiState.language).coerceAtLeast(0)
+            OverlayDropdownPreference(
+                items = languages.map { langLabel(it) },
+                selectedIndex = languageIdx,
+                title = stringResource(R.string.set_language),
+                summary = languages.getOrElse(languageIdx) { languages.first() }
+                    .let { langLabel(it) },
+                onSelectedIndexChange = { index ->
+                    viewModel.setLanguage(languages[index])
+                },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 导航栏（对齐 Mishka ThemeSettings：Dropdown 弹窗选择）=====
+        // 用 WindowDropdownPreference（系统 Dialog 渲染菜单）而非 OverlayDropdownPreference：
+        // Mishka 的底栏模式位于独立二级页「外观与主题」，其 Overlay 弹窗依赖 Scaffold 内
+        // MiuixPopupHost 渲染；KOiL 为「外层 Scaffold + Pager + 页内 Scaffold」双层嵌套，
+        // Overlay 宿主层级错位导致点击闪退。Window 版同样式同交互，但走系统 Dialog，不闪退。
+        SectionTitle(stringResource(R.string.set_section_nav))
+        SettingsCard {
+            SettingSwitchRow(
+                            title = stringResource(R.string.set_floating_bar),
+                subtitle = stringResource(R.string.set_floating_bar_sub),
+                checked = uiState.floatingBottomBar,
+                onCheckedChange = viewModel::setFloatingBottomBar,
+            )
+            // 悬浮样式：仅悬浮导航条开启时展示
+            if (uiState.floatingBottomBar) {
+                SettingDivider()
+                val floatingStyles = FloatingBottomBarStyle.entries
+                val floatingStyleIdx = floatingStyles.indexOf(
+                    FloatingBottomBarStyle.fromStorage(uiState.floatingBottomBarStyle),
+                ).coerceAtLeast(0)
+                OverlayDropdownPreference(
+                    items = floatingStyles.map { styleLabel(it) },
+                    selectedIndex = floatingStyleIdx,
+                    title = stringResource(R.string.set_floating_style),
+                    summary = floatingStyles.getOrElse(floatingStyleIdx) { floatingStyles.first() }
+                        .let { styleLabel(it) },
+                    onSelectedIndexChange = { index ->
+                        viewModel.setFloatingBottomBarStyle(floatingStyles[index].storageValue)
+                    },
+                )
+            }
+            SettingDivider()
+            val barModes = BottomBarMode.entries
+            val barModeIdx = barModes.indexOf(
+                BottomBarMode.fromStorage(uiState.bottomBarMode),
+            ).coerceAtLeast(0)
+            OverlayDropdownPreference(
+                items = barModes.map { modeLabel(it) },
+                selectedIndex = barModeIdx,
+                title = stringResource(R.string.set_bar_mode),
+                summary = barModes.getOrElse(barModeIdx) { barModes.first() }
+                    .let { modeLabel(it) },
+                onSelectedIndexChange = { index ->
+                    viewModel.setBottomBarMode(barModes[index].storageValue)
+                },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 录入 =====
+        SectionTitle(stringResource(R.string.set_section_entry))
+        SettingsCard {
+            // 定位开关：开启后自动定位省份并写入默认省份
+            SettingSwitchRow(
+                title = stringResource(R.string.set_location),
+                subtitle = stringResource(R.string.set_location_sub),
+                checked = uiState.locationEnabled,
+                onCheckedChange = { on ->
+                    viewModel.setLocationEnabled(on)
+                    if (on) {
+                        if (viewModel.hasLocationPermission()) {
+                            viewModel.locateAndSetProvince()
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                    android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                                )
+                            )
+                        }
+                    }
+                },
+            )
+            // 默认省份：仅定位关闭时展示（开启时由自动定位决定，隐藏手动选择）
+            if (!uiState.locationEnabled) {
+                SettingDivider()
+                val provinces = PROVINCES
+                val provinceIdx = provinces.indexOf(uiState.defaultProvince).coerceAtLeast(0)
+                OverlayDropdownPreference(
+                    items = provinces,
+                    selectedIndex = provinceIdx,
+                    title = stringResource(R.string.set_default_province),
+                    summary = stringResource(
+                        R.string.set_default_province_sum,
+                        provinces.getOrElse(provinceIdx) { provinces.first() },
+                    ),
+                    onSelectedIndexChange = { index ->
+                        viewModel.setDefaultProvince(provinces[index])
+                    },
+                )
+            }
+            SettingDivider()
+            SettingSwitchRow(
+                title = stringResource(R.string.set_price_alert),
+                subtitle = stringResource(R.string.set_price_alert_sub),
+                checked = uiState.priceAlert,
+                onCheckedChange = viewModel::setPriceAlert,
+            )
+            SettingDivider()
+            SettingSwitchRow(
+                title = stringResource(R.string.set_keep_grade),
+                subtitle = stringResource(R.string.set_keep_grade_sub),
+                checked = uiState.keepLastGrade,
+                onCheckedChange = viewModel::setKeepLastGrade,
+            )
+            // 默认油号：仅"沿用上次油号"关闭时展示（开启时沿用上次，无需选择）
+            if (!uiState.keepLastGrade) {
+                SettingDivider()
+                val oilGrades = GRADES
+                val gradeIdx = oilGrades.indexOf(uiState.defaultOilGrade).coerceAtLeast(0)
+                OverlayDropdownPreference(
+                    items = oilGrades.map { "${it}#" },
+                    selectedIndex = gradeIdx,
+                    title = stringResource(R.string.set_default_grade),
+                    summary = stringResource(
+                        R.string.set_default_grade_sum,
+                        oilGrades.getOrElse(gradeIdx) { oilGrades.first() },
+                    ),
+                    onSelectedIndexChange = { index ->
+                        viewModel.setDefaultOilGrade(oilGrades[index])
+                    },
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 提醒与校验 =====
+        SectionTitle(stringResource(R.string.set_section_remind))
+        SettingsCard {
+            StepperInputRow(
+                title = stringResource(R.string.set_abnormal),
+                summary = stringResource(R.string.set_abnormal_sum, uiState.abnormalThreshold.toInt()),
+                value = uiState.abnormalThreshold.toInt(),
+                range = 0..50,
+                step = 1,
+                suffix = "%",
+                onFieldTap = { tappedOnField.value = true },
+                onCommit = { viewModel.setAbnormalThreshold(it.toDouble()) },
+            )
+            SettingDivider()
+            StepperInputRow(
+                title = stringResource(R.string.set_deviation),
+                summary = stringResource(R.string.set_deviation_sum, uiState.deviationThreshold.toInt()),
+                value = uiState.deviationThreshold.toInt(),
+                range = 1..50,
+                step = 1,
+                suffix = "%",
+                onFieldTap = { tappedOnField.value = true },
+                onCommit = { viewModel.setDeviationThreshold(it.toDouble()) },
+            )
+            SettingDivider()
+            StepperInputRow(
+                title = stringResource(R.string.set_tank),
+                summary = stringResource(R.string.set_tank_sub),
+                value = uiState.tankCapacity.toInt(),
+                range = 5..200,
+                step = 5,
+                suffix = "L",
+                onFieldTap = { tappedOnField.value = true },
+                onCommit = { viewModel.setTankCapacity(it.toFloat()) },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 历史油价数据库（Web 版大卡片排版） =====
+        SectionTitle(stringResource(R.string.set_section_price_db))
+        KOiLBlurBackground(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 20f,
+        ) {
+            val priceDbStatus by viewModel.priceDbStatus.collectAsState()
+            val pendingItems by viewModel.pendingItems.collectAsState()
+            val priceDbUpdating by viewModel.priceDbUpdating.collectAsState()
+            val latestShort = (priceDbStatus.lastPriceChangeDate ?: priceDbStatus.latestDate).takeLast(5)
+            val versionShort = (priceDbStatus.versionDate ?: priceDbStatus.latestDate).takeLast(5)
+            // 最近检查时间格式化（MM/dd HH:mm），未检查过显示 "--"
+            val lastCheckedText = if (priceDbStatus.lastCheckedAt > 0) {
+                java.text.SimpleDateFormat("MM/dd HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(priceDbStatus.lastCheckedAt))
+            } else "--"
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                // —— 标题（油价数据库 + 版本号，有版本号时并入）——
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (priceDbStatus.versionLabel != "V——") {
+                            stringResource(R.string.pdb_db_title, priceDbStatus.versionLabel)
+                        } else {
+                            stringResource(R.string.pdb_db_title_plain)
+                        },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+
+                // —— 统计四宫格（蓝色图标 + 数值 + 标签，对齐截图样式）——
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    StatQuadItem(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Filled.Place,
+                        value = priceDbStatus.provinceCount.toString(),
+                        label = stringResource(R.string.pdb_provinces),
+                    )
+                    StatQuadItem(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Filled.LocalGasStation,
+                        value = priceDbStatus.gradeCount.toString(),
+                        label = stringResource(R.string.pdb_grades),
+                    )
+                    StatQuadItem(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Filled.CalendarMonth,
+                        value = priceDbStatus.adjustmentCount.toString(),
+                        label = stringResource(R.string.pdb_adjustments),
+                    )
+                    StatQuadItem(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Filled.Storage,
+                        value = priceDbStatus.total.toString(),
+                        label = stringResource(R.string.pdb_records),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+
+                // —— 分割线（四宫格与下方内容分隔）——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                )
+                Spacer(Modifier.height(12.dp))
+
+                // —— 窗口链条 + 更新于（左两行） + 立即更新（右，垂直居中）——
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        val w1Short = priceDbStatus.adjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
+                        val w2Short = priceDbStatus.nextAdjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
+                        when {
+                            w1Short != null && w2Short != null -> {
+                                Text(
+                                    text = if (priceDbStatus.windowStranded) {
+                                        stringResource(R.string.pdb_adjust_stranded, w1Short, latestShort, w2Short)
+                                    } else if (priceDbStatus.adjustWindowPrice != null) {
+                                        stringResource(R.string.pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!, w2Short)
+                                    } else {
+                                        stringResource(R.string.pdb_adjust_stranded, w1Short, latestShort, w2Short)
+                                    },
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                            w2Short != null -> {
+                                Text(
+                                    text = stringResource(R.string.pdb_next_only, w2Short),
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                            else -> {
+                                Text(
+                                    text = stringResource(R.string.pdb_not_checked),
+                                    fontSize = 12.sp,
+                                    lineHeight = 15.sp,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(R.string.pdb_last_update, lastCheckedText),
+                            fontSize = 12.sp,
+                            lineHeight = 15.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(KOiLColors.Primary)
+                            .clickable(enabled = !priceDbUpdating) { viewModel.checkPriceDbNow() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (priceDbUpdating) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.Refresh,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(if (priceDbUpdating) R.string.pdb_updating else R.string.pdb_update_now),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                // —— 待确认更新（有数据需核实时才展开；无数据整块连间距、横线一起隐藏）——
+                if (pendingItems.isNotEmpty()) {
+                    // 展开时上边界横线（隐藏时此线不出现，下方仅保留一条）
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = stringResource(R.string.pdb_pending_title),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    pendingItems.forEach { item ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = "${item.province} · ${item.grade} · ${item.effectiveDate}",
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onBackground,
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.set_primary_secondary_price,
+                                        item.primaryPrice ?: 0.0,
+                                        item.secondaryPrice ?: 0.0,
+                                    ),
+                                    fontSize = 11.sp,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                            Text(
+                                text = stringResource(R.string.set_accept_primary),
+                                fontSize = 11.sp,
+                                color = KOiLColors.Primary,
+                                modifier = Modifier
+                                    .clickable { viewModel.acceptPending(item.id, true) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.set_accept_secondary),
+                                fontSize = 11.sp,
+                                color = KOiLColors.Primary,
+                                modifier = Modifier
+                                    .clickable { viewModel.acceptPending(item.id, false) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                            Text(
+                                text = stringResource(R.string.set_ignore),
+                                fontSize = 11.sp,
+                                color = Color(0xFFE53935),
+                                modifier = Modifier
+                                    .clickable { viewModel.ignorePending(item.id) }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                            )
+                        }
+                    }
+                    // 展开时下边界间距（隐藏时随之消失）
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                // —— 分割线 ——
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                )
+                Spacer(Modifier.height(12.dp))
+
+                // —— 自动更新开关 ——
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.set_price_db_auto),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.pdb_auto_sub),
+                            fontSize = 11.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    }
+                    Switch(
+                        checked = uiState.priceDbAutoUpdate,
+                        onCheckedChange = viewModel::setPriceDbAutoUpdate,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 数据 =====
+        SectionTitle(stringResource(R.string.set_section_data))
+        SettingsCard {
+            SettingRow(
+                            title = stringResource(R.string.set_export_records),
+                subtitle = stringResource(R.string.set_export_records_sub),
+                value = stringResource(R.string.act_export),
+                onClick = viewModel::exportCsv,
+            )
+            SettingDivider()
+            SettingRow(
+                            title = stringResource(R.string.set_import_records),
+                subtitle = stringResource(R.string.set_import_records_sub),
+                value = stringResource(R.string.act_import),
+                onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
+            )
+            SettingDivider()
+            SettingRow(
+                            title = stringResource(R.string.set_backup),
+                subtitle = stringResource(R.string.set_backup_sub),
+                value = stringResource(R.string.act_backup),
+                onClick = viewModel::exportBackup,
+            )
+            SettingDivider()
+            SettingRow(
+                            title = stringResource(R.string.set_export_price_history),
+                subtitle = stringResource(R.string.set_export_price_history_sub),
+                value = stringResource(R.string.act_export),
+                onClick = viewModel::exportOilPriceHistory,
+            )
+            SettingDivider()
+            SettingRow(
+                            title = stringResource(R.string.set_restore),
+                subtitle = stringResource(R.string.set_restore_sub),
+                value = stringResource(R.string.act_restore),
+                onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
+            )
+        }
+
+        // 导出结果提示
+        val exportNotice by viewModel.exportMessage.collectAsState()
+        val exportText = exportNotice.key?.let { formatNotice(it, exportNotice.args) }
+        if (exportText != null) {
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(KOiLColors.PrimaryContainer)
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    text = exportText,
+                    fontSize = 12.sp,
+                    color = KOiLColors.OnPrimaryContainer,
+                )
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+
+        // 关于
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = stringResource(R.string.set_footer, com.llpop.koil.BuildConfig.VERSION_NAME),
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+            )
+        }
+        Spacer(Modifier.height(bottomPadding + 12.dp))
+        }
+    }
+
+    // 省份选择弹窗
+
+    // CSV 导入预览弹窗
+    val importPreview by viewModel.importPreview.collectAsState()
+    importPreview?.let { preview ->
+        val activeTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
+        val tabs = listOf(
+            stringResource(R.string.import_tab_valid, preview.valid.size) to preview.valid,
+            stringResource(R.string.import_tab_dup, preview.duplicates.size) to preview.duplicates,
+            stringResource(R.string.import_tab_conflict, preview.mileageConflicts.size) to preview.mileageConflicts,
+            stringResource(R.string.import_tab_error, preview.errors.size) to preview.errors,
+        )
+        com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissImportPreview) {
+            Column {
+                Text(stringResource(R.string.import_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
+                Spacer(Modifier.height(10.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(2.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                ) {
+                    tabs.forEachIndexed { idx, (label, _) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (activeTab.value == idx) KOiLColors.Primary else Color.Transparent)
+                                .clickable { activeTab.value = idx }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                        ) {
+                            Text(label, fontSize = 10.sp, color = if (activeTab.value == idx) Color.White else MiuixTheme.colorScheme.onBackground)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.foundation.layout.Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    Column {
+                        tabs[activeTab.value].second.forEach { r ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(r.date, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackground, modifier = Modifier.width(70.dp))
+                                Text("${r.mileage.toInt()}km", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(60.dp))
+                                Text("%.1fL".format(r.oilAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
+                                Text("¥%.0f".format(r.actualAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                                r.errorKey?.let { key ->
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = when (key) {
+                                            "format_error" -> stringResource(R.string.msg_format_error)
+                                            "duplicate" -> stringResource(R.string.msg_duplicate)
+                                            else -> key
+                                        },
+                                        fontSize = 10.sp,
+                                        color = Color(0xFFE53935),
+                                    )
+                                }
+                                r.conflictKey?.let { key ->
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = when (key) {
+                                            "lt_prev" -> stringResource(R.string.msg_mileage_lt_prev, r.conflictArg)
+                                            "gt_next" -> stringResource(R.string.msg_mileage_gt_next, r.conflictArg)
+                                            else -> key
+                                        },
+                                        fontSize = 10.sp,
+                                        color = Color(0xFFE65100),
+                                    )
+                                }
+                            }
+                        }
+                        if (tabs[activeTab.value].second.isEmpty()) {
+                            Text(stringResource(R.string.import_no_data), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(vertical = 20.dp))
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f).height(40.dp)) { Text(stringResource(R.string.common_cancel), fontSize = 13.sp) }
+                    Spacer(Modifier.width(10.dp))
+                    Button(onClick = viewModel::confirmImport, modifier = Modifier.weight(1f).height(40.dp)) {
+                        Text(stringResource(R.string.import_confirm, preview.valid.size), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ===== 组件 =====
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = MiuixTheme.colorScheme.onBackgroundVariant,
+        modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
+    KOiLBlurBackground(
+        modifier = Modifier.fillMaxWidth(),
+        cornerRadius = 20f,
+    ) {
+        Column(modifier = Modifier.padding(0.dp)) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun SettingDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .padding(horizontal = 16.dp)
+            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+    )
+}
+
+@Composable
+private fun SettingRow(
+    title: String,
+    subtitle: String,
+    value: String,
+    onClick: () -> Unit,
+    showArrow: Boolean = true,
+    arrowIcon: androidx.compose.ui.graphics.vector.ImageVector =
+        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+            )
+        }
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            color = KOiLColors.Primary,
+            fontWeight = FontWeight.Medium,
+        )
+        if (showArrow) {
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = arrowIcon,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/** 四宫格统计项（蓝色图标 + 数值 + 标签，对齐截图样式） */
+@Composable
+private fun StatQuadItem(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    value: String,
+    label: String,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = KOiLColors.Primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = value,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onBackground,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant,
+        )
+    }
+}
+
+/**
+ * 步进输入行：标题 + 副标题 + 右侧 [− 数字 单位 +]。
+ * 交互统一：非编辑态纯数字文字，点击数字直接进入输入（自动聚焦、数字键盘、无边框无选中框）；
+ * 点击输入框外部 / ±按钮 / 键盘完成即提交（越界夹取），空输入自动还原（可取消）；
+ * 编辑态宽度 = 不可见测量层（草稿文字+光标占位）驱动，与未选中严格同宽，杜绝输入框撑满。
+ * 全局"点击外部收起"由 SettingsScreen 根层 pointerInput 处理（tappedOnField 标志）。
+ */
+@Composable
+private fun StepperInputRow(
+    title: String,
+    summary: String,
+    value: Int,
+    range: IntRange,
+    step: Int,
+    suffix: String,
+    horizontalPadding: Dp = 16.dp,
+    onFieldTap: () -> Unit = {},
+    onCommit: (Int) -> Unit,
+) {
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val draft = remember { mutableStateOf<String?>(null) }
+    val fieldFocused = remember { mutableStateOf(false) }
+    val fieldFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val fieldWidthPx = remember { mutableStateOf(0) }
+    val fieldDensity = LocalDensity.current
+    val clamped = value.coerceIn(range)
+    fun commitField() {
+        draft.value?.toIntOrNull()?.coerceIn(range)?.let { onCommit(it) }
+        draft.value = null
+        fieldFocused.value = false
+    }
+    // 进入编辑态后，待输入框完成组合再请求焦点（否则 FocusRequester 未挂载会失败）
+    LaunchedEffect(draft.value) {
+        if (draft.value != null) {
+            fieldFocus.requestFocus()
+        }
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = summary,
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // − 蓝圆（22dp）
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(KOiLColors.Primary)
+                    .clickable {
+                        val base = draft.value?.toIntOrNull() ?: clamped
+                        draft.value = null
+                        fieldFocused.value = false
+                        onCommit((base - step).coerceIn(range))
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("−", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+            Spacer(Modifier.width(8.dp))
+            // 数字区：非编辑态文字（含 2dp 光标占位）记录宽度；编辑态由测量层驱动精确同宽
+            if (draft.value == null) {
+                Row(
+                    modifier = Modifier
+                        .onSizeChanged { if (it.width > 0) fieldWidthPx.value = it.width }
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { draft.value = clamped.toString() }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = clamped.toString(),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.width(2.dp))
+                }
+            } else {
+                // 外层叠加层不受宽度约束：宽度跟随测量层，输入框精确同宽
+                Box(
+                    modifier = Modifier
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                onFieldTap()
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // 不可见测量层（无宽度约束）：草稿文字 + 2dp 光标占位
+                    Row(
+                        modifier = Modifier
+                            .onSizeChanged { if (it.width > 0) fieldWidthPx.value = it.width },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = draft.value!!,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Transparent,
+                        )
+                        Spacer(Modifier.width(2.dp))
+                    }
+                    // 实际输入层：精确宽度 = 测量层宽，文字居中
+                    BasicTextField(
+                        value = draft.value!!,
+                        onValueChange = { raw -> draft.value = raw.filter { it.isDigit() } },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = { focusManager.clearFocus() },
+                        ),
+                        singleLine = true,
+                        textStyle = TextStyle(
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        ),
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        modifier = Modifier
+                            .width(with(fieldDensity) { fieldWidthPx.value.toDp() })
+                            .focusRequester(fieldFocus)
+                            .onFocusChanged { state ->
+                                if (state.isFocused) {
+                                    fieldFocused.value = true
+                                } else if (fieldFocused.value) {
+                                    commitField()
+                                }
+                            },
+                    )
+                }
+            }
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = suffix,
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+            )
+            Spacer(Modifier.width(8.dp))
+            // + 蓝圆（22dp）
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(KOiLColors.Primary)
+                    .clickable {
+                        val base = draft.value?.toIntOrNull() ?: clamped
+                        draft.value = null
+                        fieldFocused.value = false
+                        onCommit((base + step).coerceIn(range))
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
+    }
+}
+
+@Composable
+private fun themeLabel(mode: AppSettings.ThemeMode) = when (mode) {
+    AppSettings.ThemeMode.SYSTEM -> stringResource(R.string.theme_system)
+    AppSettings.ThemeMode.LIGHT -> stringResource(R.string.theme_light)
+    AppSettings.ThemeMode.DARK -> stringResource(R.string.theme_dark)
+}
+
+@Composable
+private fun langLabel(lang: AppSettings.Language) = when (lang) {
+    AppSettings.Language.SYSTEM -> stringResource(R.string.lang_system)
+    AppSettings.Language.ZH_CN -> stringResource(R.string.lang_zh_cn)
+    AppSettings.Language.ZH_TW -> stringResource(R.string.lang_zh_tw)
+    AppSettings.Language.EN -> stringResource(R.string.lang_en)
+}
+
+@Composable
+private fun styleLabel(style: FloatingBottomBarStyle) = when (style) {
+    FloatingBottomBarStyle.Miuix -> stringResource(R.string.style_miuix)
+    FloatingBottomBarStyle.IosLike -> stringResource(R.string.style_ios)
+}
+
+@Composable
+private fun modeLabel(mode: BottomBarMode) = when (mode) {
+    BottomBarMode.IconAndText -> stringResource(R.string.mode_icon_text)
+    BottomBarMode.IconOnly -> stringResource(R.string.mode_icon_only)
+}
+
+/** 把 ViewModel 给出的结果通知 key 翻译为当前语言文案 */
+@Composable
+private fun formatNotice(key: String, args: List<Any>): String = when (key) {
+    "adopted" -> stringResource(R.string.msg_adopted)
+    "ignored" -> stringResource(R.string.msg_ignored)
+    "adopt_failed" -> stringResource(R.string.msg_adopt_failed)
+    "pdb_update_failed" -> stringResource(R.string.msg_pdb_update_failed, args.getOrElse(0) { "" })
+    "price_db_empty" -> stringResource(R.string.msg_price_db_empty)
+    "price_exported" -> stringResource(R.string.msg_price_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "export_failed" -> stringResource(R.string.msg_export_failed, args.getOrElse(0) { "" })
+    "no_records" -> stringResource(R.string.msg_no_records)
+    "records_exported" -> stringResource(R.string.msg_records_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "cannot_read" -> stringResource(R.string.msg_cannot_read)
+    "file_empty" -> stringResource(R.string.msg_file_empty)
+    "missing_columns" -> stringResource(R.string.msg_missing_columns)
+    "parse_failed" -> stringResource(R.string.msg_parse_failed, args.getOrElse(0) { "" })
+    "import_done" -> stringResource(R.string.msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
+    "backup_no_records" -> stringResource(R.string.msg_backup_no_records)
+    "restore_done" -> stringResource(R.string.msg_restore_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
+    "restore_failed" -> stringResource(R.string.msg_restore_failed, args.getOrElse(0) { "" })
+    "no_records_backup" -> stringResource(R.string.msg_no_records_backup)
+    "backup_done" -> stringResource(R.string.msg_backup_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "backup_failed" -> stringResource(R.string.msg_backup_failed, args.getOrElse(0) { "" })
+    else -> key
+}
+
+

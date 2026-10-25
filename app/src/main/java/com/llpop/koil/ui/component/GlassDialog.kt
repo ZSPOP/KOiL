@@ -1,0 +1,76 @@
+package com.llpop.koil.ui.component
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+
+/**
+ * KOiL 柔光玻璃弹窗：系统 Dialog 容器 + 半透明玻璃底色 + 24dp 圆角。
+ * （弹窗为独立窗口，无法采样 App 内容做真模糊，采用半透明玻璃观感；
+ *  之前用 miuix OverlayDialog 在部分机型触发闪退，故回退系统 Dialog。）
+ * 可选参数：contentPadding 内边距、scrollable+maxHeight 超高限高滚动、widthFraction 屏宽比例（>0 时加宽到该比例，默认填满系统 Dialog 可用宽）。
+ */
+@Composable
+fun KOiLGlassDialog(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    title: String? = null,
+    contentPadding: Dp = 20.dp,
+    scrollable: Boolean = false,
+    maxHeight: Dp? = null,
+    widthFraction: Float? = null,
+    content: @Composable () -> Unit,
+) {
+    if (!show) return
+    val hostState = remember { AnchoredPopupHostState() }
+    val props = if (widthFraction != null) DialogProperties(usePlatformDefaultWidth = false) else DialogProperties()
+    androidx.compose.ui.window.Dialog(
+        // 系统关闭（返回键/点击窗口外）直接关闭卡片；"点弹窗内容外的卡片外区域"由
+        // overlay 遮罩处理逐层关闭（有下拉先收起、无下拉才关卡片）
+        onDismissRequest = { onDismissRequest() },
+        properties = props,
+    ) {
+        // 弹窗根包裹：内容 + 锚定下拉 overlay（同一窗口坐标系，位置自洽且不被卡片遮挡）
+        AnchoredPopupDialogWrapper(
+            hostState = hostState,
+            onOutsideTap = onDismissRequest,
+        ) {
+            val widthMod = if (widthFraction != null)
+                Modifier.width((LocalConfiguration.current.screenWidthDp * widthFraction).dp)
+            else Modifier.fillMaxWidth()
+            Box(
+                modifier = Modifier
+                    .then(widthMod)
+                    .then(if (maxHeight != null) Modifier.heightIn(max = maxHeight) else Modifier)
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(MiuixTheme.colorScheme.surface.copy(alpha = 0.94f))
+                    .padding(contentPadding),
+            ) {
+                if (scrollable) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                    ) { content() }
+                } else {
+                    content()
+                }
+            }
+        }
+    }
+}

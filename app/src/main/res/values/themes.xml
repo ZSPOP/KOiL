@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 基础主题：edge-to-edge、透明系统栏（实际配色由 Compose KOiLTheme 决定） -->
+    <style name="Theme.KOiL" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!-- Android 12+ 系统 SplashScreen：品牌水滴渐变 + 品牌名 KOiL -->
+    <style name="Theme.KOiL.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/KOiL_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenAnimationDuration">200</item>
+        <item name="postSplashScreenTheme">@style/Theme.KOiL</item>
+    </style>
+</resources>
