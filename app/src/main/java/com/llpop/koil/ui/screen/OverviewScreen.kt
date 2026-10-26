@@ -995,7 +995,7 @@ private fun RecordCard(
         else -> MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     }
 
-    // v1.5.6→v1.5.7：长按选中态柔和过渡（细淡描边 + 内柔光晕，淡入淡出，避免突兀）
+    // v1.5.7：长按选中态——无框线，仅柔和光晕提亮（用户反馈长方形描边突兀，已移除）
     val hl by animateFloatAsState(
         targetValue = if (showMoreMenu) 1f else 0f,
         animationSpec = tween(200),
@@ -1006,18 +1006,7 @@ private fun RecordCard(
         modifier = Modifier
             .fillMaxWidth()
             // v1.5.5：长按显示时上报自身全局位置（页面级全屏层据此定位圆按钮）
-            .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) }
-            .then(
-                if (hl > 0f) {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = KOiLColors.Primary.copy(alpha = 0.4f * hl),
-                        shape = RoundedCornerShape(20f),
-                    )
-                } else {
-                    Modifier
-                }
-            ),
+            .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) },
     ) {
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
