@@ -370,6 +370,22 @@ class OilPriceDbSyncer(
      * 使数据库生效日对齐真实调价日（9-27→9-24）；[adjustDates] 为空则降级用 abapi 原日期。
      */
     private suspend fun seedProvince(province: String, adjustDates: List<String> = emptyList()): Int {
+        // 同价假记录清理：历史"窗口归档"遗留的 isStranded=false 同价记录（如 10-16 ¥8.63 与
+        // 09-25 相同——真实调价必然变价，同价且非搁浅 = 假变化点）→ 删除，让补搁浅幂等键放行。
+        // 幂等：假记录删一次后不再存在，重复补灌不重复删。
+        try {
+            priceDao.getAll().filter { it.province == province && !it.isStranded }
+                .sortedBy { it.effectiveDate }
+                .groupBy { it.grade }
+                .forEach { (_, list) ->
+                    list.zipWithNext().forEach { (a, b) ->
+                        if (kotlin.math.abs(b.price - a.price) < 1e-9) {
+                            priceDao.deleteByKey(b.province, b.grade, b.effectiveDate)
+                        }
+                    }
+                }
+        } catch (_: Exception) {
+        }
         val points = network.fetchYoujiaHistory(province)
         if (points.isEmpty()) return 0
         val today = LocalDate.now().format(DATE_FMT)
@@ -400,7 +416,10 @@ class OilPriceDbSyncer(
         }
         adjustDates.filter { it <= today }.forEach { w ->
             val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@forEach
-            val keptPoint = points.lastOrNull { it.date in yearStart..w && !it.date.isBlank() }
+            // 维持价取 abapi 曲线中 ≤ 窗口日的最后价格，不设"当年 1-1 起"下界：
+            // 首窗口搁浅（如 1-06）时 abapi 当年曲线 1-06 前无点（实测首点 01-23），
+            // 需回退到上年最后一个调价点（2025-12-24 ¥6.73）= 上年末价
+            val keptPoint = points.lastOrNull { it.date <= w && !it.date.isBlank() }
             if (keptPoint == null) return@forEach
             if (keptPoint.p92 != null && !hasChange("92号汽油", eff) && ("$province|92号汽油|$eff") !in existing) {
                 entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92!!, "窗口搁淺·維持(abapi)", false, true))
