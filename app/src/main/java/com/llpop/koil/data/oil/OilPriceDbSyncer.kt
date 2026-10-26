@@ -449,8 +449,8 @@ class OilPriceDbSyncer(
         if (points.isEmpty()) return 0
         val today = LocalDate.now().format(DATE_FMT)
         val yearStart = "${LocalDate.now().year}-01-01"
-        // 幂等键：省|油号|生效日（重灌/补灌重复触发时不重复插入）
-        val existing = priceDao.keysForProvince(province).toSet()
+        // 幂等键：省|油号|生效日（重灌/补灌重复触发时不重复插入）；mutable：变化点覆盖搁浅时移除键
+        val existing = priceDao.keysForProvince(province).toMutableSet()
         val entities = mutableListOf<KOiLPriceEntity>()
         var last92: Double? = null
         var last95: Double? = null
@@ -461,10 +461,44 @@ class OilPriceDbSyncer(
             // 只保留当年 1-1 至今（用户口径：首拉当年调价记录）
             if (pt.date < yearStart || pt.date > today) return@forEach
             val eff = if (adjustDates.isEmpty()) pt.date else addOneDay(adjustToWindow(pt.date, adjustDates))
-            pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) { if (("$province|92号汽油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last92 = v } }
-            pt.p95?.let { v -> if (last95 == null || kotlin.math.abs(v - last95!!) > 1e-9) { if (("$province|95号汽油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last95 = v } }
-            pt.p98?.let { v -> if (last98 == null || kotlin.math.abs(v - last98!!) > 1e-9) { if (("$province|98号汽油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last98 = v } }
-            pt.p0?.let { v -> if (last0 == null || kotlin.math.abs(v - last0!!) > 1e-9) { if (("$province|0号柴油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last0 = v } }
+            pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) {
+                val key = "$province|92号汽油|$eff"
+                if (key !in existing) entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false))
+                else {
+                    // v1.4.189：库里该生效日是搁浅记录（isStranded=true）但 abapi 该窗口有变化
+                    // → 删除搁浅 + 插变化点（恢复被 v1.4.188 误替换成搁浅的调价记录）
+                    val row = priceDao.getPrice(province, "92号汽油", eff)
+                    if (row != null && row.isStranded) { priceDao.deleteByKey(province, "92号汽油", eff); existing.remove(key); entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)) }
+                }
+                last92 = v
+            } }
+            pt.p95?.let { v -> if (last95 == null || kotlin.math.abs(v - last95!!) > 1e-9) {
+                val key = "$province|95号汽油|$eff"
+                if (key !in existing) entities.add(KOiLPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false))
+                else {
+                    val row = priceDao.getPrice(province, "95号汽油", eff)
+                    if (row != null && row.isStranded) { priceDao.deleteByKey(province, "95号汽油", eff); existing.remove(key); entities.add(KOiLPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)) }
+                }
+                last95 = v
+            } }
+            pt.p98?.let { v -> if (last98 == null || kotlin.math.abs(v - last98!!) > 1e-9) {
+                val key = "$province|98号汽油|$eff"
+                if (key !in existing) entities.add(KOiLPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false))
+                else {
+                    val row = priceDao.getPrice(province, "98号汽油", eff)
+                    if (row != null && row.isStranded) { priceDao.deleteByKey(province, "98号汽油", eff); existing.remove(key); entities.add(KOiLPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)) }
+                }
+                last98 = v
+            } }
+            pt.p0?.let { v -> if (last0 == null || kotlin.math.abs(v - last0!!) > 1e-9) {
+                val key = "$province|0号柴油|$eff"
+                if (key !in existing) entities.add(KOiLPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false))
+                else {
+                    val row = priceDao.getPrice(province, "0号柴油", eff)
+                    if (row != null && row.isStranded) { priceDao.deleteByKey(province, "0号柴油", eff); existing.remove(key); entities.add(KOiLPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)) }
+                }
+                last0 = v
+            } }
         }
         // —— 补搁浅窗口（v1.4.181 搁浅入库）——
         // 已过窗口 + 该窗口无生效记录 = 搁浅：插维持价记录（isStranded=true）。
@@ -480,27 +514,19 @@ class OilPriceDbSyncer(
             // 需回退到上年最后一个调价点（2025-12-24 ¥6.73）= 上年末价
             val keptPoint = points.lastOrNull { it.date <= w && !it.date.isBlank() }
             if (keptPoint == null) return@forEach
-            // v1.4.188：库内该生效日若已有「非搁浅」记录（verifyProvince 抢插/降级遗留的假调价点，
-            // 如 10-16 显示了其他省的 8.57）→ 删除后补搁浅；已有搁浅记录则幂等跳过。
-            if (keptPoint.p92 != null && !hasChange("92号汽油", eff)) {
-                val row = priceDao.getPrice(province, "92号汽油", eff)
-                if (row == null) entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92!!, "窗口搁淺·維持(abapi)", false, true))
-                else if (!row.isStranded) { priceDao.deleteByKey(province, "92号汽油", eff); entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92!!, "窗口搁淺·維持(abapi)", false, true)) }
+            // 补搁浅（v1.4.189 回滚）：只补「库里无记录」的已过窗口（hasChange 防本次新增变化点重复补）；
+            // 已有的记录（调价或搁浅）一律不删不动——v1.4.188 曾误删已有调价记录导致全搁浅。
+            if (keptPoint.p92 != null && !hasChange("92号汽油", eff) && ("$province|92号汽油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92!!, "窗口搁淺·維持(abapi)", false, true))
             }
-            if (keptPoint.p95 != null && !hasChange("95号汽油", eff)) {
-                val row = priceDao.getPrice(province, "95号汽油", eff)
-                if (row == null) entities.add(KOiLPriceEntity(province, "95号汽油", eff, keptPoint.p95!!, "窗口搁淺·維持(abapi)", false, true))
-                else if (!row.isStranded) { priceDao.deleteByKey(province, "95号汽油", eff); entities.add(KOiLPriceEntity(province, "95号汽油", eff, keptPoint.p95!!, "窗口搁淺·維持(abapi)", false, true)) }
+            if (keptPoint.p95 != null && !hasChange("95号汽油", eff) && ("$province|95号汽油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "95号汽油", eff, keptPoint.p95!!, "窗口搁淺·維持(abapi)", false, true))
             }
-            if (keptPoint.p98 != null && !hasChange("98号汽油", eff)) {
-                val row = priceDao.getPrice(province, "98号汽油", eff)
-                if (row == null) entities.add(KOiLPriceEntity(province, "98号汽油", eff, keptPoint.p98!!, "窗口搁淺·維持(abapi)", false, true))
-                else if (!row.isStranded) { priceDao.deleteByKey(province, "98号汽油", eff); entities.add(KOiLPriceEntity(province, "98号汽油", eff, keptPoint.p98!!, "窗口搁淺·維持(abapi)", false, true)) }
+            if (keptPoint.p98 != null && !hasChange("98号汽油", eff) && ("$province|98号汽油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "98号汽油", eff, keptPoint.p98!!, "窗口搁淺·維持(abapi)", false, true))
             }
-            if (keptPoint.p0 != null && !hasChange("0号柴油", eff)) {
-                val row = priceDao.getPrice(province, "0号柴油", eff)
-                if (row == null) entities.add(KOiLPriceEntity(province, "0号柴油", eff, keptPoint.p0!!, "窗口搁淺·維持(abapi)", false, true))
-                else if (!row.isStranded) { priceDao.deleteByKey(province, "0号柴油", eff); entities.add(KOiLPriceEntity(province, "0号柴油", eff, keptPoint.p0!!, "窗口搁淺·維持(abapi)", false, true)) }
+            if (keptPoint.p0 != null && !hasChange("0号柴油", eff) && ("$province|0号柴油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "0号柴油", eff, keptPoint.p0!!, "窗口搁淺·維持(abapi)", false, true))
             }
         }
         if (entities.isEmpty()) return 0
