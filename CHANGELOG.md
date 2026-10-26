@@ -1,3 +1,31 @@
+## v1.4.193（versionCode 198）— 2026-10-26（基于 v1.4.192）
+
+### 🔮 预测涨跌幅度本地估算（apizero 收费/限流后不失效）
+- **背景**：apizero 已收费限流（4030「匿名试用次数已用完 used=63/daily=5」），App 匿名
+  调用被永久拒绝 → 预测幅度（forecast）真机永远拿不到。此前唯一提供预测幅度的免费源
+  已不可用（通用搜索无替代 API）。
+- **方案**：**原油价格本地估算**——成品油调价 = 前 10 个工作日国际原油均价 vs 上期
+  10 日均价的变化率 × 经验系数（1% ≈ 56.5 元/吨，新闻实证 5.4% → 305 元/吨）：
+  - **主源：EIA 官方 API**（布伦特现货 RBRTE 日度，免费注册 Key **内置为默认值**，
+    含 10000+ 行完整历史——10 日均值比较与用户打开 App 频率无关，断档不存在；
+    配额 1000 次/日；Key 失效/留空 → 降级）
+  - **降级：腾讯财经实时**（hf_OIL 布伦特期货，公开免 Key）——现价 vs 昨收当日变化率
+    （方向可靠、幅度粗）
+  - 显示标注「估算」；两源皆失败 → 维持「待检测」不显示假值
+- **实现**：
+  1. `OilPriceNetwork`：新增 `fetchEiaBrentDaily`（EIA v2 API 解析）+ `fetchTencentBrent`
+     （qt.gtimg.cn 解析：index0 现价 / index7 昨收）
+  2. 新增 `CrudeOilEstimator`（data/oil/）：EIA 10+10 日均值 → 变化率 → ×56.5；
+     腾讯当日涨跌幅降级
+  3. `AppSettings`：新增 `eiaApiKey`（默认内置用户注册 Key）
+  4. `AddViewModel`：forecast（apizero）不可用 → 调 estimator，`forecastEstimated` 标记；
+     `AddScreen` badge 前缀「估算」（三语）
+  5. 设置页「油价数据库」区新增 **EIA API Key** 输入框（可改/留空禁用 EIA，仅腾讯降级）
+- **性能**：仅 apizero forecast 缺失时才发起 EIA 请求（正常时零开销）；首屏仍 Room
+  本地流秒开，估算全部异步后台，失败不阻塞不重试。
+- **边界**：估算为近似值（官方三地均值挂靠 + 调控措施会偏离），仅作方向参考；
+  apizero 若恢复/未来提供 Key 仍优先用官方 forecast。
+
 ## v1.4.192（versionCode 197）— 2026-10-26（基于 v1.4.191）
 
 ### 🔮 预测窗口日降级兜底（apizero 不可用时不失效）

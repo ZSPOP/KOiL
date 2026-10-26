@@ -80,6 +80,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -125,6 +126,7 @@ fun SettingsScreen(
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
         viewModel.loadPriceDbStatus()
+        viewModel.loadEiaApiKey()
     }
 
     KOiLScreenScaffold(
@@ -646,6 +648,48 @@ fun SettingsScreen(
                     Switch(
                         checked = uiState.priceDbAutoUpdate,
                         onCheckedChange = viewModel::setPriceDbAutoUpdate,
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+
+                // —— EIA API Key（原油估算数据源；预测幅度 apizero 收费后本地兜底）——
+                val eiaKey by viewModel.eiaApiKey.collectAsState()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                )
+                Spacer(Modifier.height(12.dp))
+                Column {
+                    Text(
+                        text = stringResource(R.string.koil_set_eia_key_title),
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.koil_set_eia_key_sub),
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextField(
+                        value = eiaKey,
+                        onValueChange = { viewModel.setEiaApiKey(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        colors = TextFieldDefaults.textFieldColors(
+                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                            borderColor = Color.Transparent,
+                        ),
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
                     )
                 }
                 Spacer(Modifier.height(12.dp))

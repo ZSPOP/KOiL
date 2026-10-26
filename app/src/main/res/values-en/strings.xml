@@ -34,6 +34,7 @@
     <string name="koil_add_forecast_up">Est. up</string>
     <string name="koil_add_forecast_down">Est. down</string>
     <string name="koil_add_forecast_per_ton">¥/ton</string>
+    <string name="koil_add_forecast_estimated">Est.</string>
     <string name="koil_add_approx_per_liter">≈ ¥%1$.2f/L</string>
     <string name="koil_add_unit_per_liter">¥/L</string>
     <string name="koil_add_last_refuel">Last fill-up</string>
@@ -184,6 +185,8 @@
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_price_db_auto">Auto-update price DB</string>
     <string name="koil_set_price_db_auto_sub">Check for new prices on launch</string>
+    <string name="koil_set_eia_key_title">EIA API Key</string>
+    <string name="koil_set_eia_key_sub">Crude oil estimation source (free registration, editable; leave blank to use Tencent realtime only)</string>
     <string name="koil_set_price_db_status">Price DB status</string>
     <string name="koil_set_price_db_status_sum">%1$d entries · %2$d provinces × %3$d grades · latest %4$s</string>
     <string name="koil_set_pending_count">%1$d pending</string>

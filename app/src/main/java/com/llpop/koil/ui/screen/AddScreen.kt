@@ -595,7 +595,10 @@ private fun OilPriceCard(
                             ) {
                                 if (forecast != null) {
                                     AdjustBadge(
-                                        text = stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
+                                        text = (if (uiState.forecastEstimated) {
+                                            stringResource(R.string.koil_add_forecast_estimated) + " "
+                                        } else "") +
+                                            stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
                                             "${kotlin.math.abs(forecast).toInt()}" +
                                             stringResource(R.string.koil_add_forecast_per_ton),
                                         color = textColor,

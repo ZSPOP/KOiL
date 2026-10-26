@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -143,10 +144,27 @@ class SettingsViewModel(
     private val _priceDbUpdating = MutableStateFlow(false)
     val priceDbUpdating: StateFlow<Boolean> = _priceDbUpdating.asStateFlow()
 
+    // EIA API Key（原油估算主源配置，默认内置；用户可改，留空即禁用 EIA 估算）
+    private val _eiaApiKey = MutableStateFlow("")
+    val eiaApiKey: StateFlow<String> = _eiaApiKey.asStateFlow()
+
     private val _importPreview = MutableStateFlow<ImportPreview?>(null)
     val importPreview: StateFlow<ImportPreview?> = _importPreview.asStateFlow()
 
     fun togglePendingPanel() { _showPendingPanel.value = !_showPendingPanel.value }
+
+    /** 读取 EIA API Key 初始值（默认内置用户注册 Key） */
+    fun loadEiaApiKey() {
+        viewModelScope.launch {
+            _eiaApiKey.value = settings.eiaApiKey.first()
+        }
+    }
+
+    /** 保存 EIA API Key（留空 = 禁用 EIA 估算，仅腾讯降级） */
+    fun setEiaApiKey(key: String) {
+        _eiaApiKey.value = key
+        viewModelScope.launch { settings.setEiaApiKey(key) }
+    }
 
     /** 刷新油价库状态：统计 + 配置真实字段 + pending 列表 */
     fun loadPriceDbStatus() {

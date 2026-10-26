@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
+import com.llpop.koil.data.oil.CrudeOilEstimator
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.OilPriceDbSyncer
@@ -52,6 +53,7 @@ data class AddUiState(
     val daysUntilAdjust: Int = -1,
     val adjustUrgent: Boolean = false,
     val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌）
+    val forecastEstimated: Boolean = false,      // 预测幅度是否本地估算（apizero 不可用时 EIA/腾讯兜底，标注「估算」）
     val perLiterEquivalent: Double? = null,      // 折合 元/升
     val showPriceAdjust: Boolean = false,        // 油价调整窗口提醒板块（由设置页开关控制）
     val tankCapacity: Float = 65f,
@@ -87,6 +89,7 @@ class AddViewModel(
     private val settings: AppSettings,
     private val locationHelper: LocationHelper,
     private val syncer: OilPriceDbSyncer,
+    private val estimator: CrudeOilEstimator,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddUiState())
@@ -283,10 +286,18 @@ class AddViewModel(
                     ?: next?.minusDays(14)?.toString()
                     ?: p.effectiveDate
                 val versionLabel = recentWindow?.replace("-", "")?.let { "V$it" } ?: "V——"
-                // 预测幅度：仅用接口 forecast（如"预计上调油价270元/吨"，正涨负跌）；
-                // 解析失败/无 → 不显示（不做本地推算假值）
+                // 预测幅度：接口 forecast 优先（如"预计上调油价270元/吨"，正涨负跌）；
+                // apizero 收费/不可用（forecast 缺失）→ 原油本地估算兜底（EIA 官方 → 腾讯实时），标注「估算」
                 val forecastRaw = settings.priceDbForecast.first()
-                val forecastAmount = parseForecast(forecastRaw)
+                var forecastAmount = parseForecast(forecastRaw)
+                var forecastEstimated = false
+                if (forecastAmount == null) {
+                    val estimate = runCatching { estimator.estimate() }.getOrNull()
+                    if (estimate != null) {
+                        forecastAmount = estimate.amountPerTon
+                        forecastEstimated = true
+                    }
+                }
                 // 折合元/升：元/吨 ÷ 1316 升/吨（92# 汽油密度约 0.76 kg/L）
                 val perLiterEquivalent = forecastAmount?.let { Math.round(it / 1316.0 * 100) / 100.0 }
                 _uiState.value = _uiState.value.copy(
@@ -296,6 +307,7 @@ class AddViewModel(
                     daysUntilAdjust = days,
                     adjustUrgent = urgent,
                     forecastAmount = forecastAmount,
+                    forecastEstimated = forecastEstimated,
                     perLiterEquivalent = perLiterEquivalent,
                 )
             }

@@ -34,6 +34,7 @@
     <string name="koil_add_forecast_up">預計上調</string>
     <string name="koil_add_forecast_down">預計下調</string>
     <string name="koil_add_forecast_per_ton">元/噸</string>
+    <string name="koil_add_forecast_estimated">估算</string>
     <string name="koil_add_approx_per_liter">折合约%1$.2f元/升</string>
     <string name="koil_add_unit_per_liter">元/升</string>
     <string name="koil_add_last_refuel">上次加油</string>
@@ -184,6 +185,8 @@
     <string name="koil_set_location_sub">自動識別省份</string>
     <string name="koil_set_price_db_auto">油價庫自動更新</string>
     <string name="koil_set_price_db_auto_sub">啟動時檢查新版油價</string>
+    <string name="koil_set_eia_key_title">EIA API Key</string>
+    <string name="koil_set_eia_key_sub">原油估算資料源（免費註冊，可修改；留空則僅用騰訊即時估算）</string>
     <string name="koil_set_price_db_status">油價庫狀態</string>
     <string name="koil_set_price_db_status_sum">%1$d 筆 · %2$d 省 × %3$d 油號 · 最新 %4$s</string>
     <string name="koil_set_pending_count">%1$d待處理</string>

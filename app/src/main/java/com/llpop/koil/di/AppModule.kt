@@ -5,6 +5,7 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.location.LocationHelper
+import com.llpop.koil.data.oil.CrudeOilEstimator
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
@@ -22,6 +23,7 @@ val appModule = module {
     single { AppDatabase.getInstance(androidContext()) }
     singleOf(::AppSettings)
     singleOf(::OilPriceNetwork)
+    singleOf(::CrudeOilEstimator)
     singleOf(::OilPriceDbSyncer)
 
     single<KOiLRecordDao> { get<AppDatabase>().KOiLRecordDao() }

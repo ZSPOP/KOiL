@@ -103,6 +103,8 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_DB_CALENDAR_186_MIGRATED = booleanPreferencesKey("KOiL-price-db-calendar-186-migrated")
         private val KEY_PRICE_DB_RESEED_189 = booleanPreferencesKey("KOiL-price-db-reseed-189")
         private val KEY_PRICE_DB_ADJUST_DATES_LEANED = booleanPreferencesKey("KOiL-price-db-adjust-dates-leaned")
+        // ---- 原油估算（apizero forecast 收费后本地兜底）：EIA 官方布伦特现货日度 ----
+        private val KEY_EIA_API_KEY = stringPreferencesKey("KOiL-eia-api-key")
 
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
@@ -113,6 +115,8 @@ class AppSettings(private val context: Context) {
         const val DEFAULT_REMIND_THRESHOLD = 150.0
         const val DEFAULT_ABNORMAL_THRESHOLD = 30.0
         const val DEFAULT_DEVIATION_THRESHOLD = 25.0
+        /** EIA 官方免费 API Key（用户注册，内置为默认值；设置页可改，未来失效可自行更换） */
+        const val DEFAULT_EIA_API_KEY = "GkLpNbWtHq677CmtfR6qHz9hfqqTgnbpM9PGWnLf"
     }
 
     // ---- 主题（koil-theme-mode）----
@@ -342,6 +346,13 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.map { it[KEY_PRICE_DB_ADJUST_DATES] ?: "" }
     suspend fun setPriceDbAdjustDates(dates: List<String>) {
         context.KOiLDataStore.edit { it[KEY_PRICE_DB_ADJUST_DATES] = dates.joinToString(",") }
+    }
+
+    /** EIA 官方 API Key（默认内置用户注册 Key，设置页可改）——原油估算主源 */
+    val eiaApiKey: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_EIA_API_KEY] ?: DEFAULT_EIA_API_KEY }
+    suspend fun setEiaApiKey(key: String) {
+        context.KOiLDataStore.edit { it[KEY_EIA_API_KEY] = key }
     }
 
     /** 异常生效日（不在任何窗口日+1 内的假记录，如"原日期+1"产生的 10-25）是否已一次性清理 */

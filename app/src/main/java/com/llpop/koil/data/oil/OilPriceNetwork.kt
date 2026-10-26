@@ -464,4 +464,74 @@ class OilPriceNetwork {
         }
     }
 
+    // ================= 原油估算数据源（预测幅度兜底，apizero forecast 收费/不可用）=================
+
+    @Serializable
+    private data class EiaSeriesResponse(
+        val response: EiaResponseBody? = null,
+        val error: EiaError? = null,
+    )
+
+    @Serializable
+    private data class EiaResponseBody(val total: Long = 0, val data: List<EiaPoint> = emptyList())
+
+    @Serializable
+    private data class EiaPoint(
+        val period: String? = null,
+        val value: Double? = null,
+        val series: String? = null,
+        val unit: String? = null,
+    )
+
+    @Serializable
+    private data class EiaError(val code: String? = null, val message: String? = null)
+
+    /**
+     * EIA 官方布伦特现货日度价（RBRTE 系列，美元/桶，交易日数据，含完整历史）。
+     * 返回按日期升序的 (date, price) 列表（最多 length 条）；Key 无效/接口失败返回空列表。
+     * 实测：免费注册 Key 即用，配额 1000 次/日；数据 T+1 更新（美国能源署）。
+     */
+    suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): List<Pair<String, Double>> {
+        if (apiKey.isBlank()) return emptyList()
+        val url = "https://api.eia.gov/v2/petroleum/pri/spt/data/" +
+            "?frequency=daily" +
+            "&data%5B0%5D=value" +
+            "&facets%5Bseries%5D%5B%5D=RBRTE" +
+            "&sort%5B0%5D%5Bcolumn%5D=period&sort%5B0%5D%5Bdirection%5D=desc" +
+            "&length=$length&api_key=$apiKey"
+        return try {
+            val body = client.get(url).bodyAsText()
+            val resp = json.decodeFromString<EiaSeriesResponse>(body)
+            if (resp.error != null || resp.response == null) return emptyList()
+            resp.response.data
+                .mapNotNull { p -> p.period?.takeIf { it.length >= 10 }?.let { it to (p.value ?: 0.0) } }
+                .sortedBy { it.first }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 腾讯财经布伦特原油期货实时行情（qt.gtimg.cn，公开免 Key）：
+     * 返回 (现价, 昨收) 美元/桶；失败返回 null。
+     * 实测返回示例：v_hf_OIL="110.45,-1.12,110.39,110.40,110.98,109.22,15:46:57,111.70,110.85,0,3,4,2026-10-26,布伦特原油"
+     * 字段：index0=现价、index7=昨收（验证：现价110.45/涨跌幅-1.12% → 昨收=110.45/(1-0.0112)=111.70 ✓）
+     */
+    suspend fun fetchTencentBrent(): Pair<Double, Double>? {
+        return try {
+            val body = client.get("https://qt.gtimg.cn/q=hf_OIL") {
+                header("Referer", "https://gu.qq.com/")
+                header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+            }.bodyAsText()
+            val m = Regex("""v_hf_OIL="([^"]*)"""").find(body) ?: return null
+            val fields = m.groupValues[1].split(",")
+            if (fields.size < 8) return null
+            val current = fields[0].toDoubleOrNull() ?: return null
+            val prevClose = fields[7].toDoubleOrNull() ?: return null
+            if (current <= 0 || prevClose <= 0) null else current to prevClose
+        } catch (_: Exception) {
+            null
+        }
+    }
+
 }
