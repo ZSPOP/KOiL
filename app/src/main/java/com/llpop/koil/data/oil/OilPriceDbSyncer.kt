@@ -576,9 +576,11 @@ class OilPriceDbSyncer(
         val today = LocalDate.now().format(DATE_FMT)
         val nextAdjustment = samplePrimary.nextAdjustment ?: sampleSecondary.nextAdjustment
         val forecast = samplePrimary.forecast ?: sampleSecondary.forecast
-        // 结构化窗口日优先（预测专接口 yyyy-MM-dd），缺失时回退聚合接口文本解析
+        // 结构化窗口日优先（预测专接口 yyyy-MM-dd）→ 聚合接口文本解析 → v1.4.192：本地推算窗口日历
+        // 兜底（数据库卡「下个窗口」同一来源，apizero 不可用时预测窗口日不失效）
         val nextAdjustDate = forecastResult.nextAdjustDate
             ?: OilPriceDateUtil.normalize(nextAdjustment)
+            ?: getAdjustDates().firstOrNull { it >= today }
 
         // 只信任"数据日期 == 今天"的源参与今日核验；主/次源均滞后时跳过核验（窗口存档仍生效，不产生假调价记录）
         val usableSources = listOf(samplePrimary, sampleSecondary)

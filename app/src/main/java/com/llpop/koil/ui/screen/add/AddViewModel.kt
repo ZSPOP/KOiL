@@ -249,15 +249,19 @@ class AddViewModel(
         }
     }
 
-    /** 加载调价窗口信息 + 数据库版本号：仅用接口 next_adjustment + forecast（未同步时显示待检测，不做假推算） */
+    /** 加载调价窗口信息 + 数据库版本号：接口 next_adjustment → 本地推算窗口日历兜底（apizero 不可用时窗口日不失效） */
     private fun loadPriceAdjustInfo() {
         viewModelScope.launch {
             val province = _uiState.value.province
             val p = priceDao.getNewest(province, "92号汽油")
             if (p != null) {
-                // 接口 next_adjustment 存档（未同步 → null → 不显示推算假窗口）
+                // 接口 next_adjustment 存档（未同步 → null → v1.4.192 回退本地推算窗口日历，
+                // 与数据库卡「下个窗口」同一来源；两者皆无 → 不显示推算假窗口）
                 val cfgNextRaw = settings.priceDbNextAdjustment.first()
                 val cfgNext = OilPriceDateUtil.normalize(cfgNextRaw)
+                    ?: settings.priceDbAdjustDates.first()
+                        .split(",").map { it.trim() }.filter { it.isNotBlank() }
+                        .firstOrNull { it >= LocalDate.now().toString() }
                 val next: LocalDate? = if (cfgNext != null) {
                     try { LocalDate.parse(cfgNext, dateFormatter) } catch (_: Exception) { null }
                 } else null

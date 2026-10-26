@@ -1,3 +1,18 @@
+## v1.4.192（versionCode 197）— 2026-10-26（基于 v1.4.191）
+
+### 🔮 预测窗口日降级兜底（apizero 不可用时不失效）
+- **背景**：预测功能（下个调价窗口日 + 预测涨跌幅度）实际单点依赖 apizero——实测
+  xxapi/ruseo 不提供 next_adjustment / forecast 字段，`fetchBothSources` = abapi + apizero，
+  下个窗口日 100% 来自 apizero（forecast 专接口 → 回退 oil-price next_adjustment）。
+  apizero 挂 → 预测窗口日为空（显示待检测）。
+- **修复**：下个窗口日回退链补上**本地推算窗口日历**（`getAdjustDates` 下个未来窗口，
+  与数据库卡「下个窗口」同一来源——该推算 v1.4.184 已实现，本次仅复用兜底）：
+  1. `performPriceCheck`：`nextAdjustDate = apizero forecast → 聚合文本 → 本地窗口日历`
+  2. `AddViewModel.loadPriceAdjustInfo`：接口 next_adjustment 存档为空时 → 读本地窗口日历
+     下个未来窗口（两者皆无才不显示）。
+- **边界**：预测**涨跌幅度**仍仅 apizero 提供（无替代数据源）——apizero 挂时幅度显示
+  「待检测」，窗口日正常。数据库/记录页/窗口日历不受 apizero 影响（①②④⑤兜底）。
+
 ## v1.4.191（versionCode 196）— 2026-10-26（基于 v1.4.190）
 
 ### 🗓️ 跨年维度支持（2027 自动滚动，当年口径从零重计，往年可回看）
