@@ -42,8 +42,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -995,13 +995,6 @@ private fun RecordCard(
         else -> MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     }
 
-    // v1.5.7：长按选中态——无框线，仅柔和光晕提亮（用户反馈长方形描边突兀，已移除）
-    val hl by animateFloatAsState(
-        targetValue = if (showMoreMenu) 1f else 0f,
-        animationSpec = tween(200),
-        label = "koilCardSelectHl",
-    )
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -1032,8 +1025,10 @@ private fun RecordCard(
             Column(
                 modifier = Modifier
                     .padding(start = if (isAbnormal) 15.dp else 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp)
-                    // v1.5.4：点击不再进入编辑（按钮显示时点击=收起）；长按=弹出中央圆按钮
+                    // v1.5.8：去除按压涟漪（直角长方形）+ 点击不再进入编辑；长按=弹出中央圆按钮
                     .combinedClickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
                         onClick = { if (showMoreMenu) onMoreMenu() },
                         onLongClick = { if (!showMoreMenu) onMoreMenu() },
                     ),
@@ -1202,15 +1197,6 @@ private fun RecordCard(
                     )
                 }
             }
-        }
-        // v1.5.7：长按选中柔光层（主色 8% 光晕，alpha 跟随 hl 过渡，不拦截点击）
-        if (hl > 0f) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(20f))
-                    .background(KOiLColors.Primary.copy(alpha = 0.08f * hl)),
-            )
         }
     }
 }
