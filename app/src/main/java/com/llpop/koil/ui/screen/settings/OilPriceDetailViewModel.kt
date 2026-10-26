@@ -26,22 +26,32 @@ data class PriceAdjustItem(
     val keptFrom: String? = null,    // 搁浅条目：维持自哪个生效日（MM-dd）
 )
 
-/** 油价明细页状态：省份/油号选择 + 调价时间线 + 汇总统计 */
+/** 油价明细页状态：省份/油号/年份选择 + 调价时间线 + 汇总统计 */
 data class OilPriceDetailUiState(
     val province: String = "广东",
     val grade: String = "92号汽油",
+    val year: String = java.time.LocalDate.now().year.toString(),
+    val years: List<String> = emptyList(),   // 库内该省油号记录存在的年份（降序），跨年后可切回看往年
     val provinces: List<String> = OilPriceDbSyncer.PROVINCES,
     // 库内 grade 以完整标签存储（"92号汽油"），查询与显示一致
     val grades: List<String> = OilPriceNetwork.GRADE_LABELS.values.toList(),
     val items: List<PriceAdjustItem> = emptyList(),   // 升序（旧→新），走势图用
-    val upCount: Int = 0,           // 今年上调次数
-    val downCount: Int = 0,         // 今年下调次数
-    val strandedCount: Int = 0,     // 今年搁浅次数（窗口日历已发生但库内无生效记录）
-    val riseTotal: Double = 0.0,    // 累计上调金额（元/L）
-    val fallTotal: Double = 0.0,    // 累计下调金额（元/L）
+    val upCount: Int = 0,           // 所选年份上调次数
+    val downCount: Int = 0,         // 所选年份下调次数
+    val strandedCount: Int = 0,     // 所选年份搁浅次数（窗口日历已发生但库内无生效记录）
+    val riseTotal: Double = 0.0,    // 所选年份累计上调金额（元/L）
+    val fallTotal: Double = 0.0,    // 所选年份累计下调金额（元/L）
     val netChange: Double = 0.0,    // 净涨跌 = 累计上调 − 累计下调
     val latestPrice: Double? = null,
     val latestDate: String? = null,
+)
+
+/** 明细页参数（省份 + 油号 + 年份 + 窗口日历） */
+data class OilPriceDetailParams(
+    val province: String,
+    val grade: String,
+    val year: String,
+    val dates: String,
 )
 
 class OilPriceDetailViewModel(
@@ -51,15 +61,17 @@ class OilPriceDetailViewModel(
 
     private val provinceFlow = MutableStateFlow("广东")
     private val gradeFlow = MutableStateFlow("92号汽油")
+    private val yearFlow = MutableStateFlow(java.time.LocalDate.now().year.toString())
 
     val uiState = combine(
         provinceFlow,
         gradeFlow,
+        yearFlow,
         settings.priceDbAdjustDates,
-    ) { p, g, dates -> Triple(p, g, dates) }
-        .flatMapLatest { (p, g, dates) ->
-            priceDao.observeByProvinceGrade(p, g).map { records ->
-                buildUiState(p, g, records, dates)
+    ) { p, g, y, d -> OilPriceDetailParams(p, g, y, d) }
+        .flatMapLatest { params ->
+            priceDao.observeByProvinceGrade(params.province, params.grade).map { records ->
+                buildUiState(params, records)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OilPriceDetailUiState())
@@ -70,6 +82,11 @@ class OilPriceDetailViewModel(
 
     fun selectGrade(grade: String) {
         if (grade in OilPriceNetwork.GRADE_LABELS.values) gradeFlow.value = grade
+    }
+
+    /** 切换查看年份（默认当年，跨年后可切回看往年） */
+    fun selectYear(year: String) {
+        yearFlow.value = year
     }
 
     /** 上一省份（供顶部左右箭头点击切换；边界返回 false 不动作） */
@@ -87,11 +104,13 @@ class OilPriceDetailViewModel(
     }
 
     private suspend fun buildUiState(
-        province: String,
-        grade: String,
+        params: OilPriceDetailParams,
         records: List<KOiLPriceEntity>,
-        windowDates: String,
     ): OilPriceDetailUiState {
+        // 年份过滤（v1.4.191 跨年维度）：默认显示所选年份的记录，跨年后当年从零开始、可切回看往年
+        val yearRecords = records.filter { it.effectiveDate.startsWith(params.year) }
+        // 可选年份：库内该省油号记录实际存在的年份（降序）
+        val years = records.map { it.effectiveDate.take(4) }.distinct().sortedDescending()
         var rise = 0.0
         var fall = 0.0
         var upCount = 0
@@ -99,8 +118,8 @@ class OilPriceDetailViewModel(
         val items = mutableListOf<PriceAdjustItem>()
         // 上一条非搁浅记录（搁浅条目「維持 X 價格」的维持源日期）
         var lastAdjustLabel: String? = null
-        records.forEachIndexed { i, r ->
-            val prev = if (i > 0) records[i - 1].price else null
+        yearRecords.forEachIndexed { i, r ->
+            val prev = if (i > 0) yearRecords[i - 1].price else null
             val diff = if (prev != null) r.price - prev else null
             // 涨跌统计只算非搁浅调价（搁浅 diff=0 天然不进，显式排除更清晰）
             if (diff != null && !r.isStranded) {
@@ -129,12 +148,14 @@ class OilPriceDetailViewModel(
             )
         }
 
-        // 搁浅次数 = 库内 isStranded 记录数（v1.4.181 搁浅入库后直接统计，无需窗口差集/判定）
-        val strandedCount = records.count { it.isStranded }
+        // 搁浅次数 = 所选年份库内 isStranded 记录数（v1.4.181 搁浅入库后直接统计，无需窗口差集/判定）
+        val strandedCount = yearRecords.count { it.isStranded }
 
         return OilPriceDetailUiState(
-            province = province,
-            grade = grade,
+            province = params.province,
+            grade = params.grade,
+            year = params.year,
+            years = years,
             items = items,
             upCount = upCount,
             downCount = downCount,

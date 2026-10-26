@@ -104,17 +104,29 @@ class OilPriceDbSyncer(
             settings.setPriceDbAdjustDates(emptyList())
             settings.setPriceDbCalendar186Migrated(true)
         }
-        // 1) 内存缓存优先
-        cachedAdjustDates?.let { return it }
+        // 1) 内存缓存优先（v1.4.191：跨年时内存缓存同样失效——App 跨年不重启的场景——清掉走持久化/重算）
+        cachedAdjustDates?.let { dates ->
+            if (dates.firstOrNull()?.take(4) == LocalDate.now().year.toString()) return dates
+            cachedAdjustDates = null
+        }
         // 2) 持久化缓存（App 重启后复用上次已推算的窗口日，杜绝次源临时失败导致空降级 → 假生效日）
         val persisted = settings.priceDbAdjustDates.first().let { s ->
             if (s.isBlank()) emptyList() else s.split(",").map { it.trim() }.filter { it.isNotBlank() }
         }
         if (persisted.isNotEmpty()) {
-            cachedAdjustDates = persisted
-            // 缓存命中时也执行假生效日清理（此前清理只在推算分支执行，缓存命中会跳过 → 降级假日期残留）
-            purgeIllegalEffectiveDates(persisted)
-            return persisted
+            // v1.4.191 跨年检测：缓存窗口日历的年份 ≠ 今年 → 清缓存重算（跨年后自动滚动到新年日历，
+            // 调价次数当年口径从零重计、新窗口正常增量入库，无需清库重装）
+            val yearOfCache = persisted.firstOrNull()?.take(4)
+            val currentYear = LocalDate.now().year.toString()
+            if (yearOfCache != currentYear) {
+                cachedAdjustDates = null
+                settings.setPriceDbAdjustDates(emptyList())
+            } else {
+                cachedAdjustDates = persisted
+                // 缓存命中时也执行假生效日清理（此前清理只在推算分支执行，缓存命中会跳过 → 降级假日期残留）
+                purgeIllegalEffectiveDates(persisted)
+                return persisted
+            }
         }
         // 3) 拉取推算（仅当无任何缓存时）
         // 锚点回退链（v1.4.184 起，apizero 近期不稳定降为③；同源互备 xxapi 优先）：

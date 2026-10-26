@@ -186,7 +186,23 @@ fun OilPriceDetailScreen(
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
+
+            // —— 年份选择（v1.4.191 跨年维度：默认当年，跨年后当年从零开始、可切回看往年）——
+            if (state.years.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    state.years.forEach { y ->
+                        GradeChip(
+                            label = "$y 年",
+                            selected = y == state.year,
+                            onClick = { viewModel.selectYear(y) },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+            } else {
+                Spacer(Modifier.height(2.dp))
+            }
 
             if (state.items.isEmpty()) {
                 // —— 空态 ——
