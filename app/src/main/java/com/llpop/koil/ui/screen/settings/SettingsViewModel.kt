@@ -240,18 +240,20 @@ class SettingsViewModel(
             var strandedKeptDate: String? = null
             var strandedKeptPrice: String? = null
             if (adjustWindowDate != null) {
-                // W1 窗口调价判定：库内记录生效日 = 窗口日 + 1（窗口 24 时生效），故查「窗口日+1」；
-                // 任一省任一油号有该生效日记录 = 未搁浅（全国统一调价窗口，单条查询即可）。
+                // W1 窗口调价判定（v1.4.188 方案C：跟随 App 默认省 + 92号汽油——不同省份/油号价格
+                // 各不相同，不能用"任意省任一油号"的记录，否则会显示其他省的价格，如 8.57 vs 广东 8.63）。
+                // 库内记录生效日 = 窗口日 + 1（窗口 24 时生效），故查「窗口日+1」。
+                val home = settings.defaultProvince.first().takeIf { it in OilPriceDbSyncer.PROVINCES } ?: "广东"
                 val w1Eff = runCatching { LocalDate.parse(adjustWindowDate).plusDays(1).toString() }.getOrNull() ?: adjustWindowDate
-                val w1Row = priceDao.getByDate(w1Eff)
-                if (w1Row != null) {
+                val w1Row = priceDao.getPrice(home, "92号汽油", w1Eff)
+                if (w1Row != null && !w1Row.isStranded) {
                     windowStranded = false
                     adjustWindowPrice = "%.2f".format(w1Row.price)
                 } else {
-                    // 搁浅：维持「上一条调价记录」的价格（如 10-15 窗口维持 09-25 的 ¥8.63），
+                    // 搁浅：维持「默认省 92# 上一条调价记录」的价格（如 10-15 窗口维持 09-25 的 ¥8.63），
                     // 而非生效日 10-16——上一版本误显示生效日导致歧义。
                     windowStranded = true
-                    val kept = priceDao.getLatestNonStranded()
+                    val kept = priceDao.getLatestNonStranded(home, "92号汽油", w1Eff)
                     if (kept != null) {
                         strandedKeptDate = kept.effectiveDate.takeLast(5)
                         strandedKeptPrice = "%.2f".format(kept.price)
