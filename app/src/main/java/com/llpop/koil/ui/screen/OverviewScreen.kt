@@ -2,6 +2,7 @@ package com.llpop.koil.ui.screen
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,6 +42,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
@@ -993,11 +995,29 @@ private fun RecordCard(
         else -> MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     }
 
+    // v1.5.6→v1.5.7：长按选中态柔和过渡（细淡描边 + 内柔光晕，淡入淡出，避免突兀）
+    val hl by animateFloatAsState(
+        targetValue = if (showMoreMenu) 1f else 0f,
+        animationSpec = tween(200),
+        label = "koilCardSelectHl",
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
             // v1.5.5：长按显示时上报自身全局位置（页面级全屏层据此定位圆按钮）
-            .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) },
+            .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) }
+            .then(
+                if (hl > 0f) {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = KOiLColors.Primary.copy(alpha = 0.4f * hl),
+                        shape = RoundedCornerShape(20f),
+                    )
+                } else {
+                    Modifier
+                }
+            ),
     ) {
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
@@ -1193,6 +1213,15 @@ private fun RecordCard(
                     )
                 }
             }
+        }
+        // v1.5.7：长按选中柔光层（主色 8% 光晕，alpha 跟随 hl 过渡，不拦截点击）
+        if (hl > 0f) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(20f))
+                    .background(KOiLColors.Primary.copy(alpha = 0.08f * hl)),
+            )
         }
     }
 }
