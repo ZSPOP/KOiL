@@ -37,6 +37,8 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -65,6 +67,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -231,12 +234,15 @@ fun OverviewScreen(
                 )
             }
             Spacer(Modifier.height(4.dp))
-            Text(
-                text = stringResource(R.string.koil_ov_scroll_more),
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                modifier = Modifier.padding(start = 6.dp),
-            )
+            // v1.5.3：仅当还有更多记录时才显示加载提示（避免数据全显示时误导）
+            if (visibleCount < uiState.records.size) {
+                Text(
+                    text = stringResource(R.string.koil_ov_scroll_more),
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(start = 6.dp),
+                )
+            }
             Spacer(Modifier.height(10.dp))
 
             // 按月分组（对齐 Web：月份标题 + N条）；无记录时显示空态引导
@@ -276,24 +282,7 @@ fun OverviewScreen(
                         Spacer(Modifier.height(10.dp))
                     }
                 }
-            if (visibleCount < uiState.records.size) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { visibleCount += 20 }
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(
-                            R.string.koil_ov_load_more,
-                            uiState.records.size - visibleCount,
-                        ),
-                        fontSize = 13.sp,
-                        color = KOiLColors.Primary,
-                    )
-                }
-            }
+            // v1.5.3：滚动到底自动加载已覆盖分页，移除冗余的"加载更多"按钮
             }
             Spacer(Modifier.height(bottomPadding + 12.dp))
         }
@@ -474,6 +463,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
         cornerRadius = 20f,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
+            // —— 主卡：平均油耗 | 每公里成本（核心指标大数字，v1.5.3 A 方案主次分层）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -482,6 +472,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     value = "%.2f".format(stats.avgOilConsumption ?: 0.0),
                     unit = "L/100km",
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
+                    valueFontSize = 24.sp,
                 )
                 StatCell(
                     Modifier.weight(1f),
@@ -490,9 +481,11 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     value = "%.3f".format(stats.avgCostPerKm ?: 0.0),
                     unit = stringResource(R.string.koil_stat_cost_unit),
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
+                    valueFontSize = 24.sp,
                 )
             }
             Spacer(Modifier.height(14.dp))
+            // —— 次级：總里程 | 總加油量 ——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -512,6 +505,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 )
             }
             Spacer(Modifier.height(14.dp))
+            // —— 次级：總實付 | 總應付 ——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -529,6 +523,25 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     unit = "",
                     comparePct = pct(stats.totalPayable, prev?.totalPayable),
                 )
+            }
+            // —— C 方案：實付 vs 應付 对比条（差額一眼可见）——
+            val payableDiff = stats.totalPayable - stats.totalActual
+            if (abs(payableDiff) >= 0.5) {
+                Spacer(Modifier.height(6.dp))
+                val saved = payableDiff > 0
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = stringResource(
+                            if (saved) R.string.koil_ov_vs_actual_saved else R.string.koil_ov_vs_actual_over,
+                            "%.0f".format(abs(payableDiff)),
+                        ),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (saved) Color(0xFF2E7D32) else Color(0xFFE65100),
+                    )
+                    Spacer(Modifier.weight(1f))
+                }
             }
             Spacer(Modifier.height(12.dp))
             Box(
@@ -576,6 +589,7 @@ private fun StatCell(
     value: String,
     unit: String,
     comparePct: Double? = null,
+    valueFontSize: TextUnit = 19.sp,
 ) {
     Column(modifier = modifier.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -596,7 +610,7 @@ private fun StatCell(
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = value,
-                fontSize = 19.sp,
+                fontSize = valueFontSize,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
@@ -972,15 +986,55 @@ private fun RecordCard(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.koil_ov_more_actions),
-                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clickable(onClick = onMoreMenu)
-                            .padding(0.dp),
-                    )
+                    // v1.5.3：⋮ 菜单真正实现（编辑/删除，与左滑操作一致）
+                    Box {
+                        Icon(
+                            imageVector = Icons.Filled.MoreVert,
+                            contentDescription = stringResource(R.string.koil_ov_more_actions),
+                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .clickable(onClick = onMoreMenu)
+                                .padding(0.dp),
+                        )
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = onMoreMenu,
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = stringResource(R.string.koil_ov_edit),
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onBackground,
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Edit, null, tint = KOiLColors.Primary, modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    onMoreMenu()
+                                    onEdit()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = stringResource(R.string.koil_ov_delete),
+                                        fontSize = 14.sp,
+                                        color = Color(0xFFE53935),
+                                    )
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Delete, null, tint = Color(0xFFE53935), modifier = Modifier.size(18.dp))
+                                },
+                                onClick = {
+                                    onMoreMenu()
+                                    onDelete()
+                                },
+                            )
+                        }
+                    }
                 }
 
                 // —— 区间行：上次 X月X日 · 里程 a → b km / 当前里程 ——

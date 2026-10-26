@@ -97,7 +97,7 @@
     <string name="koil_stat_total_cost">总实付</string>
     <string name="koil_stat_total_payable">总应付</string>
     <string name="koil_stat_avg_price">平均油价</string>
-    <string name="koil_stat_price_unit">元/L</string>
+    <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">平均每次</string>
     <string name="koil_stat_avg_interval">平均加油间隔</string>
     <string name="koil_stat_interval_unit">天</string>
@@ -116,6 +116,8 @@
     <string name="koil_ov_high">偏高</string>
     <string name="koil_ov_low">偏低</string>
     <string name="koil_ov_more_actions">更多操作</string>
+    <string name="koil_ov_vs_actual_saved">实付较应付节省 ¥%1$s</string>
+    <string name="koil_ov_vs_actual_over">实付较应付超支 ¥%1$s</string>
     <string name="koil_ov_prev_line">上次 %1$s · 里程 %2$d → %3$d km</string>
     <string name="koil_ov_current_mileage">当前里程 %1$d km</string>
     <string name="koil_ov_metric_consumption">平均油耗</string>

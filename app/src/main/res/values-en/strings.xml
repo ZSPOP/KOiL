@@ -97,7 +97,7 @@
     <string name="koil_stat_total_cost">Total paid</string>
     <string name="koil_stat_total_payable">Total payable</string>
     <string name="koil_stat_avg_price">Avg fuel price</string>
-    <string name="koil_stat_price_unit">¥/L</string>
+    <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">Avg per fill-up</string>
     <string name="koil_stat_avg_interval">Avg interval</string>
     <string name="koil_stat_interval_unit">days</string>
@@ -116,6 +116,8 @@
     <string name="koil_ov_high">High</string>
     <string name="koil_ov_low">Low</string>
     <string name="koil_ov_more_actions">More</string>
+    <string name="koil_ov_vs_actual_saved">Actual vs payable: saved ¥%1$s</string>
+    <string name="koil_ov_vs_actual_over">Actual vs payable: over ¥%1$s</string>
     <string name="koil_ov_prev_line">Last %1$s · mileage %2$d → %3$d km</string>
     <string name="koil_ov_current_mileage">Current mileage %1$d km</string>
     <string name="koil_ov_metric_consumption">Consumption</string>
