@@ -376,6 +376,11 @@ class OilPriceDbSyncer(
             // 期望覆盖已过窗口日数（含搁浅窗口，搁浅入库后各省应含维持记录）；
             // 每省独立拉取，失败不影响其他省
             val threshold = adjustDates.count { it <= LocalDate.now().format(DATE_FMT) }
+            // v1.4.190：189+ 升级后首次立即更新强制全量补灌一次——v1.4.188 曾把已有调价记录
+            // 误替换成搁浅（覆盖升级后 hasStrandedGap 检测不到"搁浅占位"），需强制跑 seedProvince
+            // 让「变化点覆盖搁浅」恢复调价记录；一次后恢复常规触发条件。
+            val forceReseed = !settings.priceDbReseed189.first()
+            if (forceReseed) settings.setPriceDbReseed189(true)
             // 并发补灌：4 路并行（避免 31 省串行等待；组间 200ms 缓解 abapi 限速）
             coroutineScope {
                 PROVINCES.chunked(4).forEach { chunk ->
@@ -384,7 +389,7 @@ class OilPriceDbSyncer(
                             val covered = runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
                             // covered < threshold（窗口数不够）或存在搁浅缺口（窗口日+1 无记录/同价假记录占位）
                             // 都触发补灌——防止 verifyProvince 抢插的同价假记录让 covered 达标后搁浅永远缺失
-                            if (covered < threshold || hasStrandedGap(province, adjustDates)) {
+                            if (covered < threshold || hasStrandedGap(province, adjustDates) || forceReseed) {
                                 seedProvince(province, adjustDates)
                             }
                         }
