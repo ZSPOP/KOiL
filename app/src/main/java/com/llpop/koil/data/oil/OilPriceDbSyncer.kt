@@ -23,6 +23,23 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - 8 小时节流 + 自动更新开关 + 防并发
  * - acceptPending：事务（入库 + 标记 accepted）
  * - checkDeviation：当日历史参考价偏差预检
+ *
+ * —— 锚点 5 级链（v1.4.184 顺序）——
+ * ① xxapi date−1 → ② ruseo date−1（同源互备，xxapi 优先）→ ③ apizero 预测专接口 →
+ * ④ abapi 全年曲线最近调价日（生效日−3）→ ⑤ calculateAdjustDates 本地推算全年窗口日历。
+ * 内存+持久化缓存复用（重启不空降级）；缓存命中照常清假日期。
+ *
+ * —— 灌库（seedProvince）——
+ * 幂等（省|油号|生效日键）；只存价格变化点（abapi 滞后日期归并到窗口日+1）；
+ * 补搁浅（v1.4.181）：已过窗口无生效记录 → 插 isStranded=true 维持价记录，
+ *   维持价 = abapi ≤窗口日的最后价格（首窗口搁浅回退上年末价，v1.4.182 去当年下界）；
+ * 同价假记录清理（v1.4.182）：isStranded=false 且价格与上一条相同的历史假点先删（放行搁浅幂等）。
+ *
+ * —— 清理与口径 ——
+ * purge 只清「当年 1-1~12-31 内非窗口日+1」的假日期，往年保留（v1.4.183）；
+ * 調價 N = 窗口日历已过窗口数（含搁浅）；記錄 N = 库内全量；擱淺 N = count(isStranded)。
+ *
+ * 完整机制见 docs/KOiL油价数据库机制.md。
  */
 class OilPriceDbSyncer(
     private val db: AppDatabase,

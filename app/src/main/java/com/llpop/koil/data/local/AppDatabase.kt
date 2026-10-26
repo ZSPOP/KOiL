@@ -14,6 +14,23 @@ import com.llpop.koil.data.local.entity.KOiLPricePendingEntity
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import java.io.File
 
+/**
+ * KOiL 本地数据库（油价库）。
+ *
+ * —— 数据模型（koil_prices）——
+ * 主键 (province, grade, effectiveDate)；effectiveDate = 发改委窗口日 + 1 天（窗口「24时」生效）；
+ * price 为元/L，搁浅窗口存维持价（上一窗口价）；isStranded：0=调价 / 1=搁浅窗口（v1.4.181）。
+ *
+ * —— 一次性灌库 + 持续增量（v1.4.183）——
+ * 2026 起点一次灌库（31省×4油号×已过窗口全量，含搁浅），之后新窗口日调价/搁浅增量累加；
+ * 跨年不清库（purge 只清当年假日期，往年保留），历史持续累加。
+ *
+ * —— 迁移史 ——
+ * v1 旧表 → v2（v1.4.159）fuel_prices RENAME TO koil_prices → v3（v1.4.181）ADD isStranded；
+ * 禁止 fallbackToDestructiveMigration（清库式升级丢数据）。
+ *
+ * 完整机制见 docs/KOiL油价数据库机制.md（锚点5级链/推算/灌库/搁浅/清理/统计口径/已知边界）。
+ */
 @Database(
     entities = [
         KOiLRecordEntity::class,
