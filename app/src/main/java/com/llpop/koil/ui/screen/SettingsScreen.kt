@@ -402,14 +402,14 @@ fun SettingsScreen(
                             text = stringResource(R.string.koil_pdb_view_detail),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            // v1.5.1：颜色与设置页右侧文案一致（非蓝色），深浅色自适应
-                            color = MiuixTheme.colorScheme.onBackground,
+                            // v1.5.1：颜色与设置页右侧文案（匯出/匯入/備份等 SettingRow value）完全一致
+                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
                         )
                         Spacer(Modifier.width(2.dp))
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onBackground,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                             modifier = Modifier.size(18.dp),
                         )
                     }

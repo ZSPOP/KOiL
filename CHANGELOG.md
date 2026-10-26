@@ -4,6 +4,15 @@
 > 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
 > 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
 
+## v1.5.2（versionCode 202）— 2026-10-26（基于 v1.5.1）
+
+### 🐛 查看颜色二次修正（v1.5.1 J 项未到位）
+- 根因：设置页右侧文案（匯出/匯入/備份等 SettingRow value）实际用的是
+  `MiuixTheme.colorScheme.onSurfaceVariantActions`（Miuix 交互动作文案扩展色），
+  不是 onBackground——v1.5.0 primary（蓝）/ v1.5.1 onBackground（正文白）均与右侧不同色
+- 修正：数据库卡「查看」文字 + 箭头 Icon tint 改为 `onSurfaceVariantActions`，
+  与右侧文案**完全同色**（深浅色自适应）
+
 ## v1.5.1（versionCode 201）— 2026-10-26（基于 v1.5.0）
 
 ### 🐛 两项验收反馈（设置页）
