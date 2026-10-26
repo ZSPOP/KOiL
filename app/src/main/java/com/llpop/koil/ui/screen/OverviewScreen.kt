@@ -21,13 +21,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Money
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Speed
@@ -35,11 +35,14 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material3.SwipeToDismissBox
-import androidx.compose.material3.SwipeToDismissBoxValue
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -66,11 +69,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -92,8 +93,6 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -223,15 +222,29 @@ fun OverviewScreen(
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = stringResource(R.string.koil_ov_backfill),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = KOiLColors.Primary,
+                // v1.5.4：補錄改为胶囊按钮（主色浅底 + 加号图标），点击区域加大
+                Row(
                     modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(KOiLColors.Primary.copy(alpha = 0.12f))
                         .clickable { viewModel.openBackfill() }
-                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                )
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = null,
+                        tint = KOiLColors.Primary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        text = stringResource(R.string.koil_ov_backfill),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = KOiLColors.Primary,
+                    )
+                }
             }
             Spacer(Modifier.height(4.dp))
             // v1.5.3：仅当还有更多记录时才显示加载提示（避免数据全显示时误导）
@@ -270,7 +283,7 @@ fun OverviewScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     monthRecords.forEach { record ->
-                        SwipeActionRecordCard(
+                        RecordCard(
                             record = record,
                             prevRecord = prevMap[record.record.id],
                             isInitial = prevMap[record.record.id] == null,
@@ -934,7 +947,11 @@ private fun RecordCard(
             Column(
                 modifier = Modifier
                     .padding(start = if (isAbnormal) 15.dp else 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp)
-                    .clickable(onClick = onEdit),
+                    // v1.5.4：点击不再进入编辑（按钮显示时点击=收起）；长按=弹出中央圆按钮
+                    .combinedClickable(
+                        onClick = { if (showMoreMenu) onMoreMenu() },
+                        onLongClick = { if (!showMoreMenu) onMoreMenu() },
+                    ),
             ) {
                 // —— 顶部：日期大字 + 油号胶囊 + 天数胶囊 + 异常胶囊 + ⋮ ——
                 Row(
@@ -986,55 +1003,8 @@ private fun RecordCard(
                         )
                     }
                     Spacer(Modifier.weight(1f))
-                    // v1.5.3：⋮ 菜单真正实现（编辑/删除，与左滑操作一致）
-                    Box {
-                        Icon(
-                            imageVector = Icons.Filled.MoreVert,
-                            contentDescription = stringResource(R.string.koil_ov_more_actions),
-                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clickable(onClick = onMoreMenu)
-                                .padding(0.dp),
-                        )
-                        DropdownMenu(
-                            expanded = showMoreMenu,
-                            onDismissRequest = onMoreMenu,
-                        ) {
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = stringResource(R.string.koil_ov_edit),
-                                        fontSize = 14.sp,
-                                        color = MiuixTheme.colorScheme.onBackground,
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Edit, null, tint = KOiLColors.Primary, modifier = Modifier.size(18.dp))
-                                },
-                                onClick = {
-                                    onMoreMenu()
-                                    onEdit()
-                                },
-                            )
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        text = stringResource(R.string.koil_ov_delete),
-                                        fontSize = 14.sp,
-                                        color = Color(0xFFE53935),
-                                    )
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Delete, null, tint = Color(0xFFE53935), modifier = Modifier.size(18.dp))
-                                },
-                                onClick = {
-                                    onMoreMenu()
-                                    onDelete()
-                                },
-                            )
-                        }
-                    }
+                    // v1.5.4：移除 ⋮ 菜单，长按交互统一（见卡片外层操作层）
+                    if (false) Unit
                 }
 
                 // —— 区间行：上次 X月X日 · 里程 a → b km / 当前里程 ——
@@ -1148,6 +1118,69 @@ private fun RecordCard(
                 }
             }
         }
+        // v1.5.4：长按操作层——中央两个圆形按钮（编辑/删除），点击遮罩空白收起
+        AnimatedVisibility(
+            visible = showMoreMenu,
+            enter = fadeIn() + scaleIn(initialScale = 0.85f, animationSpec = tween(160)),
+            exit = fadeOut() + scaleOut(targetScale = 0.9f, animationSpec = tween(120)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clip(RoundedCornerShape(20f))
+                    .background(Color.Black.copy(alpha = 0.38f))
+                    .clickable { onMoreMenu() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                    LongPressCircleAction(
+                        icon = Icons.Filled.Edit,
+                        label = stringResource(R.string.koil_ov_edit),
+                        bg = Color(0xFF2563EB),
+                    ) {
+                        onMoreMenu()
+                        onEdit()
+                    }
+                    LongPressCircleAction(
+                        icon = Icons.Filled.Delete,
+                        label = stringResource(R.string.koil_ov_delete),
+                        bg = Color(0xFFE53935),
+                    ) {
+                        onMoreMenu()
+                        onDelete()
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** v1.5.4：长按弹出的圆形操作按钮（图标 + 文字标签） */
+@Composable
+private fun LongPressCircleAction(
+    icon: ImageVector,
+    label: String,
+    bg: Color,
+    onClick: () -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .background(bg)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White,
+        )
     }
 }
 
@@ -1292,100 +1325,6 @@ private fun RecordDetail(
             fontSize = 9.sp,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
-    }
-}
-
-// ===== 左滑操作卡（编辑蓝 / 删除红，对齐 Web SwipeAction） =====
-@Composable
-private fun SwipeActionRecordCard(
-    record: RecordWithDerived,
-    prevRecord: RecordWithDerived?,
-    isInitial: Boolean,
-    showMoreMenu: Boolean,
-    onMoreMenu: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit,
-) {
-    val actionWidth = 84.dp
-    val actionPx = with(LocalDensity.current) { actionWidth.toPx() }
-    val maxOffsetPx = actionPx * 2
-    var offsetX by remember { mutableStateOf(0f) }
-    val scope = rememberCoroutineScope()
-
-    Box(modifier = Modifier.fillMaxWidth()) {
-        // 背景操作区：编辑（蓝）+ 删除（红）
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(20f)),
-        ) {
-            Spacer(Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxSize()
-                    .background(Color(0xFF2563EB))
-                    .clickable {
-                        onEdit()
-                        scope.launch {
-                            androidx.compose.animation.core.animate(initialValue = offsetX, targetValue = 0f) { value, _ -> offsetX = value }
-                        }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.Edit, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.koil_ov_edit), fontSize = 10.sp, color = Color.White)
-                }
-            }
-            Box(
-                modifier = Modifier
-                    .width(actionWidth)
-                    .fillMaxSize()
-                    .background(Color(0xFFE53935))
-                    .clickable {
-                        onDelete()
-                        scope.launch {
-                            androidx.compose.animation.core.animate(initialValue = offsetX, targetValue = 0f) { value, _ -> offsetX = value }
-                        }
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.Delete, null, tint = Color.White, modifier = Modifier.size(18.dp))
-                    Text(stringResource(R.string.koil_ov_delete), fontSize = 10.sp, color = Color.White)
-                }
-            }
-        }
-        // 内容层（左滑露出操作区）
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
-                .pointerInput(Unit) {
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            val target = if (offsetX < -actionPx) -maxOffsetPx else 0f
-                            scope.launch {
-                                androidx.compose.animation.core.animate(initialValue = offsetX, targetValue = target) { value, _ -> offsetX = value }
-                            }
-                        },
-                    ) { change, dragAmount ->
-                        change.consume()
-                        offsetX = (offsetX + dragAmount).coerceIn(-maxOffsetPx, 0f)
-                    }
-                },
-        ) {
-            RecordCard(
-                record = record,
-                prevRecord = prevRecord,
-                isInitial = isInitial,
-                showMoreMenu = showMoreMenu,
-                onMoreMenu = onMoreMenu,
-                onDelete = onDelete,
-                onEdit = onEdit,
-            )
-        }
     }
 }
 

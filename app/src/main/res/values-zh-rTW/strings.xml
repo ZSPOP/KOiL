@@ -71,7 +71,7 @@
     <string name="koil_ov_empty_title">暫無加油記錄</string>
     <string name="koil_ov_empty_hint">前往「錄入」頁新增第一筆加油記錄</string>
     <string name="koil_ov_total_count_in_list">共%1$d筆</string>
-    <string name="koil_ov_backfill">+ 補錄</string>
+    <string name="koil_ov_backfill">補錄</string>
     <string name="koil_ov_scroll_more">捲動載入更多記錄</string>
     <string name="koil_ov_month_count">%1$d筆</string>
     <string name="koil_ov_load_more">載入更多（還有 %1$d 筆）</string>
