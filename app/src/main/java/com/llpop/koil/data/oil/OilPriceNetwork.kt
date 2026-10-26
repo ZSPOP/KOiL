@@ -421,17 +421,18 @@ class OilPriceNetwork {
         val data: List<XxapiPriceItem> = emptyList(),
     )
 
-    /** 锚点窗口日：ruseo → xxapi，取最近窗口生效日（date）− 1 天；两者皆失败返回 null。 */
+    /** 锚点窗口日：xxapi → ruseo（v1.4.184 起 xxapi 优先，同源互备），
+     *  取最近窗口生效日（date）− 1 天；两者皆失败返回 null。 */
     suspend fun fetchAnchorWindowDate(): String? {
         val date = runCatching {
-            val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
-            json.decodeFromString<RuseoResponse>(body).data?.list
-                ?.firstOrNull { !it.date.isNullOrBlank() }?.date
+            val body = client.get("https://v2.xxapi.cn/api/oilPrice").bodyAsText()
+            json.decodeFromString<XxapiResponse>(body).data
+                .firstOrNull { !it.date.isNullOrBlank() }?.date
         }.getOrNull()
             ?: runCatching {
-                val body = client.get("https://v2.xxapi.cn/api/oilPrice").bodyAsText()
-                json.decodeFromString<XxapiResponse>(body).data
-                    .firstOrNull { !it.date.isNullOrBlank() }?.date
+                val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
+                json.decodeFromString<RuseoResponse>(body).data?.list
+                    ?.firstOrNull { !it.date.isNullOrBlank() }?.date
             }.getOrNull()
         return date?.let { runCatching { LocalDate.parse(it).minusDays(1).toString() }.getOrNull() }
     }

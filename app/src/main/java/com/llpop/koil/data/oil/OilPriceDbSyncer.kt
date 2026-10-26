@@ -93,10 +93,12 @@ class OilPriceDbSyncer(
             return persisted
         }
         // 3) 拉取推算（仅当无任何缓存时）
-        // 锚点回退链：① apizero 预测专接口 → ② ruseo date−1 → ③ xxapi date−1（同源互备）
+        // 锚点回退链（v1.4.184 起，apizero 近期不稳定降为③；同源互备 xxapi 优先）：
+        // ① xxapi date−1 → ② ruseo date−1 → ③ apizero 预测专接口（结构化 nextAdjustDate）
         // → ④ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，实测 18/18 与发改委公告吻合）
-        val anchor = network.fetchForecast(defaultProvince()).nextAdjustDate
-            ?: network.fetchAnchorWindowDate()
+        // → ⑤ calculateAdjustDates 本地推算当年全年窗口日历（节假日顺延）
+        val anchor = network.fetchAnchorWindowDate()
+            ?: network.fetchForecast(defaultProvince()).nextAdjustDate
             ?: abapiAnchor()
         if (anchor == null) {
             // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
