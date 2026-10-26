@@ -20,7 +20,7 @@ import java.io.File
         KOiLPriceEntity::class,
         KOiLPricePendingEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -49,11 +49,18 @@ abstract class AppDatabase : RoomDatabase() {
          *
          * 1 → 2（v1.4.159 命名统一）：fuel_prices 表重命名为 koil_prices，
          * 旧版本（version=1）已建表用户升级时重命名，数据保留；全新安装直接建新表。
+         * 2 → 3（v1.4.181 搁浅入库）：koil_prices 增加 isStranded 列（0=调价/1=搁浅），
+         * 存量记录默认 0（调价点）；搁浅窗口记录由补灌逻辑幂等补齐，不清库。
          */
         val MIGRATIONS: Array<Migration> = arrayOf(
             object : Migration(1, 2) {
                 override fun migrate(db: SupportSQLiteDatabase) {
                     db.execSQL("ALTER TABLE fuel_prices RENAME TO koil_prices")
+                }
+            },
+            object : Migration(2, 3) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("ALTER TABLE koil_prices ADD COLUMN isStranded INTEGER NOT NULL DEFAULT 0")
                 }
             },
         )

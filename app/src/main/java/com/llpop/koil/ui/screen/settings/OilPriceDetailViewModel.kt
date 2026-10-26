@@ -97,56 +97,40 @@ class OilPriceDetailViewModel(
         var upCount = 0
         var downCount = 0
         val items = mutableListOf<PriceAdjustItem>()
+        // 上一条非搁浅记录（搁浅条目「維持 X 價格」的维持源日期）
+        var lastAdjustLabel: String? = null
         records.forEachIndexed { i, r ->
             val prev = if (i > 0) records[i - 1].price else null
             val diff = if (prev != null) r.price - prev else null
-            if (diff != null) {
+            // 涨跌统计只算非搁浅调价（搁浅 diff=0 天然不进，显式排除更清晰）
+            if (diff != null && !r.isStranded) {
                 if (diff > 0.001) { rise += diff; upCount++ }
                 else if (diff < -0.001) { fall += -diff; downCount++ }
             }
+            if (!r.isStranded) lastAdjustLabel = r.effectiveDate.takeLast(5)
             items.add(
                 PriceAdjustItem(
                     date = r.effectiveDate,
-                    label = r.effectiveDate.takeLast(5),
+                    // 调价记录显示生效日；搁浅显示窗口日（= 生效日−1，与数据库卡「調整日 10-15」一致）
+                    label = if (r.isStranded) {
+                        runCatching { LocalDate.parse(r.effectiveDate).minusDays(1).toString().takeLast(5) }
+                            .getOrDefault(r.effectiveDate.takeLast(5))
+                    } else {
+                        r.effectiveDate.takeLast(5)
+                    },
                     price = r.price,
-                    diff = diff,
-                    isUp = diff?.let { it > 0.001 },
+                    // 搁浅 = 维持价（与上一窗口同价）→ 显示 0 持平；
+                    // 首条搁浅（1-06，库内首条）prev=null → null（无前值可比较）
+                    diff = if (r.isStranded) (diff?.let { 0.0 }) else diff,
+                    isUp = if (r.isStranded) null else diff?.let { it > 0.001 },
+                    isStranded = r.isStranded,
+                    keptFrom = if (r.isStranded) lastAdjustLabel else null,
                 )
             )
         }
 
-        // 搁浅次数 = 今年已发生窗口数 − 上调次数 − 下调次数。
-        // 说明：records 首条为「基準價」（无前一条可比较方向，不计上调/下调），但其窗口
-        // 已发生且有记录（非搁浅）；若用「窗口+1 无记录」判定，首条窗口会两头不计，
-        // 导致 上調+下調+擱淺 恒比窗口数少 1。改用差集口径后总数恒等于窗口数。
-        val today = LocalDate.now().toString()
-        val occurredWindows = windowDates
-            .split(",").map { it.trim() }.filter { it.isNotBlank() && it <= today }
-        val strandedCount = (occurredWindows.size - upCount - downCount).coerceAtLeast(0)
-
-        // —— 展示层补全搁浅条目（窗口已过但该省该油号无生效记录 = 搁浅）——
-        // 不灌库：库内记录/缺口统计/调价次数口径都不受影响，仅时间线显示补全，
-        // 使「調價 20」与记录页条目完全对应（搁浅显示为灰色「擱淺 · 維持 X 價格」）。
-        val effectiveDates = records.map { it.effectiveDate }.toSet()
-        occurredWindows.forEach { w ->
-            val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@forEach
-            if (eff !in effectiveDates) {
-                // 维持价 = 该搁浅窗口前最近一条记录（价格与生效日，用于「維持 09-25 價格」）
-                val kept = records.lastOrNull { it.effectiveDate <= eff }
-                items.add(
-                    PriceAdjustItem(
-                        date = eff,
-                        label = eff.takeLast(5),
-                        price = kept?.price ?: 0.0,
-                        diff = 0.0,
-                        isUp = null,
-                        isStranded = true,
-                        keptFrom = kept?.effectiveDate?.takeLast(5),
-                    )
-                )
-            }
-        }
-        items.sortBy { it.date }
+        // 搁浅次数 = 库内 isStranded 记录数（v1.4.181 搁浅入库后直接统计，无需窗口差集/判定）
+        val strandedCount = records.count { it.isStranded }
 
         return OilPriceDetailUiState(
             province = province,

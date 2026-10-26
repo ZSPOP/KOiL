@@ -1,0 +1,262 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "cb16c3131e37d5e2677ff4285f8e8124",
+    "entities": [
+      {
+        "tableName": "koil_record",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `reoilDate` TEXT NOT NULL, `mileage` REAL NOT NULL, `oilAmount` REAL NOT NULL, `payableAmount` REAL NOT NULL, `actualAmount` REAL NOT NULL, `oilPrice` REAL, `oilGrade` TEXT, `province` TEXT, `source` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reoilDate",
+            "columnName": "reoilDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mileage",
+            "columnName": "mileage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oilAmount",
+            "columnName": "oilAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payableAmount",
+            "columnName": "payableAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actualAmount",
+            "columnName": "actualAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oilPrice",
+            "columnName": "oilPrice",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "oilGrade",
+            "columnName": "oilGrade",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "province",
+            "columnName": "province",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_koil_record_reoilDate_mileage",
+            "unique": true,
+            "columnNames": [
+              "reoilDate",
+              "mileage"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_koil_record_reoilDate_mileage` ON `${TABLE_NAME}` (`reoilDate`, `mileage`)"
+          },
+          {
+            "name": "index_koil_record_reoilDate",
+            "unique": false,
+            "columnNames": [
+              "reoilDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_koil_record_reoilDate` ON `${TABLE_NAME}` (`reoilDate`)"
+          }
+        ]
+      },
+      {
+        "tableName": "koil_prices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`province` TEXT NOT NULL, `grade` TEXT NOT NULL, `effectiveDate` TEXT NOT NULL, `price` REAL NOT NULL, `source` TEXT, `isVerified` INTEGER NOT NULL, `isStranded` INTEGER NOT NULL, PRIMARY KEY(`province`, `grade`, `effectiveDate`))",
+        "fields": [
+          {
+            "fieldPath": "province",
+            "columnName": "province",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grade",
+            "columnName": "grade",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "effectiveDate",
+            "columnName": "effectiveDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isVerified",
+            "columnName": "isVerified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isStranded",
+            "columnName": "isStranded",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "province",
+            "grade",
+            "effectiveDate"
+          ]
+        }
+      },
+      {
+        "tableName": "koil_price_pending",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `province` TEXT NOT NULL, `grade` TEXT NOT NULL, `effectiveDate` TEXT NOT NULL, `primaryPrice` REAL, `primarySource` TEXT, `secondaryPrice` REAL, `secondarySource` TEXT, `status` TEXT NOT NULL, `resolvedPrice` REAL, `resolvedSource` TEXT, `note` TEXT, `createdAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "province",
+            "columnName": "province",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grade",
+            "columnName": "grade",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "effectiveDate",
+            "columnName": "effectiveDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "primaryPrice",
+            "columnName": "primaryPrice",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "primarySource",
+            "columnName": "primarySource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "secondaryPrice",
+            "columnName": "secondaryPrice",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "secondarySource",
+            "columnName": "secondarySource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resolvedPrice",
+            "columnName": "resolvedPrice",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "resolvedSource",
+            "columnName": "resolvedSource",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "note",
+            "columnName": "note",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_koil_price_pending_province_grade_effectiveDate",
+            "unique": true,
+            "columnNames": [
+              "province",
+              "grade",
+              "effectiveDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_koil_price_pending_province_grade_effectiveDate` ON `${TABLE_NAME}` (`province`, `grade`, `effectiveDate`)"
+          },
+          {
+            "name": "index_koil_price_pending_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_koil_price_pending_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cb16c3131e37d5e2677ff4285f8e8124')"
+    ]
+  }
+}

@@ -75,6 +75,10 @@ interface KOiLPriceDao {
     @Query("SELECT * FROM koil_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate ASC")
     fun observeByProvinceGrade(province: String, grade: String): Flow<List<KOiLPriceEntity>>
 
+    /** 该省全部 省|油号|生效日 幂等键（重灌/补灌时不重复插入） */
+    @Query("SELECT DISTINCT province || '|' || grade || '|' || effectiveDate FROM koil_prices WHERE province = :province")
+    suspend fun keysForProvince(province: String): List<String>
+
     @Query("SELECT * FROM koil_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate ASC")
     suspend fun getByProvinceGrade(province: String, grade: String): List<KOiLPriceEntity>
 

@@ -667,7 +667,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             //       搁浅 → 「維持 09-25 價格」说明（无幅度条）
             if (item.isStranded) {
                 Text(
-                    text = "維持 ${item.keptFrom ?: "—"} 價格",
+                    text = "維持 ${item.keptFrom ?: "上年"} 價格",
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),

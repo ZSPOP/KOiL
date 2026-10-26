@@ -340,8 +340,9 @@ class OilPriceDbSyncer(
         try {
             val adjustDates = getAdjustDates()
             if (adjustDates.isEmpty()) return
-            // 期望覆盖窗口日数（含搁浅窗口）；每省独立拉取，失败不影响其他省
-            val threshold = adjustDates.size
+            // 期望覆盖已过窗口日数（含搁浅窗口，搁浅入库后各省应含维持记录）；
+            // 每省独立拉取，失败不影响其他省
+            val threshold = adjustDates.count { it <= LocalDate.now().format(DATE_FMT) }
             // 并发补灌：4 路并行（避免 31 省串行等待；组间 200ms 缓解 abapi 限速）
             coroutineScope {
                 PROVINCES.chunked(4).forEach { chunk ->
@@ -373,6 +374,8 @@ class OilPriceDbSyncer(
         if (points.isEmpty()) return 0
         val today = LocalDate.now().format(DATE_FMT)
         val yearStart = "${LocalDate.now().year}-01-01"
+        // 幂等键：省|油号|生效日（重灌/补灌重复触发时不重复插入）
+        val existing = priceDao.keysForProvince(province).toSet()
         val entities = mutableListOf<KOiLPriceEntity>()
         var last92: Double? = null
         var last95: Double? = null
@@ -383,10 +386,34 @@ class OilPriceDbSyncer(
             // 只保留当年 1-1 至今（用户口径：首拉当年调价记录）
             if (pt.date < yearStart || pt.date > today) return@forEach
             val eff = if (adjustDates.isEmpty()) pt.date else addOneDay(adjustToWindow(pt.date, adjustDates))
-            pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last92 = v } }
-            pt.p95?.let { v -> if (last95 == null || kotlin.math.abs(v - last95!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last95 = v } }
-            pt.p98?.let { v -> if (last98 == null || kotlin.math.abs(v - last98!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last98 = v } }
-            pt.p0?.let { v -> if (last0 == null || kotlin.math.abs(v - last0!!) > 1e-9) { entities.add(KOiLPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last0 = v } }
+            pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) { if (("$province|92号汽油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last92 = v } }
+            pt.p95?.let { v -> if (last95 == null || kotlin.math.abs(v - last95!!) > 1e-9) { if (("$province|95号汽油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "95号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last95 = v } }
+            pt.p98?.let { v -> if (last98 == null || kotlin.math.abs(v - last98!!) > 1e-9) { if (("$province|98号汽油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "98号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last98 = v } }
+            pt.p0?.let { v -> if (last0 == null || kotlin.math.abs(v - last0!!) > 1e-9) { if (("$province|0号柴油|$eff") !in existing) entities.add(KOiLPriceEntity(province, "0号柴油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false)); last0 = v } }
+        }
+        // —— 补搁浅窗口（v1.4.181 搁浅入库）——
+        // 已过窗口 + 该窗口无生效记录 = 搁浅：插维持价记录（isStranded=true）。
+        // 维持价 = abapi 曲线中 ≤ 窗口日的最后价格（首窗口搁浅（如 1-06）时 = 上年末价，
+        // 即 abapi 当年首点 1-01，落在 yearStart..w 内）；幂等：跳过库内已有与本次变化点。
+        fun hasChange(g: String, eff: String) = entities.any {
+            !it.isStranded && it.province == province && it.grade == g && it.effectiveDate == eff
+        }
+        adjustDates.filter { it <= today }.forEach { w ->
+            val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@forEach
+            val keptPoint = points.lastOrNull { it.date in yearStart..w && !it.date.isBlank() }
+            if (keptPoint == null) return@forEach
+            if (keptPoint.p92 != null && !hasChange("92号汽油", eff) && ("$province|92号汽油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92!!, "窗口搁淺·維持(abapi)", false, true))
+            }
+            if (keptPoint.p95 != null && !hasChange("95号汽油", eff) && ("$province|95号汽油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "95号汽油", eff, keptPoint.p95!!, "窗口搁淺·維持(abapi)", false, true))
+            }
+            if (keptPoint.p98 != null && !hasChange("98号汽油", eff) && ("$province|98号汽油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "98号汽油", eff, keptPoint.p98!!, "窗口搁淺·維持(abapi)", false, true))
+            }
+            if (keptPoint.p0 != null && !hasChange("0号柴油", eff) && ("$province|0号柴油|$eff") !in existing) {
+                entities.add(KOiLPriceEntity(province, "0号柴油", eff, keptPoint.p0!!, "窗口搁淺·維持(abapi)", false, true))
+            }
         }
         if (entities.isEmpty()) return 0
         entities.chunked(500).forEach { priceDao.insertAll(it) }
