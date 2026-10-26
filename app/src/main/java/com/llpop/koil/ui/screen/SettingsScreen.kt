@@ -349,7 +349,7 @@ fun SettingsScreen(
             SettingDivider()
             StepperInputRow(
                 title = stringResource(R.string.koil_set_tank),
-                summary = stringResource(R.string.koil_set_tank_sub),
+                summary = stringResource(R.string.koil_set_tank_sub_fmt, uiState.tankCapacity.toInt()),
                 value = uiState.tankCapacity.toInt(),
                 range = 5..200,
                 step = 5,
@@ -378,7 +378,7 @@ fun SettingsScreen(
             } else "--"
 
             Column(modifier = Modifier.padding(16.dp)) {
-                // —— 标题（油价数据库 + 版本号，有版本号时并入）——
+                // —— 标题（油价数据库 + 版本号，有版本号时并入；v1.5.0：字号对齐下方开关行）——
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = if (priceDbStatus.versionLabel != "V——") {
@@ -386,8 +386,8 @@ fun SettingsScreen(
                         } else {
                             stringResource(R.string.koil_pdb_db_title_plain)
                         },
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Spacer(Modifier.weight(1f))
@@ -402,17 +402,26 @@ fun SettingsScreen(
                             text = stringResource(R.string.koil_pdb_view_detail),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = KOiLColors.Primary,
+                            // v1.5.0：颜色与设置页右侧（Switch/数值）同步，深浅色自适应
+                            color = MiuixTheme.colorScheme.primary,
                         )
                         Spacer(Modifier.width(2.dp))
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = null,
-                            tint = KOiLColors.Primary,
+                            tint = MiuixTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp),
                         )
                     }
                 }
+                // v1.5.0：版本号标题行与下方数据隔断（同款 0.5dp 分割线）
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                )
                 // —— 完整性缺口提示（补灌未覆盖完的省，红色警示）——
                 if (priceDbStatus.incompleteProvinceCount > 0) {
                     Spacer(Modifier.height(6.dp))
@@ -652,8 +661,9 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— EIA API Key（原油估算数据源；预测幅度 apizero 收费后本地兜底）——
+                // —— EIA API Key（原油估算数据源；v1.5.0：默认只读，开关打开才可编辑，防误改）——
                 val eiaKey by viewModel.eiaApiKey.collectAsState()
+                var eiaKeyEditMode by remember { mutableStateOf(false) }
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -662,12 +672,25 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 Column {
-                    Text(
-                        text = stringResource(R.string.koil_set_eia_key_title),
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.koil_set_eia_key_title),
+                            modifier = Modifier.weight(1f),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        Text(
+                            text = stringResource(R.string.koil_set_eia_key_edit),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Switch(
+                            checked = eiaKeyEditMode,
+                            onCheckedChange = { eiaKeyEditMode = it },
+                        )
+                    }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = stringResource(R.string.koil_set_eia_key_sub),
@@ -677,8 +700,9 @@ fun SettingsScreen(
                     Spacer(Modifier.height(8.dp))
                     TextField(
                         value = eiaKey,
-                        onValueChange = { viewModel.setEiaApiKey(it) },
+                        onValueChange = { if (eiaKeyEditMode) viewModel.setEiaApiKey(it) },
                         modifier = Modifier.fillMaxWidth(),
+                        enabled = eiaKeyEditMode,
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Ascii,

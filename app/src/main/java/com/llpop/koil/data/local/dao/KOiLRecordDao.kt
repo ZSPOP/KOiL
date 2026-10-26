@@ -44,6 +44,10 @@ interface KOiLRecordDao {
     @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC LIMIT 1")
     suspend fun getLatest(): KOiLRecordEntity?
 
+    /** 最新一条记录实时观察（v1.5.0：首页"上次加油"卡片常驻订阅，任何入口增删改即刷新） */
+    @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC LIMIT 1")
+    fun observeLatest(): Flow<KOiLRecordEntity?>
+
     /** 最早一条记录（用于日期校验：补录不能早于第一条） */
     @Query("SELECT * FROM koil_record ORDER BY reoilDate ASC, id ASC LIMIT 1")
     suspend fun getEarliest(): KOiLRecordEntity?

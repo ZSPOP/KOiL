@@ -1,3 +1,34 @@
+# KOiL CHANGELOG
+
+> ⏳ **发布前待办（对外发布时必须处理）**：加一次性迁移——清空 `KOiL-price-db-forecast`
+> 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
+> 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
+
+## v1.5.0（versionCode 200）— 2026-10-26（基于 v1.4.194）
+
+### 🧹 八项修复（讨论攒齐后统一交付）
+- **B 窗口日顺延改循环**：AddViewModel 顺延从"只加 14 天一次"改为 `while` 循环顺延
+  → 长期未开 App（>14 天）且存档过期很远时不再显示过去窗口（覆盖春节长周期）
+- **C verifyProvince 死代码清理**：apizero 移除后 matches（双源一致=搁浅）/bothPresent
+  （不一致入 pending）分支永不可达 → 删除，收敛为 abapi 单源有价即自动入库；
+  搁浅窗口仍由 seedRemainingProvinces 补搁浅处理（功能不变）
+- **D 数据库归 V1**：AppDatabase version 3→1，删除 v2/v3 历史迁移与 schemas/2.json、
+  3.json——1.5.0 为干净正式起点。⚠️ **已装旧版必须卸载重装**（Room 禁止版本回退，
+  覆盖升级会崩溃）；koil_record 加油记录随卸载清空（作者已确认可接受）
+- **E 上次加油卡片实时检测**：KOiLRecordDao 新增 `observeLatest(): Flow`，
+  AddViewModel 常驻订阅 → 记录在任意入口（本页/记录页/明细页）增删改，首页
+  「上次加油」卡片实时刷新
+- **F 合并预测+折合徽章**：首页窗口板块徽章①②合并为单个——
+  `预计上调270元/吨(估算) 折合上调约0.21元/升`（估算标注移入括号紧跟数字、
+  折合带方向，跟随预测正负；三语新增 up/down 折合 string）
+- **G 油箱容量副标题**：`超量录入校验` → `油箱容量 50L · 超量录入校验`（数值实时同步）
+- **H 数据库卡三处**：版本号标题 20sp Bold→17sp Medium（对齐下方开关行）；
+  「查看」颜色写死 KOiLColors.Primary→MiuixTheme.colorScheme.primary（深浅色自适应、
+  与设置页右侧 Switch/数值同步）；标题行下加 0.5dp 隔断横线
+- **I EIA Key 防误改**：副标题精简为 `原油估算源（可修改，留空降级腾讯）`（一行）；
+  标题行右侧加「编辑」开关——默认关 → 输入框只读灰色；打开才可编辑（实时保存，
+  关开关后 Key 保持修改后的值）
+
 ## v1.4.194（versionCode 199）— 2026-10-26（基于 v1.4.193）
 
 ### 🗑️ 彻底移除 apizero（已收费）+ 冷启动窗口板块秒开

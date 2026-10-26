@@ -25,11 +25,13 @@ import java.io.File
  * 2026 起点一次灌库（31省×4油号×已过窗口全量，含搁浅），之后新窗口日调价/搁浅增量累加；
  * 跨年不清库（purge 只清当年假日期，往年保留），历史持续累加。
  *
- * —— 迁移史 ——
- * v1 旧表 → v2（v1.4.159）fuel_prices RENAME TO koil_prices → v3（v1.4.181）ADD isStranded；
+ * —— 迁移史（v1.5.0 重置）——
+ * v1.5.0 数据库归 V1（App 未对外发布，作者自用）：删除 v2/v3 历史迁移（fuel_prices 改名、
+ * isStranded 加列）与 schemas/2.json、3.json；全新安装直接按当前 entity 完整建表。
+ * ⚠️ 已装旧版（库 version=3）覆盖升级会因 Room 禁止版本回退崩溃——必须卸载重装。
  * 禁止 fallbackToDestructiveMigration（清库式升级丢数据）。
  *
- * 完整机制见 docs/KOiL油价数据库机制.md（锚点5级链/推算/灌库/搁浅/清理/统计口径/已知边界）。
+ * 完整机制见 docs/KOiL油价数据库机制.md（锚点链/推算/灌库/搁浅/清理/统计口径/已知边界）。
  */
 @Database(
     entities = [
@@ -37,7 +39,7 @@ import java.io.File
         KOiLPriceEntity::class,
         KOiLPricePendingEntity::class,
     ],
-    version = 3,
+    version = 1,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -56,31 +58,6 @@ abstract class AppDatabase : RoomDatabase() {
          * 无法改为 KOiL_*（视为同名），故表名保留小写（见 entity 注释）。
          */
         private const val LEGACY_DB_NAME = "koil.db"
-
-        /**
-         * 数据库迁移集合（规范，禁止清库式升级）：
-         * 1) 修改 entity/DAO 后，把 @Database version 升为 n+1；
-         * 2) 对照 schemas/<n>/xxx.json 与 schemas/<n+1>/xxx.json 编写 Migration(n, n+1)
-         *    （ALTER TABLE / CREATE TABLE / 数据搬移），写入本数组；
-         * 3) 禁止 fallbackToDestructiveMigration —— 会清空用户全部数据。
-         *
-         * 1 → 2（v1.4.159 命名统一）：fuel_prices 表重命名为 koil_prices，
-         * 旧版本（version=1）已建表用户升级时重命名，数据保留；全新安装直接建新表。
-         * 2 → 3（v1.4.181 搁浅入库）：koil_prices 增加 isStranded 列（0=调价/1=搁浅），
-         * 存量记录默认 0（调价点）；搁浅窗口记录由补灌逻辑幂等补齐，不清库。
-         */
-        val MIGRATIONS: Array<Migration> = arrayOf(
-            object : Migration(1, 2) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    db.execSQL("ALTER TABLE fuel_prices RENAME TO koil_prices")
-                }
-            },
-            object : Migration(2, 3) {
-                override fun migrate(db: SupportSQLiteDatabase) {
-                    db.execSQL("ALTER TABLE koil_prices ADD COLUMN isStranded INTEGER NOT NULL DEFAULT 0")
-                }
-            },
-        )
 
         @Volatile
         private var instance: AppDatabase? = null
@@ -108,8 +85,6 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                         // WAL：灌库/调价大批量写入时首页查询读旧快照不阻塞，避免"写入期间查询排队变慢"
                         .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                        // 显式注册迁移（无 fallback 回退）：版本不符且无迁移时直接崩溃而非清空数据
-                        .addMigrations(*MIGRATIONS)
                         .build()
                         .also { instance = it }
                 }

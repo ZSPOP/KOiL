@@ -593,20 +593,21 @@ private fun OilPriceCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                if (forecast != null) {
+                                // v1.5.0：预测幅度 + 折合单价合并为一个徽章（估算标注移入括号紧跟数字）
+                                if (forecast != null && perLiter != null) {
                                     AdjustBadge(
-                                        text = (if (uiState.forecastEstimated) {
-                                            stringResource(R.string.koil_add_forecast_estimated) + " "
-                                        } else "") +
-                                            stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
+                                        text = stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
                                             "${kotlin.math.abs(forecast).toInt()}" +
-                                            stringResource(R.string.koil_add_forecast_per_ton),
-                                        color = textColor,
-                                    )
-                                }
-                                if (perLiter != null) {
-                                    AdjustBadge(
-                                        text = stringResource(R.string.koil_add_approx_per_liter, kotlin.math.abs(perLiter)),
+                                            stringResource(R.string.koil_add_forecast_per_ton) +
+                                            (if (uiState.forecastEstimated) {
+                                                "(" + stringResource(R.string.koil_add_forecast_estimated) + ")"
+                                            } else "") +
+                                            " " +
+                                            stringResource(
+                                                if (rising) R.string.koil_add_approx_per_liter_up
+                                                else R.string.koil_add_approx_per_liter_down,
+                                                kotlin.math.abs(perLiter),
+                                            ),
                                         color = textColor,
                                     )
                                 }

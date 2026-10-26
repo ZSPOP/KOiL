@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "750372373033167d7ad155ed7becb0ea",
+    "identityHash": "cb16c3131e37d5e2677ff4285f8e8124",
     "entities": [
       {
         "tableName": "koil_record",
@@ -94,8 +94,8 @@
         ]
       },
       {
-        "tableName": "fuel_prices",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`province` TEXT NOT NULL, `grade` TEXT NOT NULL, `effectiveDate` TEXT NOT NULL, `price` REAL NOT NULL, `source` TEXT, `isVerified` INTEGER NOT NULL, PRIMARY KEY(`province`, `grade`, `effectiveDate`))",
+        "tableName": "koil_prices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`province` TEXT NOT NULL, `grade` TEXT NOT NULL, `effectiveDate` TEXT NOT NULL, `price` REAL NOT NULL, `source` TEXT, `isVerified` INTEGER NOT NULL, `isStranded` INTEGER NOT NULL, PRIMARY KEY(`province`, `grade`, `effectiveDate`))",
         "fields": [
           {
             "fieldPath": "province",
@@ -129,6 +129,12 @@
           {
             "fieldPath": "isVerified",
             "columnName": "isVerified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isStranded",
+            "columnName": "isStranded",
             "affinity": "INTEGER",
             "notNull": true
           }
@@ -250,7 +256,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '750372373033167d7ad155ed7becb0ea')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cb16c3131e37d5e2677ff4285f8e8124')"
     ]
   }
 }

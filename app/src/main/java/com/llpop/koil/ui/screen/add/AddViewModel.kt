@@ -136,6 +136,12 @@ class AddViewModel(
             // 响应式订阅（常驻，替代一次性查询：灌库/调价更新后自动刷新，根治冷启动数据空白）
             observeViewProvincePrices()
             observeCurrentPrice()
+            // v1.5.0：「上次加油」卡片常驻订阅——任何入口（本页/记录页/明细页）增删改记录即实时刷新
+            viewModelScope.launch {
+                recordDao.observeLatest().collect { last ->
+                    _uiState.update { it.copy(lastRecord = last) }
+                }
+            }
             // 库行数变化（灌库完成/清库）→ 刷新涨跌趋势 + 调价窗口 + 版本号
             viewModelScope.launch {
                 priceDao.observeCount().distinctUntilChanged().collect { count ->
@@ -276,8 +282,11 @@ class AddViewModel(
                 var urgent = false
                 if (next != null) {
                     val today = LocalDate.now()
-                    // 接口 next 已过期（days<0）时自动顺延一个周期，避免显示过去窗口
-                    val effectiveNext = if (next.isBefore(today)) next.plusDays(14) else next
+                    // 接口 next 已过期（days<0）时循环顺延一个周期直到 ≥ 今天（v1.5.0：
+                    // 原只顺延一次，长期未开 App 且存档过期很远时仍显示过去窗口；循环覆盖
+                    // 春节等长周期 + 多轮错过场景）
+                    var effectiveNext: LocalDate = next
+                    while (effectiveNext.isBefore(today)) effectiveNext = effectiveNext.plusDays(14)
                     nextAdjustDate = effectiveNext.format(dateFormatter)
                     days = java.time.temporal.ChronoUnit.DAYS.between(today, effectiveNext).toInt()
                     urgent = days in 0..3

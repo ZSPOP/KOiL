@@ -749,89 +749,40 @@ class OilPriceDbSyncer(
     }
 
     /**
-     * 单省（默认省）双源核验，返回 (入库数, 待确认数, 失败标记)。
+     * 单省（默认省）单源核验，返回 (入库数, 待确认数, 失败标记)。
      * 生效日 = 归并窗口日 + 1（窗口日 24 时生效 → 次日实际生效）。
-     * 双源一致 → 入库；双源均有但不一致 → 入/更新 pending（等待用户采纳，一直挂着，不自动处理）；
-     * 单源缺失（一源失效）→ 用有价的源自动入库（不提示）。
+     * v1.5.0：apizero 已移除（v1.4.194），双源比对/pending 分支成为死代码删除——
+     * 现为 abapi 单源：有价即自动入库；搁浅窗口由 seedRemainingProvinces 补搁浅处理。
      */
     private suspend fun verifyProvince(province: String, today: String): Triple<Int, Int, Int> {
         return try {
-            val (primary, secondary) = network.fetchBothSources(province)
+            val (primary, _) = network.fetchBothSources(province)
             val primaryMap = primary.data.associateBy { it.grade }
-            val secondaryMap = secondary.data.associateBy { it.grade }
-            val allGrades = (primaryMap.keys + secondaryMap.keys).toSet()
-            if (allGrades.isEmpty()) return Triple(0, 0, 1)
+            if (primaryMap.isEmpty()) return Triple(0, 0, 1)
             // 生效日 = 归并窗口日 + 1；窗口日为空（从未成功推算）时用 today 原值，避免"today+1"假生效日
             val eff = getAdjustDates().let { if (it.isEmpty()) today else addOneDay(adjustToWindow(today, it)) }
 
             val toInsert = mutableListOf<KOiLPriceEntity>()
-            val toPending = mutableListOf<KOiLPricePendingEntity>()
             var verified = 0
-            var pending = 0
 
-            for (grade in allGrades) {
-                val pItem = primaryMap[grade]
-                val sItem = secondaryMap[grade]
+            for ((grade, pItem) in primaryMap) {
                 val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
-                val pPrice = pItem?.price
-                val sPrice = sItem?.price
-                val pSource = pItem?.source ?: "youjia.abapi.cn"
-                val sSource = sItem?.source ?: ""
-
-                val bothPresent = pPrice != null && sPrice != null
-                val matches = bothPresent && kotlin.math.abs(pPrice!! - sPrice!!) < STRANDED_EPSILON
-
-                when {
-                    matches -> {
-                        // 双源一致：与库内最近调价价相同 = 搁浅窗口（窗口日无调价）→ 不插调价记录
-                        // （10-15 这类搁浅由 seedRemainingProvinces 补搁浅处理，防止 verify 抢插
-                        //  isStranded=false 的同价假记录挡住补搁浅幂等键）；价格有变化才入库。
-                        val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
-                        if ((latest == null || kotlin.math.abs(latest.price - pPrice!!) > 1e-9) &&
-                            priceDao.getPrice(province, gradeLabel, eff) == null
-                        ) {
-                            toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, pPrice!!, pSource, true))
-                        }
-                        verified++
+                val pPrice = pItem.price
+                val pSource = pItem.source.ifBlank { "youjia.abapi.cn" }
+                // 单源有价即自动入库（真实调价必然变价；同价非搁浅假点由 purge 清理）
+                if (pPrice != null) {
+                    val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
+                    if ((latest == null || kotlin.math.abs(latest.price - pPrice) > 1e-9) &&
+                        priceDao.getPrice(province, gradeLabel, eff) == null
+                    ) {
+                        toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, pPrice, pSource, true))
                     }
-                    bothPresent -> {
-                        // 双源均有但不一致：入 pending 等待用户采纳（一直挂着，不自动处理）
-                        val existing = pendingDao.getPendingByKey(province, gradeLabel, eff)
-                        if (existing != null) {
-                            pendingDao.updateSources(existing.id, pPrice, pSource, sPrice, sSource)
-                        } else {
-                            toPending.add(
-                                KOiLPricePendingEntity(
-                                    province = province, grade = gradeLabel, effectiveDate = eff,
-                                    primaryPrice = pPrice, primarySource = pSource,
-                                    secondaryPrice = sPrice, secondarySource = sSource,
-                                    status = "pending", resolvedPrice = null, resolvedSource = null,
-                                    note = null, createdAt = System.currentTimeMillis(),
-                                )
-                            )
-                        }
-                        pending++
-                    }
-                    else -> {
-                        // 单源缺失（一源失效）：用有价的源自动入库，不提示
-                        val price = pPrice ?: sPrice
-                        val source = if (pPrice != null) pSource else sSource
-                        if (price != null) {
-                            val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
-                            if ((latest == null || kotlin.math.abs(latest.price - price) > 1e-9) &&
-                                priceDao.getPrice(province, gradeLabel, eff) == null
-                            ) {
-                                toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, price, source, true))
-                            }
-                        }
-                        verified++
-                    }
+                    verified++
                 }
             }
 
             if (toInsert.isNotEmpty()) priceDao.insertAll(toInsert)
-            if (toPending.isNotEmpty()) pendingDao.insertAll(toPending)
-            Triple(verified, pending, 0)
+            Triple(verified, 0, 0)
         } catch (_: Exception) {
             Triple(0, 0, 1)
         }

@@ -35,6 +35,8 @@
     <string name="koil_add_forecast_down">預計下調</string>
     <string name="koil_add_forecast_per_ton">元/噸</string>
     <string name="koil_add_forecast_estimated">估算</string>
+    <string name="koil_add_approx_per_liter_up">折合上調約%1$.2f元/升</string>
+    <string name="koil_add_approx_per_liter_down">折合下調約%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter">折合约%1$.2f元/升</string>
     <string name="koil_add_unit_per_liter">元/升</string>
     <string name="koil_add_last_refuel">上次加油</string>
@@ -150,6 +152,7 @@
     <string name="koil_set_default_grade">預設油號</string>
     <string name="koil_set_default_grade_sum">新建記錄時預選 %1$s#</string>
     <string name="koil_set_tank">油箱容量</string>
+    <string name="koil_set_tank_sub_fmt">油箱容量 %1$dL · 超量錄入校驗</string>
     <string name="koil_set_tank_sub">超量錄入校驗</string>
     <string name="koil_set_keep_grade">沿用上次油號</string>
     <string name="koil_set_keep_grade_sub">錄入自動帶出</string>
@@ -186,7 +189,8 @@
     <string name="koil_set_price_db_auto">油價庫自動更新</string>
     <string name="koil_set_price_db_auto_sub">啟動時檢查新版油價</string>
     <string name="koil_set_eia_key_title">EIA API Key</string>
-    <string name="koil_set_eia_key_sub">原油估算資料源（免費註冊，可修改；留空則僅用騰訊即時估算）</string>
+    <string name="koil_set_eia_key_edit">編輯</string>
+    <string name="koil_set_eia_key_sub">原油估算源（可修改，留空降級騰訊）</string>
     <string name="koil_set_price_db_status">油價庫狀態</string>
     <string name="koil_set_price_db_status_sum">%1$d 筆 · %2$d 省 × %3$d 油號 · 最新 %4$s</string>
     <string name="koil_set_pending_count">%1$d待處理</string>
