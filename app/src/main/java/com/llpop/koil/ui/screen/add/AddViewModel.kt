@@ -252,8 +252,11 @@ class AddViewModel(
         }
     }
 
-    /** 加载调价窗口信息 + 数据库版本号：接口 next_adjustment → 本地推算窗口日历兜底（apizero 不可用时窗口日不失效） */
+    /** 加载调价窗口信息 + 数据库版本号 + 预测幅度。
+     *  v1.4.194：拆两段更新——窗口日/版本号（纯本地，立即显示，无网络等待）；
+     *  预测幅度（EIA 估算含网络请求）独立异步，完成后补更新，不阻塞窗口板块冷启动渲染。 */
     private fun loadPriceAdjustInfo() {
+        // 第一段：窗口日 + 版本号（纯本地，秒显）
         viewModelScope.launch {
             val province = _uiState.value.province
             val p = priceDao.getNewest(province, "92号汽油")
@@ -286,8 +289,20 @@ class AddViewModel(
                     ?: next?.minusDays(14)?.toString()
                     ?: p.effectiveDate
                 val versionLabel = recentWindow?.replace("-", "")?.let { "V$it" } ?: "V——"
-                // 预测幅度：接口 forecast 优先（如"预计上调油价270元/吨"，正涨负跌）；
-                // apizero 收费/不可用（forecast 缺失）→ 原油本地估算兜底（EIA 官方 → 腾讯实时），标注「估算」
+                _uiState.value = _uiState.value.copy(
+                    versionLabel = versionLabel,
+                    latestPriceDate = p.effectiveDate,
+                    nextAdjustDate = nextAdjustDate,
+                    daysUntilAdjust = days,
+                    adjustUrgent = urgent,
+                )
+            }
+        }
+        // 第二段：预测幅度（接口 forecast 优先 → 原油本地估算 EIA/腾讯；含网络请求，异步补更新）
+        viewModelScope.launch {
+            val province = _uiState.value.province
+            val p = priceDao.getNewest(province, "92号汽油")
+            if (p != null) {
                 val forecastRaw = settings.priceDbForecast.first()
                 var forecastAmount = parseForecast(forecastRaw)
                 var forecastEstimated = false
@@ -301,11 +316,6 @@ class AddViewModel(
                 // 折合元/升：元/吨 ÷ 1316 升/吨（92# 汽油密度约 0.76 kg/L）
                 val perLiterEquivalent = forecastAmount?.let { Math.round(it / 1316.0 * 100) / 100.0 }
                 _uiState.value = _uiState.value.copy(
-                    versionLabel = versionLabel,
-                    latestPriceDate = p.effectiveDate,
-                    nextAdjustDate = nextAdjustDate,
-                    daysUntilAdjust = days,
-                    adjustUrgent = urgent,
                     forecastAmount = forecastAmount,
                     forecastEstimated = forecastEstimated,
                     perLiterEquivalent = perLiterEquivalent,

@@ -1,3 +1,26 @@
+## v1.4.194（versionCode 199）— 2026-10-26（基于 v1.4.193）
+
+### 🗑️ 彻底移除 apizero（已收费）+ 冷启动窗口板块秒开
+- **背景**：apizero（极数本源）2026-10-23 起匿名接口收费限流（4030 需付费 Key），用户
+  拒绝付费 → 全部功能已有独立兜底，本版**彻底摘除**该依赖。
+- **apizero 使用点清理（4 处）**：
+  1. **双源核验次源**（fetchFromApiZero）→ `fetchBothSources` 改为 abapi 单源
+     （保留 Pair 签名，secondary 恒失败；verifyProvince 自动走「单源→有价源入库」，
+     不再产生 pending）
+  2. **预测专接口**（fetchForecast + ForecastResponse/ForecastData）→ 全删
+  3. **窗口日历锚点③**（getAdjustDates）→ 锚点链 5 级缩为 4 级：
+     ①xxapi → ②ruseo → ③abapi 曲线 → ④本地推算（均已有）
+  4. **同步链路**每轮净减 2 个 apizero 请求
+- **预测幅度**：恒走 EIA 原油估算（v1.4.193 已落地），UI 标注「估算」；调价窗口日恒走
+  本地推算窗口日历（v1.4.192 已落地）——**两者与 apizero 零关系**。
+- **冷启动窗口板块延时修复**：`loadPriceAdjustInfo` 拆两段——
+  ① 窗口日/版本号（纯本地）**立即渲染**，不再等网络；
+  ② EIA 估算（含网络请求）**独立异步**，完成后补更新预测幅度，不阻塞首屏。
+- **文档**：API_SOURCES.md 数据源表重构（apizero 移入付费段并标注已移除）、
+  OilPriceNetwork 头注释更新（单源 + 兜底链）。
+- **验证**：compileDebugKotlin 通过；覆盖升级/全新安装行为不变（窗口日历、EIA Key、
+  估算标注逻辑未动）。
+
 ## v1.4.193（versionCode 198）— 2026-10-26（基于 v1.4.192）
 
 ### 🔮 预测涨跌幅度本地估算（apizero 收费/限流后不失效）

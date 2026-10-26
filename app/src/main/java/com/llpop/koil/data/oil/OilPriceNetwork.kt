@@ -20,17 +20,17 @@ import kotlinx.serialization.json.Json
 import java.time.LocalDate
 
 /**
- * 油价双源抓取（对齐 Web 端 oil-price.service.ts）：
- * - 主源：youjia.abapi.cn（GET chart-data.php，含完整历史曲线）
- * - 次源：v1.apizero.cn（POST oil-price，含 next_adjustment / forecast）
- * 两源独立超时 8s，任一失败不影响另一源。
+ * 油价数据抓取（v1.4.194 起 apizero 已收费移除，回归单源）：
+ * - 主源：youjia.abapi.cn（GET chart-data.php，含完整历史曲线 + 今日价）
+ * 超时 8s，失败返回 success=false（调用方有兜底链）。
  *
  * 【数据源权威记录】完整来源清单/实测返回/依赖关系见工程根 API_SOURCES.md，
  * 改网络层或换源前必须同步更新该文件；用户要求不在 App 设置页展示数据源。
- * - 主源提供：价格历史曲线（涨跌对比、偏差参考）
- * - 次源提供：今日价 + 调价窗口（next_adjustment）+ 预测（forecast）
- * - ⚠️ 窗口/预测/版本号 100% 依赖次源 apizero，属单点风险
- * - APIZERO_TYPE_MAP 需同时兼容 "92#" 旧格式与 "gasoline_92" 实测新格式
+ * - abapi 提供：价格历史曲线（灌库/涨跌对比/偏差参考）+ 今日价（调价核验）
+ * - 窗口日：xxapi/ruseo 锚点（fetchAnchorWindowDate）→ abapi 曲线 → 本地推算（见 OilPriceDbSyncer）
+ * - 预测幅度：EIA 官方原油估算 + 腾讯实时降级（见 CrudeOilEstimator）
+ * - 节假日：chinese-days CDN（fetchChinaHolidays）
+ * - 全国快照：ruseo → xxapi（fetchNationwideSnapshot）
  */
 class OilPriceNetwork {
 
@@ -41,13 +41,6 @@ class OilPriceNetwork {
             "95" to "95号汽油",
             "98" to "98号汽油",
             "0" to "0号柴油",
-        )
-        // 实测（2026-10-22）apizero 返回 type 为 "gasoline_92"/"gasoline_95"/"gasoline_98"/"diesel_0"；
-        // 兼容旧格式 "92#"/"95#"/"98#"/"0#"（历史接口）
-        private val APIZERO_TYPE_MAP = mapOf(
-            "92#" to "92", "95#" to "95", "98#" to "98", "0#" to "0",
-            "gasoline_92" to "92", "gasoline_95" to "95",
-            "gasoline_98" to "98", "diesel_0" to "0",
         )
         private val YOUJIA_GRADE_MAP = mapOf(
             "p92" to "92", "p95" to "95", "p98" to "98", "p0" to "0",
@@ -237,134 +230,19 @@ class OilPriceNetwork {
         return ChinaHolidays.EMPTY
     }
 
-    @Serializable
-    private data class ApiZeroPriceItem(
-        val type: String = "",
-        val price: Double = 0.0,
-        val name: String = "",
-    )
-
-    @Serializable
-    private data class ApiZeroData(
-        val province: String? = null,
-        @SerialName("update_date") val updateDate: String? = null,
-        @SerialName("next_adjustment") val nextAdjustment: String? = null,
-        val forecast: String? = null,
-        val prices: List<ApiZeroPriceItem> = emptyList(),
-    )
-
-    @Serializable
-    private data class ApiZeroResponse(
-        val code: Int = -1,
-        val message: String? = null,
-        val msg: String? = null,
-        val data: ApiZeroData? = null,
-    )
-
-    suspend fun fetchFromApiZero(province: String): OilPriceResponse {
-        return try {
-            val body = client.post("https://v1.apizero.cn/api/oil-price") {
-                contentType(ContentType.Application.Json)
-                setBody("""{"province":"$province"}""")
-            }.bodyAsText()
-            val resp = json.decodeFromString<ApiZeroResponse>(body)
-            val data = resp.data
-            if ((resp.code != 200 && resp.code != 0) || data?.prices.isNullOrEmpty()) {
-                OilPriceResponse(
-                    success = false,
-                    error = resp.message ?: resp.msg ?: "接口返回异常",
-                )
-            } else {
-                val items = data!!.prices.mapNotNull { item ->
-                    val grade = APIZERO_TYPE_MAP[item.type] ?: return@mapNotNull null
-                    OilPriceInfo(
-                        grade = grade,
-                        gradeLabel = GRADE_LABELS[grade] ?: grade,
-                        price = item.price,
-                        updateDate = data.updateDate ?: "",
-                        source = "ApiZero 油价",
-                    )
-                }
-                OilPriceResponse(
-                    success = items.isNotEmpty(),
-                    province = province,
-                    updateDate = OilPriceDateUtil.normalize(data.updateDate),
-                    nextAdjustment = data.nextAdjustment,
-                    forecast = data.forecast,
-                    data = items,
-                    error = if (items.isEmpty()) "接口返回数据不完整" else null,
-                )
-            }
-        } catch (e: Exception) {
-            OilPriceResponse(success = false, error = e.message ?: "ApiZero 源请求失败")
-        }
-    }
-
-    /** 双源并行抓取（对齐 Web fetchBothSources：主源优先语义由调用方处理） */
+    /**
+     * 单源抓取（v1.4.194 起 apizero 已收费移除，双源核验退化为 abapi 单源：
+     * 调用方已有的「单源缺失 → 用有价源自动入库」逻辑自然生效）。
+     */
     suspend fun fetchBothSources(province: String): Pair<OilPriceResponse, OilPriceResponse> =
         coroutineScope {
             val primaryDeferred = async { fetchFromYoujia(province) }
-            val secondaryDeferred = async { fetchFromApiZero(province) }
-            primaryDeferred.await() to secondaryDeferred.await()
+            primaryDeferred.await() to OilPriceResponse(
+                success = false,
+                error = "apizero 已移除（收费）",
+            )
         }
 
-    // ===== 预测专接口：v1.apizero.cn /api/oil-price-forecast（窗口日精确化） =====
-    // 实测（2026-10-22）：返回 next_adjust_date（yyyy-MM-dd 精确窗口日）+ days_remaining
-    // + prediction{direction, estimated_change_per_ton, confidence}。
-    // 注意：预测幅度口径与本源聚合接口 forecast 不一致（专接口偏激，如 1215 vs 270 元/吨），
-    // 故仅采用其结构化窗口日/方向/置信度，预测幅度仍以聚合接口 forecast 为准。
-
-    @Serializable
-    private data class ForecastPrediction(
-        val direction: String? = null,
-        val confidence: String? = null,
-    )
-
-    @Serializable
-    private data class ForecastData(
-        @SerialName("next_adjust_date") val nextAdjustDate: String? = null,
-        @SerialName("days_remaining") val daysRemaining: Int? = null,
-        val prediction: ForecastPrediction? = null,
-    )
-
-    @Serializable
-    private data class ForecastResponse(
-        val code: Int = -1,
-        val msg: String? = null,
-        val message: String? = null,
-        val data: ForecastData? = null,
-    )
-
-    /** 抓取预测专接口（窗口日/方向/置信度；失败时 success=false，不影响主流程） */
-    suspend fun fetchForecast(province: String): OilPriceResponse {
-        return try {
-            val body = client.post("https://v1.apizero.cn/api/oil-price-forecast") {
-                contentType(ContentType.Application.Json)
-                setBody("""{"province":"$province"}""")
-            }.bodyAsText()
-            val resp = json.decodeFromString<ForecastResponse>(body)
-            val data = resp.data
-            if ((resp.code != 200 && resp.code != 0) || data?.nextAdjustDate.isNullOrBlank()) {
-                OilPriceResponse(
-                    success = false,
-                    province = province,
-                    error = resp.message ?: resp.msg ?: "预测接口返回异常",
-                )
-            } else {
-                val normalized = OilPriceDateUtil.normalize(data!!.nextAdjustDate)
-                OilPriceResponse(
-                    success = normalized != null,
-                    province = province,
-                    nextAdjustDate = normalized,
-                    direction = data.prediction?.direction,
-                    confidence = data.prediction?.confidence,
-                    error = if (normalized == null) "预测接口窗口日无法识别" else null,
-                )
-            }
-        } catch (e: Exception) {
-            OilPriceResponse(success = false, error = e.message ?: "预测接口请求失败")
-        }
-    }
     // ===== 锚点备用源：ruseo / xxapi（全国油价快照） =====
     // 实测（2026-10-26）：两源同源镜像（价格一致），date 均为最近窗口生效日
     // （如 10-16 = 10-15 窗口 24 时生效）；故 date − 1 = 真实窗口日（含搁浅窗口）。

@@ -24,9 +24,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - acceptPending：事务（入库 + 标记 accepted）
  * - checkDeviation：当日历史参考价偏差预检
  *
- * —— 锚点 5 级链（v1.4.184 顺序）——
- * ① xxapi date−1 → ② ruseo date−1（同源互备，xxapi 优先）→ ③ apizero 预测专接口 →
- * ④ abapi 全年曲线最近调价日（生效日−3）→ ⑤ calculateAdjustDates 本地推算全年窗口日历。
+ * —— 锚点链（v1.4.194 apizero 已收费移除，4 级）——
+ * ① xxapi date−1 → ② ruseo date−1（同源互备，xxapi 优先）→
+ * ③ abapi 全年曲线最近调价日（生效日−3）→ ④ calculateAdjustDates 本地推算全年窗口日历。
  * 内存+持久化缓存复用（重启不空降级）；缓存命中照常清假日期。
  *
  * —— 灌库（seedProvince）——
@@ -129,12 +129,10 @@ class OilPriceDbSyncer(
             }
         }
         // 3) 拉取推算（仅当无任何缓存时）
-        // 锚点回退链（v1.4.184 起，apizero 近期不稳定降为③；同源互备 xxapi 优先）：
-        // ① xxapi date−1 → ② ruseo date−1 → ③ apizero 预测专接口（结构化 nextAdjustDate）
-        // → ④ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，实测 18/18 与发改委公告吻合）
-        // → ⑤ calculateAdjustDates 本地推算当年全年窗口日历（节假日顺延）
+        // 锚点回退链（v1.4.194 apizero 已收费移除；同源互备 xxapi 优先）：
+        // ① xxapi date−1 → ② ruseo date−1 → ③ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，
+        // 实测 18/18 与发改委公告吻合）→ ④ calculateAdjustDates 本地推算当年全年窗口日历（节假日顺延）
         val anchor = network.fetchAnchorWindowDate()
-            ?: network.fetchForecast(defaultProvince()).nextAdjustDate
             ?: abapiAnchor()
         if (anchor == null) {
             // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
@@ -561,25 +559,21 @@ class OilPriceDbSyncer(
         // 采样省份：默认省份（用户相关），缺省回退列表第一个
         val sampleProvince = settings.defaultProvince.first().takeIf { it in PROVINCES } ?: PROVINCES[0]
         val (samplePrimary, sampleSecondary) = network.fetchBothSources(sampleProvince)
-        // 预测专接口（结构化窗口日）：与双源并行；失败不影响主流程，nextAdjustDate 回退文本解析
-        val forecastResult = network.fetchForecast(sampleProvince)
 
         if (!samplePrimary.success && !sampleSecondary.success) {
             return OilPriceSyncResult(
                 success = false,
                 message = samplePrimary.error ?: sampleSecondary.error ?: "实时油价获取失败",
                 latestDate = getLastUpdatedAt().ifBlank { null },
-                nextAdjustDate = forecastResult.nextAdjustDate,
             )
         }
 
         val today = LocalDate.now().format(DATE_FMT)
         val nextAdjustment = samplePrimary.nextAdjustment ?: sampleSecondary.nextAdjustment
         val forecast = samplePrimary.forecast ?: sampleSecondary.forecast
-        // 结构化窗口日优先（预测专接口 yyyy-MM-dd）→ 聚合接口文本解析 → v1.4.192：本地推算窗口日历
-        // 兜底（数据库卡「下个窗口」同一来源，apizero 不可用时预测窗口日不失效）
-        val nextAdjustDate = forecastResult.nextAdjustDate
-            ?: OilPriceDateUtil.normalize(nextAdjustment)
+        // 窗口日：聚合接口文本解析（abapi 无此字段 → 恒 null）→ v1.4.192：本地推算窗口日历兜底
+        //（数据库卡「下个窗口」同一来源，apizero 移除后预测窗口日不失效）
+        val nextAdjustDate = OilPriceDateUtil.normalize(nextAdjustment)
             ?: getAdjustDates().firstOrNull { it >= today }
 
         // 只信任"数据日期 == 今天"的源参与今日核验；主/次源均滞后时跳过核验（窗口存档仍生效，不产生假调价记录）
@@ -782,7 +776,7 @@ class OilPriceDbSyncer(
                 val pPrice = pItem?.price
                 val sPrice = sItem?.price
                 val pSource = pItem?.source ?: "youjia.abapi.cn"
-                val sSource = sItem?.source ?: "v1.apizero.cn"
+                val sSource = sItem?.source ?: ""
 
                 val bothPresent = pPrice != null && sPrice != null
                 val matches = bothPresent && kotlin.math.abs(pPrice!! - sPrice!!) < STRANDED_EPSILON
