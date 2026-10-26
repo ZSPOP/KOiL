@@ -62,14 +62,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -123,6 +126,9 @@ fun OverviewScreen(
     var visibleCount by remember { mutableStateOf(20) }
     var showBackToTop by remember { mutableStateOf(false) }
     var moreMenuFor by remember { mutableStateOf<Long?>(null) }
+    // v1.5.5：长按操作的卡片引用 + 全局位置（全屏遮罩点击任意处收起）
+    var actionRecord by remember { mutableStateOf<RecordWithDerived?>(null) }
+    var actionRect by remember { mutableStateOf<Rect?>(null) }
 
     // 滚动到底自动加载更多 + 返回顶部按钮显隐
     LaunchedEffect(scrollState.value) {
@@ -288,7 +294,16 @@ fun OverviewScreen(
                             prevRecord = prevMap[record.record.id],
                             isInitial = prevMap[record.record.id] == null,
                             showMoreMenu = moreMenuFor == record.record.id,
-                            onMoreMenu = { moreMenuFor = if (moreMenuFor == record.record.id) null else record.record.id },
+                            onMoreMenu = {
+                                if (moreMenuFor == record.record.id) {
+                                    moreMenuFor = null
+                                    actionRecord = null
+                                } else {
+                                    moreMenuFor = record.record.id
+                                    actionRecord = record
+                                }
+                            },
+                            onRect = { r -> if (moreMenuFor == record.record.id) actionRect = r },
                             onDelete = { viewModel.deleteRecord(record.record.id) },
                             onEdit = { viewModel.startEdit(record.record) },
                         )
@@ -298,6 +313,61 @@ fun OverviewScreen(
             // v1.5.3：滚动到底自动加载已覆盖分页，移除冗余的"加载更多"按钮
             }
             Spacer(Modifier.height(bottomPadding + 12.dp))
+        }
+
+        // v1.5.5：长按全屏操作层——点击任意处收起；圆按钮定位在长按卡片中央
+        AnimatedVisibility(
+            visible = moreMenuFor != null,
+            enter = fadeIn() + scaleIn(initialScale = 0.95f, animationSpec = tween(150)),
+            exit = fadeOut() + scaleOut(targetScale = 0.98f, animationSpec = tween(120)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.38f))
+                    .clickable {
+                        moreMenuFor = null
+                        actionRecord = null
+                        actionRect = null
+                    },
+            ) {
+                actionRect?.let { r ->
+                    val density = LocalDensity.current
+                    val rowW = with(density) { 54.dp.toPx() * 2 + 28.dp.toPx() }
+                    val rowH = with(density) { 54.dp.toPx() + 6.dp.toPx() + 16.dp.toPx() }
+                    Row(
+                        modifier = Modifier.offset {
+                            IntOffset(
+                                (r.center.x - rowW / 2).roundToInt(),
+                                (r.center.y - rowH / 2).roundToInt(),
+                            )
+                        },
+                        horizontalArrangement = Arrangement.spacedBy(28.dp),
+                    ) {
+                        LongPressCircleAction(
+                            icon = Icons.Filled.Edit,
+                            label = stringResource(R.string.koil_ov_edit),
+                            bg = Color(0xFF2563EB),
+                        ) {
+                            moreMenuFor = null
+                            actionRecord?.let { viewModel.startEdit(it.record) }
+                            actionRecord = null
+                            actionRect = null
+                        }
+                        LongPressCircleAction(
+                            icon = Icons.Filled.Delete,
+                            label = stringResource(R.string.koil_ov_delete),
+                            bg = Color(0xFFE53935),
+                        ) {
+                            val rec = actionRecord
+                            moreMenuFor = null
+                            actionRecord = null
+                            actionRect = null
+                            rec?.let { viewModel.deleteRecord(it.record.id) }
+                        }
+                    }
+                }
+            }
         }
 
         // 右下角返回顶部按钮（对齐 Web；bottom 抬高避让悬浮导航条）
@@ -907,6 +977,7 @@ private fun RecordCard(
     onMoreMenu: () -> Unit,
     onDelete: () -> Unit,
     onEdit: () -> Unit,
+    onRect: (Rect) -> Unit = {},
 ) {
     val r = record.record
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
@@ -922,7 +993,12 @@ private fun RecordCard(
         else -> MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // v1.5.5：长按显示时上报自身全局位置（页面级全屏层据此定位圆按钮）
+            .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) },
+    ) {
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
@@ -1115,40 +1191,6 @@ private fun RecordCard(
                         "",
                         warn = false,
                     )
-                }
-            }
-        }
-        // v1.5.4：长按操作层——中央两个圆形按钮（编辑/删除），点击遮罩空白收起
-        AnimatedVisibility(
-            visible = showMoreMenu,
-            enter = fadeIn() + scaleIn(initialScale = 0.85f, animationSpec = tween(160)),
-            exit = fadeOut() + scaleOut(targetScale = 0.9f, animationSpec = tween(120)),
-        ) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .clip(RoundedCornerShape(20f))
-                    .background(Color.Black.copy(alpha = 0.38f))
-                    .clickable { onMoreMenu() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    LongPressCircleAction(
-                        icon = Icons.Filled.Edit,
-                        label = stringResource(R.string.koil_ov_edit),
-                        bg = Color(0xFF2563EB),
-                    ) {
-                        onMoreMenu()
-                        onEdit()
-                    }
-                    LongPressCircleAction(
-                        icon = Icons.Filled.Delete,
-                        label = stringResource(R.string.koil_ov_delete),
-                        bg = Color(0xFFE53935),
-                    ) {
-                        onMoreMenu()
-                        onDelete()
-                    }
                 }
             }
         }
