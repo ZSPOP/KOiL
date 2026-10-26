@@ -177,7 +177,14 @@ class OilPriceDbSyncer(
      */
     private suspend fun purgeIllegalEffectiveDates(dates: List<String>) {
         val legal = dates.map { addOneDay(it) }.toSet()
-        val badDates = priceDao.distinctEffectiveDates().filter { it !in legal }
+        // 只清「当年窗口日历范围内的假日期」：生效日在当年 1-1 ~ 12-31 且不在合法窗口+1 集合
+        // （如降级灌入的 09-27）；往年日期一律保留 —— 灌库是一次性起点 + 持续增量模型，
+        // 2026 起点灌库后跨年（2027）不重灌、不清库，历史记录持续累加。
+        val yearStart = "${LocalDate.now().year}-01-01"
+        val yearEnd = "${LocalDate.now().year}-12-31"
+        val badDates = priceDao.distinctEffectiveDates().filter {
+            it in yearStart..yearEnd && it !in legal
+        }
         if (badDates.isNotEmpty()) {
             priceDao.getAll().filter { it.effectiveDate in badDates }
                 .forEach { priceDao.deleteByKey(it.province, it.grade, it.effectiveDate) }
