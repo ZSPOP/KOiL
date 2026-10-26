@@ -105,6 +105,7 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_DB_ADJUST_DATES_LEANED = booleanPreferencesKey("KOiL-price-db-adjust-dates-leaned")
         // ---- 原油估算（apizero forecast 收费后本地兜底）：EIA 官方布伦特现货日度 ----
         private val KEY_EIA_API_KEY = stringPreferencesKey("KOiL-eia-api-key")
+        private val KEY_EIA_ENABLED = booleanPreferencesKey("KOiL-eia-enabled")
 
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
@@ -353,6 +354,13 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.map { it[KEY_EIA_API_KEY] ?: DEFAULT_EIA_API_KEY }
     suspend fun setEiaApiKey(key: String) {
         context.KOiLDataStore.edit { it[KEY_EIA_API_KEY] = key }
+    }
+
+    /** EIA 原油估算源启用开关（v1.5.1：默认开=用 EIA；关=直接用腾讯，输入框显示供修改） */
+    val eiaEnabled: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_EIA_ENABLED] ?: true }
+    suspend fun setEiaEnabled(enabled: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_EIA_ENABLED] = enabled }
     }
 
     /** 异常生效日（不在任何窗口日+1 内的假记录，如"原日期+1"产生的 10-25）是否已一次性清理 */

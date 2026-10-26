@@ -148,15 +148,20 @@ class SettingsViewModel(
     private val _eiaApiKey = MutableStateFlow("")
     val eiaApiKey: StateFlow<String> = _eiaApiKey.asStateFlow()
 
+    // EIA 原油估算源启用开关（v1.5.1：开=用 EIA；关=直接用腾讯，输入框显示供修改）
+    private val _eiaEnabled = MutableStateFlow(true)
+    val eiaEnabled: StateFlow<Boolean> = _eiaEnabled.asStateFlow()
+
     private val _importPreview = MutableStateFlow<ImportPreview?>(null)
     val importPreview: StateFlow<ImportPreview?> = _importPreview.asStateFlow()
 
     fun togglePendingPanel() { _showPendingPanel.value = !_showPendingPanel.value }
 
-    /** 读取 EIA API Key 初始值（默认内置用户注册 Key） */
+    /** 读取 EIA 配置初始值（Key + 启用开关，默认内置 Key / 默认开） */
     fun loadEiaApiKey() {
         viewModelScope.launch {
             _eiaApiKey.value = settings.eiaApiKey.first()
+            _eiaEnabled.value = settings.eiaEnabled.first()
         }
     }
 
@@ -164,6 +169,12 @@ class SettingsViewModel(
     fun setEiaApiKey(key: String) {
         _eiaApiKey.value = key
         viewModelScope.launch { settings.setEiaApiKey(key) }
+    }
+
+    /** 切换 EIA 原油估算源启用状态（开=EIA，关=腾讯） */
+    fun setEiaEnabled(enabled: Boolean) {
+        _eiaEnabled.value = enabled
+        viewModelScope.launch { settings.setEiaEnabled(enabled) }
     }
 
     /** 刷新油价库状态：统计 + 配置真实字段 + pending 列表 */

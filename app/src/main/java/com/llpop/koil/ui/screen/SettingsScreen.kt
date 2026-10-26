@@ -402,14 +402,14 @@ fun SettingsScreen(
                             text = stringResource(R.string.koil_pdb_view_detail),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            // v1.5.0：颜色与设置页右侧（Switch/数值）同步，深浅色自适应
-                            color = MiuixTheme.colorScheme.primary,
+                            // v1.5.1：颜色与设置页右侧文案一致（非蓝色），深浅色自适应
+                            color = MiuixTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.width(2.dp))
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = null,
-                            tint = MiuixTheme.colorScheme.primary,
+                            tint = MiuixTheme.colorScheme.onBackground,
                             modifier = Modifier.size(18.dp),
                         )
                     }
@@ -661,9 +661,10 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— EIA API Key（原油估算数据源；v1.5.0：默认只读，开关打开才可编辑，防误改）——
+                // —— EIA API Key（原油估算数据源；v1.5.1：数据源开关——开=用 EIA 隐藏输入框；
+                //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
                 val eiaKey by viewModel.eiaApiKey.collectAsState()
-                var eiaKeyEditMode by remember { mutableStateOf(false) }
+                val eiaEnabled by viewModel.eiaEnabled.collectAsState()
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -680,15 +681,9 @@ fun SettingsScreen(
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onBackground,
                         )
-                        Text(
-                            text = stringResource(R.string.koil_set_eia_key_edit),
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        )
-                        Spacer(Modifier.width(4.dp))
                         Switch(
-                            checked = eiaKeyEditMode,
-                            onCheckedChange = { eiaKeyEditMode = it },
+                            checked = eiaEnabled,
+                            onCheckedChange = viewModel::setEiaEnabled,
                         )
                     }
                     Spacer(Modifier.height(2.dp))
@@ -697,24 +692,26 @@ fun SettingsScreen(
                         fontSize = 14.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
-                    Spacer(Modifier.height(8.dp))
-                    TextField(
-                        value = eiaKey,
-                        onValueChange = { if (eiaKeyEditMode) viewModel.setEiaApiKey(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = eiaKeyEditMode,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Ascii,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                    )
+                    // 开关开 = 用 EIA → 隐藏输入框（防误改）；开关关 = 用腾讯 → 显示输入框供修改
+                    if (!eiaEnabled) {
+                        Spacer(Modifier.height(8.dp))
+                        TextField(
+                            value = eiaKey,
+                            onValueChange = { viewModel.setEiaApiKey(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                            ),
+                            colors = TextFieldDefaults.textFieldColors(
+                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                borderColor = Color.Transparent,
+                            ),
+                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(12.dp))
             }

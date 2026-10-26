@@ -28,16 +28,20 @@ class CrudeOilEstimator(
     }
 
     suspend fun estimate(): CrudeOilEstimate? {
-        // 主源：EIA 官方布伦特现货日度 → 10 交易日均值比较（完整历史，最接近官方口径）
-        val key = settings.eiaApiKey.first()
-        if (key.isNotBlank()) {
-            val eia = runCatching { network.fetchEiaBrentDaily(key, length = 30) }.getOrNull()
-            if (eia != null && eia.size >= MIN_EIA_POINTS) {
-                val amount = calcFromEiaSeries(eia)
-                if (amount != null) return CrudeOilEstimate(amount, "EIA")
+        // v1.5.1：数据源开关——关 = 直接用腾讯（不请求 EIA）；开 = EIA 主源 → 失败降级腾讯
+        val eiaOn = settings.eiaEnabled.first()
+        if (eiaOn) {
+            // 主源：EIA 官方布伦特现货日度 → 10 交易日均值比较（完整历史，最接近官方口径）
+            val key = settings.eiaApiKey.first()
+            if (key.isNotBlank()) {
+                val eia = runCatching { network.fetchEiaBrentDaily(key, length = 30) }.getOrNull()
+                if (eia != null && eia.size >= MIN_EIA_POINTS) {
+                    val amount = calcFromEiaSeries(eia)
+                    if (amount != null) return CrudeOilEstimate(amount, "EIA")
+                }
             }
         }
-        // 降级：腾讯布伦特期货实时（当日涨跌幅，方向可靠、幅度粗）
+        // 降级/直选：腾讯布伦特期货实时（当日涨跌幅，方向可靠、幅度粗）
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
             val pct = (tencent.first - tencent.second) / tencent.second
