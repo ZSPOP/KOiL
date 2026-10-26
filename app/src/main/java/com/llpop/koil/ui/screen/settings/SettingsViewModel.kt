@@ -126,6 +126,8 @@ class SettingsViewModel(
         val nextAdjustWindowDate: String? = null,   // 下一个调价窗口日
         val windowStranded: Boolean = false,        // 最近窗口搁浅（库内无该窗口调价记录）
         val adjustWindowPrice: String? = null,      // 最近窗口有调价时的价格文本（元/升）
+        val strandedKeptDate: String? = null,       // 搁浅时维持的上一条调价生效日（如 09-25）
+        val strandedKeptPrice: String? = null,      // 搁浅时维持的价格（元/升）
         val incompleteProvinceCount: Int = 0,       // 窗口日覆盖不足的省份数（完整性提示）
         val versionLabel: String = "V——",           // 版本号（V+最新调价窗口日，不受搁浅影响）
     )
@@ -235,15 +237,25 @@ class SettingsViewModel(
             }
             var windowStranded = false
             var adjustWindowPrice: String? = null
+            var strandedKeptDate: String? = null
+            var strandedKeptPrice: String? = null
             if (adjustWindowDate != null) {
-                // W1 窗口有调价记录 → 未搁浅，显示调价后价格；否则搁浅，维持 latest 价格
-                // 全国统一调价窗口：任一省任一油号在该窗口有记录即可判定未搁浅（单条查询，无需全表）
-                val w1Row = priceDao.getByDate(adjustWindowDate)
+                // W1 窗口调价判定：库内记录生效日 = 窗口日 + 1（窗口 24 时生效），故查「窗口日+1」；
+                // 任一省任一油号有该生效日记录 = 未搁浅（全国统一调价窗口，单条查询即可）。
+                val w1Eff = runCatching { LocalDate.parse(adjustWindowDate).plusDays(1).toString() }.getOrNull() ?: adjustWindowDate
+                val w1Row = priceDao.getByDate(w1Eff)
                 if (w1Row != null) {
                     windowStranded = false
                     adjustWindowPrice = "%.2f".format(w1Row.price)
                 } else {
+                    // 搁浅：维持「上一条调价记录」的价格（如 10-15 窗口维持 09-25 的 ¥8.63），
+                    // 而非生效日 10-16——上一版本误显示生效日导致歧义。
                     windowStranded = true
+                    val kept = priceDao.getLatestNonStranded()
+                    if (kept != null) {
+                        strandedKeptDate = kept.effectiveDate.takeLast(5)
+                        strandedKeptPrice = "%.2f".format(kept.price)
+                    }
                 }
             }
 
@@ -272,6 +284,8 @@ class SettingsViewModel(
                 nextAdjustWindowDate = nextAdjustWindowDate,
                 windowStranded = windowStranded,
                 adjustWindowPrice = adjustWindowPrice,
+                strandedKeptDate = strandedKeptDate,
+                strandedKeptPrice = strandedKeptPrice,
                 incompleteProvinceCount = incompleteProvinceCount,
                 versionLabel = versionLabel,
             )

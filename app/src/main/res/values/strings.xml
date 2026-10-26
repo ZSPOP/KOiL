@@ -233,7 +233,8 @@
     <string name="koil_pdb_db_title_plain">数据库版本(待检测)</string>
 <string name="koil_pdb_stats">%1$d 省份 %2$d 油号 %3$d 调价 %4$d 记录</string>
     <string name="koil_pdb_updated_and_until">更新于 %1$s · 数据截至 %2$s</string>
-    <string name="koil_pdb_adjust_stranded">调整日 %1$s（搁浅，价格维持 %2$s）</string>
+    <string name="koil_pdb_adjust_stranded">调整日 %1$s（搁浅，维持 %2$s 价格 ¥%3$s）</string>
+    <string name="koil_pdb_adjust_stranded_short">调整日 %1$s（搁浅）</string>
     <string name="koil_pdb_adjust_adjusted">调整日 %1$s · 调价至 %2$s 元/升</string>
     <string name="koil_pdb_next_window">下个窗口：%1$s</string>
     <string name="koil_pdb_not_checked">尚未检测</string>

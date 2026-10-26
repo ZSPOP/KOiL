@@ -371,7 +371,7 @@ fun SettingsScreen(
             val versionShort = (priceDbStatus.versionDate ?: priceDbStatus.latestDate).takeLast(5)
             // 最近检查时间格式化（MM/dd HH:mm），未检查过显示 "--"
             val lastCheckedText = if (priceDbStatus.lastCheckedAt > 0) {
-                java.text.SimpleDateFormat("MM/dd HH:mm", java.util.Locale.getDefault())
+                java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
                     .format(java.util.Date(priceDbStatus.lastCheckedAt))
             } else "--"
 
@@ -465,15 +465,19 @@ fun SettingsScreen(
                     Column(Modifier.weight(1f)) {
                         val w1Short = priceDbStatus.adjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
                         val w2Short = priceDbStatus.nextAdjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
-                        // 行1：調整日（单独一行，含搁浅/调价状态）
+                        // 行1：調整日（单独一行，含搁浅/调价状态；搁浅显示维持的上一条调价日+价格）
+                        val strandedKeptDate = priceDbStatus.strandedKeptDate
+                        val strandedKeptPrice = priceDbStatus.strandedKeptPrice
                         Text(
                             text = when {
+                                w1Short != null && priceDbStatus.windowStranded && strandedKeptDate != null && strandedKeptPrice != null ->
+                                    stringResource(R.string.koil_pdb_adjust_stranded, w1Short, strandedKeptDate, strandedKeptPrice)
                                 w1Short != null && priceDbStatus.windowStranded ->
-                                    stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort)
+                                    stringResource(R.string.koil_pdb_adjust_stranded_short, w1Short)
                                 w1Short != null && priceDbStatus.adjustWindowPrice != null ->
                                     stringResource(R.string.koil_pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!)
                                 w1Short != null ->
-                                    stringResource(R.string.koil_pdb_adjust_stranded, w1Short, latestShort)
+                                    stringResource(R.string.koil_pdb_adjust_stranded_short, w1Short)
                                 else ->
                                     stringResource(R.string.koil_pdb_not_checked)
                             },
@@ -482,8 +486,11 @@ fun SettingsScreen(
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                         Spacer(Modifier.height(4.dp))
-                        // 行2：下個窗口 + 最近更新（同一行）
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // 行2：下個窗口 ｜ 最近更新（紧凑同行，竖线分隔）
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
                             if (w2Short != null) {
                                 Text(
                                     text = stringResource(R.string.koil_pdb_next_window, w2Short),
@@ -491,8 +498,13 @@ fun SettingsScreen(
                                     lineHeight = 15.sp,
                                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 )
+                                Box(
+                                    Modifier
+                                        .width(1.dp)
+                                        .height(12.dp)
+                                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f))
+                                )
                             }
-                            Spacer(Modifier.weight(1f))
                             Text(
                                 text = stringResource(R.string.koil_pdb_last_update, lastCheckedText),
                                 fontSize = 12.sp,

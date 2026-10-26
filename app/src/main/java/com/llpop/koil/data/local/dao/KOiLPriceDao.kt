@@ -72,6 +72,9 @@ interface KOiLPriceDao {
     @Query("SELECT * FROM koil_prices WHERE effectiveDate = :date LIMIT 1")
     suspend fun getByDate(date: String): KOiLPriceEntity?
 
+    @Query("SELECT * FROM koil_prices WHERE isStranded = 0 ORDER BY effectiveDate DESC LIMIT 1")
+    suspend fun getLatestNonStranded(): KOiLPriceEntity?
+
     @Query("SELECT * FROM koil_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate ASC")
     fun observeByProvinceGrade(province: String, grade: String): Flow<List<KOiLPriceEntity>>
 
