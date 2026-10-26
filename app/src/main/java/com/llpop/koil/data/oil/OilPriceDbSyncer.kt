@@ -97,6 +97,13 @@ class OilPriceDbSyncer(
      * 从锚点向前倒推回溯当年首调、向后顺推至当年末。缓存复用；失败返回 emptyList（降级用 abapi 原日期）。
      */
     private suspend fun getAdjustDates(): List<String> {
+        // v1.4.186：一次性清旧窗口日历缓存重算——锚点失败（落 abapi 推算）的日历可能漏窗口
+        // （如无 10-15），升级后强制重算一次，避免错日历长期复用导致窗口/搁浅缺失。
+        if (!settings.priceDbCalendar186Migrated.first()) {
+            cachedAdjustDates = null
+            settings.setPriceDbAdjustDates(emptyList())
+            settings.setPriceDbCalendar186Migrated(true)
+        }
         // 1) 内存缓存优先
         cachedAdjustDates?.let { return it }
         // 2) 持久化缓存（App 重启后复用上次已推算的窗口日，杜绝次源临时失败导致空降级 → 假生效日）
@@ -375,7 +382,9 @@ class OilPriceDbSyncer(
                     chunk.map { province ->
                         async {
                             val covered = runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
-                            if (covered < threshold) {
+                            // covered < threshold（窗口数不够）或存在搁浅缺口（窗口日+1 无记录/同价假记录占位）
+                            // 都触发补灌——防止 verifyProvince 抢插的同价假记录让 covered 达标后搁浅永远缺失
+                            if (covered < threshold || hasStrandedGap(province, adjustDates)) {
                                 seedProvince(province, adjustDates)
                             }
                         }
@@ -385,6 +394,30 @@ class OilPriceDbSyncer(
             }
         } finally {
             seedLock.set(false)
+        }
+    }
+
+    /**
+     * 该省是否存在「搁浅缺口」：已过窗口日+1 无生效记录，或存在同价假记录
+     * （isStranded=false 且价格与最近调价价相同——真实调价必然变价，同价且非搁浅 = 假记录）。
+     * 用于补灌触发判定，避免 covered 达标后搁浅被假记录挡住而永久缺失。
+     */
+    private suspend fun hasStrandedGap(province: String, adjustDates: List<String>): Boolean {
+        val today = LocalDate.now().format(DATE_FMT)
+        val grades = OilPriceNetwork.GRADE_LABELS.values.toList()
+        return adjustDates.filter { it <= today }.any { w ->
+            val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@any false
+            grades.any { key ->
+                val e = priceDao.getPrice(province, key, eff)
+                when {
+                    e == null -> true
+                    !e.isStranded -> {
+                        val latest = priceDao.getLatestPrice(province, key, eff)
+                        latest != null && kotlin.math.abs(latest.price - e.price) < 1e-9
+                    }
+                    else -> false
+                }
+            }
         }
     }
 
@@ -701,8 +734,13 @@ class OilPriceDbSyncer(
 
                 when {
                     matches -> {
-                        // 双源一致：自动入库
-                        if (priceDao.getPrice(province, gradeLabel, eff) == null) {
+                        // 双源一致：与库内最近调价价相同 = 搁浅窗口（窗口日无调价）→ 不插调价记录
+                        // （10-15 这类搁浅由 seedRemainingProvinces 补搁浅处理，防止 verify 抢插
+                        //  isStranded=false 的同价假记录挡住补搁浅幂等键）；价格有变化才入库。
+                        val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
+                        if ((latest == null || kotlin.math.abs(latest.price - pPrice!!) > 1e-9) &&
+                            priceDao.getPrice(province, gradeLabel, eff) == null
+                        ) {
                             toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, pPrice!!, pSource, true))
                         }
                         verified++
@@ -729,8 +767,13 @@ class OilPriceDbSyncer(
                         // 单源缺失（一源失效）：用有价的源自动入库，不提示
                         val price = pPrice ?: sPrice
                         val source = if (pPrice != null) pSource else sSource
-                        if (price != null && priceDao.getPrice(province, gradeLabel, eff) == null) {
-                            toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, price, source, true))
+                        if (price != null) {
+                            val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
+                            if ((latest == null || kotlin.math.abs(latest.price - price) > 1e-9) &&
+                                priceDao.getPrice(province, gradeLabel, eff) == null
+                            ) {
+                                toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, price, source, true))
+                            }
                         }
                         verified++
                     }

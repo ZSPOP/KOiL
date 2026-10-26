@@ -100,6 +100,7 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_DB_FORECAST = stringPreferencesKey("KOiL-price-db-forecast")
         private val KEY_PRICE_DB_LEGACY_PENDING_CLEARED = booleanPreferencesKey("KOiL-price-db-legacy-pending-cleared")
         private val KEY_PRICE_DB_ADJUST_DATES = stringPreferencesKey("KOiL-price-db-adjust-dates")
+        private val KEY_PRICE_DB_CALENDAR_186_MIGRATED = booleanPreferencesKey("KOiL-price-db-calendar-186-migrated")
         private val KEY_PRICE_DB_ADJUST_DATES_LEANED = booleanPreferencesKey("KOiL-price-db-adjust-dates-leaned")
 
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
@@ -319,6 +320,13 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.map { it[KEY_PRICE_DB_LEGACY_PENDING_CLEARED] ?: false }
     suspend fun setPriceDbLegacyPendingCleared(cleared: Boolean) {
         context.KOiLDataStore.edit { it[KEY_PRICE_DB_LEGACY_PENDING_CLEARED] = cleared }
+    }
+
+    /** v1.4.186 一次性标记：升级后强制清旧窗口日历缓存重算（锚点失败落 abapi 推算的日历可能漏窗口，如无 10-15） */
+    val priceDbCalendar186Migrated: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_DB_CALENDAR_186_MIGRATED] ?: false }
+    suspend fun setPriceDbCalendar186Migrated(migrated: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_DB_CALENDAR_186_MIGRATED] = migrated }
     }
 
     /** 推算的当年权威窗口日（逗号分隔 yyyy-MM-dd，持久化复用；App 重启后仍有效，杜绝次源临时失败导致的空降级） */
