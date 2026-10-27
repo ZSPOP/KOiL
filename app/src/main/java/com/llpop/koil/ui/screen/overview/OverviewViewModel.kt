@@ -333,15 +333,32 @@ class OverviewViewModel(
     }
     fun setBackfillDate(v: String) { _uiState.value = _uiState.value.copy(backfillDate = v); runBackfillPrecheck() }
     fun setBackfillMileage(v: String) { _uiState.value = _uiState.value.copy(backfillMileage = v); runBackfillPrecheck() }
-    fun setBackfillOilAmount(v: String) { _uiState.value = _uiState.value.copy(backfillOilAmount = v); runBackfillPrecheck() }
+    fun setBackfillOilAmount(v: String) {
+        _uiState.value = _uiState.value.copy(backfillOilAmount = v)
+        // v1.5.12：应付自动计算（对齐首页 updatePayable：油量 × 参考单价）
+        updateBackfillPayable()
+        runBackfillPrecheck()
+    }
     fun setBackfillActualAmount(v: String) { _uiState.value = _uiState.value.copy(backfillActualAmount = v); runBackfillPrecheck() }
     fun setBackfillGrade(v: String) { _uiState.value = _uiState.value.copy(backfillGrade = v); runBackfillPrecheck() }
     fun setBackfillProvince(v: String) {
         _uiState.value = _uiState.value.copy(backfillProvince = v, backfillRecordDates = reoilDatesFor(v))
         runBackfillPrecheck()
     }
-    /** 应付可编辑（对齐编辑卡：补录卡应付不再只读自动，用户可改） */
+    /** 应付只读自动计算（对齐首页）：setter 保留兼容，UI 不再可编辑 */
     fun setBackfillPayableAmount(v: String) { _uiState.value = _uiState.value.copy(backfillPayableAmount = v) }
+
+    /** v1.5.12：补录应付金额自动计算（对齐首页 updatePayable），油量或参考价变化时即时刷新 */
+    private fun updateBackfillPayable() {
+        val s = _uiState.value
+        val amount = s.backfillOilAmount.toDoubleOrNull()
+        val price = s.backfillReferencePrice
+        if (amount != null && price != null && amount > 0 && price > 0) {
+            _uiState.value = _uiState.value.copy(
+                backfillPayableAmount = String.format("%.2f", amount * price)
+            )
+        }
+    }
     fun cancelBackfill() { _uiState.value = _uiState.value.copy(showBackfillDialog = false) }
 
     /** 补录偏差预检入口（去抖信号，实际执行见 doRunBackfillPrecheck） */

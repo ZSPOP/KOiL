@@ -54,6 +54,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -506,23 +508,58 @@ fun OverviewScreen(
                     )
                 }
                 Spacer(Modifier.height(14.dp))
-                // 第二行：里程 + 加油量
-                Row {
-                    EditField(stringResource(R.string.koil_add_field_mileage), uiState.backfillMileage, viewModel::setBackfillMileage, modifier = Modifier.weight(1f))
-                    Spacer(Modifier.width(14.dp))
-                    EditField(stringResource(R.string.koil_add_field_oil_amount), uiState.backfillOilAmount, viewModel::setBackfillOilAmount, modifier = Modifier.weight(1f))
+                // v1.5.12：选日期后该区间可输入里程范围提示（日期行与里程行之间）
+                if (uiState.backfillRangeMin != null || uiState.backfillRangeMax != null) {
+                    MileageRangeHint(
+                        rangeMin = uiState.backfillRangeMin,
+                        rangeMax = uiState.backfillRangeMax,
+                    )
+                    Spacer(Modifier.height(14.dp))
                 }
-                Spacer(Modifier.height(14.dp))
-                // 第三行：应付（可编辑，对齐编辑卡）+ 实付
+                // 第二行：里程 + 加油量（v1.5.12 图标/红色错误态对齐首页录入卡）
                 Row {
                     EditField(
-                        stringResource(R.string.koil_add_field_payable),
-                        uiState.backfillPayableAmount,
-                        viewModel::setBackfillPayableAmount,
+                        label = stringResource(R.string.koil_add_field_mileage),
+                        icon = Icons.Filled.Speed,
+                        value = uiState.backfillMileage,
+                        onValueChange = viewModel::setBackfillMileage,
+                        keyboardType = KeyboardType.Number,
+                        error = uiState.backfillMileageConflictType.isNotBlank() || uiState.backfillSameDayExists,
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(14.dp))
-                    EditField(stringResource(R.string.koil_add_field_actual), uiState.backfillActualAmount, viewModel::setBackfillActualAmount, modifier = Modifier.weight(1f))
+                    EditField(
+                        label = stringResource(R.string.koil_add_field_oil_amount),
+                        icon = Icons.Filled.WaterDrop,
+                        value = uiState.backfillOilAmount,
+                        onValueChange = viewModel::setBackfillOilAmount,
+                        keyboardType = KeyboardType.Decimal,
+                        error = uiState.backfillOverTank,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+                // 第三行：应付（只读自动计算）+ 实付（v1.5.12 对齐首页录入卡）
+                Row {
+                    EditField(
+                        label = stringResource(R.string.koil_add_field_payable),
+                        icon = Icons.Filled.Money,
+                        value = uiState.backfillPayableAmount,
+                        onValueChange = viewModel::setBackfillPayableAmount,
+                        keyboardType = KeyboardType.Decimal,
+                        readOnly = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(14.dp))
+                    EditField(
+                        label = stringResource(R.string.koil_add_field_actual),
+                        icon = Icons.Filled.Money,
+                        value = uiState.backfillActualAmount,
+                        onValueChange = viewModel::setBackfillActualAmount,
+                        keyboardType = KeyboardType.Decimal,
+                        error = uiState.backfillDeviationExceeded || uiState.backfillOverPayable,
+                        modifier = Modifier.weight(1f),
+                    )
                 }
                 Spacer(Modifier.height(10.dp))
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
@@ -533,14 +570,6 @@ fun OverviewScreen(
                     referencePrice = uiState.backfillReferencePrice,
                 )
                 Spacer(Modifier.height(8.dp))
-                // v1.5.11：选日期后提示该区间可输入里程范围
-                if (uiState.backfillRangeMin != null || uiState.backfillRangeMax != null) {
-                    MileageRangeHint(
-                        rangeMin = uiState.backfillRangeMin,
-                        rangeMax = uiState.backfillRangeMax,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                }
                 // v1.5.11：补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
                 BackfillPrecheckHint(
                     beforeFirst = uiState.backfillBeforeFirst,
@@ -1515,16 +1544,16 @@ private fun EditRecordDialog(
             Spacer(Modifier.height(14.dp))
             // 第二行：里程 + 加油量
             Row {
-                EditField(stringResource(R.string.koil_add_field_mileage), uiState.editMileage, onMileageChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_mileage), Icons.Filled.Speed, uiState.editMileage, onMileageChange, keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(14.dp))
-                EditField(stringResource(R.string.koil_add_field_oil_amount), uiState.editOilAmount, onOilAmountChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_oil_amount), Icons.Filled.WaterDrop, uiState.editOilAmount, onOilAmountChange, keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(14.dp))
             // 第三行：应付（可编辑，对齐 Web 编辑弹窗）+ 实付
             Row {
-                EditField(stringResource(R.string.koil_add_field_payable), uiState.editPayableAmount, onPayableChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_payable), Icons.Filled.Money, uiState.editPayableAmount, onPayableChange, keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(14.dp))
-                EditField(stringResource(R.string.koil_add_field_actual), uiState.editActualAmount, onActualAmountChange, modifier = Modifier.weight(1f))
+                EditField(stringResource(R.string.koil_add_field_actual), Icons.Filled.Money, uiState.editActualAmount, onActualAmountChange, keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(10.dp))
             // 实付综合信息块（对齐 Web PaymentSummaryCard）
@@ -1816,24 +1845,48 @@ private fun PaymentSummaryCard(
     }
 }
 
+/** 补录弹窗字段（v1.5.12 对齐首页录入卡 FormField：图标 + 标签行，红色错误态边框/图标/标签） */
 @Composable
 private fun EditField(
     label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
     onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Text,
     readOnly: Boolean = false,
+    error: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val errorColor = Color(0xFFFF3B30)
+    val tfColors = TextFieldDefaults.textFieldColors(
+        backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+        labelColor = if (error) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
+        borderColor = if (error) errorColor else Color.Transparent,
+    )
     Column(modifier = modifier) {
-        Text(text = label, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-        Spacer(Modifier.height(4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (error) errorColor else MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                color = if (error) errorColor else MiuixTheme.colorScheme.onBackgroundVariant,
+            )
+        }
+        Spacer(Modifier.height(6.dp))
         TextField(
             value = value,
             onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }) },
             modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             singleLine = true,
             readOnly = readOnly,
-            colors = TextFieldDefaults.textFieldColors(borderColor = Color.Transparent),
+            colors = tfColors,
             cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
         )
     }
