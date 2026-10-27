@@ -3,6 +3,16 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
+## 当前版本：v1.5.15（versionCode 215）— 2026-10-27 已交付
+
+- commit：`877a3dc`（基于 v1.5.14 `80d7104`）
+- APK：https://aka.doubaocdn.com/s/Ei0ihYGa1Y （KOiL-v1.5.15-release.apk）
+- 源码 zip（完整工程源码）：https://aka.doubaocdn.com/s/iHJXuxGAgX （KOiL-src-v1515.zip，verifier 关键工程文件 11/11）
+- 签名：release 证书 SHA-256 恒定 `cc962f1e...`，编译通过、verifier 通过
+
+### v1.5.15 变更（日期可选择补下拉箭头）
+- KOiLDateField：onDateSelected != null（补录卡日期可选）时右侧显示 DropdownArrowEndAction 下拉箭头（对齐油号/省份字段）；只读（编辑卡/首页）不显示
+
 ## 当前版本：v1.5.14（versionCode 214）— 2026-10-27 已交付
 
 - commit：`88bf228`（基于 v1.5.13 `255dc22`）
