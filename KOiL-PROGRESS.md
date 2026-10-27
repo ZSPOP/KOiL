@@ -5,7 +5,9 @@
 
 ## 当前版本：v1.5.16（versionCode 216）— 2026-10-27 已交付
 
-- commit：代码 commit + 交付记录 commit（见 git log）
+- commit：`65eb51f`（基于 v1.5.15 `4882e1d`）
+- APK：https://aka.doubaocdn.com/s/xz1qtVLijV （KOiL-v1.5.16-release.apk）
+- 源码 zip（完整工程源码）：https://aka.doubaocdn.com/s/NeY4q5kQEn （KOiL-src-v1516.zip，verifier 关键工程文件 11/11）
 - 签名：release 证书 SHA-256 恒定 `cc962f1e2524ba8273c9d668436e9926d8a056e49b816e680c730518d46ffe4b`，编译通过、verifier 通过
 - 定位：深度压力测试 18 项问题的第一批稳定性 hotfix（低风险、可独立回退）
 
