@@ -13,21 +13,25 @@ import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.domain.logic.ConsumptionStatus
+import com.llpop.koil.domain.logic.DerivedCalculator
 import com.llpop.koil.util.ExportHelper
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
+import java.util.TreeSet
 
 data class SettingsUiState(
     val themeMode: AppSettings.ThemeMode = AppSettings.ThemeMode.SYSTEM,
@@ -517,21 +521,29 @@ class SettingsViewModel(
                     "油耗状态,省份,来源"
 
                 val lines = mutableListOf(header)
-                val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                var prev: KOiLRecordEntity? = null
-                for (r in records) {
-                    val distance = prev?.let { r.mileage - it.mileage }
-                    val oilDays = prev?.let {
-                        val d1 = LocalDate.parse(r.reoilDate, dateFmt)
-                        val d0 = LocalDate.parse(it.reoilDate, dateFmt)
-                        java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
+                // v1.5.20：与总览共用 DerivedCalculator，导出真实油耗状态（不再写死"正常"），里程保留小数
+                val abnormalPct = settings.abnormalThreshold.first()
+                val derived = DerivedCalculator.compute(records, abnormalPct)
+                for ((index, d) in derived.withIndex()) {
+                    val r = d.record
+                    val prev = derived.getOrNull(index - 1)?.record
+                    val distance = d.distance
+                    val unitPayable = d.unitPricePayable?.let { "%.2f".format(it) } ?: "-"
+                    val unitActual = d.unitPriceActual?.let { "%.2f".format(it) } ?: "-"
+                    val consumption = d.oilConsumption?.let { "%.2f".format(it) } ?: "-"
+                    val costPerKm = d.costPerKm?.let { "%.2f".format(it) } ?: "-"
+                    // 里程保留原始小数（原 %.0f 会把 89050.5 截成 89050，导入回环失真）
+                    val mileageStr = r.mileage.fmtMileage()
+                    val prevMileageStr = prev?.mileage?.fmtMileage() ?: "-"
+                    val distanceStr = distance?.fmtMileage() ?: "-"
+                    // 油耗状态：第一条无里程段→-；短途(<100km)→短距；否则按阈值判定 正常/偏高/偏低
+                    val status = when {
+                        distance == null -> "-"
+                        distance < DerivedCalculator.MIN_DISTANCE -> "短距"
+                        d.consumptionStatus == ConsumptionStatus.HIGH -> "偏高"
+                        d.consumptionStatus == ConsumptionStatus.LOW -> "偏低"
+                        else -> "正常"
                     }
-                    val unitPayable = if (r.oilAmount > 0) "%.2f".format(r.payableAmount / r.oilAmount) else "-"
-                    val unitActual = if (r.oilAmount > 0) "%.2f".format(r.actualAmount / r.oilAmount) else "-"
-                    val consumption = if (distance != null && distance >= 100)
-                        "%.2f".format(r.oilAmount / distance * 100) else "-"
-                    val costPerKm = if (distance != null && distance >= 100)
-                        "%.2f".format(r.actualAmount / distance) else "-"
 
                     lines.add(
                         listOf(
@@ -542,22 +554,21 @@ class SettingsViewModel(
                             r.oilPrice?.let { "%.2f".format(it) } ?: "-",
                             "%.2f".format(r.payableAmount),
                             "%.2f".format(r.actualAmount),
-                            "%.0f".format(r.mileage),
-                            prev?.let { "%.0f".format(it.mileage) } ?: "-",
-                            distance?.let { "%.0f".format(it) } ?: "-",
+                            mileageStr,
+                            prevMileageStr,
+                            distanceStr,
                             prev?.let { "%.2f".format(it.oilAmount) } ?: "-",
                             prev?.let { "%.2f".format(it.actualAmount) } ?: "-",
                             unitPayable,
                             unitActual,
-                            oilDays?.toString() ?: "-",
+                            d.oilDays?.toString() ?: "-",
                             consumption,
                             costPerKm,
-                            "正常",
+                            status,
                             r.province ?: "-",
                             r.source ?: "-",
                         ).joinToString(",")
                     )
-                    prev = r
                 }
 
                 val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
@@ -579,12 +590,15 @@ class SettingsViewModel(
 
     /**
      * 预览 CSV 导入（§7.8）：解析文件，分为 valid/duplicate/mileage_conflict/errors 四组，不入库。
+     * v1.5.20：①文件内自身重复/里程链也检测（库内 + 已接受文件行合并视图）；②TreeSet 二分（O(n log n)，原 O(n²)）；
+     * ③复合键用 Double 精确比较（不再字符串拼接）；④解析/判定切 Dispatchers.Default，大文件不卡主线程。
      */
     fun previewCsv(uri: Uri) {
         viewModelScope.launch {
             try {
-                val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: run { _exportMessage.value = ExportNotice("cannot_read"); return@launch }
+                val content = withContext(Dispatchers.IO) {
+                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                } ?: run { _exportMessage.value = ExportNotice("cannot_read"); return@launch }
 
                 val lines = content.lines().filter { it.isNotBlank() }
                 if (lines.size < 2) {
@@ -607,73 +621,90 @@ class SettingsViewModel(
                     return@launch
                 }
 
-                val existing = recordDao.getRange("1970-01-01", "2999-12-31")
-                val existingSet = existing.map { "${it.reoilDate}|${it.mileage}" }.toSet()
-                val sortedExisting = existing.sortedBy { it.reoilDate }
+                // 解析 + 判定均为 CPU 密集，切后台线程（大文件不再卡 UI）
+                val preview = withContext(Dispatchers.Default) {
+                    val existing = recordDao.getRange("1970-01-01", "2999-12-31")
+                    // 合并视图有序集合：库内记录 + 已接受的文件行。compareBy(date,mileage) 后
+                    // lower/higher 即"日期/里程的前一条/后一条"，contains 即同日同里程重复（Double 精确比较）
+                    val tree = TreeSet<MileageKey>(compareBy({ it.date }, { it.mileage }))
+                    existing.forEach { tree.add(MileageKey(it.reoilDate, it.mileage)) }
 
-                val valid = mutableListOf<ParsedRecord>()
-                val duplicates = mutableListOf<ParsedRecord>()
-                val mileageConflicts = mutableListOf<ParsedRecord>()
-                val errors = mutableListOf<ParsedRecord>()
+                    val errors = mutableListOf<ParsedRecord>()
+                    // 第一遍：按文件原顺序解析；格式错误直接入 errors，合法行保序暂存
+                    val parsed = mutableListOf<ParsedRecord>()
+                    for (line in lines.drop(1)) {
+                        val cols = line.split(",")
+                        val date = cols.getOrNull(dateIdx)?.trim()?.normalizeDate() ?: ""
+                        val mileage = cols.getOrNull(mileageIdx)?.toDoubleOrNull()
+                        val oilAmount = cols.getOrNull(oilAmountIdx)?.toDoubleOrNull()
+                        val actual = cols.getOrNull(actualIdx)?.toDoubleOrNull()
 
-                for (line in lines.drop(1)) {
-                    val cols = line.split(",")
-                    val date = cols.getOrNull(dateIdx)?.trim()?.normalizeDate() ?: ""
-                    val mileage = cols.getOrNull(mileageIdx)?.toDoubleOrNull()
-                    val oilAmount = cols.getOrNull(oilAmountIdx)?.toDoubleOrNull()
-                    val actual = cols.getOrNull(actualIdx)?.toDoubleOrNull()
+                        if (date.isBlank() || !date.matches(Regex("""\d{4}-\d{2}-\d{2}""")) ||
+                            mileage == null || oilAmount == null || actual == null ||
+                            mileage <= 0 || oilAmount <= 0 || actual < 0
+                        ) {
+                            errors.add(ParsedRecord(date = date, errorKey = "format_error"))
+                            continue
+                        }
 
-                    // 错误组：格式错误
-                    if (date.isBlank() || !date.matches(Regex("""\d{4}-\d{2}-\d{2}""")) ||
-                        mileage == null || oilAmount == null || actual == null ||
-                        mileage <= 0 || oilAmount <= 0 || actual < 0
-                    ) {
-                        errors.add(ParsedRecord(date = date, errorKey = "format_error"))
-                        continue
+                        val payable = cols.getOrNull(payableIdx)?.toDoubleOrNull() ?: actual
+                        val grade = cols.getOrNull(gradeIdx)?.trim()?.removeSuffix("号")?.removeSuffix("#")
+                        val price = cols.getOrNull(priceIdx)?.toDoubleOrNull()
+                        val province = cols.getOrNull(provinceIdx)?.trim()
+                        parsed.add(
+                            ParsedRecord(
+                                date = date, mileage = mileage, oilAmount = oilAmount,
+                                actualAmount = actual, payableAmount = payable,
+                                oilGrade = grade, oilPrice = price, province = province,
+                            )
+                        )
                     }
 
-                    val payable = cols.getOrNull(payableIdx)?.toDoubleOrNull() ?: actual
-                    val grade = cols.getOrNull(gradeIdx)?.trim()?.removeSuffix("号")?.removeSuffix("#")
-                    val price = cols.getOrNull(priceIdx)?.toDoubleOrNull()
-                    val province = cols.getOrNull(provinceIdx)?.trim()
+                    // 第二遍：按 (date,mileage) 升序，在合并视图上二分判重 + 严格递增里程链；
+                    // 已接受的文件行即时入树，故文件内自身重复/冲突也能被发现
+                    val verdicts = HashMap<Int, CsvVerdict>()
+                    parsed.withIndex()
+                        .sortedWith(compareBy({ it.value.date }, { it.value.mileage }))
+                        .forEach { (idx, p) ->
+                            val key = MileageKey(p.date, p.mileage)
+                            val prev = tree.lower(key)
+                            val next = tree.higher(key)
+                            when {
+                                tree.contains(key) ->
+                                    verdicts[idx] = CsvVerdict(CSV_DUP)
+                                prev != null && p.mileage <= prev.mileage ->
+                                    verdicts[idx] = CsvVerdict(CSV_CONFLICT, "lt_prev", prev.mileage.toInt())
+                                next != null && p.mileage >= next.mileage ->
+                                    verdicts[idx] = CsvVerdict(CSV_CONFLICT, "gt_next", next.mileage.toInt())
+                                else -> {
+                                    tree.add(key)
+                                    verdicts[idx] = CsvVerdict(CSV_VALID)
+                                }
+                            }
+                        }
 
-                    val parsed = ParsedRecord(
-                        date = date, mileage = mileage, oilAmount = oilAmount,
-                        actualAmount = actual, payableAmount = payable,
-                        oilGrade = grade, oilPrice = price, province = province,
+                    // 第三遍：按文件原顺序归类（展示顺序与文件一致）
+                    val valid = mutableListOf<ParsedRecord>()
+                    val duplicates = mutableListOf<ParsedRecord>()
+                    val conflicts = mutableListOf<ParsedRecord>()
+                    parsed.forEachIndexed { idx, p ->
+                        when (val v = verdicts[idx]) {
+                            null -> errors.add(p.copy(errorKey = "format_error"))
+                            else -> when (v.group) {
+                                CSV_VALID -> valid.add(p)
+                                CSV_DUP -> duplicates.add(p.copy(errorKey = "duplicate"))
+                                else -> conflicts.add(p.copy(conflictKey = v.conflictKey, conflictArg = v.conflictArg))
+                            }
+                        }
+                    }
+
+                    ImportPreview(
+                        valid = valid, duplicates = duplicates,
+                        mileageConflicts = conflicts, errors = errors,
                     )
-
-                    // 重复组：同日同里程已存在
-                    if (existingSet.contains("$date|$mileage")) {
-                        duplicates.add(parsed.copy(errorKey = "duplicate"))
-                        continue
-                    }
-
-                    // 里程冲突组：与前后记录里程顺序不一致
-                    val prevRecord = sortedExisting.lastOrNull { it.reoilDate < date || (it.reoilDate == date && it.mileage < mileage) }
-                    val nextRecord = sortedExisting.firstOrNull { it.reoilDate > date || (it.reoilDate == date && it.mileage > mileage) }
-                    var conflictKey: String? = null
-                    var conflictArg = 0
-                    // v1.5.16：统一严格递增（与录入/补录一致）——里程等于相邻记录也判冲突
-                    if (prevRecord != null && mileage <= prevRecord.mileage) {
-                        conflictKey = "lt_prev"
-                        conflictArg = prevRecord.mileage.toInt()
-                    } else if (nextRecord != null && mileage >= nextRecord.mileage) {
-                        conflictKey = "gt_next"
-                        conflictArg = nextRecord.mileage.toInt()
-                    }
-                    if (conflictKey != null) {
-                        mileageConflicts.add(parsed.copy(conflictKey = conflictKey, conflictArg = conflictArg))
-                        continue
-                    }
-
-                    valid.add(parsed)
                 }
 
-                _importPreview.value = ImportPreview(
-                    valid = valid, duplicates = duplicates,
-                    mileageConflicts = mileageConflicts, errors = errors,
-                )
+                _importPreview.value = preview
                 _exportMessage.value = ExportNotice()
             } catch (e: Exception) {
                 _exportMessage.value = ExportNotice("parse_failed", listOf(e.message ?: ""))
@@ -681,23 +712,22 @@ class SettingsViewModel(
         }
     }
 
-    /** 确认导入：将 valid 组写入数据库 */
+    /** 确认导入：将 valid 组批量写入数据库（v1.5.20 单事务 + IGNORE，原逐条 insert + 吞异常） */
     fun confirmImport() {
         val preview = _importPreview.value ?: return
         viewModelScope.launch {
-            var imported = 0
-            for (r in preview.valid) {
-                try {
-                    recordDao.insert(
-                        KOiLRecordEntity(
-                            reoilDate = r.date, mileage = r.mileage, oilAmount = r.oilAmount,
-                            payableAmount = r.payableAmount, actualAmount = r.actualAmount,
-                            oilPrice = r.oilPrice, oilGrade = r.oilGrade, province = r.province,
-                            source = "csv_import",
-                        )
-                    )
-                    imported++
-                } catch (_: Exception) { }
+            val entities = preview.valid.map { r ->
+                KOiLRecordEntity(
+                    reoilDate = r.date, mileage = r.mileage, oilAmount = r.oilAmount,
+                    payableAmount = r.payableAmount, actualAmount = r.actualAmount,
+                    oilPrice = r.oilPrice, oilGrade = r.oilGrade, province = r.province,
+                    source = "csv_import",
+                )
+            }
+            // 单事务批量插入；IGNORE 兜底唯一索引冲突（预览后数据被改动），rowId=-1 即跳过
+            val imported = if (entities.isEmpty()) 0
+            else withContext(Dispatchers.Default) {
+                recordDao.insertAllIgnore(entities).count { it != -1L }
             }
             _importPreview.value = null
             val skipped = preview.duplicates.size + preview.mileageConflicts.size + preview.errors.size
@@ -788,6 +818,10 @@ class SettingsViewModel(
             "%04d-%02d-%02d".format(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
         } else it
     }
+
+    /** 里程/距离导出：整数不带小数点，小数保留原值（避免 %.0f 截断小数，保证导入回环不失真） */
+    private fun Double.fmtMileage(): String =
+        if (this % 1.0 == 0.0) this.toLong().toString() else this.toString()
 
     /**
      * 完整备份（§7.10）：导出 JSON，包含全部记录（含派生字段）+ 设置项。
@@ -891,3 +925,14 @@ class SettingsViewModel(
         else -> "\"$obj\""
     }
 }
+
+// ===== v1.5.20 CSV 导入二分判定辅助（O(n log n)，库内 + 文件内合并视图）=====
+/** (日期, 里程) 复合键；ISO 日期字符串字典序即时间序，配合 TreeSet 做 lower/higher 二分定位 */
+private data class MileageKey(val date: String, val mileage: Double)
+
+/** CSV 行判定结果；group 取 CSV_VALID / CSV_DUP / CSV_CONFLICT，冲突时带 conflictKey/Arg */
+private data class CsvVerdict(val group: Int, val conflictKey: String? = null, val conflictArg: Int = 0)
+
+private const val CSV_VALID = 0
+private const val CSV_DUP = 1
+private const val CSV_CONFLICT = 2

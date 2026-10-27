@@ -13,14 +13,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -54,6 +56,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
@@ -91,10 +95,10 @@ import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import com.llpop.koil.ui.screen.overview.ConsumptionStatus
+import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.ui.screen.overview.OverviewUiState
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
-import com.llpop.koil.ui.screen.overview.RecordWithDerived
+import com.llpop.koil.domain.logic.RecordWithDerived
 import com.llpop.koil.ui.screen.overview.TrendPoint
 import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
@@ -121,6 +125,7 @@ private enum class SwipeActionValue { CLOSED, OPEN }
  * - 加油历史：按月分组 + 三段式记录卡（胶囊/区间/核心三栏带环比/次要三栏）
  * - 左滑出操作（编辑蓝 / 删除红）+ 右下角返回顶部
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OverviewScreen(
     modifier: Modifier = Modifier,
@@ -128,10 +133,9 @@ fun OverviewScreen(
     viewModel: OverviewViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val scrollState = rememberScrollState()
+    // v1.5.20：全页改 LazyColumn 惰性渲染，历史记录只组合可见项；不再需要按月手动分页（visibleMonths）
+    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    // v1.5.9：按月分批加载——默认展开最近 1 个月，滚动到底逐月续载
-    var visibleMonths by remember { mutableStateOf(1) }
     var showBackToTop by remember { mutableStateOf(false) }
     var moreMenuFor by remember { mutableStateOf<Long?>(null) }
     // v1.5.5：长按操作的卡片引用 + 全局位置（全屏遮罩点击任意处收起）
@@ -139,18 +143,36 @@ fun OverviewScreen(
     var actionRect by remember { mutableStateOf<Rect?>(null) }
     // v1.5.9：待确认删除的记录（弹确认框后才真正删除）
     var pendingDelete by remember { mutableStateOf<RecordWithDerived?>(null) }
-    // 月份总数（最新在前）
-    val monthCount = remember(uiState.records.size) {
-        uiState.records.map { it.record.reoilDate.substring(0, 7) }.distinct().size
+
+    // v1.5.20（#11）：snapshotFlow 监听 LazyList 滚动位置，仅在"是否显示返回顶部"翻转时更新状态，
+    // 不再用 LaunchedEffect(scrollState.value) 每次像素变化都触发
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 300
+        }
+            .distinctUntilChanged()
+            .collect { showBackToTop = it }
     }
 
-    // 滚动到底自动按月续载 + 返回顶部按钮显隐
-    LaunchedEffect(scrollState.value) {
-        if (scrollState.value > 400) showBackToTop = true else showBackToTop = false
-        if (scrollState.maxValue > 0 && scrollState.value >= scrollState.maxValue - 200) {
-            if (visibleMonths < monthCount) visibleMonths += 1
+    // v1.5.20（#9）：月分组与 prevMap 只在 records 变化时重算，不再每次重组都 groupBy/buildPrevMap
+    val monthGroups = remember(uiState.records) {
+        uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }.toList()
+    }
+    val prevMap = remember(uiState.records) { buildPrevMap(uiState.records) }
+    // v1.5.20（#10）：长按相关回调稳定（remember 一次），配合 items(key=id) 让未变化卡片可跳过重组
+    val onMoreMenuCard = remember {
+        { rec: RecordWithDerived ->
+            if (moreMenuFor == rec.record.id) {
+                moreMenuFor = null
+                actionRecord = null
+            } else {
+                moreMenuFor = rec.record.id
+                actionRecord = rec
+            }
         }
     }
+    // 只有当前选中卡片才会触发 onRect（RecordCard 内以 showMoreMenu 门控），故无需 id 即可稳定
+    val onActionRect = remember { { rect: Rect -> actionRect = rect } }
 
     val rangeLabels = listOf(
         "all" to stringResource(R.string.koil_range_all),
@@ -164,171 +186,157 @@ fun OverviewScreen(
         modifier = modifier,
     ) { _, topPadding, scrollBehavior, _ ->
         Box(Modifier.fillMaxSize()) {
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 12.dp),
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            contentPadding = PaddingValues(horizontal = 12.dp),
         ) {
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
-            Spacer(Modifier.height(topPadding))
+            item { Spacer(Modifier.height(topPadding)) }
 
             // 范围筛选器（对齐 Web：全部/今年/近6个月/近3个月）
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                rangeLabels.forEach { (key, label) ->
-                    val selected = uiState.range == key
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) KOiLColors.Primary else Color.Transparent)
-                            .clickable {
-                                viewModel.setRange(key)
-                                visibleMonths = 1
-                            }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = 12.sp,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-
-            // 六指标 2×2 网格（对齐 Web：带图标 + 较上期）
-            SummaryGrid(uiState = uiState)
-            Spacer(Modifier.height(12.dp))
-
-            // 趋势分析（双轴一张图）
-            TrendChart(trend = uiState.trend)
-            Spacer(Modifier.height(12.dp))
-
-            // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）
-            AbnormalAlertCard(
-                count = uiState.abnormalRecords.size,
-                rangeLabel = rangeLabel(uiState.range),
-                recordCount = uiState.records.size,
-                avgConsumption = uiState.avgConsumption,
-            )
-            Spacer(Modifier.height(12.dp))
-
-            // 加油历史区（对齐 Web：标题 + 共N条 + 补录 + 滚动加载提示）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.koil_ov_history),
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(start = 4.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.koil_ov_total_count_in_list, uiState.records.size),
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-                Spacer(Modifier.weight(1f))
-                // v1.5.4：補錄改为胶囊按钮（主色浅底 + 加号图标），点击区域加大
+            item {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(KOiLColors.Primary.copy(alpha = 0.12f))
-                        .clickable { viewModel.openBackfill() }
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = null,
-                        tint = KOiLColors.Primary,
-                        modifier = Modifier.size(15.dp),
-                    )
-                    Spacer(Modifier.width(3.dp))
-                    Text(
-                        text = stringResource(R.string.koil_ov_backfill),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = KOiLColors.Primary,
-                    )
+                    rangeLabels.forEach { (key, label) ->
+                        val selected = uiState.range == key
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (selected) KOiLColors.Primary else Color.Transparent)
+                                .clickable { viewModel.setRange(key) }
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
+                            )
+                        }
+                    }
                 }
             }
-            Spacer(Modifier.height(4.dp))
-            // v1.5.9：仅当还有更多月份未加载时才显示提示（避免数据全显示时误导）
-            if (visibleMonths < monthCount) {
-                Text(
-                    text = stringResource(R.string.koil_ov_scroll_more),
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.padding(start = 6.dp),
+            item { Spacer(Modifier.height(12.dp)) }
+
+            // 六指标 2×2 网格（对齐 Web：带图标 + 较上期）
+            item { SummaryGrid(uiState = uiState) }
+            item { Spacer(Modifier.height(12.dp)) }
+
+            // 趋势分析（双轴一张图）
+            item { TrendChart(trend = uiState.trend) }
+            item { Spacer(Modifier.height(12.dp)) }
+
+            // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）
+            item {
+                AbnormalAlertCard(
+                    count = uiState.abnormalRecords.size,
+                    rangeLabel = rangeLabel(uiState.range),
+                    recordCount = uiState.records.size,
+                    avgConsumption = uiState.avgConsumption,
                 )
             }
-            Spacer(Modifier.height(10.dp))
+            item { Spacer(Modifier.height(12.dp)) }
 
-            // 按月分组（对齐 Web：月份标题 + N条）；无记录时显示空态引导
-            if (uiState.records.isEmpty()) {
-                EmptyHistoryBox()
-            } else {
-            // v1.5.9：按月分批加载——只渲染已加载的月份（默认最近 1 个月，滚动续载）
-            val prevMap = buildPrevMap(uiState.records)
-            uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }
-                .toList()
-                .take(visibleMonths)
-                .forEach { (monthKey, monthRecords) ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = monthTitle(monthKey),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MiuixTheme.colorScheme.onBackground,
-                            modifier = Modifier.padding(start = 4.dp),
+            // 加油历史区（对齐 Web：标题 + 共N条 + 补录）
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.koil_ov_history),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        modifier = Modifier.padding(start = 4.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.koil_ov_total_count_in_list, uiState.records.size),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    // v1.5.4：補錄改为胶囊按钮（主色浅底 + 加号图标），点击区域加大
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                            .clickable { viewModel.openBackfill() }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = null,
+                            tint = KOiLColors.Primary,
+                            modifier = Modifier.size(15.dp),
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(3.dp))
                         Text(
-                            text = stringResource(R.string.koil_ov_month_count, monthRecords.size),
-                            fontSize = 11.sp,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            text = stringResource(R.string.koil_ov_backfill),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = KOiLColors.Primary,
                         )
                     }
-                    Spacer(Modifier.height(8.dp))
-                    monthRecords.forEach { record ->
+                }
+            }
+            item { Spacer(Modifier.height(10.dp)) }
+
+            // v1.5.20（#8）：LazyColumn 惰性渲染——月份标题 stickyHeader 吸顶，卡片仅组合可见项；
+            // 无记录时显示空态引导。已移除手动按月分页（visibleMonths）与"滚动加载更多"提示
+            if (uiState.records.isEmpty()) {
+                item { EmptyHistoryBox() }
+            } else {
+                monthGroups.forEach { (monthKey, monthRecords) ->
+                    stickyHeader(key = "header-$monthKey") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MiuixTheme.colorScheme.background)
+                                .padding(top = 6.dp, bottom = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = monthTitle(monthKey),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MiuixTheme.colorScheme.onBackground,
+                                modifier = Modifier.padding(start = 4.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.koil_ov_month_count, monthRecords.size),
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
+                        }
+                    }
+                    // v1.5.20（#10）：key=记录 id，回调稳定；未变化的滚出/滚入卡片可被跳过/回收
+                    items(items = monthRecords, key = { it.record.id }) { record ->
                         RecordCard(
                             record = record,
                             prevRecord = prevMap[record.record.id],
                             isInitial = prevMap[record.record.id] == null,
                             showMoreMenu = moreMenuFor == record.record.id,
-                            onMoreMenu = {
-                                if (moreMenuFor == record.record.id) {
-                                    moreMenuFor = null
-                                    actionRecord = null
-                                } else {
-                                    moreMenuFor = record.record.id
-                                    actionRecord = record
-                                }
-                            },
-                            onRect = { r -> if (moreMenuFor == record.record.id) actionRect = r },
-                            onDelete = { viewModel.deleteRecord(record.record.id) },
-                            onEdit = { viewModel.startEdit(record.record) },
+                            onMoreMenu = onMoreMenuCard,
+                            onRect = onActionRect,
+                            modifier = Modifier.padding(bottom = 10.dp),
                         )
-                        Spacer(Modifier.height(10.dp))
                     }
                 }
-            // v1.5.3：滚动到底自动加载已覆盖分页，移除冗余的"加载更多"按钮
             }
-            Spacer(Modifier.height(bottomPadding + 12.dp))
+            item { Spacer(Modifier.height(bottomPadding + 12.dp)) }
         }
 
         // v1.5.5：长按全屏操作层——点击任意处收起；圆按钮定位在长按卡片中央
@@ -397,7 +405,7 @@ fun OverviewScreen(
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
                     .clickable {
-                        scope.launch { scrollState.animateScrollTo(0) }
+                        scope.launch { listState.animateScrollToItem(0) }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -1115,10 +1123,9 @@ private fun RecordCard(
     prevRecord: RecordWithDerived?,
     isInitial: Boolean,
     showMoreMenu: Boolean,
-    onMoreMenu: () -> Unit,
-    onDelete: () -> Unit,
-    onEdit: () -> Unit,
+    onMoreMenu: (RecordWithDerived) -> Unit,
     onRect: (Rect) -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
     val r = record.record
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
@@ -1135,7 +1142,7 @@ private fun RecordCard(
     }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             // v1.5.5：长按显示时上报自身全局位置（页面级全屏层据此定位圆按钮）
             .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) },
@@ -1168,8 +1175,8 @@ private fun RecordCard(
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { if (showMoreMenu) onMoreMenu() },
-                        onLongClick = { if (!showMoreMenu) onMoreMenu() },
+                        onClick = { if (showMoreMenu) onMoreMenu(record) },
+                        onLongClick = { if (!showMoreMenu) onMoreMenu(record) },
                     ),
             ) {
                 // —— 顶部：日期大字 + 油号胶囊 + 天数胶囊 + 异常胶囊 + ⋮ ——

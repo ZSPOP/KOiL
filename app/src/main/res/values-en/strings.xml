@@ -72,7 +72,6 @@
     <string name="koil_ov_empty_hint">Go to the Add tab to record your first refuel</string>
     <string name="koil_ov_total_count_in_list">%1$d records</string>
     <string name="koil_ov_backfill">Backfill</string>
-    <string name="koil_ov_scroll_more">Scroll to load more records</string>
     <string name="koil_ov_month_count">%1$d</string>
     <string name="koil_ov_load_more">Load more (%1$d left)</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>

@@ -8,6 +8,9 @@ import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.domain.logic.ConsumptionStatus
+import com.llpop.koil.domain.logic.DerivedCalculator
+import com.llpop.koil.domain.logic.RecordWithDerived
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,27 +19,15 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-private const val MIN_DISTANCE = 100.0
+// v1.5.20：RecordWithDerived / ConsumptionStatus / computeDerived 已抽取到
+// domain.logic.DerivedCalculator（总览页与 CSV 导出共用同一口径）
+private const val MIN_DISTANCE = DerivedCalculator.MIN_DISTANCE
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-
-/** 单条记录的派生字段（不落库，查询时计算） */
-data class RecordWithDerived(
-    val record: KOiLRecordEntity,
-    val distance: Double? = null,
-    val oilDays: Long? = null,
-    val unitPricePayable: Double? = null,
-    val unitPriceActual: Double? = null,
-    val oilConsumption: Double? = null,
-    val costPerKm: Double? = null,
-    val shortDistanceSkipped: Boolean = false,
-    val consumptionStatus: ConsumptionStatus = ConsumptionStatus.NORMAL,
-    val deviationPct: Double = 0.0,
-)
-
-enum class ConsumptionStatus { HIGH, NORMAL, LOW, SKIPPED }
 
 /** 9 项汇总指标（对齐 Web 版口径） */
 data class SummaryStats(
@@ -158,9 +149,15 @@ class OverviewViewModel(
             backfillPrecheckFlow.debounce(180).collect { doRunBackfillPrecheck() }
         }
         viewModelScope.launch {
-            recordDao.observeAll().collect { raw ->
-                lastRawRecords = raw.sortedBy { it.reoilDate }
-                allDerived = computeDerived(lastRawRecords, abnormalThresholdPct)
+            // v1.5.20：debounce 合并连续写入（批量导入/快速增删），120ms 停顿后只重算一次；
+            // 排序 + 派生计算（O(n)）切 Dispatchers.Default，不再阻塞主线程；状态更新仍回主线程
+            recordDao.observeAll().debounce(120).collect { raw ->
+                val pair = withContext(Dispatchers.Default) {
+                    val sorted = raw.sortedBy { it.reoilDate }
+                    sorted to DerivedCalculator.compute(sorted, abnormalThresholdPct)
+                }
+                lastRawRecords = pair.first
+                allDerived = pair.second
                 recompute()
             }
         }
@@ -169,7 +166,9 @@ class OverviewViewModel(
             settings.abnormalThreshold.collect { pct ->
                 abnormalThresholdPct = pct
                 if (lastRawRecords.isNotEmpty()) {
-                    allDerived = computeDerived(lastRawRecords, pct)
+                    allDerived = withContext(Dispatchers.Default) {
+                        DerivedCalculator.compute(lastRawRecords, pct)
+                    }
                     recompute()
                 }
             }
@@ -706,55 +705,7 @@ class OverviewViewModel(
     }
 
     // ===== 计算 =====
-    private fun computeDerived(sorted: List<KOiLRecordEntity>, abnormalPct: Double): List<RecordWithDerived> {
-        val result = mutableListOf<RecordWithDerived>()
-        var prev: KOiLRecordEntity? = null
-        for (r in sorted) {
-            val distance = prev?.let { r.mileage - it.mileage }
-            val oilDays = prev?.let {
-                val d1 = LocalDate.parse(r.reoilDate, dateFormatter)
-                val d0 = LocalDate.parse(it.reoilDate, dateFormatter)
-                java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
-            }
-            val unitPricePayable = if (r.oilAmount > 0) r.payableAmount / r.oilAmount else null
-            val unitPriceActual = if (r.oilAmount > 0) r.actualAmount / r.oilAmount else null
-            val validDistance = distance != null && distance >= MIN_DISTANCE
-            // 用 takeIf + let 避免重复判空（清理 "Condition is always true" 编译警告）
-            val oilConsumption = distance?.takeIf { it >= MIN_DISTANCE }?.let { d -> r.oilAmount / d * 100 }
-            val costPerKm = distance?.takeIf { it >= MIN_DISTANCE }?.let { d -> r.actualAmount / d }
-            result.add(
-                RecordWithDerived(
-                    record = r,
-                    distance = distance,
-                    oilDays = oilDays,
-                    unitPricePayable = unitPricePayable?.let { Math.round(it * 100) / 100.0 },
-                    unitPriceActual = unitPriceActual?.let { Math.round(it * 100) / 100.0 },
-                    oilConsumption = oilConsumption?.let { Math.round(it * 100) / 100.0 },
-                    costPerKm = costPerKm?.let { Math.round(it * 100) / 100.0 },
-                    shortDistanceSkipped = distance != null && distance < MIN_DISTANCE,
-                )
-            )
-            prev = r
-        }
-        val validConsumptions = result.mapNotNull { it.oilConsumption }
-        if (validConsumptions.isNotEmpty()) {
-            val avg = validConsumptions.average()
-            val high = avg * (1 + abnormalPct / 100.0)
-            val low = avg * (1 - abnormalPct / 100.0)
-            for (i in result.indices) {
-                val d = result[i]
-                val status = when {
-                    d.oilConsumption == null -> ConsumptionStatus.SKIPPED
-                    d.oilConsumption > high -> ConsumptionStatus.HIGH
-                    d.oilConsumption < low -> ConsumptionStatus.LOW
-                    else -> ConsumptionStatus.NORMAL
-                }
-                val dev = if (d.oilConsumption != null && avg > 0) (d.oilConsumption - avg) / avg * 100 else 0.0
-                result[i] = d.copy(consumptionStatus = status, deviationPct = dev)
-            }
-        }
-        return result
-    }
+    // 派生字段（distance/油耗/每公里成本/油耗状态）统一由 domain.logic.DerivedCalculator.compute 计算
 
     private fun computeSummary(derived: List<RecordWithDerived>): SummaryStats {
         val totalCount = derived.size

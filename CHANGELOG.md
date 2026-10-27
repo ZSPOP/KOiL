@@ -4,6 +4,29 @@
 > 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
 > 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
 
+## v1.5.20（versionCode 220）— 2026-10-27（基于 v1.5.16，性能与大数据量专项）
+
+> 深度压力测试 18 项问题中的剩余 8 项（中危性能为主）一次性修复，合并原计划 v1.5.17/v1.5.18 直接出本版，不涉及 DB schema 变更与新功能。
+
+### 🔴 导入导出正确性（#3 #4）
+1. **#4 导出油耗状态不再写死"正常"**：新建 `domain/logic/DerivedCalculator.kt`（共享 `RecordWithDerived` / `ConsumptionStatus` / `compute()`），由 `OverviewViewModel` 与 `SettingsViewModel.exportCsv` 共用；CSV 状态列按真实派生结果输出（正常/偏高/偏低/短距/–），油耗、每公里成本、单价、加油间隔均改用同一派生口径，消除"页面偏高、导出却正常"的不一致
+2. **#3 导出里程不再丢小数**：本次里程/上次里程/行驶里程由 `%.0f` 改为整数显示整数、非整数保留原值（`fmtMileage()`），油量/金额仍保留 2 位
+3. **#3 导入检测文件内自身重复/里程链冲突**：原实现仅对比库内记录，CSV 文件内重复行、同文件里程倒挂均漏检；现以「库内 + 已接受文件行」合并视图判定，逐行即时入树
+4. **#3 复合键浮点健壮性**：去重键由 `"日期|里程"` 字符串拼接改为 `TreeSet` 按 `(日期, 里程)` 精确比较（避免小数里程字符串/精度问题）
+
+### 🟡 性能：导入与重算（#6 #7）
+5. **#7 导入预检 O(n²) → O(n log n)**：`previewCsv` 前后记录查找由 `lastOrNull/firstOrNull` 全表扫描改为 `TreeSet.lower/higher` 二分；三遍处理（解析→排序判定→按原顺序归类），大文件不再随记录数平方级变慢
+6. **#6 重算/导入移出主线程**：`observeAll` 加 120ms `debounce`（合并批量导入/快速增删的连续写入），排序与派生计算切 `Dispatchers.Default`；CSV 文件读取切 IO、解析判定切 Default；阈值变化重算同样切后台
+7. **#6 确认导入改单事务批量**：原逐条 `insert` + `catch` 吞异常（N 次事务且静默漏写）改为 DAO 新增 `insertAllIgnore(IGNORE)` 单事务批量插入，按返回 rowId 统计实际写入数，唯一索引冲突（预览后数据被改）安全跳过
+
+### 🟡 性能：历史列表 LazyColumn 重构（#8 #9 #10 #11）
+8. **#8 历史列表惰性渲染**：总览页整体由「`Column + verticalScroll` + 按月手动分页 `take(visibleMonths)`」改为 `LazyColumn`，月份标题用 `stickyHeader` 吸顶，记录卡只组合可见项；移除手动分页逻辑与"滚动加载更多"提示（及三语死字符串 koil_ov_scroll_more）
+9. **#9 分组/前驱映射 remember 缓存**：`groupBy` 月分组与 `buildPrevMap` 由每次重组都重算改为 `remember(records)`，滚动/弹窗等无关重组不再重复构建
+10. **#10 记录卡稳定 key 与回调**：`items(key = 记录 id)`，长按回调 `remember` 稳定（不再每卡每次新建 4 个 lambda）；顺手删除 `RecordCard` 中从未被使用的 `onDelete/onEdit` 死参数，未变化卡片滚出/滚入可正确跳过重组
+11. **#11 滚动监听改 snapshotFlow**：返回顶部按钮显隐由 `LaunchedEffect(scrollState.value)`（每像素变化触发）改为 `snapshotFlow { firstVisibleItemIndex/Offset }.distinctUntilChanged()`，仅在显隐翻转时更新状态
+
+---
+
 ## v1.5.16（versionCode 216）— 2026-10-27（基于 v1.5.15，稳定性 hotfix）
 
 > 深度压力测试 18 项问题中的低风险稳定项，按风险递增分批，本版为第一批（不涉及 DB schema/大改）。

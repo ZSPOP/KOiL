@@ -17,6 +17,13 @@ interface KOiLRecordDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAll(records: List<KOiLRecordEntity>)
 
+    /**
+     * v1.5.20 批量导入：单事务批量插入，命中唯一索引 (reoilDate,mileage) 时跳过该行（IGNORE，
+     * 不回滚整批）。返回每条 rowId，-1 表示被忽略，调用方据此统计实际插入数。
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIgnore(records: List<KOiLRecordEntity>): List<Long>
+
     @Update
     suspend fun update(record: KOiLRecordEntity)
 
