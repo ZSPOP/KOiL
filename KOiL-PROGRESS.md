@@ -3,6 +3,21 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
+## 当前版本：v1.5.13（versionCode 213）— 2026-10-27 已交付
+
+- commit：`84cc5fd`（基于 v1.5.12 `062ae1b`）
+- APK：https://aka.doubaocdn.com/s/kuOQbUtog3 （KOiL-v1.5.13-release.apk）
+- 源码 zip（完整工程源码）：https://aka.doubaocdn.com/s/zhTMMtrh1d （KOiL-src-v1513.zip，verifier 关键工程文件 10/10）
+- 签名：release 证书 SHA-256 恒定 `cc962f1e...`，编译通过、verifier 通过
+
+### v1.5.13 变更（补录保存按钮变蓝 + 编辑卡 1:1 复刻补录卡）
+1. 补录卡保存按钮：全部校验通过 → 蓝色（KOiL 主色）可保存；否则灰色置灰（对齐首页 addRecord）
+2. 编辑卡 1:1 复刻补录卡，唯一差异日期只读（KOiLDateField onDateSelected=null）：
+   - 打开即显示该日期里程区间提示（prev+1 ~ next-1），里程可修改
+   - 全量校验：早于第一条/同日同里程重复/双向里程链/偏差A+B/实付>应付/油箱容量，**排除编辑记录自身 id**（DAO 新增 getEarliestExcluding / getSameDayRecordsExcluding）
+   - 红色错误态（里程/油量/实付）+ 校验提示条 + 应付只读自动算（油量×参考价）
+   - 保存按钮 editReady 全通过 → 蓝色；否则置灰
+
 ## 当前版本：v1.5.12（versionCode 212）— 2026-10-27 已交付
 
 - commit：`8569999`（基于 v1.5.11 `488d739`）
