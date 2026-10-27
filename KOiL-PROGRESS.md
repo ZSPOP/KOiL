@@ -3,6 +3,18 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
+## 当前版本：v1.5.14（versionCode 214）— 2026-10-27 已交付
+
+- commit：`88bf228`（基于 v1.5.13 `255dc22`）
+- APK：https://aka.doubaocdn.com/s/UnpDYU6p9B （KOiL-v1.5.14-release.apk）
+- 源码 zip（完整工程源码）：https://aka.doubaocdn.com/s/BEJzArLU0c （KOiL-src-v1514.zip，verifier 关键工程文件 10/10）
+- 签名：release 证书 SHA-256 恒定 `cc962f1e...`，编译通过、verifier 通过
+
+### v1.5.14 变更（文案区分 + 应付待计算占位）
+1. 编辑卡校验通过 →「校驗通過，可以儲存」；补录卡保持「可以補錄」（BackfillPrecheckHint 加 readyText）
+2. 应付未计算（油量/参考价缺失）→ 显示「待計算」：EditField Box 叠加占位 + ViewModel 清空逻辑；precheck 后参考价就绪自动算出
+3. 编辑卡打开瞬间应付先"待计算"，不再显示旧记录值
+
 ## 当前版本：v1.5.13（versionCode 213）— 2026-10-27 已交付
 
 - commit：`84cc5fd`（基于 v1.5.12 `062ae1b`）
