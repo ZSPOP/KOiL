@@ -548,6 +548,8 @@ fun OverviewScreen(
                         onValueChange = viewModel::setBackfillPayableAmount,
                         keyboardType = KeyboardType.Decimal,
                         readOnly = true,
+                        // v1.5.14：应付未计算（油量/参考价缺失）时显示占位
+                        placeholder = stringResource(R.string.koil_ov_payable_pending),
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(14.dp))
@@ -583,6 +585,7 @@ fun OverviewScreen(
                     overTank = uiState.backfillOverTank,
                     tankCapacity = uiState.backfillTankCapacity,
                     ready = uiState.backfillReady,
+                    readyText = stringResource(R.string.koil_ov_bf_ready),
                 )
                 Spacer(Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
@@ -1593,6 +1596,8 @@ private fun EditRecordDialog(
                     onValueChange = onPayableChange,
                     keyboardType = KeyboardType.Decimal,
                     readOnly = true,
+                    // v1.5.14：应付未计算（油量/参考价缺失）时显示占位
+                    placeholder = stringResource(R.string.koil_ov_payable_pending),
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(14.dp))
@@ -1628,6 +1633,7 @@ private fun EditRecordDialog(
                 overTank = uiState.editOverTank,
                 tankCapacity = uiState.editTankCapacity,
                 ready = uiState.editReady,
+                readyText = stringResource(R.string.koil_ov_edit_ready),
             )
             Spacer(Modifier.height(20.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
@@ -1653,7 +1659,7 @@ private fun EditRecordDialog(
     }
 }
 
-/** v1.5.11：补录校验提示（用户确认规则：早于第一条/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色） */
+/** v1.5.11：补录校验提示（用户确认规则：早于第一条/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色；v1.5.14 readyText 支持编辑卡/补录卡差异化文案） */
 @Composable
 private fun BackfillPrecheckHint(
     beforeFirst: Boolean,
@@ -1667,6 +1673,7 @@ private fun BackfillPrecheckHint(
     overTank: Boolean,
     tankCapacity: Double,
     ready: Boolean,
+    readyText: String,
 ) {
     val text = when {
         beforeFirst -> stringResource(R.string.koil_ov_bf_before_first)
@@ -1682,7 +1689,7 @@ private fun BackfillPrecheckHint(
         )
         overPayable -> stringResource(R.string.koil_precheck_over_payable)
         overTank -> stringResource(R.string.koil_precheck_over_tank, tankCapacity.toInt())
-        ready -> stringResource(R.string.koil_ov_bf_ready)
+        ready -> readyText
         else -> return
     }
     val blocking = beforeFirst || sameDayExists ||
@@ -1908,6 +1915,7 @@ private fun EditField(
     keyboardType: KeyboardType = KeyboardType.Text,
     readOnly: Boolean = false,
     error: Boolean = false,
+    placeholder: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val errorColor = Color(0xFFFF3B30)
@@ -1932,16 +1940,29 @@ private fun EditField(
             )
         }
         Spacer(Modifier.height(6.dp))
-        TextField(
-            value = value,
-            onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }) },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            singleLine = true,
-            readOnly = readOnly,
-            colors = tfColors,
-            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-        )
+        // v1.5.14：miuix TextField 无 placeholder 参数，用 Box 叠加层实现"待计算"占位（value 为空时显示）
+        Box(modifier = Modifier.fillMaxWidth()) {
+            TextField(
+                value = value,
+                onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                singleLine = true,
+                readOnly = readOnly,
+                colors = tfColors,
+                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+            )
+            if (placeholder != null && value.isEmpty()) {
+                Text(
+                    text = placeholder,
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 14.dp),
+                )
+            }
+        }
     }
 }
 

@@ -135,6 +135,8 @@
     <string name="koil_ov_bf_before_first">補錄不能早於你的第一筆記錄</string>
     <string name="koil_ov_bf_dup">該日期和里程的加油記錄已存在，請勿重複提交</string>
     <string name="koil_ov_bf_ready">校驗通過，可以補錄</string>
+    <string name="koil_ov_edit_ready">校驗通過，可以儲存</string>
+    <string name="koil_ov_payable_pending">待計算</string>
     <string name="koil_ov_bf_mileage_range">本區間可輸入里程：%1$d ~ %2$d km</string>
     <string name="koil_ov_bf_mileage_range_min">本區間可輸入里程：≥ %1$d km</string>
     <string name="koil_ov_bf_mileage_range_max">本區間可輸入里程：≤ %1$d km</string>

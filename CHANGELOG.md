@@ -4,6 +4,17 @@
 > 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
 > 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
 
+## v1.5.14（versionCode 214）— 2026-10-27（基于 v1.5.13）
+
+### ✏️ 编辑/补录卡文案区分 + 应付"待计算"占位（用户验收反馈）
+1. **校验通过文案区分**：编辑卡 → 「校驗通過，可以**儲存**」（新增 koil_ov_edit_ready，zh/en/zh-rTW 三语）；补录卡保持「校驗通過，可以**補錄**」（BackfillPrecheckHint 新增 readyText 参数）
+2. **应付金额未计算时显示「待計算」**：
+   - miuix TextField 无 placeholder 参数 → EditField 用 Box 叠加层实现占位（value 为空时显示，14sp 半透明，与输入左对齐）
+   - ViewModel：油量或参考价缺失时 updateEditPayable/updateBackfillPayable **清空**应付（而非保留旧值）→ 显示"待计算"
+   - precheck 完成后（参考价就绪）立即刷新应付自动算，避免打开弹窗停留"待计算"
+   - 编辑卡打开瞬间应付不再显示旧记录值，先"待计算"，参考价到位后按 油量×参考价 自动算出
+3. 应付字段图标保持 Money（¥）不变（用户截图确认的图标）
+
 ## v1.5.13（versionCode 213）— 2026-10-27（基于 v1.5.12）
 
 ### 🔵 补录卡保存按钮变蓝 + 编辑卡 1:1 复刻补录卡（用户确认最终口径）

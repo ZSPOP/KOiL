@@ -135,6 +135,8 @@
     <string name="koil_ov_bf_before_first">Cannot backfill earlier than your first record</string>
     <string name="koil_ov_bf_dup">A record with this date and mileage already exists</string>
     <string name="koil_ov_bf_ready">Valid, ready to backfill</string>
+    <string name="koil_ov_edit_ready">Valid, ready to save</string>
+    <string name="koil_ov_payable_pending">Pending</string>
     <string name="koil_ov_bf_mileage_range">Mileage allowed in this range: %1$d ~ %2$d km</string>
     <string name="koil_ov_bf_mileage_range_min">Mileage allowed in this range: ≥ %1$d km</string>
     <string name="koil_ov_bf_mileage_range_max">Mileage allowed in this range: ≤ %1$d km</string>

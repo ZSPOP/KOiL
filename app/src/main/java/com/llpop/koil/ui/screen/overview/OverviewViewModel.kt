@@ -240,7 +240,8 @@ class OverviewViewModel(
             editMileage = record.mileage.toString(),
             editOilAmount = record.oilAmount.toString(),
             editActualAmount = record.actualAmount.toString(),
-            editPayableAmount = record.payableAmount.toString(),
+            // v1.5.14：应付由参考价自动算，打开瞬间未算出 → 空（显示"待计算"），precheck 完成后即时刷新
+            editPayableAmount = "",
             editGrade = record.oilGrade ?: "92",
             editProvince = province,
             editRecordDates = reoilDatesFor(province),
@@ -278,16 +279,15 @@ class OverviewViewModel(
     /** v1.5.13：编辑卡应付只读自动计算（对齐补录卡），setter 保留兼容，UI 不再可编辑 */
     fun setEditPayableAmount(v: String) { _uiState.value = _uiState.value.copy(editPayableAmount = v) }
 
-    /** v1.5.13：编辑卡应付金额自动计算（对齐补录卡 updateBackfillPayable），油量/油号/参考价变化时即时刷新 */
+    /** v1.5.13：编辑卡应付金额自动计算（对齐补录卡 updateBackfillPayable），油量/油号/参考价变化时即时刷新；v1.5.14：无法计算时清空显示待计算 */
     private fun updateEditPayable() {
         val s = _uiState.value
         val amount = s.editOilAmount.toDoubleOrNull()
         val price = s.editReferencePrice
-        if (amount != null && price != null && amount > 0 && price > 0) {
-            _uiState.value = _uiState.value.copy(
-                editPayableAmount = String.format("%.2f", amount * price)
-            )
-        }
+        val payable = if (amount != null && price != null && amount > 0 && price > 0)
+            String.format("%.2f", amount * price)
+        else ""
+        _uiState.value = s.copy(editPayableAmount = payable)
     }
 
     /** 编辑偏差预检入口（去抖信号，实际执行见 doRunEditPrecheck） */
@@ -415,6 +415,8 @@ class OverviewViewModel(
             editRangeMax = rangeMax,
             editReady = ready,
         )
+        // v1.5.14：参考价就绪后立即刷新应付自动算（避免打开弹窗停留在"待计算"）
+        updateEditPayable()
     }
 
     fun saveEdit() {
@@ -486,16 +488,15 @@ class OverviewViewModel(
     /** 应付只读自动计算（对齐首页）：setter 保留兼容，UI 不再可编辑 */
     fun setBackfillPayableAmount(v: String) { _uiState.value = _uiState.value.copy(backfillPayableAmount = v) }
 
-    /** v1.5.12：补录应付金额自动计算（对齐首页 updatePayable），油量或参考价变化时即时刷新 */
+    /** v1.5.12：补录应付金额自动计算（对齐首页 updatePayable），油量或参考价变化时即时刷新；v1.5.14：无法计算时清空显示待计算 */
     private fun updateBackfillPayable() {
         val s = _uiState.value
         val amount = s.backfillOilAmount.toDoubleOrNull()
         val price = s.backfillReferencePrice
-        if (amount != null && price != null && amount > 0 && price > 0) {
-            _uiState.value = _uiState.value.copy(
-                backfillPayableAmount = String.format("%.2f", amount * price)
-            )
-        }
+        val payable = if (amount != null && price != null && amount > 0 && price > 0)
+            String.format("%.2f", amount * price)
+        else ""
+        _uiState.value = s.copy(backfillPayableAmount = payable)
     }
     fun cancelBackfill() { _uiState.value = _uiState.value.copy(showBackfillDialog = false) }
 
@@ -624,6 +625,8 @@ class OverviewViewModel(
             backfillTankCapacity = tankCapacity,
             backfillReady = ready,
         )
+        // v1.5.14：参考价就绪后立即刷新应付自动算（避免打开弹窗停留在"待计算"）
+        updateBackfillPayable()
     }
 
     fun saveBackfill() {
