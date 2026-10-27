@@ -79,7 +79,6 @@ class AppSettings(private val context: Context) {
         private val KEY_TANK_CAPACITY = floatPreferencesKey("KOiL-tank-capacity")
         private val KEY_KEEP_LAST_GRADE = booleanPreferencesKey("KOiL-keep-last-grade")
         private val KEY_LAST_GRADE = stringPreferencesKey("KOiL-last-grade")
-        private val KEY_REMIND_THRESHOLD = doublePreferencesKey("KOiL-remind-threshold")
         private val KEY_ABNORMAL_THRESHOLD = doublePreferencesKey("KOiL-abnormal-threshold")
         private val KEY_PRICE_ALERT = booleanPreferencesKey("KOiL-price-alert")
         private val KEY_PRICE_PUSH = booleanPreferencesKey("KOiL-price-push")
@@ -113,8 +112,9 @@ class AppSettings(private val context: Context) {
         private val KEY_BOTTOM_BAR_MODE = stringPreferencesKey("KOiL-bottom-bar-mode")
 
         const val DEFAULT_TANK_CAPACITY = 65f
-        const val DEFAULT_REMIND_THRESHOLD = 150.0
         const val DEFAULT_ABNORMAL_THRESHOLD = 30.0
+        // v1.5.16 一次性数据修复标记：历史 payable=0 记录回填为 actual（仅执行一次）
+        private val KEY_RECORD_PAYABLE_ZERO_FIXED = booleanPreferencesKey("KOiL-record-payable-zero-fixed")
         const val DEFAULT_DEVIATION_THRESHOLD = 25.0
         /** EIA 官方免费 API Key（用户注册，内置为默认值；设置页可改，未来失效可自行更换） */
         const val DEFAULT_EIA_API_KEY = "GkLpNbWtHq677CmtfR6qHz9hfqqTgnbpM9PGWnLf"
@@ -196,18 +196,18 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_KEEP_LAST_GRADE] = keep }
     }
 
-    // ---- 加油提醒里程（koil-remind-threshold，默认 150km）----
-    val remindThreshold: Flow<Double> =
-        context.KOiLDataStore.data.map { it[KEY_REMIND_THRESHOLD] ?: DEFAULT_REMIND_THRESHOLD }
-    suspend fun setRemindThreshold(km: Double) {
-        context.KOiLDataStore.edit { it[KEY_REMIND_THRESHOLD] = km }
-    }
-
     // ---- 异常油耗阈值（koil-abnormal-threshold，默认 30%）----
     val abnormalThreshold: Flow<Double> =
         context.KOiLDataStore.data.map { it[KEY_ABNORMAL_THRESHOLD] ?: DEFAULT_ABNORMAL_THRESHOLD }
     suspend fun setAbnormalThreshold(pct: Double) {
         context.KOiLDataStore.edit { it[KEY_ABNORMAL_THRESHOLD] = pct }
+    }
+
+    // ---- v1.5.16 一次性数据修复：历史 payable=0 记录是否已回填为 actual ----
+    val recordPayableZeroFixed: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_RECORD_PAYABLE_ZERO_FIXED] ?: false }
+    suspend fun setRecordPayableZeroFixed(fixed: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_RECORD_PAYABLE_ZERO_FIXED] = fixed }
     }
 
     // ---- 油价调整提醒开关（koil-price-alert）----

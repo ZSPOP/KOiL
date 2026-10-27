@@ -125,6 +125,10 @@ data class OverviewUiState(
     // 日历加油日期标记（当前省份全部加油日期，供日历打点）
     val editRecordDates: Set<String> = emptySet(),
     val backfillRecordDates: Set<String> = emptySet(),
+    // v1.5.16：补录/编辑保存防重入（对齐首页 isAdding）+ 失败提示（不再静默吞异常）
+    val isSavingBackfill: Boolean = false,
+    val isSavingEdit: Boolean = false,
+    val saveError: Boolean = false,
 )
 
 @OptIn(kotlinx.coroutines.FlowPreview::class)
@@ -256,6 +260,8 @@ class OverviewViewModel(
             editRangeMin = null,
             editRangeMax = null,
             editReady = false,
+            isSavingEdit = false,
+            saveError = false,
             showEditDialog = true,
         )
         // 打开即跑预检：自动带出参考价（油号单价）与应付自动算，避免 ¥--
@@ -414,6 +420,7 @@ class OverviewViewModel(
             editRangeMin = rangeMin,
             editRangeMax = rangeMax,
             editReady = ready,
+            saveError = false,
         )
         // v1.5.14：参考价就绪后立即刷新应付自动算（避免打开弹窗停留在"待计算"）
         updateEditPayable()
@@ -423,29 +430,43 @@ class OverviewViewModel(
         val s = _uiState.value
         val r = s.editingRecord ?: return
         // v1.5.13：对齐补录卡——预检全通过（日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量）才允许保存
-        if (s.editDate.isBlank() || !s.editReady) return
+        // v1.5.16：增加 isSavingEdit 防重入（快速双击不再并发 update）+ 失败提示（不再静默吞异常）
+        if (s.editDate.isBlank() || !s.editReady || s.isSavingEdit) return
         viewModelScope.launch {
-            val province = s.editProvince.ifBlank { settings.defaultProvince.first() }
+            val cur = _uiState.value
+            if (cur.isSavingEdit) return@launch
+            _uiState.value = cur.copy(isSavingEdit = true, saveError = false)
+            val province = cur.editProvince.ifBlank { settings.defaultProvince.first() }
             try {
                 recordDao.update(
                     r.copy(
-                        reoilDate = _uiState.value.editDate,
-                        mileage = _uiState.value.editMileage.toDoubleOrNull() ?: r.mileage,
-                        oilAmount = _uiState.value.editOilAmount.toDoubleOrNull() ?: r.oilAmount,
-                        payableAmount = _uiState.value.editPayableAmount.toDoubleOrNull() ?: r.payableAmount,
-                        actualAmount = _uiState.value.editActualAmount.toDoubleOrNull() ?: r.actualAmount,
-                        oilGrade = _uiState.value.editGrade,
-                        oilPrice = _uiState.value.editReferencePrice ?: r.oilPrice,
+                        reoilDate = cur.editDate,
+                        mileage = cur.editMileage.toDoubleOrNull() ?: r.mileage,
+                        oilAmount = cur.editOilAmount.toDoubleOrNull() ?: r.oilAmount,
+                        // v1.5.16：应付算不出时回退本次实付（对齐补录卡），不再保留旧应付
+                        payableAmount = cur.editPayableAmount.toDoubleOrNull()
+                            ?: (cur.editActualAmount.toDoubleOrNull() ?: r.payableAmount),
+                        actualAmount = cur.editActualAmount.toDoubleOrNull() ?: r.actualAmount,
+                        oilGrade = cur.editGrade,
+                        oilPrice = cur.editReferencePrice ?: r.oilPrice,
                         province = province,
                     )
                 )
-                _uiState.value = _uiState.value.copy(showEditDialog = false, editingRecord = null)
-            } catch (_: Exception) { }
+                _uiState.value = _uiState.value.copy(
+                    showEditDialog = false, editingRecord = null,
+                    isSavingEdit = false, saveError = false,
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isSavingEdit = false, saveError = true)
+            }
         }
     }
 
     fun cancelEdit() {
-        _uiState.value = _uiState.value.copy(showEditDialog = false, editingRecord = null)
+        _uiState.value = _uiState.value.copy(
+            showEditDialog = false, editingRecord = null,
+            isSavingEdit = false, saveError = false,
+        )
     }
 
     /** 该省份全部加油日期（供日历打点标记） */
@@ -466,6 +487,8 @@ class OverviewViewModel(
                 backfillGrade = "92",
                 backfillProvince = home,
                 backfillRecordDates = reoilDatesFor(home),
+                isSavingBackfill = false,
+                saveError = false,
             )
             // 打开即跑预检：自动带出参考价（油号单价），避免 ¥--
             runBackfillPrecheck()
@@ -498,7 +521,12 @@ class OverviewViewModel(
         else ""
         _uiState.value = s.copy(backfillPayableAmount = payable)
     }
-    fun cancelBackfill() { _uiState.value = _uiState.value.copy(showBackfillDialog = false) }
+    fun cancelBackfill() {
+        _uiState.value = _uiState.value.copy(
+            showBackfillDialog = false,
+            isSavingBackfill = false, saveError = false,
+        )
+    }
 
     /** 补录偏差预检入口（去抖信号，实际执行见 doRunBackfillPrecheck） */
     private fun runBackfillPrecheck() {
@@ -624,6 +652,7 @@ class OverviewViewModel(
             backfillRangeMax = rangeMax,
             backfillTankCapacity = tankCapacity,
             backfillReady = ready,
+            saveError = false,
         )
         // v1.5.14：参考价就绪后立即刷新应付自动算（避免打开弹窗停留在"待计算"）
         updateBackfillPayable()
@@ -635,24 +664,39 @@ class OverviewViewModel(
         val oilAmount = s.backfillOilAmount.toDoubleOrNull() ?: return
         val actual = s.backfillActualAmount.toDoubleOrNull() ?: return
         // v1.5.11：用户确认规则——预检全通过（日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量）才允许保存
-        if (s.backfillDate.isBlank() || !s.backfillReady) return
+        // v1.5.16：增加 isSavingBackfill 防重入（快速双击不再并发 insert 撞唯一约束崩溃）+ try-catch 失败提示
+        if (s.backfillDate.isBlank() || !s.backfillReady || s.isSavingBackfill) return
         viewModelScope.launch {
-            val payable = s.backfillPayableAmount.toDoubleOrNull() ?: actual
-            val province = s.backfillProvince.ifBlank { settings.defaultProvince.first() }
-            recordDao.insert(
-                KOiLRecordEntity(
-                    reoilDate = s.backfillDate,
-                    mileage = mileage,
-                    oilAmount = oilAmount,
-                    payableAmount = payable,
-                    actualAmount = actual,
-                    oilPrice = s.backfillReferencePrice ?: (if (oilAmount > 0) actual / oilAmount else null),
-                    oilGrade = s.backfillGrade,
-                    province = province,
-                    source = "backfill_modal",
+            val cur = _uiState.value
+            if (cur.isSavingBackfill) return@launch
+            _uiState.value = cur.copy(isSavingBackfill = true, saveError = false)
+            val curMileage = cur.backfillMileage.toDoubleOrNull() ?: return@launch
+            val curOil = cur.backfillOilAmount.toDoubleOrNull() ?: return@launch
+            val curActual = cur.backfillActualAmount.toDoubleOrNull() ?: return@launch
+            val payable = cur.backfillPayableAmount.toDoubleOrNull() ?: curActual
+            val province = cur.backfillProvince.ifBlank { settings.defaultProvince.first() }
+            try {
+                recordDao.insert(
+                    KOiLRecordEntity(
+                        reoilDate = cur.backfillDate,
+                        mileage = curMileage,
+                        oilAmount = curOil,
+                        payableAmount = payable,
+                        actualAmount = curActual,
+                        oilPrice = cur.backfillReferencePrice ?: (if (curOil > 0) curActual / curOil else null),
+                        oilGrade = cur.backfillGrade,
+                        province = province,
+                        source = "backfill_modal",
+                    )
                 )
-            )
-            _uiState.value = _uiState.value.copy(showBackfillDialog = false)
+                _uiState.value = _uiState.value.copy(
+                    showBackfillDialog = false,
+                    isSavingBackfill = false,
+                    saveError = false,
+                )
+            } catch (_: Exception) {
+                _uiState.value = _uiState.value.copy(isSavingBackfill = false, saveError = true)
+            }
         }
     }
 

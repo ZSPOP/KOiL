@@ -11,10 +11,12 @@ import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceSyncWorker
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.di.appModule
+import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -31,8 +33,9 @@ class KOiLApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 全局崩溃捕获：无 logcat 环境下将异常栈写入 files/crash-*.txt
-        CrashHandler.install(this)
+        // v1.5.16：全局崩溃捕获统一在 Application 最早安装（覆盖启动期崩溃），写私有目录 + Download/KOiL-crash.txt；
+        // 原 MainActivity 的重复安装已移除（原先两套 handler 各写一份文件）。
+        CrashReporter.install(this)
 
         startKoin {
             androidContext(this@KOiLApplication)
@@ -46,7 +49,15 @@ class KOiLApplication : Application() {
         // 首次启动预置：仅历史加油记录（油价库已改为联网灌库，见下两段）
         appScope.launch {
             try {
-                SeedInitializer.seedIfEmpty(this@KOiLApplication, AppDatabase.getInstance(this@KOiLApplication))
+                val db = AppDatabase.getInstance(this@KOiLApplication)
+                SeedInitializer.seedIfEmpty(this@KOiLApplication, db)
+                // v1.5.16：一次性回填历史 payable=0 记录（无参考价且未手填应付的旧数据，按实付入账），仅执行一次
+                val settings = GlobalContext.get().get<AppSettings>()
+                if (!settings.recordPayableZeroFixed.first()) {
+                    val fixed = db.KOiLRecordDao().fixZeroPayable()
+                    settings.setRecordPayableZeroFixed(true)
+                    Log.i("KOiL", "v1.5.16 fixed $fixed record(s) with zero payableAmount")
+                }
             } catch (t: Throwable) {
                 Log.e("KOiL", "Seed init failed", t)
             }

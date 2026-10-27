@@ -137,6 +137,7 @@
     <string name="koil_ov_bf_ready">校验通过，可以补录</string>
     <string name="koil_ov_edit_ready">校验通过，可以保存</string>
     <string name="koil_ov_payable_pending">待计算</string>
+    <string name="koil_ov_save_failed">保存失败，请重试</string>
     <string name="koil_ov_bf_mileage_range">本区间可输入里程：%1$d ~ %2$d km</string>
     <string name="koil_ov_bf_mileage_range_min">本区间可输入里程：≥ %1$d km</string>
     <string name="koil_ov_bf_mileage_range_max">本区间可输入里程：≤ %1$d km</string>
@@ -171,8 +172,6 @@
     <string name="koil_set_keep_grade">沿用上次油号</string>
     <string name="koil_set_keep_grade_sub">录入自动带出</string>
     <string name="koil_set_section_remind">提醒与校验</string>
-    <string name="koil_set_remind_mileage">加油提醒里程</string>
-    <string name="koil_set_remind_mileage_sum">剩余里程低于 %1$d km 时提醒</string>
     <string name="koil_set_abnormal">异常油耗阈值</string>
     <string name="koil_set_abnormal_sum">偏离平均值±%1$d%%标记异常</string>
     <string name="koil_set_deviation">价格偏差阈值</string>

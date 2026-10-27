@@ -3,6 +3,25 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
+## 当前版本：v1.5.16（versionCode 216）— 2026-10-27 已交付
+
+- commit：代码 commit + 交付记录 commit（见 git log）
+- 签名：release 证书 SHA-256 恒定 `cc962f1e2524ba8273c9d668436e9926d8a056e49b816e680c730518d46ffe4b`，编译通过、verifier 通过
+- 定位：深度压力测试 18 项问题的第一批稳定性 hotfix（低风险、可独立回退）
+
+### v1.5.16 变更（稳定性 hotfix，详见 CHANGELOG）
+- 🔴 #2 录入应付 0 元修复（新数据按实付兜底 + 启动一次性回填历史 payable=0 记录，DAO fixZeroPayable + DataStore 标记）
+- 🔴 #1/#5 补录/编辑保存防重入（isSavingBackfill/isSavingEdit）+ 失败红色提示条（不再静默吞异常，三语 koil_ov_save_failed）
+- 🔴 #16 编辑应付算不出回退实付；#15 CSV 导入里程规则统一严格递增（<=/>=）
+- 🟡 #13 新建 FieldFilters.sanitizeDecimalInput，录入/补录/编辑输入框统一过滤多个小数点
+- 🟡 #17 补录日期回退 120 月限制去掉（可无限往前，未来仍禁）
+- 🟡 #18 启动定位省份未变化不写 DataStore
+- 🟡 #12 彻底移除「加油提醒里程」死功能（AppSettings/VM/combine/三语）；#14 合并双崩溃捕获（删 CrashHandler，统一 CrashReporter 在 Application 安装）
+
+### 后续版本（待做）
+- v1.5.17：#3（CSV 导入文件内去重/浮点 key/导出 %.0f 丢小数）、#6（批量事务 + observeAll debounce/Default）、#7（导入预览 O(n²)→二分）、#4（导出油耗状态写死"正常"→抽共享 DerivedCalculator）
+- v1.5.18：#8/#9/#10/#11 历史列表 Column+verticalScroll → LazyColumn 惰性重构（stickyHeader、buildPrevMap remember、稳定 key+lambda、snapshotFlow）
+
 ## 当前版本：v1.5.15（versionCode 215）— 2026-10-27 已交付
 
 - commit：`877a3dc`（基于 v1.5.14 `80d7104`）

@@ -21,7 +21,10 @@ class MainViewModel(
             val enabled = settings.locationEnabled.first()
             if (enabled && locationHelper.hasPermission()) {
                 val province = locationHelper.getCurrentProvince()
-                if (!province.isNullOrBlank()) settings.setDefaultProvince(province)
+                // v1.5.16：定位到的省份与当前默认省一致时不写 DataStore，避免每次启动无谓写入
+                if (!province.isNullOrBlank() && province != settings.defaultProvince.first()) {
+                    settings.setDefaultProvince(province)
+                }
             }
         }
     }

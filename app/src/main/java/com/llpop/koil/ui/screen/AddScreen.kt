@@ -57,6 +57,7 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.ui.screen.add.AddUiState
 import com.llpop.koil.ui.screen.add.AddViewModel
@@ -791,7 +792,7 @@ private fun FormField(
         Spacer(Modifier.height(6.dp))
         TextField(
             value = value,
-            onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }) },
+            onValueChange = { onValueChange(it.sanitizeDecimalInput()) },
             modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             readOnly = readOnly,

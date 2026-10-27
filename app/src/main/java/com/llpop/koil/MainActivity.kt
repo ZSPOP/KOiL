@@ -13,13 +13,10 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import com.llpop.koil.ui.MainScreen
-import com.llpop.koil.util.CrashReporter
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // 全局崩溃捕获：崩溃堆栈静默落盘（私有目录 + 下载/KOiL-crash.txt），
-        // 不弹 Toast、不打扰用户；需要排查时从文件取堆栈
-        CrashReporter.install(this)
+        // 全局崩溃捕获统一在 KOiLApplication.onCreate 安装（v1.5.16 起，覆盖启动期崩溃）
         // 系统 SplashScreen（Android 12+ 原生，低版本兼容库）：品牌水滴 + KOiL
         installSplashScreen()
         super.onCreate(savedInstanceState)

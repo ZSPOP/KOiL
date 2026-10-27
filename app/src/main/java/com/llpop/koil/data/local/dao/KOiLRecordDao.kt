@@ -89,4 +89,11 @@ interface KOiLRecordDao {
 
     @Query("SELECT COUNT(*) FROM koil_record")
     suspend fun count(): Int
+
+    /**
+     * v1.5.16 一次性数据修复：历史因"无参考价且未手填应付"入库的 payable=0 记录，
+     * 用实付金额回填（应付=实付，优惠 0）。返回受影响行数。
+     */
+    @Query("UPDATE koil_record SET payableAmount = actualAmount WHERE payableAmount = 0 AND actualAmount > 0")
+    suspend fun fixZeroPayable(): Int
 }

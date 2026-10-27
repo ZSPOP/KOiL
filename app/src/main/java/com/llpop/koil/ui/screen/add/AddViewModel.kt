@@ -563,7 +563,8 @@ class AddViewModel(
                     reoilDate = state.date,
                     mileage = state.mileage.toDouble(),
                     oilAmount = state.oilAmount.toDouble(),
-                    payableAmount = state.payableAmount.toDoubleOrNull() ?: 0.0,
+                    // v1.5.16：无参考价且未手填应付时，应付按实付入账（对齐补录卡），避免入库 0 元导致总览异常
+                    payableAmount = state.payableAmount.toDoubleOrNull() ?: state.actualAmount.toDouble(),
                     actualAmount = state.actualAmount.toDouble(),
                     oilPrice = state.currentPrice,
                     oilGrade = state.oilGrade,

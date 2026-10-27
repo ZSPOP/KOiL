@@ -89,6 +89,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.ui.screen.overview.ConsumptionStatus
 import com.llpop.koil.ui.screen.overview.OverviewUiState
@@ -587,6 +588,11 @@ fun OverviewScreen(
                     ready = uiState.backfillReady,
                     readyText = stringResource(R.string.koil_ov_bf_ready),
                 )
+                // v1.5.16：保存失败提示（如唯一约束冲突等）
+                if (uiState.saveError) {
+                    Spacer(Modifier.height(8.dp))
+                    SaveErrorHint()
+                }
                 Spacer(Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
@@ -594,7 +600,7 @@ fun OverviewScreen(
                     Button(
                         onClick = viewModel::saveBackfill,
                         modifier = Modifier.weight(1f).height(44.dp),
-                        enabled = uiState.backfillReady,
+                        enabled = uiState.backfillReady && !uiState.isSavingBackfill,
                         // v1.5.13：全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
                         colors = ButtonDefaults.buttonColors(
                             color = KOiLColors.Primary,
@@ -1635,6 +1641,11 @@ private fun EditRecordDialog(
                 ready = uiState.editReady,
                 readyText = stringResource(R.string.koil_ov_edit_ready),
             )
+            // v1.5.16：保存失败提示（如唯一约束冲突等）
+            if (uiState.saveError) {
+                Spacer(Modifier.height(8.dp))
+                SaveErrorHint()
+            }
             Spacer(Modifier.height(20.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 Button(
@@ -1645,7 +1656,7 @@ private fun EditRecordDialog(
                 Button(
                     onClick = onSave,
                     modifier = Modifier.weight(1f).height(44.dp),
-                    enabled = uiState.editReady,
+                    enabled = uiState.editReady && !uiState.isSavingEdit,
                     // v1.5.13：全部校验通过 → 蓝色可保存；否则灰色置灰（对齐补录卡/首页录入卡）
                     colors = ButtonDefaults.buttonColors(
                         color = KOiLColors.Primary,
@@ -1704,6 +1715,24 @@ private fun BackfillPrecheckHint(
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(text, fontSize = 12.sp, color = fg)
+    }
+}
+
+/** v1.5.16：补录/编辑保存失败提示（红色），不再静默吞异常 */
+@Composable
+private fun SaveErrorHint() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0x1AFF3B30))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.koil_ov_save_failed),
+            fontSize = 12.sp,
+            color = Color(0xFFFF3B30),
+        )
     }
 }
 
@@ -1944,7 +1973,7 @@ private fun EditField(
         Box(modifier = Modifier.fillMaxWidth()) {
             TextField(
                 value = value,
-                onValueChange = { onValueChange(it.filter { c -> c.isDigit() || c == '.' }) },
+                onValueChange = { onValueChange(it.sanitizeDecimalInput()) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 singleLine = true,

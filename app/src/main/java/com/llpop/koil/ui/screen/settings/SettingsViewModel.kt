@@ -36,7 +36,6 @@ data class SettingsUiState(
     val defaultOilGrade: String = "92",
     val tankCapacity: Float = AppSettings.DEFAULT_TANK_CAPACITY,
     val keepLastGrade: Boolean = false,
-    val remindThreshold: Double = AppSettings.DEFAULT_REMIND_THRESHOLD,
     val abnormalThreshold: Double = AppSettings.DEFAULT_ABNORMAL_THRESHOLD,
     val priceAlert: Boolean = false,
     val pricePush: Boolean = true,
@@ -404,7 +403,6 @@ class SettingsViewModel(
         settings.defaultOilGrade,
         settings.tankCapacity,
         settings.keepLastGrade,
-        settings.remindThreshold,
         settings.abnormalThreshold,
         settings.priceAlert,
         settings.pricePush,
@@ -423,17 +421,16 @@ class SettingsViewModel(
             defaultOilGrade = args[3] as String,
             tankCapacity = args[4] as Float,
             keepLastGrade = args[5] as Boolean,
-            remindThreshold = args[6] as Double,
-            abnormalThreshold = args[7] as Double,
-            priceAlert = args[8] as Boolean,
-            pricePush = args[9] as Boolean,
-            locationEnabled = args[10] as Boolean,
-            priceDbAutoUpdate = args[11] as Boolean,
-            deviationThreshold = args[12] as Double,
-            priceDbCache = args[13] as String,
-            floatingBottomBar = args[14] as Boolean,
-            floatingBottomBarStyle = args[15] as String,
-            bottomBarMode = args[16] as String,
+            abnormalThreshold = args[6] as Double,
+            priceAlert = args[7] as Boolean,
+            pricePush = args[8] as Boolean,
+            locationEnabled = args[9] as Boolean,
+            priceDbAutoUpdate = args[10] as Boolean,
+            deviationThreshold = args[11] as Double,
+            priceDbCache = args[12] as String,
+            floatingBottomBar = args[13] as Boolean,
+            floatingBottomBarStyle = args[14] as String,
+            bottomBarMode = args[15] as String,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 
@@ -463,9 +460,6 @@ class SettingsViewModel(
 
     fun setKeepLastGrade(keep: Boolean) =
         viewModelScope.launch { settings.setKeepLastGrade(keep) }
-
-    fun setRemindThreshold(km: Double) =
-        viewModelScope.launch { settings.setRemindThreshold(km) }
 
     fun setAbnormalThreshold(pct: Double) =
         viewModelScope.launch { settings.setAbnormalThreshold(pct) }
@@ -660,10 +654,11 @@ class SettingsViewModel(
                     val nextRecord = sortedExisting.firstOrNull { it.reoilDate > date || (it.reoilDate == date && it.mileage > mileage) }
                     var conflictKey: String? = null
                     var conflictArg = 0
-                    if (prevRecord != null && mileage < prevRecord.mileage) {
+                    // v1.5.16：统一严格递增（与录入/补录一致）——里程等于相邻记录也判冲突
+                    if (prevRecord != null && mileage <= prevRecord.mileage) {
                         conflictKey = "lt_prev"
                         conflictArg = prevRecord.mileage.toInt()
-                    } else if (nextRecord != null && mileage > nextRecord.mileage) {
+                    } else if (nextRecord != null && mileage >= nextRecord.mileage) {
                         conflictKey = "gt_next"
                         conflictArg = nextRecord.mileage.toInt()
                     }
@@ -764,7 +759,6 @@ class SettingsViewModel(
                     settingsObj.optString("defaultGrade")?.takeIf { it.isNotEmpty() }?.let { settings.setDefaultOilGrade(it) }
                     if (!settingsObj.isNull("tankCapacity")) settings.setTankCapacity(settingsObj.getDouble("tankCapacity").toFloat())
                     if (!settingsObj.isNull("keepLastGrade")) settings.setKeepLastGrade(settingsObj.getBoolean("keepLastGrade"))
-                    if (!settingsObj.isNull("remindThreshold")) settings.setRemindThreshold(settingsObj.getDouble("remindThreshold"))
                     if (!settingsObj.isNull("abnormalThreshold")) settings.setAbnormalThreshold(settingsObj.getDouble("abnormalThreshold"))
                     if (!settingsObj.isNull("deviationThreshold")) settings.setDeviationThreshold(settingsObj.getDouble("deviationThreshold"))
                     if (!settingsObj.isNull("priceAlert")) settings.setPriceAlert(settingsObj.getBoolean("priceAlert"))
@@ -853,7 +847,6 @@ class SettingsViewModel(
                     "defaultGrade" to settings.defaultOilGrade.first(),
                     "tankCapacity" to settings.tankCapacity.first(),
                     "keepLastGrade" to settings.keepLastGrade.first(),
-                    "remindThreshold" to settings.remindThreshold.first(),
                     "abnormalThreshold" to settings.abnormalThreshold.first(),
                     "deviationThreshold" to settings.deviationThreshold.first(),
                     "priceAlert" to settings.priceAlert.first(),

@@ -137,6 +137,7 @@
     <string name="koil_ov_bf_ready">Valid, ready to backfill</string>
     <string name="koil_ov_edit_ready">Valid, ready to save</string>
     <string name="koil_ov_payable_pending">Pending</string>
+    <string name="koil_ov_save_failed">Save failed. Please try again.</string>
     <string name="koil_ov_bf_mileage_range">Mileage allowed in this range: %1$d ~ %2$d km</string>
     <string name="koil_ov_bf_mileage_range_min">Mileage allowed in this range: ≥ %1$d km</string>
     <string name="koil_ov_bf_mileage_range_max">Mileage allowed in this range: ≤ %1$d km</string>
@@ -172,8 +173,6 @@
     <string name="koil_set_keep_grade">Keep last grade</string>
     <string name="koil_set_keep_grade_sub">Auto-fill on entry</string>
     <string name="koil_set_section_remind">Reminders &amp; checks</string>
-    <string name="koil_set_remind_mileage">Refuel reminder</string>
-    <string name="koil_set_remind_mileage_sum">Remind below %1$d km remaining</string>
     <string name="koil_set_abnormal">Abnormal threshold</string>
     <string name="koil_set_abnormal_sum">Flag beyond mean ±%1$d%%</string>
     <string name="koil_set_deviation">Price deviation threshold</string>

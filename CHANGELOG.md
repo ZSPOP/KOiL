@@ -4,6 +4,32 @@
 > 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
 > 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
 
+## v1.5.16（versionCode 216）— 2026-10-27（基于 v1.5.15，稳定性 hotfix）
+
+> 深度压力测试 18 项问题中的低风险稳定项，按风险递增分批，本版为第一批（不涉及 DB schema/大改）。
+
+### 🔴 数据正确性
+1. **#2 录入应付金额 0 元修复（含存量数据）**：
+   - 新数据：`AddViewModel` 无参考价且未手填应付时，应付由「0.0」改为「按实付入账」（对齐补录卡），避免总览"优惠金额/每公里成本"虚高
+   - 存量：DAO 新增 `fixZeroPayable()`（`UPDATE koil_record SET payableAmount = actualAmount WHERE payableAmount = 0 AND actualAmount > 0`），`KOiLApplication` 启动后按一次性 DataStore 标记 `KOiL-record-payable-zero-fixed` 回填一次（不走 Room Migration，与现有一次性标记风格一致，不清库）
+2. **#16 编辑应付算不出回退实付**：`saveEdit` 应付为空时由「保留旧应付」改为回退本次实付（对齐补录卡），双重兜底
+3. **#15 CSV 导入里程规则统一严格递增**：补录/编辑/导入三处统一——里程 `<` 改 `<=`、`>` 改 `>=`，等于相邻记录也判冲突（修导入/录入阈值不一致）
+
+### 🔴 保存健壮性（#1 #5）
+4. **补录/编辑保存防重入**：新增 `isSavingBackfill` / `isSavingEdit` 状态（对齐首页 isAdding），保存期间按钮置灰，快速双击不再并发 insert 撞唯一约束（SQLiteConstraintException）
+5. **保存失败不再静默**：补录/编辑 `catch(_:Exception){}` 改为捕获后置 `saveError=true`，弹窗显示红色「保存失败，请重试」条（新增三语 koil_ov_save_failed）；用户重新输入即清除；打开/取消弹窗重置保存态
+
+### 🟡 输入与交互（#13 #17 #18）
+6. **#13 输入框过滤多个小数点**：新建 `ui/component/FieldFilters.kt` 的 `sanitizeDecimalInput()`（仅保留数字 + 第一个小数点），录入卡 FormField / 补录卡 / 编辑卡 EditField 统一替换原 `filter{ 数字或点 }`（原过滤允许 "1.2.3" 致 toDouble=null）
+7. **#17 补录日期回退限制去掉**：KOiLDatePicker 月份切换原最多回退 120 个月（10 年）→ 改为可无限往前（选①，"早于第一条记录"由业务校验拦截）；未来月份仍不可达
+8. **#18 启动定位不再反复写 DataStore**：MainViewModel 定位到的省份与当前默认省一致时不写，避免每次启动无谓写入
+
+### 🟡 清理与崩溃（#12 #14）
+9. **#12 彻底移除「加油提醒里程」死功能**：删除 AppSettings 的 KEY_REMIND_THRESHOLD / DEFAULT_REMIND_THRESHOLD / remindThreshold Flow / setRemindThreshold；SettingsViewModel 字段/combine（17→16 flow，重排 args 索引）/setter/导入导出映射；三语 strings 删除 koil_set_remind_mileage(_sum)（保留「提醒与校验」section 标题，异常/偏差/油箱三项仍在）。旧备份含该字段时导入忽略（兼容）
+10. **#14 合并重复的全局崩溃捕获**：删除 CrashHandler.kt（写 files/crash-*.txt），统一由 CrashReporter（写 files/crash.txt + Download/KOiL-crash.txt）在 KOiLApplication.onCreate 最早安装（覆盖启动期崩溃）；MainActivity 移除重复安装
+
+---
+
 ## v1.5.15（versionCode 215）— 2026-10-27（基于 v1.5.14）
 
 ### 🔽 日期可选择时补上下拉箭头图标（用户指出：油号框箭头对着的小图标没进版）

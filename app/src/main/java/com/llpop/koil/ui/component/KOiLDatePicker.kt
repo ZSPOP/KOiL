@@ -134,7 +134,8 @@ fun KOiLDatePickerDialog(
     // 未来月份不可达（对齐 Web max=今天）：当前视图月 == 今天所在月时禁止再切下月
     val todayMonth = YearMonth.from(today)
     val canNextMonth = viewMonth < todayMonth
-    val canPrevMonth = viewMonth > YearMonth.from(initial).minusMonths(120)
+    // v1.5.16：去掉回退 120 个月（10 年）下限——补录允许任意早日期，"早于第一条记录"由业务校验拦截
+    val canPrevMonth = true
 
     /** 切换月份（切月动画完成后的真实切换 / 箭头点击直接切换） */
     fun goMonth(delta: Int) {
