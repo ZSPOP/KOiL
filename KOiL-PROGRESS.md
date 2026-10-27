@@ -7,8 +7,9 @@
 
 - commit：`8569999`（基于 v1.5.11 `488d739`）
 - APK：https://aka.doubaocdn.com/s/K6vvC7ld9Q （KOiL-v1.5.12-release.apk）
-- 源码 zip：https://aka.doubaocdn.com/s/OESVhdem1p （KOiL-src-v1512.zip，五件套 verifier matched 5/5）
+- 源码 zip（**完整工程源码**）：https://aka.doubaocdn.com/s/DYHRhQ58Wg （KOiL-src-v1512.zip）
 - 签名：release 证书 SHA-256 恒定 `cc962f1e...`，编译通过、verifier 通过
+- ⚠️ 2026-10-27 修正：旧 zip 只含 .git+文档不是工程源码；新 zip 含完整工程（见下「源码包打包规范」）
 
 ### v1.5.12 变更（补录弹窗 UI 对齐首页录入卡，仅補錄卡片）
 1. 里程区间提示移至日期行与本次里程行之间
@@ -49,6 +50,13 @@
 
 ### 待用户验收
 - 装包验证：里程范围提示是否出现、保存按钮置灰是否跟随新规则
+
+## 源码包打包规范（2026-10-27 修正，务必遵守）
+源码 zip 必须是**可直接打开构建的完整 Android 工程**，不是只有 .git+文档。
+- 打包内容：`git ls-files`（排除 `.web-ref/`）+ 手动补 `keystore/koil-release.keystore` 与 `keystore.properties`（git 忽略但构建必需）+ 整个 `.git/`
+- 必须包含：settings.gradle.kts / build.gradle.kts / gradlew / gradlew.bat / gradle/wrapper/gradle-wrapper.jar / app/（src + build.gradle.kts）/ keystore
+- 排除：app/build/、.gradle/、.kotlin/、.tmp-tool-results/、.web-ref/、*.apk、*.zip、local.properties
+- 校验：verifier archive zip-check-entries 断言上述关键工程文件 + 解压回读确认 app/src 完整
 
 ## 常驻待办（对外发布前必做）
 - 清空 `KOiL-price-db-forecast` 残留旧值 + 标记 `KOiL-price-db-forecast-194-cleared`
