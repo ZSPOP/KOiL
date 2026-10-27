@@ -533,15 +533,26 @@ fun OverviewScreen(
                     referencePrice = uiState.backfillReferencePrice,
                 )
                 Spacer(Modifier.height(8.dp))
-                // v1.5.10：补录校验提示（复刻 Web：日期边界/重复/里程链/金额ratio）
+                // v1.5.11：选日期后提示该区间可输入里程范围
+                if (uiState.backfillRangeMin != null || uiState.backfillRangeMax != null) {
+                    MileageRangeHint(
+                        rangeMin = uiState.backfillRangeMin,
+                        rangeMax = uiState.backfillRangeMax,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                }
+                // v1.5.11：补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
                 BackfillPrecheckHint(
                     beforeFirst = uiState.backfillBeforeFirst,
                     sameDayExists = uiState.backfillSameDayExists,
-                    similarExists = uiState.backfillSimilarExists,
                     mileageConflictType = uiState.backfillMileageConflictType,
                     mileageConflictDate = uiState.backfillMileageConflictDate,
                     mileageConflictValue = uiState.backfillMileageConflictValue,
-                    amountError = uiState.backfillAmountError,
+                    deviationPct = uiState.backfillDeviationPct,
+                    deviationExceeded = uiState.backfillDeviationExceeded,
+                    overPayable = uiState.backfillOverPayable,
+                    overTank = uiState.backfillOverTank,
+                    tankCapacity = uiState.backfillTankCapacity,
                     ready = uiState.backfillReady,
                 )
                 Spacer(Modifier.height(20.dp))
@@ -1560,16 +1571,19 @@ private fun PriceDeviationHint(pct: Double?, exceeded: Boolean) {
     }
 }
 
-/** v1.5.10：补录校验提示（复刻 Web create 校验链：早于第一条/重复/里程链/金额ratio，通过绿色） */
+/** v1.5.11：补录校验提示（用户确认规则：早于第一条/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色） */
 @Composable
 private fun BackfillPrecheckHint(
     beforeFirst: Boolean,
     sameDayExists: Boolean,
-    similarExists: Boolean,
     mileageConflictType: String,
     mileageConflictDate: String,
     mileageConflictValue: Double,
-    amountError: String,
+    deviationPct: Double?,
+    deviationExceeded: Boolean,
+    overPayable: Boolean,
+    overTank: Boolean,
+    tankCapacity: Double,
     ready: Boolean,
 ) {
     val text = when {
@@ -1581,22 +1595,17 @@ private fun BackfillPrecheckHint(
         mileageConflictType == "next" -> stringResource(
             R.string.koil_ov_bf_mileage_next, mileageConflictDate, mileageConflictValue
         )
-        amountError.isNotBlank() -> stringResource(
-            when (amountError) {
-                "oil_too_small" -> R.string.koil_ov_bf_oil_too_small
-                "oil_too_large" -> R.string.koil_ov_bf_oil_too_large
-                "actual_too_large" -> R.string.koil_ov_bf_actual_too_large
-                "actual_over_payable" -> R.string.koil_ov_bf_actual_over_payable
-                else -> R.string.koil_ov_bf_discount_too_large
-            }
+        deviationExceeded && deviationPct != null -> stringResource(
+            R.string.koil_precheck_deviation, deviationPct
         )
-        similarExists -> stringResource(R.string.koil_ov_bf_similar)
+        overPayable -> stringResource(R.string.koil_precheck_over_payable)
+        overTank -> stringResource(R.string.koil_precheck_over_tank, tankCapacity.toInt())
         ready -> stringResource(R.string.koil_ov_bf_ready)
         else -> return
     }
     val blocking = beforeFirst || sameDayExists ||
-        mileageConflictType.isNotBlank() || amountError.isNotBlank()
-    val (bg, fg) = if (blocking || similarExists) Color(0x1AFF9500) to Color(0xFFFF9500)
+        mileageConflictType.isNotBlank() || deviationExceeded || overPayable || overTank
+    val (bg, fg) = if (blocking) Color(0x1AFF9500) to Color(0xFFFF9500)
     else Color(0x1A34C759) to Color(0xFF34C759)
     Box(
         modifier = Modifier
@@ -1606,6 +1615,28 @@ private fun BackfillPrecheckHint(
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(text, fontSize = 12.sp, color = fg)
+    }
+}
+
+/** v1.5.11：选日期后该区间可输入里程范围提示（中性信息，不阻断） */
+@Composable
+private fun MileageRangeHint(rangeMin: Double?, rangeMax: Double?) {
+    val text = when {
+        rangeMin != null && rangeMax != null ->
+            stringResource(R.string.koil_ov_bf_mileage_range, rangeMin.toInt(), rangeMax.toInt())
+        rangeMin != null ->
+            stringResource(R.string.koil_ov_bf_mileage_range_min, rangeMin.toInt())
+        else ->
+            stringResource(R.string.koil_ov_bf_mileage_range_max, rangeMax?.toInt() ?: 0)
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0x14FFFFFF))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(text, fontSize = 12.sp, color = Color(0xFF9AA0A6))
     }
 }
 
