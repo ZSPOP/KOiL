@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -79,13 +80,23 @@ fun KOiLDateField(
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart,
         ) {
-            Text(
-                text = date,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = MiuixTheme.colorScheme.onBackground,
-                maxLines = 1,
-            )
+            // v1.5.15：日期可选择（onDateSelected != null）时右侧显示下拉箭头（对齐油号/省份字段），只读不显示
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = date,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                )
+                if (onDateSelected != null) {
+                    DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                }
+            }
         }
     }
     if (showPicker && onDateSelected != null) {

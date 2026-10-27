@@ -4,6 +4,12 @@
 > 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
 > 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
 
+## v1.5.15（versionCode 215）— 2026-10-27（基于 v1.5.14）
+
+### 🔽 日期可选择时补上下拉箭头图标（用户指出：油号框箭头对着的小图标没进版）
+- **KOiLDateField**：`onDateSelected != null`（日期可选择：补录卡）时，日期值右侧显示 **DropdownArrowEndAction** 下拉箭头（对齐油号/省份字段，表示可点击选择）；只读（编辑卡/首页录入卡 `onDateSelected=null`）不显示
+- 视觉与油号框（GradePriceSelect）/省份框（ProvinceSelectField）保持一致
+
 ## v1.5.14（versionCode 214）— 2026-10-27（基于 v1.5.13）
 
 ### ✏️ 编辑/补录卡文案区分 + 应付"待计算"占位（用户验收反馈）
