@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"场景1：里程异常(50)+加油量有效(50L) → 里程警告与预计可行驶同屏显示"},{"id":2,"priority":"p0","description":"场景2：加油量500超限+里程正常 → 只显示超限警告、无续航"},{"id":3,"priority":"p1","description":"场景3：加油量0/空 → 无续航无提示"},{"id":4,"priority":"p0","description":"场景4：加油量有效+实付超限 → 续航与实付警告同屏"},{"id":5,"priority":"p1","description":"场景5：无任何输入 → 三行等距无占位"}]}

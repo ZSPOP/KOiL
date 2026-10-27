@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"移动端375px宽度-点击底部录入加油tab切换到录入页"},{"id":2,"priority":"p0","description":"移动端375px宽度-点击底部数据总览tab切换到总览页"},{"id":3,"priority":"p0","description":"移动端375px宽度-点击底部设置tab切换到设置页"},{"id":4,"priority":"p1","description":"移动端375px宽度-底部导航三个tab均可见且高亮正确"}]}

@@ -533,12 +533,26 @@ fun OverviewScreen(
                     referencePrice = uiState.backfillReferencePrice,
                 )
                 Spacer(Modifier.height(8.dp))
-                PriceDeviationHint(uiState.backfillDeviationPct, uiState.backfillDeviationExceeded)
+                // v1.5.10：补录校验提示（复刻 Web：日期边界/重复/里程链/金额ratio）
+                BackfillPrecheckHint(
+                    beforeFirst = uiState.backfillBeforeFirst,
+                    sameDayExists = uiState.backfillSameDayExists,
+                    similarExists = uiState.backfillSimilarExists,
+                    mileageConflictType = uiState.backfillMileageConflictType,
+                    mileageConflictDate = uiState.backfillMileageConflictDate,
+                    mileageConflictValue = uiState.backfillMileageConflictValue,
+                    amountError = uiState.backfillAmountError,
+                    ready = uiState.backfillReady,
+                )
                 Spacer(Modifier.height(20.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
                     Spacer(Modifier.width(12.dp))
-                    Button(onClick = viewModel::saveBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                    Button(
+                        onClick = viewModel::saveBackfill,
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        enabled = uiState.backfillReady,
+                    ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
                 }
             }
         }
@@ -1535,6 +1549,55 @@ private fun PriceDeviationHint(pct: Double?, exceeded: Boolean) {
     else Color(0x1A34C759) to Color(0xFF34C759)
     val text = if (exceeded) stringResource(R.string.koil_precheck_deviation, pct)
     else stringResource(R.string.koil_precheck_price_ok)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(bg)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        Text(text, fontSize = 12.sp, color = fg)
+    }
+}
+
+/** v1.5.10：补录校验提示（复刻 Web create 校验链：早于第一条/重复/里程链/金额ratio，通过绿色） */
+@Composable
+private fun BackfillPrecheckHint(
+    beforeFirst: Boolean,
+    sameDayExists: Boolean,
+    similarExists: Boolean,
+    mileageConflictType: String,
+    mileageConflictDate: String,
+    mileageConflictValue: Double,
+    amountError: String,
+    ready: Boolean,
+) {
+    val text = when {
+        beforeFirst -> stringResource(R.string.koil_ov_bf_before_first)
+        sameDayExists -> stringResource(R.string.koil_ov_bf_dup)
+        mileageConflictType == "prev" -> stringResource(
+            R.string.koil_ov_bf_mileage_prev, mileageConflictDate, mileageConflictValue
+        )
+        mileageConflictType == "next" -> stringResource(
+            R.string.koil_ov_bf_mileage_next, mileageConflictDate, mileageConflictValue
+        )
+        amountError.isNotBlank() -> stringResource(
+            when (amountError) {
+                "oil_too_small" -> R.string.koil_ov_bf_oil_too_small
+                "oil_too_large" -> R.string.koil_ov_bf_oil_too_large
+                "actual_too_large" -> R.string.koil_ov_bf_actual_too_large
+                "actual_over_payable" -> R.string.koil_ov_bf_actual_over_payable
+                else -> R.string.koil_ov_bf_discount_too_large
+            }
+        )
+        similarExists -> stringResource(R.string.koil_ov_bf_similar)
+        ready -> stringResource(R.string.koil_ov_bf_ready)
+        else -> return
+    }
+    val blocking = beforeFirst || sameDayExists ||
+        mileageConflictType.isNotBlank() || amountError.isNotBlank()
+    val (bg, fg) = if (blocking || similarExists) Color(0x1AFF9500) to Color(0xFFFF9500)
+    else Color(0x1A34C759) to Color(0xFF34C759)
     Box(
         modifier = Modifier
             .fillMaxWidth()

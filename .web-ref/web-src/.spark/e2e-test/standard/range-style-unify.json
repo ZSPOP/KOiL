@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"续航+里程警告同屏：两个通栏块样式一致（圆角/内边距/通栏宽度），续航块图标与文字垂直居中"},{"id":2,"priority":"p1","description":"深色主题下续航块背景与文字颜色正确，图标与文字同色"},{"id":3,"priority":"p0","description":"仅有续航时独立显示，不塌陷、有正常内边距"},{"id":4,"priority":"p0","description":"加油量超限无续航，仅显示警告块"}]}

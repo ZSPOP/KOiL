@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"打开线上应用地址，等待页面加载完成。报告：1) 页面是否白屏/404/正常 2) 控制台所有 error 3) window.location.pathname 和 window.__BASENAME__ 的值 4) #root 元素 innerHTML 长度。如果页面正常，截图并说明看到了什么内容。"},{"id":2,"priority":"p0","description":"如果页面显示了加油记录应用，点击底部的'汇总'tab，验证汇总页面正常显示。"},{"id":3,"priority":"p1","description":"点击底部的'历史'tab，验证历史页面正常显示。"}]}

@@ -83,8 +83,18 @@ data class OverviewUiState(
     // 编辑/补录偏差预检（对齐首页录入：按加油日期取参考价）
     val editDeviationPct: Double? = null,
     val editDeviationExceeded: Boolean = false,
-    val backfillDeviationPct: Double? = null,
-    val backfillDeviationExceeded: Boolean = false,
+    // v1.5.10：补录复刻 Web 校验结果（未来日期/早于第一条/金额ratio/里程链/重复）
+    val backfillBeforeFirst: Boolean = false,
+    val backfillSameDayExists: Boolean = false,
+    val backfillSameDayCount: Int = 0,
+    val backfillSimilarExists: Boolean = false,
+    // 里程链冲突：type = "prev"（需大于）/ "next"（需小于），携带对端日期与里程供 UI 三语渲染
+    val backfillMileageConflictType: String = "",
+    val backfillMileageConflictDate: String = "",
+    val backfillMileageConflictValue: Double = 0.0,
+    // 金额/油量校验错误 key（复刻 Web validateOilAmountAndAmount：过小/超上限/超1500/实付高于应付/优惠超25%）
+    val backfillAmountError: String = "",
+    val backfillReady: Boolean = false,
     // 编辑/补录参考单价（按加油日期取，联动油号）与自动核算应付金额
     val editReferencePrice: Double? = null,
     val editPayableAmount: String = "",
@@ -333,29 +343,106 @@ class OverviewViewModel(
         backfillPrecheckFlow.tryEmit(Unit)
     }
 
-    /** 补录偏差预检：按补录的加油日期取参考价（对齐首页录入 checkDeviation）；应付由用户输入（对齐编辑卡）；参考价按所选省份联动 */
+    /** 补录偏差预检（v1.5.10 复刻 Web create 校验链：日期边界→金额ratio→里程链→重复） */
     private suspend fun doRunBackfillPrecheck() {
         val s = _uiState.value
         val grade = s.backfillGrade
         val date = s.backfillDate
+        val mileage = s.backfillMileage.toDoubleOrNull()
         val amount = s.backfillOilAmount.toDoubleOrNull()
         val actual = s.backfillActualAmount.toDoubleOrNull()
+        val payableInput = s.backfillPayableAmount.toDoubleOrNull()
         val province = s.backfillProvince.ifBlank { settings.defaultProvince.first() }
-            // 参考单价（按加油日期取 ≤ 它的最新价）
-            val label = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
-            val refPrice = if (date.isNotBlank()) priceDao.getLatestPrice(province, label, date)?.price else null
-            var devPct: Double? = null
-            var devExceeded = false
-            if (date.isNotBlank() && amount != null && amount > 0 && actual != null && actual > 0) {
-                val r = syncer.checkDeviation(province, grade, date, amount, actual)
-                devPct = r.deviationPercent
-                devExceeded = r.hasDeviation
+        // 参考单价（按加油日期取 ≤ 它的最新价）
+        val label = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
+        val refPrice = if (date.isNotBlank()) priceDao.getLatestPrice(province, label, date)?.price else null
+
+        var beforeFirst = false
+        var sameDayExists = false
+        var sameDayCount = 0
+        var similarExists = false
+        var mileageConflictType = ""
+        var mileageConflictDate = ""
+        var mileageConflictValue = 0.0
+        var amountError = ""
+
+        if (date.isNotBlank()) {
+            // 1) 不早于第一条（复刻 Web：date < firstDate 或 同日且里程更小）
+            val earliest = recordDao.getEarliest()
+            if (earliest != null) {
+                beforeFirst = date < earliest.reoilDate ||
+                    (date == earliest.reoilDate && mileage != null && mileage < earliest.mileage)
             }
-            _uiState.value = s.copy(
-                backfillReferencePrice = refPrice,
-                backfillDeviationPct = devPct,
-                backfillDeviationExceeded = devExceeded,
-            )
+            // 2) 同日记录（复刻 Web checkDuplicate：exists + similarExists + sameDayCount）
+            val sameDay = recordDao.getSameDayRecords(date)
+            sameDayCount = sameDay.size
+            if (mileage != null) {
+                sameDayExists = sameDay.any { it.mileage == mileage }
+            }
+            if (!sameDayExists && amount != null && actual != null) {
+                similarExists = sameDay.any {
+                    kotlin.math.abs(it.oilAmount - amount) <= 2 &&
+                        kotlin.math.abs(it.actualAmount - actual) <= 10
+                }
+            }
+            // 3) 里程链（复刻 Web checkMileageChain：prev < date 需大于、next > date 需小于）
+            if (mileage != null && mileage > 0) {
+                val prev = recordDao.getBeforeDate(date)
+                val next = recordDao.getAfterDate(date)
+                when {
+                    prev != null && mileage <= prev.mileage -> {
+                        mileageConflictType = "prev"
+                        mileageConflictDate = prev.reoilDate
+                        mileageConflictValue = prev.mileage
+                    }
+                    next != null && mileage >= next.mileage -> {
+                        mileageConflictType = "next"
+                        mileageConflictDate = next.reoilDate
+                        mileageConflictValue = next.mileage
+                    }
+                }
+            }
+        }
+
+        // 4) 金额/油量校验（复刻 Web validateOilAmountAndAmount）
+        if (amount != null) {
+            if (amount < 1) amountError = "oil_too_small"
+            else if (amount > 200) amountError = "oil_too_large"
+        }
+        if (amountError.isEmpty() && actual != null && actual > 1500) {
+            amountError = "actual_too_large"
+        }
+        if (amountError.isEmpty() && amount != null && amount > 0 && actual != null && actual > 0) {
+            // 应付基准：优先用户输入，否则 参考价×油量（复刻 Web payableForCheck）
+            val payableForCheck = if (payableInput != null && payableInput > 0) payableInput
+            else if (refPrice != null && refPrice > 0) amount * refPrice
+            else null
+            if (payableForCheck != null && payableForCheck > 0) {
+                val ratio = actual / payableForCheck
+                if (ratio > 1.01) amountError = "actual_over_payable"
+                else if (ratio < 0.75) amountError = "discount_too_large"
+            }
+        }
+
+        val ready = date.isNotBlank() &&
+            mileage != null && mileage > 0 &&
+            amount != null && amount > 0 &&
+            actual != null && actual > 0 &&
+            !beforeFirst && !sameDayExists &&
+            mileageConflictType.isEmpty() && amountError.isEmpty()
+
+        _uiState.value = s.copy(
+            backfillReferencePrice = refPrice,
+            backfillBeforeFirst = beforeFirst,
+            backfillSameDayExists = sameDayExists,
+            backfillSameDayCount = sameDayCount,
+            backfillSimilarExists = similarExists,
+            backfillMileageConflictType = mileageConflictType,
+            backfillMileageConflictDate = mileageConflictDate,
+            backfillMileageConflictValue = mileageConflictValue,
+            backfillAmountError = amountError,
+            backfillReady = ready,
+        )
     }
 
     fun saveBackfill() {
@@ -363,9 +450,8 @@ class OverviewViewModel(
         val mileage = s.backfillMileage.toDoubleOrNull() ?: return
         val oilAmount = s.backfillOilAmount.toDoubleOrNull() ?: return
         val actual = s.backfillActualAmount.toDoubleOrNull() ?: return
-        if (s.backfillDate.isBlank() || mileage <= 0 || oilAmount <= 0 || actual < 0) return
-        // 偏差超阈值 → 拦截保存（对齐首页录入：预检不过不允许提交）
-        if (s.backfillDeviationExceeded) return
+        // v1.5.10：复刻 Web——预检全通过（日期/重复/里程链/金额ratio）才允许保存
+        if (s.backfillDate.isBlank() || !s.backfillReady) return
         viewModelScope.launch {
             val payable = s.backfillPayableAmount.toDoubleOrNull() ?: actual
             val province = s.backfillProvince.ifBlank { settings.defaultProvince.first() }

@@ -1,0 +1,12 @@
+{"cases": [
+  {"id": 1, "priority": "p0", "description": "打开加油录入页，验证底部导航三标签显示为中文（录入加油/数据总览/设置）"},
+  {"id": 2, "priority": "p0", "description": "进入设置页，找到语言选择区块，验证有4个选项（跟随系统/简体中文/繁體中文/English），默认跟随系统选中"},
+  {"id": 3, "priority": "p0", "description": "设置页点击 English 切换语言，底部导航变为英文（Home/Overview/Settings），页面标题变为英文"},
+  {"id": 4, "priority": "p0", "description": "英文态下切换到数据总览Tab，验证6个指标卡标题全为英文且无截断溢出"},
+  {"id": 5, "priority": "p0", "description": "英文态下切换到录入加油Tab，验证表单标签全为英文且375px宽度下不溢出"},
+  {"id": 6, "priority": "p1", "description": "英文态下切换到趋势分析Tab（数据总览内），验证Tab标签和空状态文案为英文"},
+  {"id": 7, "priority": "p0", "description": "切换回简体中文，所有文案恢复为中文，语言选择区块简体中文选项高亮"},
+  {"id": 8, "priority": "p1", "description": "切换到繁體中文，验证底部导航和设置页文案变为繁体（設定值/錄入等）"},
+  {"id": 9, "priority": "p1", "description": "切换回跟随系统模式，语言恢复为跟随浏览器默认语言"},
+  {"id": 10, "priority": "p1", "description": "深浅色主题切换在英文态下正常工作，文字颜色正确"}
+]}

@@ -1,0 +1,9 @@
+{"cases": [
+  {"id": 1, "priority": "p0", "description": "输入里程大于上次记录时，里程列下方显示绿色本次行驶≈Xkm提示"},
+  {"id": 2, "priority": "p0", "description": "输入里程小于上次记录时，里程列下方显示警示提示且不阻塞提交（提交按钮仍可点击）"},
+  {"id": 3, "priority": "p0", "description": "无上次记录（首条）时，里程列不显示行驶差值也不显示回退警示"},
+  {"id": 4, "priority": "p0", "description": "新建记录时，油号默认带入最近一条记录的油号"},
+  {"id": 5, "priority": "p1", "description": "保存成功 toast 中出现「查看记录」按钮，点击切换到数据总览页"},
+  {"id": 6, "priority": "p1", "description": "375px宽度下表单布局正常，新增提示文字不溢出"},
+  {"id": 7, "priority": "p1", "description": "切换英文态，新增文案翻译正常，无缺失key"}
+]}

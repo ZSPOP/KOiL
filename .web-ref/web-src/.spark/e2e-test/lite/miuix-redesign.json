@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"首页（录入页）正常渲染：玻璃态卡片、大圆角、蓝色主色渐变按钮、输入框白底大圆角"},{"id":2,"priority":"p0","description":"切换到汇总页：玻璃态总览卡片、渐变高亮油耗卡、数据网格整齐"},{"id":3,"priority":"p0","description":"切换到历史页：卡片式列表记录，每条记录独立大圆角卡片"},{"id":4,"priority":"p0","description":"窄屏底部胶囊导航居中、对齐、高亮准确"},{"id":5,"priority":"p1","description":"顶栏玻璃质感，标题图标渐变、间距合理"}]}

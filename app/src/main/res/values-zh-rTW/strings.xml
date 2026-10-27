@@ -132,6 +132,17 @@
     <string name="koil_ov_delete_confirm_title">確定要刪除這筆加油紀錄嗎？</string>
     <string name="koil_ov_delete_confirm_sub">此操作無法復原</string>
     <string name="koil_ov_delete_confirm">刪除</string>
+    <string name="koil_ov_bf_before_first">補錄不能早於你的第一筆記錄</string>
+    <string name="koil_ov_bf_dup">該日期和里程的加油記錄已存在，請勿重複提交</string>
+    <string name="koil_ov_bf_similar">當日已有相似記錄（油量/金額相近），請確認</string>
+    <string name="koil_ov_bf_ready">校驗通過，可以補錄</string>
+    <string name="koil_ov_bf_mileage_prev">與%1$s記錄(%2$.0f km)衝突：補錄里程需大於%2$.0f km</string>
+    <string name="koil_ov_bf_mileage_next">與%1$s記錄(%2$.0f km)衝突：補錄里程需小於%2$.0f km</string>
+    <string name="koil_ov_bf_oil_too_small">加油量過小，請確認</string>
+    <string name="koil_ov_bf_oil_too_large">加油量超過上限，請確認是否正確</string>
+    <string name="koil_ov_bf_actual_too_large">實付金額超過1500元，請確認是否正確</string>
+    <string name="koil_ov_bf_actual_over_payable">實付金額高於應付金額，請確認</string>
+    <string name="koil_ov_bf_discount_too_large">實付金額與應付金額差異過大（優惠超過25%），請確認</string>
     <string name="koil_ov_edit_title">編輯記錄</string>
     <string name="koil_ov_month_title">%1$d年%2$d月</string>
     <string name="koil_ov_md_date">%1$d月%2$d日</string>

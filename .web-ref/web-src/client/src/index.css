@@ -1,0 +1,98 @@
+@import '@lark-apaas/client-toolkit/lib/index.css';
+@import "tw-animate-css";
+@import "./tailwind-theme.css";
+@import "./typography.css";
+
+/* 隐藏右下角平台水印 / 品牌角标 */
+[class*="watermark"],
+[class*="water-mark"],
+[class*="powered"],
+[class*="brand-badge"],
+[class*="corner-badge"],
+[class*="aitool"],
+[class*="generator"],
+[style*="position: fixed"][style*="bottom:"][style*="right:"]:has(> div:only-child),
+body > div:last-child:has(> div[style*="position: fixed"]) {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* 针对常见的固定定位品牌水印覆盖层 */
+body::after,
+body::before {
+  content: none !important;
+}
+
+/* 隐藏数字输入框原生步进箭头 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* 原生日期输入：隐藏默认日历图标，使用自定义按钮 */
+.native-date-input::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+  pointer-events: none;
+}
+
+.native-date-input::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+
+.native-date-input::-webkit-datetime-edit {
+  padding: 0;
+}
+
+.native-date-input::-webkit-calendar-picker-indicator:hover {
+  background: transparent;
+  cursor: default;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  background-color: var(--background);
+  color: var(--foreground);
+  transition: background-color 300ms ease, color 300ms ease;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  background-color: var(--background);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* 设置页三个 Popover 在非 settings Tab 时强制隐藏，防止切换过程中悬浮残留 */
+[data-koil-tab-active]:not([data-koil-tab-active="settings"]) [data-koil-settings-popover] {
+  display: none !important;
+}
+
+@config "../../tailwind.config.ts";

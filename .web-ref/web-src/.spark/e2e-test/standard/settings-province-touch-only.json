@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"打开默认省份弹窗，上下滚动按钮可见且高度≥44px"},{"id":2,"priority":"p0","description":"触屏长按向下按钮约1.5秒，列表连续向下滚动多步；松开后停止"},{"id":3,"priority":"p0","description":"触屏长按向上按钮约1.5秒，列表连续向上滚动多步；松开后停止"},{"id":4,"priority":"p1","description":"触屏在列表区域上下滑动，原生滚动正常，按钮位置固定"}]}

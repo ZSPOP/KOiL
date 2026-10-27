@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"底部导航-点击录入加油tab应切换到录入页（标题含录入加油）"},{"id":2,"priority":"p0","description":"底部导航-点击数据总览tab应切换到总览页（标题含数据总览）"},{"id":3,"priority":"p0","description":"底部导航-点击设置tab应切换到设置页（标题含设置）"},{"id":4,"priority":"p1","description":"底部导航-当前tab高亮状态正确跟随切换"}]}

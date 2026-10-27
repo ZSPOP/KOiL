@@ -1,0 +1,9 @@
+{"cases": [
+  {"id": 1, "priority": "p0", "description": "应付金额和实付金额在同一行左右两列并排显示，与里程加油量行视觉一致"},
+  {"id": 2, "priority": "p0", "description": "两字段都为空未触发校验时，两列高度完全一致底部对齐"},
+  {"id": 3, "priority": "p0", "description": "只有应付列有提示/错误时，两列高度仍完全一致"},
+  {"id": 4, "priority": "p0", "description": "只有实付列有错误提示时，两列高度仍完全一致"},
+  {"id": 5, "priority": "p0", "description": "优惠/多付胶囊显示在两列下方独立整行，不在实付列内"},
+  {"id": 6, "priority": "p1", "description": "375px宽度下两列输入框与胶囊文本完整不溢出"},
+  {"id": 7, "priority": "p1", "description": "切换英文态，两列高度仍对齐，胶囊翻译正常"}
+]}

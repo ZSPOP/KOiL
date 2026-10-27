@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"打开首页，默认显示录入加油页，表单卡片存在且标题可见"},{"id":2,"priority":"p0","description":"点击底部「汇总」tab，汇总统计页卡片正常显示，无白屏"},{"id":3,"priority":"p0","description":"点击底部「历史」tab，历史记录页列表卡片正常显示，无白屏"},{"id":4,"priority":"p1","description":"底部导航为居中悬浮胶囊样式，带毛玻璃半透明效果"},{"id":5,"priority":"p1","description":"整体为浅色柔光玻璃风格，背景有渐变光晕，页面无横向滚动条"}]}

@@ -1,0 +1,8 @@
+{"cases": [
+  {"id": 1, "priority": "p0", "description": "打开录入加油页，输入加油量和小于应付的实付金额，优惠提示显示为醒目的绿色胶囊样式（有背景色、边框、更大字号）"},
+  {"id": 2, "priority": "p0", "description": "输入大于应付的实付金额，多付提示显示为醒目的警示色胶囊样式（背景色、边框对称）"},
+  {"id": 3, "priority": "p0", "description": "375px 宽度下节省态提示不溢出、金额完整可见"},
+  {"id": 4, "priority": "p1", "description": "切换英文态，Saved 和 Overpaid 的胶囊提示不溢出"},
+  {"id": 5, "priority": "p1", "description": "切换深色主题，绿色和警示色胶囊对比清晰可读"},
+  {"id": 6, "priority": "p0", "description": "清空实付金额，提示消失（显示条件不变）"}
+]}

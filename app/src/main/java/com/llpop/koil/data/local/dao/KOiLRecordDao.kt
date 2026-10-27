@@ -52,6 +52,18 @@ interface KOiLRecordDao {
     @Query("SELECT * FROM koil_record ORDER BY reoilDate ASC, id ASC LIMIT 1")
     suspend fun getEarliest(): KOiLRecordEntity?
 
+    /** 指定日期之前最近一条（< date，v1.5.10 复刻 Web checkMileageChain prev） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate < :date ORDER BY reoilDate DESC, id DESC LIMIT 1")
+    suspend fun getBeforeDate(date: String): KOiLRecordEntity?
+
+    /** 指定日期之后最近一条（> date，v1.5.10 复刻 Web checkMileageChain next） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate > :date ORDER BY reoilDate ASC, id ASC LIMIT 1")
+    suspend fun getAfterDate(date: String): KOiLRecordEntity?
+
+    /** 指定日期全部记录（同日多条：里程/油量/实付，v1.5.10 复刻 Web checkDuplicate） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate = :date ORDER BY mileage ASC")
+    suspend fun getSameDayRecords(date: String): List<KOiLRecordEntity>
+
     /** 同日同里程完全重复检测（预检） */
     @Query("SELECT COUNT(*) FROM koil_record WHERE reoilDate = :date AND mileage = :mileage")
     suspend fun countSameDayMileage(date: String, mileage: Double): Int

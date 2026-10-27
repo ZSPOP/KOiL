@@ -1,0 +1,7 @@
+{"cases": [
+  {"id": 1, "priority": "p0", "description": "本次里程和加油量两列输入框高度一致，左侧列不再比右侧矮"},
+  {"id": 2, "priority": "p0", "description": "预计可行驶胶囊显示在两列输入框的下方，单独占一整行宽度（非右列内）"},
+  {"id": 3, "priority": "p0", "description": "有油耗数据时输入加油量后胶囊显示预计里程km数，无数据时显示对应hint文案，逻辑不变"},
+  {"id": 4, "priority": "p1", "description": "375px宽度下胶囊文本完整，不溢出"},
+  {"id": 5, "priority": "p1", "description": "切换到英文态，胶囊翻译正常，无缺失key"}
+]}

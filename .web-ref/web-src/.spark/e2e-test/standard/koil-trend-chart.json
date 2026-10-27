@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"打开 koil-records 页面，趋势分析区域可见，控制台无 TOOLTIP_BG 未定义错误和常量重复声明错误"},{"id":2,"priority":"p1","description":"趋势分析的三个 tab（油耗/费用/月度占比）可切换，切换后图表区域有内容或空态提示，无白屏"}]}

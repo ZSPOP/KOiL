@@ -132,6 +132,17 @@
     <string name="koil_ov_delete_confirm_title">Delete this refuel record?</string>
     <string name="koil_ov_delete_confirm_sub">This cannot be undone</string>
     <string name="koil_ov_delete_confirm">Delete</string>
+    <string name="koil_ov_bf_before_first">Cannot backfill earlier than your first record</string>
+    <string name="koil_ov_bf_dup">A record with this date and mileage already exists</string>
+    <string name="koil_ov_bf_similar">A similar record exists on this day, please confirm</string>
+    <string name="koil_ov_bf_ready">Valid, ready to backfill</string>
+    <string name="koil_ov_bf_mileage_prev">Conflicts with %1$s record (%2$.0f km): mileage must be greater than %2$.0f km</string>
+    <string name="koil_ov_bf_mileage_next">Conflicts with %1$s record (%2$.0f km): mileage must be less than %2$.0f km</string>
+    <string name="koil_ov_bf_oil_too_small">Fuel amount too small, please confirm</string>
+    <string name="koil_ov_bf_oil_too_large">Fuel amount exceeds limit, please confirm</string>
+    <string name="koil_ov_bf_actual_too_large">Paid amount exceeds ¥1500, please confirm</string>
+    <string name="koil_ov_bf_actual_over_payable">Paid amount exceeds payable, please confirm</string>
+    <string name="koil_ov_bf_discount_too_large">Discount over 25% vs payable, please confirm</string>
     <string name="koil_ov_edit_title">Edit record</string>
     <string name="koil_ov_month_title">%2$d/%1$d</string>
     <string name="koil_ov_md_date">%2$d/%1$d</string>

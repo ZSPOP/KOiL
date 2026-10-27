@@ -1,0 +1,1 @@
+{"cases":[{"id":1,"priority":"p0","description":"打开首页，页头+油价卡+加油表单完整显示，主体非空白"},{"id":2,"priority":"p0","description":"点击底部导航'数据'tab，页面正常显示无白屏无JS报错"},{"id":3,"priority":"p0","description":"点击底部导航'设置'tab，页面正常显示无白屏无JS报错"},{"id":4,"priority":"p1","description":"切回'加油'tab，页面恢复正常，全程控制台无Render Error/TypeError"}]}
