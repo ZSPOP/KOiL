@@ -3,12 +3,34 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.11（versionCode 211）— 2026-10-27 已交付
+## 当前版本：v1.5.12（versionCode 212）— 2026-10-27 已交付
+
+- commit：`8569999`（基于 v1.5.11 `488d739`）
+- APK：https://aka.doubaocdn.com/s/K6vvC7ld9Q （KOiL-v1.5.12-release.apk）
+- 源码 zip：https://aka.doubaocdn.com/s/OESVhdem1p （KOiL-src-v1512.zip，五件套 verifier matched 5/5）
+- 签名：release 证书 SHA-256 恒定 `cc962f1e...`，编译通过、verifier 通过
+
+### v1.5.12 变更（补录弹窗 UI 对齐首页录入卡，仅補錄卡片）
+1. 里程区间提示移至日期行与本次里程行之间
+2. 应付金额只读自动计算（= 加油量 × 参考单价，对齐首页 updatePayable）
+3. 里程/油量/实付字段红色错误态（对齐首页 FormField：#FF3B30 边框/图标/标签）
+   - 里程：里程链冲突或同日重复 → 红
+   - 油量：超油箱容量 → 红
+   - 实付：偏差超阈值或实付>应付 → 红
+4. 字段图标对齐首页：里程=Speed / 油量=WaterDrop / 应付=Money / 实付=Money
+- 编辑弹窗字段同步适配新组件签名（仅补图标+键盘类型，行为不变）
+
+### 待用户验收（v1.5.12）
+- 里程范围提示位置（日期行下、里程行上）
+- 应付金额自动计算 + 只读
+- 字段红色错误态是否与首页一致
+- 字段图标
+
+## 上一版本：v1.5.11（versionCode 211）— 2026-10-27 已交付
 
 - commit：`488d739`（基于 v1.5.10 `b7d0098`）
 - APK：https://aka.doubaocdn.com/s/3vov4412D9 （KOiL-v1.5.11-release.apk）
 - 源码 zip：https://aka.doubaocdn.com/s/3uycL13hz6 （KOiL-src-v1511.zip，五件套 verifier matched 5/5）
-- 签名：release 证书 SHA-256 恒定 `cc962f1e...`（与历史一致），编译通过、verifier 通过
 
 ### v1.5.11 变更（仅補錄卡片，首页录入不动）
 用户逐条确认的补录页校验规则：
