@@ -54,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -125,18 +126,25 @@ fun OverviewScreen(
     val uiState by viewModel.uiState.collectAsState()
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
-    var visibleCount by remember { mutableStateOf(20) }
+    // v1.5.9：按月分批加载——默认展开最近 1 个月，滚动到底逐月续载
+    var visibleMonths by remember { mutableStateOf(1) }
     var showBackToTop by remember { mutableStateOf(false) }
     var moreMenuFor by remember { mutableStateOf<Long?>(null) }
     // v1.5.5：长按操作的卡片引用 + 全局位置（全屏遮罩点击任意处收起）
     var actionRecord by remember { mutableStateOf<RecordWithDerived?>(null) }
     var actionRect by remember { mutableStateOf<Rect?>(null) }
+    // v1.5.9：待确认删除的记录（弹确认框后才真正删除）
+    var pendingDelete by remember { mutableStateOf<RecordWithDerived?>(null) }
+    // 月份总数（最新在前）
+    val monthCount = remember(uiState.records.size) {
+        uiState.records.map { it.record.reoilDate.substring(0, 7) }.distinct().size
+    }
 
-    // 滚动到底自动加载更多 + 返回顶部按钮显隐
+    // 滚动到底自动按月续载 + 返回顶部按钮显隐
     LaunchedEffect(scrollState.value) {
         if (scrollState.value > 400) showBackToTop = true else showBackToTop = false
         if (scrollState.maxValue > 0 && scrollState.value >= scrollState.maxValue - 200) {
-            if (visibleCount < uiState.records.size) visibleCount += 20
+            if (visibleMonths < monthCount) visibleMonths += 1
         }
     }
 
@@ -179,7 +187,7 @@ fun OverviewScreen(
                             .background(if (selected) KOiLColors.Primary else Color.Transparent)
                             .clickable {
                                 viewModel.setRange(key)
-                                visibleCount = 20
+                                visibleMonths = 1
                             }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                     ) {
@@ -255,8 +263,8 @@ fun OverviewScreen(
                 }
             }
             Spacer(Modifier.height(4.dp))
-            // v1.5.3：仅当还有更多记录时才显示加载提示（避免数据全显示时误导）
-            if (visibleCount < uiState.records.size) {
+            // v1.5.9：仅当还有更多月份未加载时才显示提示（避免数据全显示时误导）
+            if (visibleMonths < monthCount) {
                 Text(
                     text = stringResource(R.string.koil_ov_scroll_more),
                     fontSize = 11.sp,
@@ -270,9 +278,11 @@ fun OverviewScreen(
             if (uiState.records.isEmpty()) {
                 EmptyHistoryBox()
             } else {
-            val visible = uiState.records.take(visibleCount)
+            // v1.5.9：按月分批加载——只渲染已加载的月份（默认最近 1 个月，滚动续载）
             val prevMap = buildPrevMap(uiState.records)
-            visible.groupBy { it.record.reoilDate.substring(0, 7) }
+            uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }
+                .toList()
+                .take(visibleMonths)
                 .forEach { (monthKey, monthRecords) ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -365,7 +375,8 @@ fun OverviewScreen(
                             moreMenuFor = null
                             actionRecord = null
                             actionRect = null
-                            rec?.let { viewModel.deleteRecord(it.record.id) }
+                            // v1.5.9：先弹确认框，确认后才真正删除
+                            rec?.let { pendingDelete = it }
                         }
                     }
                 }
@@ -390,6 +401,64 @@ fun OverviewScreen(
             }
         }
     }
+    }
+
+    // v1.5.9：删除确认弹窗（防误删）
+    pendingDelete?.let { rec ->
+        com.llpop.koil.ui.component.KOiLGlassDialog(
+            show = true,
+            onDismissRequest = { pendingDelete = null },
+            contentPadding = 20.dp,
+            widthFraction = 0.82f,
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = stringResource(R.string.koil_ov_delete_confirm_title),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(R.string.koil_ov_delete_confirm_sub),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+                Spacer(Modifier.height(20.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = stringResource(R.string.koil_common_cancel),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .clickable { pendingDelete = null }
+                            .padding(vertical = 11.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.koil_ov_delete_confirm),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFE53935))
+                            .clickable {
+                                pendingDelete = null
+                                viewModel.deleteRecord(rec.record.id)
+                            }
+                            .padding(vertical = 11.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+        }
     }
 
     // 编辑弹窗

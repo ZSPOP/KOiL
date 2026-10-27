@@ -129,6 +129,9 @@
     <string name="koil_col_unit_price">Unit price</string>
     <string name="koil_ov_edit">Edit</string>
     <string name="koil_ov_delete">Delete</string>
+    <string name="koil_ov_delete_confirm_title">Delete this refuel record?</string>
+    <string name="koil_ov_delete_confirm_sub">This cannot be undone</string>
+    <string name="koil_ov_delete_confirm">Delete</string>
     <string name="koil_ov_edit_title">Edit record</string>
     <string name="koil_ov_month_title">%2$d/%1$d</string>
     <string name="koil_ov_md_date">%2$d/%1$d</string>

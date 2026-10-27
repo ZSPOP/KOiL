@@ -129,6 +129,9 @@
     <string name="koil_col_unit_price">實付單價</string>
     <string name="koil_ov_edit">編輯</string>
     <string name="koil_ov_delete">刪除</string>
+    <string name="koil_ov_delete_confirm_title">確定要刪除這筆加油紀錄嗎？</string>
+    <string name="koil_ov_delete_confirm_sub">此操作無法復原</string>
+    <string name="koil_ov_delete_confirm">刪除</string>
     <string name="koil_ov_edit_title">編輯記錄</string>
     <string name="koil_ov_month_title">%1$d年%2$d月</string>
     <string name="koil_ov_md_date">%1$d月%2$d日</string>
