@@ -83,6 +83,19 @@ data class OverviewUiState(
     // 编辑/补录偏差预检（对齐首页录入：按加油日期取参考价）
     val editDeviationPct: Double? = null,
     val editDeviationExceeded: Boolean = false,
+    // v1.5.13：编辑卡校验复刻补录卡（唯一差异：日期只读，校验排除自身 id）
+    val editBeforeFirst: Boolean = false,
+    val editSameDayExists: Boolean = false,
+    val editMileageConflictType: String = "",
+    val editMileageConflictDate: String = "",
+    val editMileageConflictValue: Double = 0.0,
+    val editOverPayable: Boolean = false,
+    val editOverTank: Boolean = false,
+    val editTankCapacity: Double = 0.0,
+    // 编辑日期（只读）的里程区间（prev+1 ~ next-1，null 表示该侧无界）
+    val editRangeMin: Double? = null,
+    val editRangeMax: Double? = null,
+    val editReady: Boolean = false,
     // v1.5.11：补录校验结果（用户确认规则：日期边界/同日重复/双向里程链 + 首页口径）
     val backfillBeforeFirst: Boolean = false,
     val backfillSameDayExists: Boolean = false,
@@ -231,59 +244,184 @@ class OverviewViewModel(
             editGrade = record.oilGrade ?: "92",
             editProvince = province,
             editRecordDates = reoilDatesFor(province),
+            // v1.5.13：打开即重置编辑卡校验态（对齐补录卡）
+            editBeforeFirst = false,
+            editSameDayExists = false,
+            editMileageConflictType = "",
+            editMileageConflictDate = "",
+            editMileageConflictValue = 0.0,
+            editOverPayable = false,
+            editOverTank = false,
+            editRangeMin = null,
+            editRangeMax = null,
+            editReady = false,
             showEditDialog = true,
         )
-        // 打开即跑预检：自动带出参考价（油号单价），避免 ¥--
+        // 打开即跑预检：自动带出参考价（油号单价）与应付自动算，避免 ¥--
         runEditPrecheck()
     }
 
     fun setEditDate(v: String) { _uiState.value = _uiState.value.copy(editDate = v); runEditPrecheck() }
     fun setEditMileage(v: String) { _uiState.value = _uiState.value.copy(editMileage = v); runEditPrecheck() }
-    fun setEditOilAmount(v: String) { _uiState.value = _uiState.value.copy(editOilAmount = v); runEditPrecheck() }
+    fun setEditOilAmount(v: String) {
+        _uiState.value = _uiState.value.copy(editOilAmount = v)
+        // v1.5.13：应付自动计算（对齐补录卡/首页 updatePayable：油量 × 参考单价）
+        updateEditPayable()
+        runEditPrecheck()
+    }
     fun setEditActualAmount(v: String) { _uiState.value = _uiState.value.copy(editActualAmount = v); runEditPrecheck() }
-    fun setEditGrade(v: String) { _uiState.value = _uiState.value.copy(editGrade = v); runEditPrecheck() }
+    fun setEditGrade(v: String) { _uiState.value = _uiState.value.copy(editGrade = v); updateEditPayable(); runEditPrecheck() }
     fun setEditProvince(v: String) {
         _uiState.value = _uiState.value.copy(editProvince = v, editRecordDates = reoilDatesFor(v))
         runEditPrecheck()
     }
-    /** 编辑态应付金额可手动修改（对齐 Web：编辑弹窗应付为可编辑输入框） */
+    /** v1.5.13：编辑卡应付只读自动计算（对齐补录卡），setter 保留兼容，UI 不再可编辑 */
     fun setEditPayableAmount(v: String) { _uiState.value = _uiState.value.copy(editPayableAmount = v) }
+
+    /** v1.5.13：编辑卡应付金额自动计算（对齐补录卡 updateBackfillPayable），油量/油号/参考价变化时即时刷新 */
+    private fun updateEditPayable() {
+        val s = _uiState.value
+        val amount = s.editOilAmount.toDoubleOrNull()
+        val price = s.editReferencePrice
+        if (amount != null && price != null && amount > 0 && price > 0) {
+            _uiState.value = _uiState.value.copy(
+                editPayableAmount = String.format("%.2f", amount * price)
+            )
+        }
+    }
 
     /** 编辑偏差预检入口（去抖信号，实际执行见 doRunEditPrecheck） */
     private fun runEditPrecheck() {
         editPrecheckFlow.tryEmit(Unit)
     }
 
-    /** 编辑偏差预检：按编辑后的加油日期取参考价（对齐首页录入 checkDeviation）；参考价按所选省份联动 */
+    /** 编辑校验（v1.5.13 复刻补录卡：日期边界/同日重复/双向里程链 + 偏差A+B/实付>应付/油箱容量；唯一差异：日期只读、校验排除自身 id） */
     private suspend fun doRunEditPrecheck() {
         val s = _uiState.value
+        val r = s.editingRecord ?: return
         val grade = s.editGrade
         val date = s.editDate
+        val mileage = s.editMileage.toDoubleOrNull()
         val amount = s.editOilAmount.toDoubleOrNull()
         val actual = s.editActualAmount.toDoubleOrNull()
+        val payableInput = s.editPayableAmount.toDoubleOrNull()
         val province = s.editProvince.ifBlank { settings.defaultProvince.first() }
-            // 参考单价（按加油日期取 ≤ 它的最新价）
-            val label = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
-            val refPrice = if (date.isNotBlank()) priceDao.getLatestPrice(province, label, date)?.price else null
-            var devPct: Double? = null
-            var devExceeded = false
-            if (date.isNotBlank() && amount != null && amount > 0 && actual != null && actual > 0) {
-                val r = syncer.checkDeviation(province, grade, date, amount, actual)
-                devPct = r.deviationPercent
-                devExceeded = r.hasDeviation
+        // 参考单价（按加油日期取 ≤ 它的最新价）
+        val label = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
+        val refPrice = if (date.isNotBlank()) priceDao.getLatestPrice(province, label, date)?.price else null
+        // 油箱容量（首页口径）
+        val tankCapacity = settings.tankCapacity.first().toDouble()
+
+        var beforeFirst = false
+        var sameDayExists = false
+        var mileageConflictType = ""
+        var mileageConflictDate = ""
+        var mileageConflictValue = 0.0
+        var devPct: Double? = null
+        var devExceeded = false
+        var overPayable = false
+        var overTank = false
+        var rangeMin: Double? = null
+        var rangeMax: Double? = null
+
+        if (date.isNotBlank()) {
+            // 1) 不早于第一条（排除自身：编辑对象就是最早记录时不误判）
+            val earliest = recordDao.getEarliestExcluding(r.id)
+            if (earliest != null) {
+                beforeFirst = date < earliest.reoilDate ||
+                    (date == earliest.reoilDate && mileage != null && mileage < earliest.mileage)
             }
-            _uiState.value = s.copy(
-                editReferencePrice = refPrice,
-                editDeviationPct = devPct,
-                editDeviationExceeded = devExceeded,
-            )
+            // 2) 同日同里程重复（排除自身）
+            val sameDay = recordDao.getSameDayRecordsExcluding(date, r.id)
+            if (mileage != null) {
+                sameDayExists = sameDay.any { it.mileage == mileage }
+            }
+            // 3) 里程链（prev < date 需大于、next > date 需小于；日期只读 → prev/next 天然不含自身）
+            val prev = recordDao.getBeforeDate(date)
+            val next = recordDao.getAfterDate(date)
+            if (mileage != null && mileage > 0) {
+                when {
+                    prev != null && mileage <= prev.mileage -> {
+                        mileageConflictType = "prev"
+                        mileageConflictDate = prev.reoilDate
+                        mileageConflictValue = prev.mileage
+                    }
+                    next != null && mileage >= next.mileage -> {
+                        mileageConflictType = "next"
+                        mileageConflictDate = next.reoilDate
+                        mileageConflictValue = next.mileage
+                    }
+                }
+            }
+            // 4) 该日期区间可输入里程范围（prev+1 ~ next-1，无界侧为 null）
+            rangeMin = prev?.let { it.mileage + 1 }
+            rangeMax = next?.let { it.mileage - 1 }
+            if (rangeMin != null && rangeMax != null && rangeMin > rangeMax) {
+                rangeMin = null
+                rangeMax = null
+            }
+        }
+
+        // 4) 价格偏差（首页口径 A+B：A 参考价偏差优先，B 无参考价回退实付vs应付，阈值=设置页）
+        if (date.isNotBlank() && amount != null && amount > 0 && actual != null && actual > 0) {
+            val result = syncer.checkDeviation(province, grade, date, amount, actual)
+            val threshold = result.thresholdPercent
+            if (result.referencePrice != null) {
+                devPct = result.deviationPercent
+                devExceeded = result.hasDeviation
+            } else {
+                val payable = if (payableInput != null && payableInput > 0) payableInput
+                else if (refPrice != null && refPrice > 0) amount * refPrice
+                else null
+                val pct = if (payable != null && payable > 0)
+                    kotlin.math.abs(actual - payable) / payable * 100 else 0.0
+                devPct = pct
+                devExceeded = pct > threshold
+            }
+            // 5) 实付>应付 一律拦截（=允许）
+            val payableForCheck = if (payableInput != null && payableInput > 0) payableInput
+            else if (refPrice != null && refPrice > 0) amount * refPrice
+            else null
+            if (payableForCheck != null && payableForCheck > 0 && actual > payableForCheck) {
+                overPayable = true
+            }
+        }
+        // 6) 油箱容量（加油量 > 油箱容量）
+        if (amount != null && amount > tankCapacity && tankCapacity > 0) {
+            overTank = true
+        }
+
+        val ready = date.isNotBlank() &&
+            mileage != null && mileage > 0 &&
+            amount != null && amount > 0 &&
+            actual != null && actual > 0 &&
+            !beforeFirst && !sameDayExists &&
+            mileageConflictType.isEmpty() &&
+            !devExceeded && !overPayable && !overTank
+
+        _uiState.value = s.copy(
+            editReferencePrice = refPrice,
+            editDeviationPct = devPct,
+            editDeviationExceeded = devExceeded,
+            editBeforeFirst = beforeFirst,
+            editSameDayExists = sameDayExists,
+            editMileageConflictType = mileageConflictType,
+            editMileageConflictDate = mileageConflictDate,
+            editMileageConflictValue = mileageConflictValue,
+            editOverPayable = overPayable,
+            editOverTank = overTank,
+            editTankCapacity = tankCapacity,
+            editRangeMin = rangeMin,
+            editRangeMax = rangeMax,
+            editReady = ready,
+        )
     }
 
     fun saveEdit() {
         val s = _uiState.value
         val r = s.editingRecord ?: return
-        // 偏差超阈值 → 拦截保存（对齐首页录入：预检不过不允许提交）
-        if (s.editDeviationExceeded) return
+        // v1.5.13：对齐补录卡——预检全通过（日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量）才允许保存
+        if (s.editDate.isBlank() || !s.editReady) return
         viewModelScope.launch {
             val province = s.editProvince.ifBlank { settings.defaultProvince.first() }
             try {

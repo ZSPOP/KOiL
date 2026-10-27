@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -463,11 +464,10 @@ fun OverviewScreen(
         }
     }
 
-    // 编辑弹窗
+    // 编辑弹窗（v1.5.13 复刻补录卡：日期只读 + 全量校验 + 保存置灰/变蓝）
     if (uiState.showEditDialog) {
         EditRecordDialog(
             uiState = uiState,
-            onDateChange = viewModel::setEditDate,
             onMileageChange = viewModel::setEditMileage,
             onOilAmountChange = viewModel::setEditOilAmount,
             onActualAmountChange = viewModel::setEditActualAmount,
@@ -592,6 +592,13 @@ fun OverviewScreen(
                         onClick = viewModel::saveBackfill,
                         modifier = Modifier.weight(1f).height(44.dp),
                         enabled = uiState.backfillReady,
+                        // v1.5.13：全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
+                        colors = ButtonDefaults.buttonColors(
+                            color = KOiLColors.Primary,
+                            contentColor = Color.White,
+                            disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
+                        ),
                     ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
                 }
             }
@@ -1497,11 +1504,10 @@ private fun RecordDetail(
     }
 }
 
-// ===== 编辑记录弹窗 =====
+// ===== 编辑记录弹窗（v1.5.13 复刻补录卡：字段结构/图标/红色错误态/里程区间提示/校验提示条/应付只读自动算/保存置灰变蓝；唯一差异：日期只读） =====
 @Composable
 private fun EditRecordDialog(
     uiState: OverviewUiState,
-    onDateChange: (String) -> Unit,
     onMileageChange: (String) -> Unit,
     onOilAmountChange: (String) -> Unit,
     onActualAmountChange: (String) -> Unit,
@@ -1530,9 +1536,14 @@ private fun EditRecordDialog(
             // 加油省份（与设置页同款下拉列表）
             ProvinceSelectField(province = uiState.editProvince, onProvinceChange = onProvinceChange)
             Spacer(Modifier.height(14.dp))
-            // 第一行：日期（日历可改）+ 油号（联动当日参考单价）
+            // 第一行：日期（只读，不可修改）+ 油号（联动当日参考单价）
             Row(verticalAlignment = Alignment.Top) {
-                com.llpop.koil.ui.component.KOiLDateField(modifier = Modifier.weight(1f), date = uiState.editDate, recordDates = uiState.editRecordDates, onDateSelected = onDateChange)
+                com.llpop.koil.ui.component.KOiLDateField(
+                    modifier = Modifier.weight(1f),
+                    date = uiState.editDate,
+                    recordDates = uiState.editRecordDates,
+                    onDateSelected = null,
+                )
                 Spacer(Modifier.width(14.dp))
                 GradePriceSelect(
                     grade = uiState.editGrade,
@@ -1542,21 +1553,61 @@ private fun EditRecordDialog(
                 )
             }
             Spacer(Modifier.height(14.dp))
-            // 第二行：里程 + 加油量
+            // 打开即显示该日期（只读）的里程区间提示（对齐补录卡：日期行与里程行之间）
+            if (uiState.editRangeMin != null || uiState.editRangeMax != null) {
+                MileageRangeHint(
+                    rangeMin = uiState.editRangeMin,
+                    rangeMax = uiState.editRangeMax,
+                )
+                Spacer(Modifier.height(14.dp))
+            }
+            // 第二行：里程 + 加油量（红色错误态对齐补录卡）
             Row {
-                EditField(stringResource(R.string.koil_add_field_mileage), Icons.Filled.Speed, uiState.editMileage, onMileageChange, keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
+                EditField(
+                    label = stringResource(R.string.koil_add_field_mileage),
+                    icon = Icons.Filled.Speed,
+                    value = uiState.editMileage,
+                    onValueChange = onMileageChange,
+                    keyboardType = KeyboardType.Number,
+                    error = uiState.editMileageConflictType.isNotBlank() || uiState.editSameDayExists,
+                    modifier = Modifier.weight(1f),
+                )
                 Spacer(Modifier.width(14.dp))
-                EditField(stringResource(R.string.koil_add_field_oil_amount), Icons.Filled.WaterDrop, uiState.editOilAmount, onOilAmountChange, keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                EditField(
+                    label = stringResource(R.string.koil_add_field_oil_amount),
+                    icon = Icons.Filled.WaterDrop,
+                    value = uiState.editOilAmount,
+                    onValueChange = onOilAmountChange,
+                    keyboardType = KeyboardType.Decimal,
+                    error = uiState.editOverTank,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Spacer(Modifier.height(14.dp))
-            // 第三行：应付（可编辑，对齐 Web 编辑弹窗）+ 实付
+            // 第三行：应付（只读自动计算）+ 实付（对齐补录卡）
             Row {
-                EditField(stringResource(R.string.koil_add_field_payable), Icons.Filled.Money, uiState.editPayableAmount, onPayableChange, keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                EditField(
+                    label = stringResource(R.string.koil_add_field_payable),
+                    icon = Icons.Filled.Money,
+                    value = uiState.editPayableAmount,
+                    onValueChange = onPayableChange,
+                    keyboardType = KeyboardType.Decimal,
+                    readOnly = true,
+                    modifier = Modifier.weight(1f),
+                )
                 Spacer(Modifier.width(14.dp))
-                EditField(stringResource(R.string.koil_add_field_actual), Icons.Filled.Money, uiState.editActualAmount, onActualAmountChange, keyboardType = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                EditField(
+                    label = stringResource(R.string.koil_add_field_actual),
+                    icon = Icons.Filled.Money,
+                    value = uiState.editActualAmount,
+                    onValueChange = onActualAmountChange,
+                    keyboardType = KeyboardType.Decimal,
+                    error = uiState.editDeviationExceeded || uiState.editOverPayable,
+                    modifier = Modifier.weight(1f),
+                )
             }
             Spacer(Modifier.height(10.dp))
-            // 实付综合信息块（对齐 Web PaymentSummaryCard）
+            // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
             PaymentSummaryCard(
                 payable = uiState.editPayableAmount.toDoubleOrNull(),
                 actual = uiState.editActualAmount.toDoubleOrNull(),
@@ -1564,7 +1615,20 @@ private fun EditRecordDialog(
                 referencePrice = uiState.editReferencePrice,
             )
             Spacer(Modifier.height(8.dp))
-            PriceDeviationHint(uiState.editDeviationPct, uiState.editDeviationExceeded)
+            // 编辑校验提示条（v1.5.13 复刻补录卡：日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色）
+            BackfillPrecheckHint(
+                beforeFirst = uiState.editBeforeFirst,
+                sameDayExists = uiState.editSameDayExists,
+                mileageConflictType = uiState.editMileageConflictType,
+                mileageConflictDate = uiState.editMileageConflictDate,
+                mileageConflictValue = uiState.editMileageConflictValue,
+                deviationPct = uiState.editDeviationPct,
+                deviationExceeded = uiState.editDeviationExceeded,
+                overPayable = uiState.editOverPayable,
+                overTank = uiState.editOverTank,
+                tankCapacity = uiState.editTankCapacity,
+                ready = uiState.editReady,
+            )
             Spacer(Modifier.height(20.dp))
             Row(modifier = Modifier.fillMaxWidth()) {
                 Button(
@@ -1575,28 +1639,17 @@ private fun EditRecordDialog(
                 Button(
                     onClick = onSave,
                     modifier = Modifier.weight(1f).height(44.dp),
+                    enabled = uiState.editReady,
+                    // v1.5.13：全部校验通过 → 蓝色可保存；否则灰色置灰（对齐补录卡/首页录入卡）
+                    colors = ButtonDefaults.buttonColors(
+                        color = KOiLColors.Primary,
+                        contentColor = Color.White,
+                        disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
+                    ),
                 ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
             }
         }
-    }
-}
-
-/** 编辑/补录弹窗的偏差预检提示（对齐首页录入横幅：超阈值橙色、通过绿色） */
-@Composable
-private fun PriceDeviationHint(pct: Double?, exceeded: Boolean) {
-    if (pct == null) return
-    val (bg, fg) = if (exceeded) Color(0x1AFF9500) to Color(0xFFFF9500)
-    else Color(0x1A34C759) to Color(0xFF34C759)
-    val text = if (exceeded) stringResource(R.string.koil_precheck_deviation, pct)
-    else stringResource(R.string.koil_precheck_price_ok)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(bg)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(text, fontSize = 12.sp, color = fg)
     }
 }
 

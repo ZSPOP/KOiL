@@ -52,6 +52,10 @@ interface KOiLRecordDao {
     @Query("SELECT * FROM koil_record ORDER BY reoilDate ASC, id ASC LIMIT 1")
     suspend fun getEarliest(): KOiLRecordEntity?
 
+    /** 排除指定 id 外的最早一条（编辑校验：自身是最早记录时不得把自己当"前一条"） */
+    @Query("SELECT * FROM koil_record WHERE id != :excludeId ORDER BY reoilDate ASC, id ASC LIMIT 1")
+    suspend fun getEarliestExcluding(excludeId: Long): KOiLRecordEntity?
+
     /** 指定日期之前最近一条（< date，v1.5.10 复刻 Web checkMileageChain prev） */
     @Query("SELECT * FROM koil_record WHERE reoilDate < :date ORDER BY reoilDate DESC, id DESC LIMIT 1")
     suspend fun getBeforeDate(date: String): KOiLRecordEntity?
@@ -63,6 +67,10 @@ interface KOiLRecordDao {
     /** 指定日期全部记录（同日多条：里程/油量/实付，v1.5.10 复刻 Web checkDuplicate） */
     @Query("SELECT * FROM koil_record WHERE reoilDate = :date ORDER BY mileage ASC")
     suspend fun getSameDayRecords(date: String): List<KOiLRecordEntity>
+
+    /** 指定日期、排除指定 id 的全部记录（编辑校验：不与自己判重） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate = :date AND id != :excludeId ORDER BY mileage ASC")
+    suspend fun getSameDayRecordsExcluding(date: String, excludeId: Long): List<KOiLRecordEntity>
 
     /** 同日同里程完全重复检测（预检） */
     @Query("SELECT COUNT(*) FROM koil_record WHERE reoilDate = :date AND mileage = :mileage")
