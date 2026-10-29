@@ -1,5 +1,28 @@
 # KOiL CHANGELOG
 
+## v1.5.26（versionCode 226）— 2026-10-29（基于 v1.5.25，总览居中 + 油价库补灌自动重试）
+
+> 用户认可方案的两项：总览六指标居中 + 油价库"打开不自动灌"根因修复。不涉及 DB schema（覆盖升级安全）。
+
+### 🖌 总览页六指标 3×2 居中 + 列间距（OverviewScreen）
+- **根因**：StatCell 内容全部 start 对齐 → 三列内容挤在各自格子左侧，第三列右侧留白约 20% 屏宽 → 整体视觉偏左
+- **修复**：StatCell 外层 Column 改 `horizontalAlignment = CenterHorizontally`（icon+label 行、数值+单位行、涨跌行全部居中）；
+  两行网格列间改为显式 `Spacer(12.dp)` 均匀间距；行间距 14dp、外部 padding 16dp 不变
+
+### 🔄 油价库全国补灌自动重试（KOiLApplication + OilPriceDbSyncer）
+- **根因**：全国 31 省补灌（seedRemainingProvinces）前置条件"窗口日历就绪"（getAdjustDates 非空，防假生效日纪律）；
+  重装后日历缓存为空，启动瞬间锚点链（xxapi→ruseo→abapi→发改委）若失败 → 日历空 → 补灌**静默跳过且无重试**；
+  失败后 checkAndUpdate 的 catch 还写入 8h 节流时间戳 → 自动检测也被锁死 → 只有点「立即更新」(force) 能绕过
+  （与你观察"打开几分钟不动、点立即更新马上灌"完全一致；截图「下个窗口：10-29」来自聚合接口文本，不依赖日历成功）
+- **修复**：
+  1. 新增 `fillRemainingProvincesIfCalendarReady()`（日历就绪才灌，返回是否已执行）——把"日历未就绪"变成可观测状态
+  2. 启动兜底改为重试循环：首轮 3s + 后续每 30s 轮询，最多 6 次（约 3 分钟自愈），就绪即自动灌全国
+  3. `checkAndUpdate` 失败**不再写 lastCheckAt**——瞬时失败不再锁死 8 小时，下次启动/周期 Worker 可立即重试；
+     成功才写节流时间戳
+- 保留纪律：日历未就绪仍不灌（不放开空降级，避免重蹈假生效日 bug）
+
+---
+
 ## v1.5.25（versionCode 225）— 2026-10-29（基于 v1.5.24，修复吸顶闪退）
 
 > 用户实测 v1.5.24 总览页月份标题吸顶时闪退。不涉及 DB schema（覆盖升级安全）。
