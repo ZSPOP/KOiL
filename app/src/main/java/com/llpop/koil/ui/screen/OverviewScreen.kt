@@ -68,7 +68,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -115,10 +114,6 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 
@@ -191,7 +186,7 @@ fun OverviewScreen(
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_ov_title),
         modifier = modifier,
-    ) { _, topPadding, scrollBehavior, backdrop ->
+    ) { _, topPadding, scrollBehavior, _ ->
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -309,7 +304,10 @@ fun OverviewScreen(
                     stickyHeader(key = "header-$monthKey") {
                         // v1.5.24：吸顶检测（用 layoutInfo offset，不受自身绘制 offset 影响，无振荡）——
                         // 标题进入顶栏区域(offset ≤ 顶栏高度)即视为贴顶：绘制 offset 下移顶栏高度贴顶栏底部（连续无跳变），
-                        // 背景换顶栏同款毛玻璃（与 BlurredBar 同参数）；未贴顶时透明无背景色块
+                        // 未贴顶时透明无背景色块
+                        // v1.5.25：吸顶背景改半透明 surface——原 textureBlur(backdrop) 会采样到 header 自身
+                        //（header 位于 backdrop 录制子树内部，与顶栏不同）→ 自采样递归导致闪退；
+                        // 半透明 surface 观感接近顶栏毛玻璃且无递归风险
                         val density = LocalDensity.current
                         val topBarPx = with(density) { topPadding.toPx() }
                         val sticky by remember(topPadding) {
@@ -319,7 +317,6 @@ fun OverviewScreen(
                                 off <= topBarPx + 2
                             }
                         }
-                        val canBlur = backdrop != null && isRuntimeShaderSupported()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -331,21 +328,10 @@ fun OverviewScreen(
                                     },
                                 )
                                 .then(
-                                    when {
-                                        sticky && canBlur -> Modifier.textureBlur(
-                                            backdrop = backdrop!!,
-                                            shape = RectangleShape,
-                                            blurRadius = 25f,
-                                            colors = BlurColors(
-                                                blendColors = listOf(
-                                                    BlendColorEntry(
-                                                        color = MiuixTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                                    ),
-                                                ),
-                                            ),
-                                        )
-                                        sticky -> Modifier.background(MiuixTheme.colorScheme.surface)
-                                        else -> Modifier
+                                    if (sticky) {
+                                        Modifier.background(MiuixTheme.colorScheme.surface.copy(alpha = 0.92f))
+                                    } else {
+                                        Modifier
                                     },
                                 )
                                 .padding(top = 6.dp, bottom = 8.dp),
