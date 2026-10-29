@@ -1,5 +1,23 @@
 # KOiL CHANGELOG
 
+## v1.5.34（versionCode 234）— 2026-10-29（基于 v1.5.33，logo 矢量渲染缺失修复 + 省份字体间距对齐 + 同步来源行间距）
+
+> 用户报 v1.5.33 的 3 处问题一次执行。**logo 缺失为严重缺陷**：VectorDrawable 转换脚本对 SVG「M 隐式 LineTo」解析错误导致四个字母缺笔画。不涉及 DB schema（覆盖升级安全）。
+
+### 🎨 KOiL logo 矢量渲染缺失修复（关键）
+- 根因：fontTools SVGPathPen 会把「M 后连续坐标」输出为隐式 LineTo（如 `M160.65 559.95 265.95 581.05`），转换器按 M 只读 2 坐标、其余坐标点被丢弃 → K/O/i/L 全部缺笔画；且 M 后错误插入 L 产生畸形命令
+- 修复：转换器重写（M 首组坐标直接输出、后续隐式坐标补 L）；viewport 高度 1000→1020（容纳 O 的 descender 防底部裁剪），viewportWidth 同步 2984.5
+- 验证：修复后 K O i L 全部完整（K 直干、O 镂空孔、i 圆点均在），与字体渲染一致
+- 同步更新工程根 KOiL-logo-vector.svg（y-down 坐标系最终形状）
+
+### 🔽 省份字体与箭头间距对齐设置页
+- 文字 12sp Medium → 14sp Bold（对齐油号选择行尾）；删除手动 Spacer(2dp)，箭头直接跟随（DropdownArrowEndAction 自带间距，与设置页 Dropdown 行尾排布一致）
+
+### ⚙️ 同步来源行间距
+- 「同步来源」文字行到油价库卡片圆角底部间隔 12dp → 6dp
+
+# KOiL CHANGELOG
+
 ## v1.5.33（versionCode 233）— 2026-10-29（基于 v1.5.32，KOiL 品牌 logo 转矢量 + 同步来源移区块最底 + 省份箭头换设置页同款）
 
 > 用户报 3 项改动一次执行。**关键变更：Unbounded 字体彻底移除**——设置页底部 KOiL 品牌字从字体渲染转为矢量 drawable（形状为 Bold wght700 字形轮廓），字体文件与引用代码全部删除。不涉及 DB schema（覆盖升级安全）。
