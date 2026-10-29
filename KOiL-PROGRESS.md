@@ -6,7 +6,7 @@
 ## 当前版本：v1.5.21（versionCode 221）— 2026-10-29 已交付
 
 - 定位：数据正确性专项 —— ① 结清常驻待办（KOiL-price-db-forecast 彻底删除）；② 窗口日 24 点生效边界（B1~B8）
-- commit：`2f4b65e`（基于 v1.5.20 `2a6b593`，不涉及 DB schema，覆盖升级安全）
+- commit：`c5544e7`（基于 v1.5.20 `2a6b593`，不涉及 DB schema，覆盖升级安全）
 - APK：`KOiL-v1.5.21-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
 - 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1521.zip`
 - 变更明细：见 CHANGELOG v1.5.21
