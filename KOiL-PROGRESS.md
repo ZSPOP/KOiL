@@ -3,26 +3,26 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.16（versionCode 216）— 2026-10-27 已交付
+## 当前版本：v1.5.20（versionCode 220）— 2026-10-29 已交付
+
+- commit：`2a6b593`（基于 v1.5.16 `65eb51f`，合并原计划 v1.5.17/v1.5.18，不涉及 DB schema 与新功能）
+- APK：`KOiL-v1.5.20-release.apk`（62MB，release 正式签名；apksigner 校验通过，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1520.zip`（31MB，含 settings/build/gradlew/wrapper/app/src/keystore/schemas）
+- 构建环境：Gradle 9.3.1 + AGP 9.1.0 + JDK 21（Temurin，~/jdk/jdk-21.0.13+9）+ SDK /home/user/android-sdk；构建耗时约 4 分钟
+- 变更明细：见 CHANGELOG v1.5.20 —— 导入导出正确性（#3 #4）、导入/重算性能（#6 #7）、历史列表 LazyColumn 重构（#8 #9 #10 #11）
+- 待用户验收：CSV 导入/导出正确性（状态列真实派生、里程小数保留、文件内重复/里程倒挂拦截）、大数据量下历史列表滚动流畅度、返回顶部按钮
+
+### v1.5.20 变更速览（详见 CHANGELOG）
+- #4 导出油耗状态不再写死"正常"：新建 domain/logic/DerivedCalculator.kt，总览与导出共用派生口径（正常/偏高/偏低/短距/–）
+- #3 导出里程不丢小数（fmtMileage：整数显整数、非整数保留）；导入检测文件内自身重复/里程链冲突；去重键改 TreeSet (日期,里程) 精确比较
+- #7 导入预检 O(n²)→O(n log n)（TreeSet.lower/higher 二分）；#6 observeAll debounce 120ms + 排序/派生计算切 Default、CSV 读写切 IO、确认导入改 insertAllIgnore 单事务批量
+- #8 历史列表 Column+verticalScroll → LazyColumn + stickyHeader 月份吸顶；#9 groupBy/buildPrevMap remember 缓存；#10 items(key=记录id)+稳定回调（顺手删 RecordCard 死参数）；#11 返回顶部显隐改 snapshotFlow distinctUntilChanged
+
+## 历史版本：v1.5.16（versionCode 216）— 2026-10-27 已交付
 
 - commit：`65eb51f`（基于 v1.5.15 `4882e1d`）
-- APK：https://aka.doubaocdn.com/s/xz1qtVLijV （KOiL-v1.5.16-release.apk）
-- 源码 zip（完整工程源码）：https://aka.doubaocdn.com/s/NeY4q5kQEn （KOiL-src-v1516.zip，verifier 关键工程文件 11/11）
-- 签名：release 证书 SHA-256 恒定 `cc962f1e2524ba8273c9d668436e9926d8a056e49b816e680c730518d46ffe4b`，编译通过、verifier 通过
 - 定位：深度压力测试 18 项问题的第一批稳定性 hotfix（低风险、可独立回退）
-
-### v1.5.16 变更（稳定性 hotfix，详见 CHANGELOG）
-- 🔴 #2 录入应付 0 元修复（新数据按实付兜底 + 启动一次性回填历史 payable=0 记录，DAO fixZeroPayable + DataStore 标记）
-- 🔴 #1/#5 补录/编辑保存防重入（isSavingBackfill/isSavingEdit）+ 失败红色提示条（不再静默吞异常，三语 koil_ov_save_failed）
-- 🔴 #16 编辑应付算不出回退实付；#15 CSV 导入里程规则统一严格递增（<=/>=）
-- 🟡 #13 新建 FieldFilters.sanitizeDecimalInput，录入/补录/编辑输入框统一过滤多个小数点
-- 🟡 #17 补录日期回退 120 月限制去掉（可无限往前，未来仍禁）
-- 🟡 #18 启动定位省份未变化不写 DataStore
-- 🟡 #12 彻底移除「加油提醒里程」死功能（AppSettings/VM/combine/三语）；#14 合并双崩溃捕获（删 CrashHandler，统一 CrashReporter 在 Application 安装）
-
-### 后续版本（待做）
-- v1.5.17：#3（CSV 导入文件内去重/浮点 key/导出 %.0f 丢小数）、#6（批量事务 + observeAll debounce/Default）、#7（导入预览 O(n²)→二分）、#4（导出油耗状态写死"正常"→抽共享 DerivedCalculator）
-- v1.5.18：#8/#9/#10/#11 历史列表 Column+verticalScroll → LazyColumn 惰性重构（stickyHeader、buildPrevMap remember、稳定 key+lambda、snapshotFlow）
+- 变更：#2 应付 0 元修复(含存量回填)、#1/#5 保存防重入+失败红条、#16 编辑应付回退实付、#15 CSV 里程严格递增、#13 输入框多小数点过滤、#17 补录日期无限回退、#18 定位省不重复写、#12 移除加油提醒里程死功能、#14 合并双崩溃捕获
 
 ## 当前版本：v1.5.15（versionCode 215）— 2026-10-27 已交付
 
