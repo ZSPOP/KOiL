@@ -96,7 +96,6 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_DB_LAST_WINDOW = stringPreferencesKey("KOiL-price-db-last-window-checked")
         private val KEY_PRICE_DB_NEXT_ADJUSTMENT = stringPreferencesKey("KOiL-price-db-next-adjustment")
         private val KEY_PRICE_DB_PREV_ADJUSTMENT = stringPreferencesKey("KOiL-price-db-prev-adjustment")
-        private val KEY_PRICE_DB_FORECAST = stringPreferencesKey("KOiL-price-db-forecast")
         private val KEY_PRICE_DB_LEGACY_PENDING_CLEARED = booleanPreferencesKey("KOiL-price-db-legacy-pending-cleared")
         private val KEY_PRICE_DB_ADJUST_DATES = stringPreferencesKey("KOiL-price-db-adjust-dates")
         private val KEY_PRICE_DB_CALENDAR_186_MIGRATED = booleanPreferencesKey("KOiL-price-db-calendar-186-migrated")
@@ -115,6 +114,10 @@ class AppSettings(private val context: Context) {
         const val DEFAULT_ABNORMAL_THRESHOLD = 30.0
         // v1.5.16 一次性数据修复标记：历史 payable=0 记录回填为 actual（仅执行一次）
         private val KEY_RECORD_PAYABLE_ZERO_FIXED = booleanPreferencesKey("KOiL-record-payable-zero-fixed")
+        // v1.5.21 一次性清理标记：apizero 时代残留的 KOiL-price-db-forecast 键已删除（forecast 功能已彻底移除）
+        private val KEY_PRICE_DB_FORECAST_CLEARED = booleanPreferencesKey("KOiL-price-db-forecast-cleared")
+        // v1.5.21 一次性清理标记：库内"未来生效日"脏记录（effectiveDate > 今天）已删除（窗口日 24 点生效边界修复）
+        private val KEY_PRICE_DB_WINDOW_DAY_CLEARED = booleanPreferencesKey("KOiL-price-db-window-day-cleared")
         const val DEFAULT_DEVIATION_THRESHOLD = 25.0
         /** EIA 官方免费 API Key（用户注册，内置为默认值；设置页可改，未来失效可自行更换） */
         const val DEFAULT_EIA_API_KEY = "GkLpNbWtHq677CmtfR6qHz9hfqqTgnbpM9PGWnLf"
@@ -314,11 +317,24 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_PRICE_DB_PREV_ADJUSTMENT] = date }
     }
 
-    /** 调价预测幅度（接口 forecast 字段） */
-    val priceDbForecast: Flow<String> =
-        context.KOiLDataStore.data.map { it[KEY_PRICE_DB_FORECAST] ?: "" }
-    suspend fun setPriceDbForecast(forecast: String) {
-        context.KOiLDataStore.edit { it[KEY_PRICE_DB_FORECAST] = forecast }
+    /** v1.5.21 一次性清理：删除 apizero 时代残留的 forecast 键（幂等；forecast 功能已彻底移除，键不再被任何代码读写） */
+    suspend fun clearLegacyPriceDbForecast() {
+        // 旧键名（已从常量表删除，用字面量定位物理键）
+        val legacyKey = stringPreferencesKey("KOiL-price-db-forecast")
+        context.KOiLDataStore.edit { p ->
+            p.remove(legacyKey)
+            p[KEY_PRICE_DB_FORECAST_CLEARED] = true
+        }
+    }
+
+    val priceDbForecastCleared: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_DB_FORECAST_CLEARED] ?: false }
+
+    /** v1.5.21 一次性标记：库内"未来生效日"脏记录是否已清理（窗口日 24 点前禁止出现 effectiveDate > 今天 的记录） */
+    val priceDbWindowDayCleared: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_DB_WINDOW_DAY_CLEARED] ?: false }
+    suspend fun setPriceDbWindowDayCleared(cleared: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_DB_WINDOW_DAY_CLEARED] = cleared }
     }
 
     /** 旧机制（双源当日价核验）遗留假 pending 是否已清理（一次性，新机制首次跑通后置 true） */

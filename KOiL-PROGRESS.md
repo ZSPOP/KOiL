@@ -3,7 +3,23 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.20（versionCode 220）— 2026-10-29 已交付
+## 当前版本：v1.5.21（versionCode 221）— 2026-10-29 已交付
+
+- 定位：数据正确性专项 —— ① 结清常驻待办（KOiL-price-db-forecast 彻底删除）；② 窗口日 24 点生效边界（B1~B8）
+- commit：`2f4b65e`（基于 v1.5.20 `2a6b593`，不涉及 DB schema，覆盖升级安全）
+- APK：`KOiL-v1.5.21-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1521.zip`
+- 变更明细：见 CHANGELOG v1.5.21
+- 待用户验收：① 数据库卡不再当天显示"V今日 擱淺"；② 调价次数恢复 20（今天窗口不计入）；③ 记录页无 10-30 假搁浅；④ 首页/录入页/通知 24 点前均显示旧价
+
+### v1.5.21 变更速览
+- 🗑️ #1 forecast 彻底删除：DataStore 键 `KOiL-price-db-forecast` 物理删除（一次性清理 + 标记 `KOiL-price-db-forecast-cleared`）；
+  删 AppSettings/Syncer/Models/AddViewModel 全部 forecast 引用与 parseForecast 分支；预测幅度恒走 EIA/腾讯估算（UI「估算」标注恒显）
+- 🕐 #2 窗口日 24 点生效边界（B1~B8）：补搁浅/补灌阈值/缺口检测 `<=today`→`<today`（B1/B2）；
+  核验搁浅窗口日保护（B3）；调价次数口径同改（B4）；verifyProvince 降级不写 today（B5）；写入闸拦 `effectiveDate>today`（B8）；
+  启动一次性删未来生效日记录（B6，标记 `KOiL-price-db-window-day-cleared`）；四宫格/当前价/调价通知改 ≤今天 查询（B7）
+
+## 历史版本：v1.5.20（versionCode 220）— 2026-10-29 已交付
 
 - commit：`2a6b593`（基于 v1.5.16 `65eb51f`，合并原计划 v1.5.17/v1.5.18，不涉及 DB schema 与新功能）
 - APK：`KOiL-v1.5.20-release.apk`（62MB，release 正式签名；apksigner 校验通过，证书 SHA-256 恒定 `cc962f1e...`）
@@ -117,7 +133,7 @@
 - 校验：verifier archive zip-check-entries 断言上述关键工程文件 + 解压回读确认 app/src 完整
 
 ## 常驻待办（对外发布前必做）
-- 清空 `KOiL-price-db-forecast` 残留旧值 + 标记 `KOiL-price-db-forecast-194-cleared`
+- ~~清空 `KOiL-price-db-forecast` 残留旧值~~ → **v1.5.21 已结清**：键物理删除（一次性清理 + 标记 `KOiL-price-db-forecast-cleared`）
   （apizero 时代最后一次 forecast；当前仅作者自用，故 194 未实施）
 
 ## 历史版本速览

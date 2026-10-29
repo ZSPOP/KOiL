@@ -192,13 +192,14 @@ class SettingsViewModel(
             val provinceCount = priceDao.countProvinces()
             val gradeCount = priceDao.countGrades()
             // 调价次数：优先取"权威调价窗口日历"中今年已发生的窗口日数（含搁浅窗口），
-            // 符合"今年调价几次"的认知；窗口日历为空时才回退库内去重生效日期数
+            // 窗口日历为空时才回退库内去重生效日期数
             //（DISTINCT effectiveDate 会被降级假生效日污染，不可作为调价次数口径）
+            // v1.5.21 B4：窗口日 24 点前不算已发生 → 严格 < today（今天窗口日不计入，修复"29 号当天调价 21 次"）
             val windowDates = settings.priceDbAdjustDates.first()
                 .split(",").map { it.trim() }.filter { it.isNotBlank() }
             val todayStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE)
             val adjustmentCount = if (windowDates.isNotEmpty()) {
-                windowDates.count { it <= todayStr }
+                windowDates.count { it < todayStr }
             } else {
                 priceDao.countAdjustments()
             }
@@ -207,8 +208,9 @@ class SettingsViewModel(
             // 完整性缺口：阈值 = "已调价窗口数"（排除搁浅窗口——搁浅不写记录，
             // 计入会让所有省都差几个而误报），再容忍 2 个窗口的数据拉取缺口（各省数据源偶发缺窗口）
             // 窗口是否调价过：窗口日 +1 在库内有记录（生效日 = 窗口日 + 1 天）
+            // v1.5.21 B4：同改严格 < today（今天窗口日不计入缺口阈值）
             val adjustedWindowCount = windowDates.count { w ->
-                w <= todayStr && runCatching {
+                w < todayStr && runCatching {
                     priceDao.getByDate(LocalDate.parse(w).plusDays(1).toString()) != null
                 }.getOrDefault(false)
             }

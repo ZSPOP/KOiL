@@ -58,6 +58,17 @@ class KOiLApplication : Application() {
                     settings.setRecordPayableZeroFixed(true)
                     Log.i("KOiL", "v1.5.16 fixed $fixed record(s) with zero payableAmount")
                 }
+                // v1.5.21：一次性清理——① 删 apizero 时代残留的 forecast 键（功能已彻底移除）；
+                // ② 删"未来生效日"脏记录（effectiveDate > 今天，窗口日 24 点生效边界修复：先清存量再防新增）
+                if (!settings.priceDbForecastCleared.first()) {
+                    settings.clearLegacyPriceDbForecast()
+                    Log.i("KOiL", "v1.5.21 cleared legacy price-db-forecast key")
+                }
+                if (!settings.priceDbWindowDayCleared.first()) {
+                    val cleared = db.koilPriceDao().deleteFutureRecords(java.time.LocalDate.now().toString())
+                    settings.setPriceDbWindowDayCleared(true)
+                    Log.i("KOiL", "v1.5.21 cleared $cleared future-effectiveDate record(s)")
+                }
             } catch (t: Throwable) {
                 Log.e("KOiL", "Seed init failed", t)
             }

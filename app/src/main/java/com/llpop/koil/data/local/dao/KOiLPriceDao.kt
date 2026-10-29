@@ -99,6 +99,17 @@ interface KOiLPriceDao {
     @Query("SELECT * FROM koil_prices WHERE province = :province AND grade = :grade ORDER BY effectiveDate DESC LIMIT 1")
     fun observeNewest(province: String, grade: String): Flow<KOiLPriceEntity?>
 
+    /** v1.5.21 B7 展示层兜底：不晚于指定日期的最新生效价（响应式）——窗口日 24 点前不显示次日新价 */
+    @Query(
+        "SELECT * FROM koil_prices WHERE province = :province AND grade = :grade " +
+            "AND effectiveDate <= :date ORDER BY effectiveDate DESC LIMIT 1"
+    )
+    fun observeNewestUpTo(province: String, grade: String, date: String): Flow<KOiLPriceEntity?>
+
+    /** v1.5.21 B6 一次性清理：删除"未来生效日"脏记录（正常数据不存在 effectiveDate > 今天 的记录） */
+    @Query("DELETE FROM koil_prices WHERE effectiveDate > :today")
+    suspend fun deleteFutureRecords(today: String): Int
+
     /** 响应式行数：库从空→有数据（灌库完成）时触发首页整体刷新 */
     @Query("SELECT COUNT(*) FROM koil_prices")
     fun observeCount(): Flow<Int>

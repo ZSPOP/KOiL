@@ -48,7 +48,8 @@ class OilPriceSyncWorker(
         val gradeCode = settings.defaultOilGrade.first()
             .takeIf { it in OilPriceNetwork.GRADE_LABELS } ?: "92"
         val grade = OilPriceNetwork.GRADE_LABELS[gradeCode] ?: gradeCode
-        val newest = dao.getNewest(province, grade)
+        // v1.5.21 B7：调价通知取"截至今天已生效"的最新价——窗口日 24 点前不推送次日新价（等次日生效后才推送）
+        val newest = dao.getLatestPrice(province, grade, LocalDate.now().toString())
         if (newest != null) {
             val lastNotified = settings.priceLastNotifiedDate.first()
             if (lastNotified.isBlank()) {

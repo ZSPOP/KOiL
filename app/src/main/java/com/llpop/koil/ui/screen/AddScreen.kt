@@ -594,15 +594,14 @@ private fun OilPriceCard(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                // v1.5.0：预测幅度 + 折合单价合并为一个徽章（估算标注移入括号紧跟数字）
+                                // v1.5.0：预测幅度 + 折合单价合并为一个徽章；v1.5.21 起 apizero forecast 彻底移除，
+                                // 幅度恒来自 EIA/腾讯本地估算 → 「估算」标注恒显示
                                 if (forecast != null && perLiter != null) {
                                     AdjustBadge(
                                         text = stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
                                             "${kotlin.math.abs(forecast).toInt()}" +
                                             stringResource(R.string.koil_add_forecast_per_ton) +
-                                            (if (uiState.forecastEstimated) {
-                                                "(" + stringResource(R.string.koil_add_forecast_estimated) + ")"
-                                            } else "") +
+                                            "(" + stringResource(R.string.koil_add_forecast_estimated) + ")" +
                                             " " +
                                             stringResource(
                                                 if (rising) R.string.koil_add_approx_per_liter_up

@@ -52,8 +52,7 @@ data class AddUiState(
     val nextAdjustDate: String? = null,
     val daysUntilAdjust: Int = -1,
     val adjustUrgent: Boolean = false,
-    val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌）
-    val forecastEstimated: Boolean = false,      // 预测幅度是否本地估算（apizero 不可用时 EIA/腾讯兜底，标注「估算」）
+    val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌，v1.5.21 起恒来自 EIA/腾讯本地估算）
     val perLiterEquivalent: Double? = null,      // 折合 元/升
     val showPriceAdjust: Boolean = false,        // 油价调整窗口提醒板块（由设置页开关控制）
     val tankCapacity: Float = 65f,
@@ -182,9 +181,7 @@ class AddViewModel(
         viewModelScope.launch {
             settings.priceDbNextAdjustment.collect { loadPriceAdjustInfo() }
         }
-        viewModelScope.launch {
-            settings.priceDbForecast.collect { loadPriceAdjustInfo() }
-        }        // 持续监听偏差阈值设置
+        // 持续监听偏差阈值设置
         viewModelScope.launch {
             settings.deviationThreshold.collect {
                 runPrecheck()
@@ -198,11 +195,13 @@ class AddViewModel(
             _uiState.map { it.viewProvince }
                 .distinctUntilChanged()
                 .flatMapLatest { p ->
+                    // v1.5.21 B7：取"截至今天已生效"的最新价（窗口日 24 点前不显示次日新价）；today 每次重算跨天自动跟随
+                    val today = LocalDate.now().format(dateFormatter)
                     combine(
-                        priceDao.observeNewest(p, "92号汽油"),
-                        priceDao.observeNewest(p, "95号汽油"),
-                        priceDao.observeNewest(p, "98号汽油"),
-                        priceDao.observeNewest(p, "0号柴油"),
+                        priceDao.observeNewestUpTo(p, "92号汽油", today),
+                        priceDao.observeNewestUpTo(p, "95号汽油", today),
+                        priceDao.observeNewestUpTo(p, "98号汽油", today),
+                        priceDao.observeNewestUpTo(p, "0号柴油", today),
                     ) { a, b, c, d -> listOfNotNull(a, b, c, d) }
                 }
                 .collect { prices ->
@@ -249,7 +248,9 @@ class AddViewModel(
                 .distinctUntilChanged()
                 .flatMapLatest { (p, g) ->
                     val label = GRADE_LABELS[g] ?: "92号汽油"
-                    priceDao.observeNewest(p, label)
+                    // v1.5.21 B7：当前单价取"截至今天已生效"的最新价（窗口日白天不提前显示次日新价）
+                    val today = LocalDate.now().format(dateFormatter)
+                    priceDao.observeNewestUpTo(p, label, today)
                 }
                 .collect { entry ->
                     _uiState.update { it.copy(currentPrice = entry?.price?.takeIf { v -> v > 0 }) }
@@ -307,42 +308,21 @@ class AddViewModel(
                 )
             }
         }
-        // 第二段：预测幅度（接口 forecast 优先 → 原油本地估算 EIA/腾讯；含网络请求，异步补更新）
+        // 第二段：预测幅度（v1.5.21 起 apizero forecast 已彻底移除，恒走 EIA/腾讯原油本地估算；含网络请求，异步补更新）
         viewModelScope.launch {
             val province = _uiState.value.province
             val p = priceDao.getNewest(province, "92号汽油")
             if (p != null) {
-                val forecastRaw = settings.priceDbForecast.first()
-                var forecastAmount = parseForecast(forecastRaw)
-                var forecastEstimated = false
-                if (forecastAmount == null) {
-                    val estimate = runCatching { estimator.estimate() }.getOrNull()
-                    if (estimate != null) {
-                        forecastAmount = estimate.amountPerTon
-                        forecastEstimated = true
-                    }
-                }
+                val estimate = runCatching { estimator.estimate() }.getOrNull()
+                val forecastAmount = estimate?.amountPerTon
                 // 折合元/升：元/吨 ÷ 1316 升/吨（92# 汽油密度约 0.76 kg/L）
                 val perLiterEquivalent = forecastAmount?.let { Math.round(it / 1316.0 * 100) / 100.0 }
                 _uiState.value = _uiState.value.copy(
                     forecastAmount = forecastAmount,
-                    forecastEstimated = forecastEstimated,
                     perLiterEquivalent = perLiterEquivalent,
                 )
             }
         }
-    }
-
-    /**
-     * 解析接口 forecast 文本（如"预计上调油价270元/吨"/"预计下调油价约120元/吨"/"预计搁浅"）：
-     * 返回有符号元/吨（上调为正、下调为负）；无法解析或搁浅返回 null。
-     */
-    private fun parseForecast(raw: String): Double? {
-        val text = raw.trim()
-        if (text.isBlank() || text.contains("搁浅")) return null
-        val m = Regex("""(\d+(?:\.\d+)?)\s*元/吨""").find(text) ?: return null
-        val value = m.groupValues[1].toDoubleOrNull() ?: return null
-        return if (text.contains("下调")) -value else value
     }
 
     fun showProvincePicker() { _uiState.value = _uiState.value.copy(showProvincePicker = true) }

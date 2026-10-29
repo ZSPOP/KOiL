@@ -19,13 +19,8 @@ data class OilPriceResponse(
     val province: String? = null,
     val updateDate: String? = null,
     val nextAdjustment: String? = null,
-    val forecast: String? = null,
-    // 预测专接口（apizero oil-price-forecast）结构化字段：
-    // nextAdjustDate = 精确调价窗口日 yyyy-MM-dd（优先于 nextAdjustment 文本解析）
-    // direction = "上涨"/"下跌"/"搁浅"；confidence = "高/中/低"（备用，不展示）
-    val nextAdjustDate: String? = null,
-    val direction: String? = null,
-    val confidence: String? = null,
+    // v1.5.21：forecast/nextAdjustDate/direction/confidence 已随 apizero 移除全部删除（预测专接口不再存在），
+    // 预测幅度恒走 EIA/腾讯本地估算（CrudeOilEstimator），窗口日恒走本地推算窗口日历。
     val error: String? = null,
     val data: List<OilPriceInfo> = emptyList(),
 )
@@ -40,8 +35,6 @@ data class OilPriceSyncResult(
     val latestDate: String? = null,
     val strandedWindowDate: String? = null,
     val nextAdjustment: String? = null,
-    val forecast: String? = null,
-    val nextAdjustDate: String? = null,
 )
 
 /** 偏差预检结果（对齐 Web checkPriceDeviation 返回） */

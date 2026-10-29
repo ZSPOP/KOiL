@@ -280,19 +280,13 @@ class OilPriceDbSyncer(
             ensureInitConfig()
 
             val result = performPriceCheck()
-            // 窗口日：预测专接口优先 → 聚合接口文本解析 → 推算窗口日历下个未来窗口
-            //（apizero 不可达时锚点已由 abapi 曲线兜底，日历照常可用）
-            val nextRaw = result.nextAdjustDate
-                ?: result.nextAdjustment?.takeIf { it.isNotBlank() }
+            // 窗口日（v1.5.21：apizero 预测专接口已移除，不再有 result.nextAdjustDate；
+            // 仅聚合接口 next_adjustment 文本解析 → 本地推算窗口日历下个未来窗口兜底）
+            val nextRaw = result.nextAdjustment?.takeIf { it.isNotBlank() }
+                ?.let { OilPriceDateUtil.normalize(it) }
                 ?: getAdjustDates().firstOrNull { it >= LocalDate.now().format(DATE_FMT) }
             if (nextRaw != null) {
-                val newNext = if (result.nextAdjustDate != null) {
-                    // 结构化日期已是 yyyy-MM-dd，直接规范化（防御性保留 normalize）
-                    OilPriceDateUtil.normalize(nextRaw)
-                } else {
-                    // 文本解析：兼容 "2026-10-29" / "2026/10/29" / "10月29日" 等多种格式
-                    OilPriceDateUtil.normalize(nextRaw)
-                }
+                val newNext = OilPriceDateUtil.normalize(nextRaw)
                 if (newNext != null) {
                     val today = LocalDate.now().format(DATE_FMT)
                     if (newNext < today) {
@@ -313,7 +307,6 @@ class OilPriceDbSyncer(
                     }
                 }
             }
-            result.forecast?.takeIf { it.isNotBlank() }?.let { settings.setPriceDbForecast(it) }
             settings.setPriceDbLastCheckAt(now)
             settings.setPriceDbCache(result.message)
             if (result.newAdjustments > 0 && result.latestDate != null) {
@@ -385,7 +378,8 @@ class OilPriceDbSyncer(
             if (adjustDates.isEmpty()) return
             // 期望覆盖已过窗口日数（含搁浅窗口，搁浅入库后各省应含维持记录）；
             // 每省独立拉取，失败不影响其他省
-            val threshold = adjustDates.count { it <= LocalDate.now().format(DATE_FMT) }
+            // v1.5.21 B2：窗口日 24 点前不算已过 → 严格 < today（今天窗口日不计入期望覆盖）
+            val threshold = adjustDates.count { it < LocalDate.now().format(DATE_FMT) }
             // v1.4.190：189+ 升级后首次立即更新强制全量补灌一次——v1.4.188 曾把已有调价记录
             // 误替换成搁浅（覆盖升级后 hasStrandedGap 检测不到"搁浅占位"），需强制跑 seedProvince
             // 让「变化点覆盖搁浅」恢复调价记录；一次后恢复常规触发条件。
@@ -420,7 +414,8 @@ class OilPriceDbSyncer(
     private suspend fun hasStrandedGap(province: String, adjustDates: List<String>): Boolean {
         val today = LocalDate.now().format(DATE_FMT)
         val grades = OilPriceNetwork.GRADE_LABELS.values.toList()
-        return adjustDates.filter { it <= today }.any { w ->
+        // v1.5.21 B2：窗口日 24 点前不算已过 → 严格 < today（今天窗口不判缺口，避免误触发补灌）
+        return adjustDates.filter { it < today }.any { w ->
             val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@any false
             grades.any { key ->
                 val e = priceDao.getPrice(province, key, eff)
@@ -476,6 +471,9 @@ class OilPriceDbSyncer(
             // 只保留当年 1-1 至今（用户口径：首拉当年调价记录）
             if (pt.date < yearStart || pt.date > today) return@forEach
             val eff = if (adjustDates.isEmpty()) pt.date else addOneDay(adjustToWindow(pt.date, adjustDates))
+            // v1.5.21 B8 写入闸：生效日 > 今天（窗口日当天数据源若提前放次日新价）一律跳过，
+            // 等次日归并自然写入——库里永不出现"未来生效"记录
+            if (eff > today) return@forEach
             pt.p92?.let { v -> if (last92 == null || kotlin.math.abs(v - last92!!) > 1e-9) {
                 val key = "$province|92号汽油|$eff"
                 if (key !in existing) entities.add(KOiLPriceEntity(province, "92号汽油", eff, v, "youjia.abapi.cn range=year 归并发改委窗口", false))
@@ -519,10 +517,12 @@ class OilPriceDbSyncer(
         // 已过窗口 + 该窗口无生效记录 = 搁浅：插维持价记录（isStranded=true）。
         // 维持价 = abapi 曲线中 ≤ 窗口日的最后价格（首窗口搁浅（如 1-06）时 = 上年末价，
         // 即 abapi 当年首点 1-01，落在 yearStart..w 内）；幂等：跳过库内已有与本次变化点。
+        // v1.5.21 B1：窗口日 24 点前不算已过 → 严格 < today（今天窗口日不提前补搁浅，
+        // 否则窗口日白天库里就出现"次日生效"的搁浅记录，等于把窗口日当 0 点处理）
         fun hasChange(g: String, eff: String) = entities.any {
             !it.isStranded && it.province == province && it.grade == g && it.effectiveDate == eff
         }
-        adjustDates.filter { it <= today }.forEach { w ->
+        adjustDates.filter { it < today }.forEach { w ->
             val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@forEach
             // 维持价取 abapi 曲线中 ≤ 窗口日的最后价格，不设"当年 1-1 起"下界：
             // 首窗口搁浅（如 1-06）时 abapi 当年曲线 1-06 前无点（实测首点 01-23），
@@ -570,11 +570,6 @@ class OilPriceDbSyncer(
 
         val today = LocalDate.now().format(DATE_FMT)
         val nextAdjustment = samplePrimary.nextAdjustment ?: sampleSecondary.nextAdjustment
-        val forecast = samplePrimary.forecast ?: sampleSecondary.forecast
-        // 窗口日：聚合接口文本解析（abapi 无此字段 → 恒 null）→ v1.4.192：本地推算窗口日历兜底
-        //（数据库卡「下个窗口」同一来源，apizero 移除后预测窗口日不失效）
-        val nextAdjustDate = OilPriceDateUtil.normalize(nextAdjustment)
-            ?: getAdjustDates().firstOrNull { it >= today }
 
         // 只信任"数据日期 == 今天"的源参与今日核验；主/次源均滞后时跳过核验（窗口存档仍生效，不产生假调价记录）
         val usableSources = listOf(samplePrimary, sampleSecondary)
@@ -586,8 +581,6 @@ class OilPriceDbSyncer(
                 message = "数据源日期滞后（$lagDate），跳过本次核验",
                 latestDate = getLastUpdatedAt().ifBlank { null },
                 nextAdjustment = nextAdjustment,
-                forecast = forecast,
-                nextAdjustDate = nextAdjustDate,
             )
         }
 
@@ -604,14 +597,22 @@ class OilPriceDbSyncer(
 
         // 搁浅判定：采样价与库内最新价差 < 0.005
         if (latestPrice != null && kotlin.math.abs(latestPrice - sampleItem.price) < STRANDED_EPSILON) {
+            // v1.5.21 B3：今天若是窗口日（24 点后才生效/确认搁浅），白天即使价格未变也不下"搁浅"结论、
+            // 不写 lastWindowChecked=今天——否则数据库卡当天就显示"V今日 擱淺"，等于把窗口日当 0 点生效
+            if (getAdjustDates().contains(today)) {
+                return OilPriceSyncResult(
+                    success = true,
+                    message = "今天是调价窗口日（$today），价格待 24 点后生效",
+                    latestDate = latestDate,
+                    nextAdjustment = nextAdjustment,
+                )
+            }
             return OilPriceSyncResult(
                 success = true,
                 message = "已核对至 $today，油价无变化（搁浅）",
                 latestDate = latestDate,
                 strandedWindowDate = today,
                 nextAdjustment = nextAdjustment,
-                forecast = forecast,
-                nextAdjustDate = nextAdjustDate,
             )
         }
 
@@ -622,8 +623,6 @@ class OilPriceDbSyncer(
                 message = "今日已有调价记录，跳过",
                 latestDate = today,
                 nextAdjustment = nextAdjustment,
-                forecast = forecast,
-                nextAdjustDate = nextAdjustDate,
             )
         }
 
@@ -646,8 +645,6 @@ class OilPriceDbSyncer(
             pendingCount = pendingRecords,
             latestDate = today,
             nextAdjustment = nextAdjustment,
-            forecast = forecast,
-            nextAdjustDate = nextAdjustDate,
         )
     }
 
@@ -759,8 +756,14 @@ class OilPriceDbSyncer(
             val (primary, _) = network.fetchBothSources(province)
             val primaryMap = primary.data.associateBy { it.grade }
             if (primaryMap.isEmpty()) return Triple(0, 0, 1)
-            // 生效日 = 归并窗口日 + 1；窗口日为空（从未成功推算）时用 today 原值，避免"today+1"假生效日
-            val eff = getAdjustDates().let { if (it.isEmpty()) today else addOneDay(adjustToWindow(today, it)) }
+            // v1.5.21 B5：生效日 = 归并窗口日 + 1；窗口日历未就绪（从未成功推算）时跳过本次增量入库
+            //（宁缺毋滥，交给 seedProvince 主路径幂等补灌，杜绝"窗口日当天以 today 为生效日"的降级假记录）
+            val adjustDates = getAdjustDates()
+            if (adjustDates.isEmpty()) return Triple(0, 0, 0)
+            val eff = addOneDay(adjustToWindow(today, adjustDates))
+            // v1.5.21 B8 写入闸：生效日 > 今天（窗口日当天数据源若提前放次日新价）一律跳过，
+            // 等次日归并自然写入——库里永不出现"未来生效"记录
+            if (eff > today) return Triple(0, 0, 0)
 
             val toInsert = mutableListOf<KOiLPriceEntity>()
             var verified = 0

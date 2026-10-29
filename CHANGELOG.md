@@ -1,8 +1,50 @@
 # KOiL CHANGELOG
 
-> ⏳ **发布前待办（对外发布时必须处理）**：加一次性迁移——清空 `KOiL-price-db-forecast`
-> 残留旧值（apizero 时代最后一次 forecast），标记 `KOiL-price-db-forecast-194-cleared`，
-> 让升级用户预测恒走 EIA 估算（当前仅作者自用，暂无此用户场景，故 194 未实施）。
+## v1.5.21（versionCode 221）— 2026-10-29（基于 v1.5.20，数据正确性专项）
+
+> 两项数据正确性修复：#1 彻底删除 apizero 时代 forecast 残留；#2 窗口日 24 点生效边界（修复"29 号 0 点生效"假象）。
+> 不涉及 DB schema 变更（Room 无 Migration，覆盖升级安全）。
+
+### 🗑️ #1 KOiL-price-db-forecast 彻底删除（常驻待办结清）
+- **背景**：apizero（v1.4.194 已移除）时代最后一次 forecast 文本仍残留在 DataStore 键 `KOiL-price-db-forecast`，
+  代码中保留整套读取死代码（"接口 forecast 优先"分支恒不命中）。本版物理删除键 + 清全部代码引用。
+- **代码删除**：
+  1. `AppSettings`：删 `KEY_PRICE_DB_FORECAST` / `priceDbForecast` Flow / `setPriceDbForecast()`
+  2. `OilPriceDbSyncer`：删 forecast 写入（checkAndUpdate）与 `OilPriceSyncResult.forecast` / `nextAdjustDate` 透传；
+     `performPriceCheck` 不再返回 nextAdjustDate（窗口日仅剩聚合接口文本解析 → 本地窗口日历兜底）
+  3. `OilPriceModels`：删 `OilPriceResponse.forecast` / `OilPriceSyncResult.forecast` 死字段
+  4. `AddViewModel`：删 `priceDbForecast` 常驻监听、`parseForecast()` 文本解析（第二段恒走 EIA/腾讯估算）；
+     `AddUiState.forecastEstimated` 字段删除——幅度恒为估算，UI 标注「估算」恒显示
+- **数据清理**：启动一次性 `remove("KOiL-price-db-forecast")` + 标记 `KOiL-price-db-forecast-cleared`（幂等）
+- **行为**：首页预测幅度照常显示（EIA/腾讯估算 + 「估算」标注），不再有任何"接口 forecast"路径
+- **文档**：API_SOURCES.md 依赖表预测幅度行同步（键已删除、恒走估算）
+
+### 🕐 #2 窗口日 24 点生效边界修复（B1~B8）
+
+> **Bug 现象**：今天是窗口日（如 10-29）时，App 白天就把当天当"已发生/已搁浅"处理——数据库卡显示
+> "V20261029 擱淺"、调价次数多算 1（20→21）、库里出现"次日生效"（10-30）的搁浅记录，等于"以窗口日 0 点生效"。
+> **正确口径**：新价 29 号 24 点（=30 号 0 点）才生效，29 号全天显示旧价，24 点前不产生任何 10-30 记录。
+
+- **B1 补搁浅**（`OilPriceDbSyncer.seedProvince`）：`adjustDates.filter{it <= today}` → `< today`
+  ——窗口日当天不再提前补"次日生效"的搁浅记录（今天白天库里不再出现 10-30 生效的维持价记录）
+- **B2 补灌阈值/缺口**（`seedRemainingProvinces` L388、`hasStrandedGap` L423）：`<= today` → `< today`
+  ——期望覆盖数与缺口检测不再把今天窗口计入（各省不误报"未拉取完整"）
+- **B3 核验搁浅误判**（`performPriceCheck`）：今天 ∈ 窗口日历时，白天价格未变**不下"搁浅"结论**、
+  不写 `lastWindowChecked=今天`（消息改为"今天是调价窗口日，价格待 24 点后生效"）
+  ——数据库卡不再当天显示"V今日 擱淺"
+- **B4 调价次数/缺口口径**（`SettingsViewModel` L201/L210）：`<= todayStr` → `< todayStr`
+  ——"調價 N 次"今天窗口不计入（修复 20→21 的多算 1）
+- **B5 verifyProvince 降级**：窗口日历未就绪时不再用 `today` 当生效日（宁缺毋滥，交给 seedProvince 幂等补灌）
+- **B8 写入硬闸门**（`verifyProvince` + `seedProvince` 调价点）：生效日 > 今天 一律跳过
+  ——数据源若窗口日白天提前放次日新价也写不进库，等次日归并自然写入；库里永不出现"未来生效"记录
+- **B6 存量清理**：启动一次性 `DELETE FROM koil_prices WHERE effectiveDate > 今天` + 标记
+  `KOiL-price-db-window-day-cleared`（清掉已污染的 10-30 假搁浅；今晚若真调价，10-30 变化点由正常路径补入）
+- **B7 展示层兜底**：DAO 新增 `observeNewestUpTo(省,油号,今天)`（`effectiveDate <= :date`）；
+  首页四宫格（`observeViewProvincePrices`）、当前单价（`observeCurrentPrice`）、
+  调价通知（`OilPriceSyncWorker` 改 `getLatestPrice(≤今天)`）统一取"截至今天已生效"价
+  ——即使有漏网"未来生效"记录也不显示、不推送
+- **验证**：实测 10-29 abapi 仍返回旧价 8.63（数据源未提前放价）；代码级对账：窗口日历 10-15→10-29 顺推确认，
+  种子数据无 10-29/10-30 干扰；编译 + apksigner 校验通过
 
 ## v1.5.20（versionCode 220）— 2026-10-27（基于 v1.5.16，性能与大数据量专项）
 

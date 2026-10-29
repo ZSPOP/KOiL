@@ -41,7 +41,7 @@
 | 今日油价（四油号） | **abapi 单源**（v1.4.194 起 apizero 移除，双源核验退化为单源自动入库；updateDate==today 才参与） | Room `KOiL_record` |
 | 价格历史/涨跌趋势（↑3.9%） | 主源曲线 + 库内窗口对比 | Room（种子+同步滚动存档） |
 | **调价窗口日（下一调整日）** | **本地推算窗口日历** `KOiL-price-db-adjust-dates`（xxapi/ruseo 锚点 → abapi 曲线 → calculateAdjustDates 推算；v1.4.192 起数据库卡/首页同一来源） | `KOiL-price-db-next-adjustment`（兼容旧存档） |
-| **预测幅度（预计上调270元/吨）** | **EIA 原油估算**（近 10 vs 前 10 交易日均值变化率 × 56.5 元/吨 → 折合元/升）；EIA 失败降级腾讯当日涨跌幅；接口 forecast 存档优先（apizero 移除后恒 null → 恒走估算，UI 标注「估算」） | `KOiL-price-db-forecast`（apizero 移除后不再写入） |
+| **预测幅度（预计上调270元/吨）** | **EIA 原油估算**（近 10 vs 前 10 交易日均值变化率 × 56.5 元/吨 → 折合元/升）；EIA 失败降级腾讯当日涨跌幅；**v1.5.21 起接口 forecast 存档彻底移除**（键已物理删除），幅度恒走估算，UI 恒标注「估算」 | ~~`KOiL-price-db-forecast`~~（v1.5.21 已删除） |
 | 最近已过窗口 W1 / 版本号 Vxxx | prev 存档 → next−14 推算 → lastWindowChecked | `KOiL-price-db-prev-next-adjustment` / `lastWindowChecked` |
 | 31省×4油号×N窗口（**生效日精准化，v1.4.113**） | **历史灌库**=主源 abapi 曲线归并「推算窗口日 +1」；**当天入库（调价日）**=默认省 abapi 单源核验：有价即自动入库（apizero 移除后无双源比对/pending）；**生效日=权威窗口日+1**（窗口日 24 时生效 → 次日实际生效交易日）；推算/抓取失败降级用 abapi 原日期 | Room `KOiL_price` |
 
