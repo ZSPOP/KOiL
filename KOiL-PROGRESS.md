@@ -3,26 +3,27 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.26（versionCode 226）— 2026-10-29 已交付
+## 当前版本：v1.5.27（versionCode 227）— 2026-10-29 已交付
+
+- 定位：窗口日当天"今晚24点生效"提醒（建议#2）+ 设置页多源一致性展示（建议#3）
+- commit：`02a0ce5`（基于 v1.5.26，不涉及 DB schema，覆盖升级安全）
+- APK：`KOiL-v1.5.27-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1527.zip`
+- 变更明细：见 CHANGELOG v1.5.27
+- 待用户验收：① 窗口日当天（11-12）0:05 收到"今晚24时窗口到期"通知；当天启动 App 也会即时提醒（幂等不重复）；
+  ② 设置页油价库区域新增「同步来源：锚点:xxapi · 今日价:abapi」一行（数据可信度透明化）
+- 说明：通知需系统通知权限（原有）；API_SOURCES.md 已同步
+
+### v1.5.27 变更速览
+- 🔔 窗口日当天提醒：notifyPriceChanges 第 3 段 + 新 OilPriceWindowDayWorker（00:05 一次性调度）
+  + 启动链/8h 周期 Worker 兜底；独立通知 ID 1003；DataStore 键 KOiL-price-last-window-day-reminded
+- 🔍 多源一致性：锚点链返回命中来源（xxapi/ruseo/abapi/ndrc）落盘 + 同步来源组合快照
+  KOiL-price-db-last-sources；设置页新增「同步来源」展示行（三语）
+
+## 历史版本：v1.5.26（versionCode 226）— 2026-10-29 已交付
 
 - 定位：总览页六指标居中+列间距；油价库补灌自动重试（含"失败不再锁 8h"）
 - commit：`080ffe5`（基于 v1.5.25，不涉及 DB schema，覆盖升级安全）
-- APK：`KOiL-v1.5.26-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1526.zip`
-- 变更明细：见 CHANGELOG v1.5.26
-- 待用户验收：① 总览六指标三列内容各自居中、整体不再偏左，列间 12dp 均匀间距；
-  ② 重装/弱网场景打开 App 后约 3 分钟内自动灌全国（无需点立即更新）；设置页缺口自动归零
-- 说明：v1.5.26 修复的是"补灌链无重试 + 失败锁 8h"两个机制；立即更新(force)逻辑未动
-
-### v1.5.26 变更速览
-- 🖌 总览六指标：StatCell 内容水平居中（治"整体偏左"根因）+ 列间显式 12dp 间距
-- 🔄 补灌自动重试：新增 fillRemainingProvincesIfCalendarReady()，启动兜底 30s 轮询 ×6（约 3 分钟自愈）；
-  checkAndUpdate 失败不再写 lastCheckAt（失败不再锁 8 小时，下次调度即可重试）
-
-## 历史版本：v1.5.25（versionCode 225）— 2026-10-29 已交付
-
-- 定位：修复 v1.5.24 总览页月份标题吸顶闪退（textureBlur 自采样递归）
-- commit：`dac3636`（基于 v1.5.24，不涉及 DB schema，覆盖升级安全）
 - APK：`KOiL-v1.5.25-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
 - 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1525.zip`
 - 变更明细：见 CHANGELOG v1.5.25

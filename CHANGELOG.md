@@ -1,5 +1,30 @@
 # KOiL CHANGELOG
 
+## v1.5.27（versionCode 227）— 2026-10-29（基于 v1.5.26，窗口日当天提醒 + 多源一致性展示）
+
+> 用户在 4 项建议中选定 #2「窗口日当天 0 点提醒」与 #3「设置页多源一致性」。不涉及 DB schema（覆盖升级安全）。
+
+### 🔔 窗口日当天"今晚 24 点生效"提醒（新增，通知 ID 1003 独立）
+- **需求**：窗口日当天（如 11-12）提醒"今晚 24 时窗口到期、新价生效"，比现有"前一日提醒"更贴近加油决策
+- **实现**：
+  1. `OilPriceDbSyncer.notifyPriceChanges` 新增第 3 段：今天 == 窗口日历中的窗口日 且 未提醒过该窗口日 → 发通知
+     （新 DataStore 键 `KOiL-price-last-window-day-reminded` 去重；独立 ID 1003 不覆盖调价生效 1001 / 前一日提醒 1002）
+  2. 新 `OilPriceWindowDayWorker` + `scheduleWindowDayReminder()`：一次性 WorkRequest 精准调度窗口日当天 **00:05**；
+     窗口日当天已过 00:05（当天启动）→ delay=0 立即执行（幂等，已提醒即跳过）
+  3. 三保险：启动链（同步成功后重新排期 + notify 兜底）· 8h 周期 Worker（每次重新排期，持续运行跨窗口日也覆盖）· 一次性 Worker（00:05 精准）
+- 三语文案新增：`koil_noti_title_window_today` / `koil_noti_msg_window_today`
+
+### 🔍 设置页多源一致性展示（油价库区域新增"同步来源"行）
+- **需求**：把每次同步的来源链透明化——你能直观看到数据来自哪个源、兜底链是否健康，排查问题更快
+- **实现**：
+  1. 锚点链 `fetchAnchorWindowDate` 改为返回 `AnchorWindow(date, source)`——来源跟随实际命中节点
+     （xxapi → ruseo → abapi 曲线 → 发改委 ndrc 第 4 级兜底），落盘 `KOiL-price-db-last-anchor-source`
+  2. 每次同步成功写组合快照 `KOiL-price-db-last-sources`（如 "锚点:xxapi · 今日价:abapi"）
+  3. 设置页"下个窗口｜最近更新"行下方新增小字「同步来源：…」（三语 key `koil_pdb_sync_sources`）
+- 同步更新 `API_SOURCES.md`（数据源纪律）
+
+---
+
 ## v1.5.26（versionCode 226）— 2026-10-29（基于 v1.5.25，总览居中 + 油价库补灌自动重试）
 
 > 用户认可方案的两项：总览六指标居中 + 油价库"打开不自动灌"根因修复。不涉及 DB schema（覆盖升级安全）。
