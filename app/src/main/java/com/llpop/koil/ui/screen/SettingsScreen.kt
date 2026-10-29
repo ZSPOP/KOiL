@@ -151,12 +151,8 @@ fun SettingsScreen(
                 PackageManager.PERMISSION_GRANTED,
         )
     }
-    val pushPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        pushPermissionGranted = granted
-        viewModel.setPricePush(granted)   // 拒绝 → 开关置关（与 MainActivity 启动被拒行为一致）
-    }
+    // v1.5.29：用户点了开关想开但未授权 → 跳系统通知设置后等待返回；ON_RESUME 检测到已授权则自动打开开关
+    var pendingOpenPush by remember { mutableStateOf(false) }
     // 返回前台时刷新权限状态（用户可能在系统设置里改动过通知/定位权限）
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -166,6 +162,11 @@ fun SettingsScreen(
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
                 locationPermissionGranted = viewModel.hasLocationPermission()
+                // v1.5.29：跳系统通知设置授权返回后，自动补开推送开关（用户刚表达过"想开"的意图）
+                if (pushPermissionGranted && pendingOpenPush) {
+                    pendingOpenPush = false
+                    viewModel.setPricePush(true)
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -313,7 +314,7 @@ fun SettingsScreen(
                     }
                 },
             )
-            // v1.5.28：未授权提示行（点击重新请求）
+            // v1.5.28：未授权提示行（点击重新请求）；v1.5.29：间距收紧贴近副标题
             if (!locationPermissionGranted) {
                 Text(
                     text = stringResource(R.string.koil_set_location_denied),
@@ -321,7 +322,7 @@ fun SettingsScreen(
                     lineHeight = 14.sp,
                     color = KOiLColors.Warning,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
                         .clickable {
                             locationPermissionLauncher.launch(
                                 arrayOf(
@@ -368,14 +369,23 @@ fun SettingsScreen(
                         if (pushPermissionGranted) {
                             viewModel.setPricePush(true)
                         } else {
-                            pushPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            // v1.5.29：HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
+                            // 用户开启后返回 App（ON_RESUME）自动补开开关
+                            pendingOpenPush = true
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                )
+                            }
                         }
                     } else {
                         viewModel.setPricePush(false)
                     }
                 },
             )
-            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）
+            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）；v1.5.29：间距收紧贴近副标题
             if (!pushPermissionGranted) {
                 Text(
                     text = stringResource(R.string.koil_set_price_push_denied),
@@ -383,7 +393,7 @@ fun SettingsScreen(
                     lineHeight = 14.sp,
                     color = KOiLColors.Warning,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
                         .clickable {
                             runCatching {
                                 context.startActivity(
@@ -631,16 +641,6 @@ fun SettingsScreen(
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
                         }
-                        // 行3（v1.5.27）：多源一致性——锚点/今日价来源快照（数据可信度透明化，便于排查兜底链健康）
-                        if (priceDbStatus.lastSyncSources.isNotBlank()) {
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
-                            )
-                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -675,6 +675,17 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+                // v1.5.29：同步来源脚注（v1.5.27 时在窗口链条 Column 第 3 行，用户反馈位置不妥；
+                // 来源属排查元信息，移到区块底部"立即更新"行之后当脚注，不干扰主信息流）
+                if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 // —— 待确认更新（有数据需核实时才展开；无数据整块连间距、横线一起隐藏）——

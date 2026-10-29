@@ -116,7 +116,7 @@ class AppSettings(private val context: Context) {
         private val KEY_BOTTOM_BAR_MODE = stringPreferencesKey("KOiL-bottom-bar-mode")
 
         const val DEFAULT_TANK_CAPACITY = 65f
-        const val DEFAULT_ABNORMAL_THRESHOLD = 30.0
+        const val DEFAULT_ABNORMAL_THRESHOLD = 20.0   // v1.5.29：默认异常油耗阈值 30% → 20%（用户要求）
         // v1.5.16 一次性数据修复标记：历史 payable=0 记录回填为 actual（仅执行一次）
         private val KEY_RECORD_PAYABLE_ZERO_FIXED = booleanPreferencesKey("KOiL-record-payable-zero-fixed")
         // v1.5.23 一次性预置标记：种子记录已灌入（防用户删光记录后重启「复活」）
