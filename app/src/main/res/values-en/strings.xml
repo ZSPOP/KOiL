@@ -288,6 +288,9 @@
     <string name="koil_pdb_seeding">Seeding in background, will refresh automatically</string>
     <string name="koil_set_price_push">Price change notifications</string>
     <string name="koil_set_price_push_sub">System notification on adjustment &amp; day before window</string>
+    <!-- v1.5.28：权限联动提示 -->
+    <string name="koil_set_price_push_denied">Notification permission is off; push can\'t be delivered. Tap to enable.</string>
+    <string name="koil_set_location_denied">Location permission missing; enable it to use location.</string>
     <string name="koil_noti_title_price_adjust">Oil price adjusted</string>
     <string name="koil_noti_msg_price_adjust">%1$s %2$s: ¥%3$.2f → ¥%4$.2f</string>
     <string name="koil_noti_title_window_tomorrow">Price window tomorrow</string>

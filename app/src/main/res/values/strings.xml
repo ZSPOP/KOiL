@@ -287,6 +287,9 @@
     <string name="koil_pdb_seeding">后台补灌中，完成后自动刷新</string>
     <string name="koil_set_price_push">调价推送通知</string>
     <string name="koil_set_price_push_sub">调价生效与窗口日前推送系统通知</string>
+    <!-- v1.5.28：权限联动提示 -->
+    <string name="koil_set_price_push_denied">系统通知权限未开启，推送无法送达，点此开启</string>
+    <string name="koil_set_location_denied">未获得定位权限，开启定位需同意权限请求</string>
     <string name="koil_noti_title_price_adjust">油价已调整</string>
     <string name="koil_noti_msg_price_adjust">%1$s %2$s：¥%3$.2f → ¥%4$.2f</string>
     <string name="koil_noti_title_window_tomorrow">明天是调价窗口日</string>

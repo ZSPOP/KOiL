@@ -10,9 +10,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
+import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.MainScreen
+import kotlinx.coroutines.launch
+import org.koin.core.context.GlobalContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,6 +38,26 @@ class MainActivity : ComponentActivity() {
             val navOwner = rememberNavigationEventDispatcherOwner(true, null)
             CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides navOwner) {
                 MainScreen()
+            }
+        }
+    }
+
+    // v1.5.28：首次启动通知权限框被拒 → 推送开关联动置关（设置页开关恒以系统权限状态为准，
+    // 用户想开时点开关会再次请求权限）
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 100) {
+            val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                runCatching {
+                    lifecycleScope.launch {
+                        GlobalContext.get().get<AppSettings>().setPricePush(false)
+                    }
+                }
             }
         }
     }

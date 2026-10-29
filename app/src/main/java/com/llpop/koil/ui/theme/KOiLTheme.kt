@@ -18,6 +18,8 @@ object KOiLColors {
     val PrimaryDark = Color(0xFF0A84FF)
     val PrimaryContainer = Color(0xFFE8F2FE)
     val OnPrimaryContainer = Color(0xFF004A99)
+    /** v1.5.28：权限/异常提示色（红色系，浅深色下均醒目） */
+    val Warning = Color(0xFFE5484D)
 }
 
 @Composable

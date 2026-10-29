@@ -59,6 +59,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.compose.runtime.DisposableEffect
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.component.KOiLBlurBackground
@@ -117,12 +127,49 @@ fun SettingsScreen(
         contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let { viewModel.importBackup(it) } }
 
-    // 定位权限请求：授权后立即定位并写入默认省份
+    // v1.5.28：权限联动——点开开关先请求权限；拒绝则开关保持关（不再"假开"）
+    var locationPermissionGranted by remember { mutableStateOf(viewModel.hasLocationPermission()) }
     val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
         val granted = permissions.entries.any { it.value }
-        if (granted) viewModel.locateAndSetProvince()
+        locationPermissionGranted = granted
+        if (granted) {
+            viewModel.setLocationEnabled(true)
+            viewModel.locateAndSetProvince()
+        } else {
+            viewModel.setLocationEnabled(false)
+        }
+    }
+
+    // v1.5.28：通知权限联动——未授权恒显示关；点开先请求；拒绝保持关 + 提示
+    val context = LocalContext.current
+    var pushPermissionGranted by remember {
+        mutableStateOf(
+            Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val pushPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        pushPermissionGranted = granted
+        viewModel.setPricePush(granted)   // 拒绝 → 开关置关（与 MainActivity 启动被拒行为一致）
+    }
+    // 返回前台时刷新权限状态（用户可能在系统设置里改动过通知/定位权限）
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                pushPermissionGranted = Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+                locationPermissionGranted = viewModel.hasLocationPermission()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -243,14 +290,15 @@ fun SettingsScreen(
         SectionTitle(stringResource(R.string.koil_set_section_entry))
         SettingsCard {
             // 定位开关：开启后自动定位省份并写入默认省份
+            // v1.5.28：权限联动——未授权恒显示关；点开先请求权限，同意才真正开启
             SettingSwitchRow(
                 title = stringResource(R.string.koil_set_location),
                 subtitle = stringResource(R.string.koil_set_location_sub),
-                checked = uiState.locationEnabled,
+                checked = uiState.locationEnabled && locationPermissionGranted,
                 onCheckedChange = { on ->
-                    viewModel.setLocationEnabled(on)
                     if (on) {
-                        if (viewModel.hasLocationPermission()) {
+                        if (locationPermissionGranted) {
+                            viewModel.setLocationEnabled(true)
                             viewModel.locateAndSetProvince()
                         } else {
                             locationPermissionLauncher.launch(
@@ -260,9 +308,30 @@ fun SettingsScreen(
                                 )
                             )
                         }
+                    } else {
+                        viewModel.setLocationEnabled(false)
                     }
                 },
             )
+            // v1.5.28：未授权提示行（点击重新请求）
+            if (!locationPermissionGranted) {
+                Text(
+                    text = stringResource(R.string.koil_set_location_denied),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    color = KOiLColors.Warning,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clickable {
+                            locationPermissionLauncher.launch(
+                                arrayOf(
+                                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                                    android.Manifest.permission.ACCESS_COARSE_LOCATION,
+                                )
+                            )
+                        },
+                )
+            }
             // 默认省份：仅定位关闭时展示（开启时由自动定位决定，隐藏手动选择）
             if (!uiState.locationEnabled) {
                 SettingDivider()
@@ -289,12 +358,43 @@ fun SettingsScreen(
                 onCheckedChange = viewModel::setPriceAlert,
             )
             SettingDivider()
+            // 油价推送通知开关（v1.5.28：权限联动——未授权恒显示关；点开先请求系统权限，同意才开）
             SettingSwitchRow(
                 title = stringResource(R.string.koil_set_price_push),
                 subtitle = stringResource(R.string.koil_set_price_push_sub),
-                checked = uiState.pricePush,
-                onCheckedChange = viewModel::setPricePush,
+                checked = uiState.pricePush && pushPermissionGranted,
+                onCheckedChange = { on ->
+                    if (on) {
+                        if (pushPermissionGranted) {
+                            viewModel.setPricePush(true)
+                        } else {
+                            pushPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    } else {
+                        viewModel.setPricePush(false)
+                    }
+                },
             )
+            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）
+            if (!pushPermissionGranted) {
+                Text(
+                    text = stringResource(R.string.koil_set_price_push_denied),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    color = KOiLColors.Warning,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .clickable {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                    }
+                                )
+                            }
+                        },
+                )
+            }
             SettingDivider()
             SettingSwitchRow(
                 title = stringResource(R.string.koil_set_keep_grade),
