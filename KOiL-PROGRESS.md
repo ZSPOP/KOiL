@@ -3,7 +3,22 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.32（versionCode 232）— 2026-10-29 已交付
+## 当前版本：v1.5.33（versionCode 233）— 2026-10-29 已交付
+
+- 定位：KOiL 品牌 logo 转矢量（Unbounded 字体彻底移除）+ 同步来源移油价库区块最底（EIA 后）+ 省份箭头换设置页同款线条风
+- commit：`a765cb5`（基于 v1.5.32，不涉及 DB schema，覆盖升级安全）
+- APK：`KOiL-v1.5.33-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1533.zip`
+- 变更明细：见 CHANGELOG v1.5.33
+- 待用户验收：① 设置页底部 KOiL 与之前字体渲染形状一致（58.52×20dp 矢量，颜色跟随主题）；② 油价库同步来源在 EIA 下方最底、分隔线同款；③ 首页省份按钮箭头为设置页同款线条箭头
+- 说明：字体文件（unbounded_variable.ttf/unbounded.xml）已删除，工程无任何字体引用；logo 矢量源 KOiL-logo-vector.svg + 预览对比图在工程根
+
+### v1.5.33 变更速览
+- 🎨 KOiL logo → `res/drawable/koil_logo.xml`（fontTools 提字形轮廓，Bold wght700 形状），设置页 Image+tint 显示，字体文件/引用代码全删
+- ⚙️ 同步来源从按钮行下移至油价库区块最底（EIA API Key 之后），同款 0.5dp 分隔线
+- 🔽 省份箭头 ArrowDropDown(16dp) → Miuix DropdownArrowEndAction（设置页同款线条风）
+
+## 历史版本：v1.5.32（versionCode 232）— 2026-10-29 已交付
 
 - 定位：异常弹窗三修（叠加/负号/标题+背景）+ 油价库两行居中 + 同步来源移最底 + 全局点击空白清焦
 - commit：`df042e7`（基于 v1.5.31，不涉及 DB schema，覆盖升级安全）

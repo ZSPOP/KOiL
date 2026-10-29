@@ -1,5 +1,23 @@
 # KOiL CHANGELOG
 
+## v1.5.33（versionCode 233）— 2026-10-29（基于 v1.5.32，KOiL 品牌 logo 转矢量 + 同步来源移区块最底 + 省份箭头换设置页同款）
+
+> 用户报 3 项改动一次执行。**关键变更：Unbounded 字体彻底移除**——设置页底部 KOiL 品牌字从字体渲染转为矢量 drawable（形状为 Bold wght700 字形轮廓），字体文件与引用代码全部删除。不涉及 DB schema（覆盖升级安全）。
+
+### 🎨 KOiL 品牌 logo 转矢量（不再依赖字体）
+1. 用 fontTools 将 Unbounded 可变字体实例化为 wght=700（与之前 Bold 渲染一致），提取 K/O/i/L 四字形轮廓，按字形宽度横排组合
+2. 生成 `res/drawable/koil_logo.xml`（VectorDrawable，视口 2926×1000，宽 58.52dp 高 20dp，黑色底供主题 tint）——预览图/对比图已随确认流程交付
+3. 设置页底部：`Text("KOiL", Unbounded 字体)` → `Image(koil_logo)` + ColorFilter.tint（颜色与之前一致 onBackgroundVariant 60%）
+4. **删除 `res/font/unbounded.xml` + `unbounded_variable.ttf`**，清理 Font/FontFamily/FontVariation import；全局确认无其它引用
+
+### ⚙️ 油价库区块：同步来源移到最底
+- 用户明确"放在数据库卡的最下面，也就是 EIA 下面"：同步来源从「立即更新」按钮行下方移出，放到 **EIA API Key 项之后、区块闭合前**（区块最后一行）
+- 分隔线与区块内其它分隔线完全同款：0.5dp / `onBackgroundVariant` alpha 0.12 / 通栏宽度；字号 12sp 保持
+
+### 🔽 首页省份箭头换设置页同款
+- 用户两次反馈实心小三角不显眼、不像设置页外观 → 替换为 Miuix `DropdownArrowEndAction`（设置页 Dropdown / 油号选择行尾同款线条风格箭头，颜色=按钮文字色）
+- 清理 `Icons.Filled.ArrowDropDown` import（不再使用）
+
 ## v1.5.32（versionCode 232）— 2026-10-29（基于 v1.5.31，异常弹窗三修 + 油价库布局 + 全局点击失焦）
 
 > 用户报 v1.5.31 的 4 处问题一并修复。不涉及 DB schema（覆盖升级安全）。
