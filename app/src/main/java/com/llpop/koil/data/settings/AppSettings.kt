@@ -83,6 +83,12 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_PUSH = booleanPreferencesKey("KOiL-price-push")
         private val KEY_PRICE_LAST_NOTIFIED_DATE = stringPreferencesKey("KOiL-price-last-notified-date")
         private val KEY_PRICE_LAST_WINDOW_REMINDED = stringPreferencesKey("KOiL-price-last-window-reminded")
+        // v1.5.27：窗口日当天"今晚24点生效"提醒去重（按窗口日标记）
+        private val KEY_PRICE_LAST_WINDOW_DAY_REMINDED = stringPreferencesKey("KOiL-price-last-window-day-reminded")
+        // v1.5.27：最近一次同步来源快照（设置页多源一致性展示）
+        private val KEY_PRICE_DB_LAST_SOURCES = stringPreferencesKey("KOiL-price-db-last-sources")
+        // v1.5.27：最近一次锚点命中源（xxapi/ruseo/abapi/ndrc/无）
+        private val KEY_PRICE_DB_LAST_ANCHOR_SOURCE = stringPreferencesKey("KOiL-price-db-last-anchor-source")
         private val KEY_LOCATION_ENABLED = booleanPreferencesKey("KOiL-location-enabled")
         private val KEY_HAS_PROMPTED_LOCATION = booleanPreferencesKey("KOiL-has-prompted-location")
         private val KEY_PRICE_DB_AUTO_UPDATE = booleanPreferencesKey("KOiL-price-db-auto-update")
@@ -241,6 +247,27 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.map { it[KEY_PRICE_LAST_WINDOW_REMINDED] ?: "" }
     suspend fun setPriceLastWindowReminded(date: String) {
         context.KOiLDataStore.edit { it[KEY_PRICE_LAST_WINDOW_REMINDED] = date }
+    }
+
+    // v1.5.27：上次已提醒的窗口日（窗口日当天"今晚24点生效"提醒去重）
+    val priceLastWindowDayReminded: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_LAST_WINDOW_DAY_REMINDED] ?: "" }
+    suspend fun setPriceLastWindowDayReminded(date: String) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_LAST_WINDOW_DAY_REMINDED] = date }
+    }
+
+    // v1.5.27：最近一次同步来源快照（设置页多源一致性展示，格式如 "锚点:xxapi · 今日价:abapi"）
+    val priceDbLastSources: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_DB_LAST_SOURCES] ?: "" }
+    suspend fun setPriceDbLastSources(value: String) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_DB_LAST_SOURCES] = value }
+    }
+
+    // v1.5.27：最近一次锚点命中源（xxapi/ruseo/abapi/ndrc/无）
+    val priceDbLastAnchorSource: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_PRICE_DB_LAST_ANCHOR_SOURCE] ?: "" }
+    suspend fun setPriceDbLastAnchorSource(value: String) {
+        context.KOiLDataStore.edit { it[KEY_PRICE_DB_LAST_ANCHOR_SOURCE] = value }
     }
 
     // ---- 定位（koil-location-enabled）----

@@ -146,6 +146,8 @@ class SettingsViewModel(
         val strandedKeptPrice: String? = null,      // 搁浅时维持的价格（元/升）
         val incompleteProvinceCount: Int = 0,       // 窗口日覆盖不足的省份数（完整性提示）
         val versionLabel: String = "V——",           // 版本号（V+最新调价窗口日，不受搁浅影响）
+        // v1.5.27：多源一致性（最近一次同步来源快照，如 "锚点:xxapi · 今日价:abapi"）
+        val lastSyncSources: String = "",
     )
     private val _priceDbStatus = MutableStateFlow(PriceDbStatus())
     val priceDbStatus: StateFlow<PriceDbStatus> = _priceDbStatus.asStateFlow()
@@ -336,6 +338,7 @@ class SettingsViewModel(
                 strandedKeptPrice = strandedKeptPrice,
                 incompleteProvinceCount = incompleteProvinceCount,
                 versionLabel = versionLabel,
+                lastSyncSources = settings.priceDbLastSources.first(),
             )
             _pendingItems.value = pendingDao.getPending()
         }

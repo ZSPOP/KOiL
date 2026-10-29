@@ -78,9 +78,14 @@ class KOiLApplication : Application() {
         // 链式执行：灌库完成后再做启动调价检查（避免灌库 + 检查两个网络任务并发抢带宽拖慢首屏数据就绪）。
         appScope.launch {
             try {
-                GlobalContext.get().get<OilPriceDbSyncer>().initPriceDb()
+                val syncer = GlobalContext.get().get<OilPriceDbSyncer>()
+                syncer.initPriceDb()
                 // 启动时非强制检查一次（8 小时节流 + 自动更新开关在服务内部判断）
-                GlobalContext.get().get<OilPriceDbSyncer>().checkAndUpdate(force = false)
+                syncer.checkAndUpdate(force = false)
+                // v1.5.27：窗口日当天"今晚24点生效"提醒——同步成功后重新排期一次性 Worker（00:05 精准），
+                // 再走一遍 notifyPriceChanges 兜底（当天启动/日历就绪即提醒；幂等，已提醒不会重复）
+                syncer.scheduleWindowDayReminder(this@KOiLApplication)
+                syncer.notifyPriceChanges(this@KOiLApplication)
             } catch (t: Throwable) {
                 Log.e("KOiL", "Startup price sync failed", t)
             }

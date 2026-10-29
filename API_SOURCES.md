@@ -51,6 +51,8 @@
 
 > **v1.4.194 移除 apizero（重要，承接 1.4.193）**：① 双源核验退化为 **abapi 单源**（verifyProvince 走「单源缺失→用有价源自动入库」分支；不再产生 pending）；② 窗口日历锚点链缩为 4 级：xxapi → ruseo → abapi 曲线 → 本地推算（删预测专接口）；③ 预测幅度恒走 **EIA 原油估算**（UI 标注「估算」）；④ `fetchBothSources` 保留 Pair 签名（secondary 恒失败），调用方零改动；⑤ 同步链路每轮净减 2 个 apizero 请求。
 
+> **v1.5.27 多源一致性可观测（重要）**：① 锚点链命中来源落盘 `KOiL-price-db-last-anchor-source`（xxapi/ruseo/abapi/ndrc/无——跟随实际命中节点，发改委 D4 第 4 级兜底格式变化自动跳过）；② 每次同步成功写组合快照 `KOiL-price-db-last-sources`（"锚点:xxapi · 今日价:abapi"），设置页油价库区域展示「同步来源」一行，数据可信度透明化、兜底链健康可排查；③ 新增窗口日当天提醒（WorkManager 一次性调度窗口日 00:05 + 启动/8h 周期兜底，通知 ID 1003 独立，DataStore `KOiL-price-last-window-day-reminded` 去重）。
+
 **⚠️ 现状可靠性**：调价窗口日 = 本地推算窗口日历（xxapi/ruseo 锚点 + abapi 曲线双重兜底，持久化不空降级）；预测幅度 = EIA 官方原油（免费 Key 内置）+ 腾讯降级；价格 = abapi 单源（历史曲线灌库 + 今日价核验）。**无付费依赖，无单点风险**。
 
 ## 三、已调研未接入的候选源（2026-10-22 调研，勿重复搜索）

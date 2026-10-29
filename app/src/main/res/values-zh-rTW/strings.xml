@@ -259,6 +259,8 @@
     <string name="koil_pdb_adjust_stranded_short">調整日 %1$s（擱淺）</string>
     <string name="koil_pdb_adjust_adjusted">調整日 %1$s · 調價至 %2$s 元/升</string>
     <string name="koil_pdb_next_window">下個窗口：%1$s</string>
+    <!-- v1.5.27：多源一致性（锚点/今日价来源快照） -->
+    <string name="koil_pdb_sync_sources">同步來源：%1$s</string>
     <string name="koil_pdb_not_checked">尚未檢測</string>
     <string name="koil_pdb_detail_title">調價記錄</string>
     <string name="koil_pdb_back">返回設定</string>
@@ -290,6 +292,9 @@
     <string name="koil_noti_msg_price_adjust">%1$s %2$s：¥%3$.2f → ¥%4$.2f</string>
     <string name="koil_noti_title_window_tomorrow">明天是調價窗口日</string>
     <string name="koil_noti_msg_window_tomorrow">預計 %1$s 發布調整公告，請留意</string>
+    <!-- v1.5.27：窗口日当天"今晚24点生效"提醒 -->
+    <string name="koil_noti_title_window_today">今晚24時油價窗口到期</string>
+    <string name="koil_noti_msg_window_today">今天（%1$s）是調價窗口日，24 時後新價生效，今晚加油可稍留意</string>
     <string name="koil_pdb_updating">更新中…</string>
     <string name="koil_msg_price_db_empty">油價庫為空</string>
     <string name="koil_msg_price_exported">已匯出 %1$d 筆油價 → %2$s</string>

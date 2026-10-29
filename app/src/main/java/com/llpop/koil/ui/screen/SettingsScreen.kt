@@ -531,6 +531,16 @@ fun SettingsScreen(
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
                         }
+                        // 行3（v1.5.27）：多源一致性——锚点/今日价来源快照（数据可信度透明化，便于排查兜底链健康）
+                        if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                            )
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(

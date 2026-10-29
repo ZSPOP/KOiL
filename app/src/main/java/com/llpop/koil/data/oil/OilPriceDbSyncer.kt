@@ -135,13 +135,18 @@ class OilPriceDbSyncer(
         // ① xxapi date−1 → ② ruseo date−1 → ③ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，
         // 实测 18/18 与发改委公告吻合）→ ④ 发改委公告（v1.5.23 D4：公告标题年份+月日=权威窗口日，
         // 含搁浅窗口；但它是网页抓取，公告格式一旦变化即抓取为空 → 自动跳过，不影响主链锚点）
-        val anchor = network.fetchAnchorWindowDate()
-            ?: abapiAnchor()
-            ?: runCatching { network.fetchNdrcAdjustDates() }.getOrNull()?.lastOrNull()
+        // v1.5.27：锚点命中来源记录（多源一致性展示）——来源跟随实际命中的链路节点
+        var anchorSource = ""
+        val anchor = network.fetchAnchorWindowDate()?.also { anchorSource = it.source }?.date
+            ?: abapiAnchor().also { if (it != null) anchorSource = "abapi" }
+            ?: runCatching { network.fetchNdrcAdjustDates() }.getOrNull()
+                ?.lastOrNull()?.also { anchorSource = "ndrc" }
         if (anchor == null) {
             // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
+            settings.setPriceDbLastAnchorSource("无")
             return emptyList()
         }
+        settings.setPriceDbLastAnchorSource(anchorSource)
         val todayYear = LocalDate.now().year
         // 拉当年 + 前后各一年节假日（向前倒推/向后顺推可能跨年；缺失年份为空 → 该年按纯工作日推）
         val holidaySet = mutableSetOf<String>()
@@ -313,6 +318,9 @@ class OilPriceDbSyncer(
             }
             settings.setPriceDbLastCheckAt(now)
             settings.setPriceDbCache(result.message)
+            // v1.5.27：多源一致性快照（设置页展示）——锚点源在 getAdjustDates 内记录，今日价恒为 abapi 主源
+            val anchorSrc = settings.priceDbLastAnchorSource.first().ifBlank { "—" }
+            settings.setPriceDbLastSources("锚点:$anchorSrc · 今日价:abapi")
             if (result.newAdjustments > 0 && result.latestDate != null) {
                 settings.setPriceDbLastUpdateDate(result.latestDate!!)
                 settings.setPriceDbLastWindowChecked(result.latestDate!!)
@@ -881,6 +889,48 @@ class OilPriceDbSyncer(
                 )
                 settings.setPriceLastWindowReminded(next)
             }
+
+            // 3) 窗口日当天提醒（v1.5.27）：今天 == 窗口日 → "今晚 24 时生效"
+            // 触发点：一次性 Worker（窗口日 00:05 精准）+ 启动/8h 周期兜底（notifyPriceChanges 幂等去重）
+            val todayStr = today.toString()
+            if (adjustDates.contains(todayStr)) {
+                val remindedDay = settings.priceLastWindowDayReminded.first()
+                if (remindedDay != todayStr) {
+                    OilPriceNotifier.notify(
+                        context,
+                        context.getString(R.string.koil_noti_title_window_today),
+                        context.getString(R.string.koil_noti_msg_window_today, todayStr),
+                        OilPriceNotifier.NOTIFICATION_ID_WINDOW_DAY,   // v1.5.27：独立 ID
+                    )
+                    settings.setPriceLastWindowDayReminded(todayStr)
+                }
+            }
         }
+    }
+
+    // ===== v1.5.27：窗口日当天提醒调度 =====
+
+    /**
+     * 为下一个窗口日调度"当天 00:05"的一次性提醒 Worker（REPLACE 策略：日历更新/重复调度覆盖旧任务）。
+     * 窗口日当天已过 00:05（如当天启动）→ delay=0 立即执行（Worker 内幂等，已提醒则跳过）。
+     * 日历为空（从未同步成功）时跳过——首次同步成功后由启动链/周期 Worker 重新调度。
+     */
+    suspend fun scheduleWindowDayReminder(context: Context) {
+        val adjustDates = settings.priceDbAdjustDates.first()
+            .split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val next = adjustDates.firstOrNull { it > LocalDate.now().format(DATE_FMT) } ?: return
+        val delayMs = runCatching {
+            val target = LocalDate.parse(next).atTime(0, 5)
+                .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            (target - System.currentTimeMillis()).coerceAtLeast(0L)
+        }.getOrNull() ?: return
+        val request = androidx.work.OneTimeWorkRequestBuilder<OilPriceWindowDayWorker>()
+            .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            .build()
+        androidx.work.WorkManager.getInstance(context).enqueueUniqueWork(
+            "KOiL_window_day_reminder",
+            androidx.work.ExistingWorkPolicy.REPLACE,
+            request,
+        )
     }
 }

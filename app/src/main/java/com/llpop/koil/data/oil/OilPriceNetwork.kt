@@ -301,20 +301,33 @@ class OilPriceNetwork {
     )
 
     /** 锚点窗口日：xxapi → ruseo（v1.4.184 起 xxapi 优先，同源互备），
-     *  取最近窗口生效日（date）− 1 天；两者皆失败返回 null。 */
-    suspend fun fetchAnchorWindowDate(): String? {
-        val date = runCatching {
+     *  取最近窗口生效日（date）− 1 天；两者皆失败返回 null。
+     *  v1.5.27：返回带来源标签（xxapi/ruseo），供设置页"多源一致性"展示。 */
+    suspend fun fetchAnchorWindowDate(): AnchorWindow? {
+        val xxapiDate = runCatching {
             val body = client.get("https://v2.xxapi.cn/api/oilPrice").bodyAsText()
             json.decodeFromString<XxapiResponse>(body).data
                 .firstOrNull { !it.date.isNullOrBlank() }?.date
         }.getOrNull()
-            ?: runCatching {
-                val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
-                json.decodeFromString<RuseoResponse>(body).data?.list
-                    ?.firstOrNull { !it.date.isNullOrBlank() }?.date
-            }.getOrNull()
-        return date?.let { runCatching { LocalDate.parse(it).minusDays(1).toString() }.getOrNull() }
+        if (xxapiDate != null) {
+            return xxapiDate.toAnchorWindow("xxapi")
+        }
+        val ruseoDate = runCatching {
+            val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
+            json.decodeFromString<RuseoResponse>(body).data?.list
+                ?.firstOrNull { !it.date.isNullOrBlank() }?.date
+        }.getOrNull()
+        if (ruseoDate != null) {
+            return ruseoDate.toAnchorWindow("ruseo")
+        }
+        return null
     }
+
+    /** v1.5.27：锚点窗口日 + 命中来源（功能3 多源一致性展示用） */
+    data class AnchorWindow(val date: String, val source: String)
+
+    private fun String.toAnchorWindow(source: String): AnchorWindow? =
+        runCatching { AnchorWindow(LocalDate.parse(this).minusDays(1).toString(), source) }.getOrNull()
 
     /** 全国最新价快照（ruseo 优先 → xxapi 兜底）；两者皆失败返回空列表。 */
     suspend fun fetchNationwideSnapshot(): List<NationwidePrice> {

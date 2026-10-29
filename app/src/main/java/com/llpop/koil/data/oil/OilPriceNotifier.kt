@@ -26,6 +26,8 @@ object OilPriceNotifier {
     private const val NOTIFICATION_ID = 1001
     /** v1.5.23 D3：窗口日前一天提醒独立 ID——与调价生效通知不再互相覆盖 */
     const val NOTIFICATION_ID_WINDOW_REMINDER = 1002
+    /** v1.5.27：窗口日当天"今晚24点生效"提醒独立 ID */
+    const val NOTIFICATION_ID_WINDOW_DAY = 1003
 
     fun ensureChannel(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

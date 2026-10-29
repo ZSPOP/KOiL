@@ -22,6 +22,8 @@ class OilPriceSyncWorker(
             val result = syncer.checkAndUpdate(force = false)
             // v1.5.22 D：通知不依赖本次同步成功（逻辑幂等：价格未变不推、已提醒不重复）
             syncer.notifyPriceChanges(applicationContext)
+            // v1.5.27：每次周期检测后重新排期窗口日当天提醒（App 持续运行跨窗口日也能覆盖）
+            syncer.scheduleWindowDayReminder(applicationContext)
             if (result.success) {
                 Result.success()
             } else {
