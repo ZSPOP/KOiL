@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- KOiL 品牌 logo 矢量（v1.5.33 修正：M 隐式 LineTo 正确处理；viewport 加高容纳 descender） -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="58.52dp"
-    android:height="20dp"
+    android:width="64.4dp"
+    android:height="22dp"
     android:viewportWidth="2984.5"
     android:viewportHeight="1020.0"
 >

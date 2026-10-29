@@ -840,7 +840,7 @@ fun SettingsScreen(
                         lineHeight = 15.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(1.dp))
                 }
             }
         }
@@ -911,7 +911,8 @@ fun SettingsScreen(
                 painter = painterResource(R.drawable.koil_logo),
                 contentDescription = null,
                 colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f)),
-                modifier = Modifier.size(width = 58.52.dp, height = 20.dp),
+                // v1.5.35：logo 放大 10%（58.52×20 → 64.4×22，保持比例）
+                modifier = Modifier.size(width = 64.4.dp, height = 22.dp),
             )
             Spacer(Modifier.height(2.dp))
             Text(

@@ -470,12 +470,14 @@ private fun OilPriceCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // v1.5.34：省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
+                        // v1.5.35：文字→箭头加 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
                         Text(
                             text = uiState.viewProvince,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = containerText,
                         )
+                        Spacer(Modifier.width(8.dp))
                         // v1.5.33：省份下拉箭头——换 Miuix DropdownArrowEndAction（与设置页 Dropdown / 油号选择
                         // 行尾同款线条风格），替代 v1.5.31 的实心小三角 ArrowDropDown（用户反馈不显眼）
                         DropdownArrowEndAction(actionColor = containerText)
