@@ -824,6 +824,7 @@ fun SettingsScreen(
                 }
                 // v1.5.33：同步来源放油价库区块最底（EIA 项之后、区块闭合前）——用户指定位置；
                 // 上方分隔线与区块内其它分隔线同款（0.5dp / alpha 0.12 / 通栏）
+                // v1.5.34：文字行与卡片圆角边框底部间隔 12dp → 6dp（用户反馈偏高）
                 if (priceDbStatus.lastSyncSources.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
                     Box(
@@ -839,8 +840,8 @@ fun SettingsScreen(
                         lineHeight = 15.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
+                    Spacer(Modifier.height(6.dp))
                 }
-                Spacer(Modifier.height(12.dp))
             }
         }
         Spacer(Modifier.height(16.dp))
