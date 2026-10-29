@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -314,7 +316,7 @@ fun SettingsScreen(
                     }
                 },
             )
-            // v1.5.28：未授权提示行（点击重新请求）；v1.5.29：间距收紧贴近副标题
+            // v1.5.28：未授权提示行（点击重新请求）；v1.5.30：间距收紧贴近副标题
             if (!locationPermissionGranted) {
                 Text(
                     text = stringResource(R.string.koil_set_location_denied),
@@ -322,7 +324,8 @@ fun SettingsScreen(
                     lineHeight = 14.sp,
                     color = KOiLColors.Warning,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .padding(horizontal = 16.dp)
+                        .offset(y = (-3).dp)
                         .clickable {
                             locationPermissionLauncher.launch(
                                 arrayOf(
@@ -370,22 +373,16 @@ fun SettingsScreen(
                             viewModel.setPricePush(true)
                         } else {
                             // v1.5.29：HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
-                            // 用户开启后返回 App（ON_RESUME）自动补开开关
+                            // 用户开启后返回 App（ON_RESUME）自动补开开关；v1.5.30：跳转加固（NEW_TASK + fallback）
                             pendingOpenPush = true
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                    }
-                                )
-                            }
+                            openNotificationSettings(context)
                         }
                     } else {
                         viewModel.setPricePush(false)
                     }
                 },
             )
-            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）；v1.5.29：间距收紧贴近副标题
+            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）；v1.5.30：间距收紧 + 跳转加固
             if (!pushPermissionGranted) {
                 Text(
                     text = stringResource(R.string.koil_set_price_push_denied),
@@ -393,16 +390,9 @@ fun SettingsScreen(
                     lineHeight = 14.sp,
                     color = KOiLColors.Warning,
                     modifier = Modifier
-                        .padding(horizontal = 16.dp, vertical = 2.dp)
-                        .clickable {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                    }
-                                )
-                            }
-                        },
+                        .padding(horizontal = 16.dp)
+                        .offset(y = (-3).dp)
+                        .clickable { openNotificationSettings(context) },
                 )
             }
             SettingDivider()
@@ -1413,3 +1403,31 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 }
 
 
+
+/**
+ * v1.5.30：跳系统通知设置（通知开关/提示行共用）。
+ * 加固要点：
+ * 1. NEW_TASK——context 非 Activity（如 application context）时 startActivity 否则抛异常（v1.5.29 就是被 runCatching
+ *    静默吞掉导致"点开关没反应"）；
+ * 2. resolveActivity 预检——部分 ROM 对 ACTION_APP_NOTIFICATION_SETTINGS 无处理者（ActivityNotFoundException），
+ *    失败 fallback 到应用信息页（所有 ROM 必有）；
+ * 3. 不再静默吞异常——仍异常则 fallback 应用信息页，保证有可感知的跳转结果。
+ */
+private fun openNotificationSettings(context: Context) {
+    val pkg = context.packageName
+    val target = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        .putExtra(Settings.EXTRA_APP_PACKAGE, pkg)
+    if (target.resolveActivity(context.packageManager) != null) {
+        context.startActivity(target)
+        return
+    }
+    // fallback：应用信息页（通知开关在 App 详情里）
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .setData(android.net.Uri.fromParts("package", pkg, null))
+        )
+    }
+}
