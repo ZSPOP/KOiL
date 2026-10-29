@@ -54,7 +54,7 @@ class CrudeOilEstimator(
                     val adjustDates = settings.priceDbAdjustDates.first()
                         .split(",").map { it.trim() }.filter { it.isNotBlank() }
                     // v1.5.23：基准日 = 库内最近非搁浅调价生效日（10-15 搁浅不重置基准）
-                    val baseDate = priceDao.getLatestNonStrandedEffectiveDate()
+                    val baseDate = priceDao.getLatestNonStrandedEffectiveDates().firstOrNull()
                     val calc = calcFromEiaSeries(eia, adjustDates, baseDate)
                     if (calc != null) return CrudeOilEstimate(calc.amountPerTon, "EIA", calc.dataDate)
                 }

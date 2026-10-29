@@ -11,8 +11,8 @@ import kotlinx.coroutines.flow.Flow
 interface KOiLPriceDao {
 
     /** v1.5.23：最近一次【非搁浅调价】的生效日（各省窗口一致，全国统一调价；搁浅轮不重置估值基准） */
-    @Query("SELECT effectiveDate FROM koil_price WHERE isStranded = 0 ORDER BY effectiveDate DESC LIMIT 1")
-    suspend fun getLatestNonStrandedEffectiveDate(): String?
+    @Query("SELECT effectiveDate FROM koil_prices WHERE isStranded = 0 ORDER BY effectiveDate DESC LIMIT 1")
+    suspend fun getLatestNonStrandedEffectiveDates(): List<String>
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(prices: List<KOiLPriceEntity>)
 

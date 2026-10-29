@@ -178,7 +178,7 @@ class OverviewViewModel(
         viewModelScope.launch {
             val saved = settings.summaryRange.first()
             if (saved in listOf("all", "3m", "6m", "year")) {
-                _uiState.update { it.copy(range = saved) }
+                _uiState.value = _uiState.value.copy(range = saved)
                 recompute()
             }
         }
