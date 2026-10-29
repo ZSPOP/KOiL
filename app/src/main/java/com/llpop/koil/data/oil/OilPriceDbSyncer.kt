@@ -799,9 +799,11 @@ class OilPriceDbSyncer(
             val adjustDates = getAdjustDates()
             if (adjustDates.isEmpty()) return Triple(0, 0, 0)
             val eff = addOneDay(adjustToWindow(today, adjustDates))
-            // v1.5.21 B8 写入闸：生效日 > 今天（窗口日当天数据源若提前放次日新价）一律跳过，
-            // 等次日归并自然写入——库里永不出现"未来生效"记录
-            if (eff > today) return Triple(0, 0, 0)
+            // v1.5.36 P8：只在「今天 == 窗口日次日（真正生效日）」才允许增量入库——
+            // 非窗口日价格抖动（数据源四舍五入/波动）不再写"上一窗口生效日"假变化点污染
+            // 调价历史/涨跌对比/历史价；窗口日当天（eff > today，B8）与其它日子（eff < today）一律跳过，
+            // 真实调价由次日 checkAndUpdate/灌库自然写入。
+            if (eff != today) return Triple(0, 0, 0)
 
             val toInsert = mutableListOf<KOiLPriceEntity>()
             var verified = 0

@@ -1,5 +1,6 @@
 package com.llpop.koil.util
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.os.Environment
@@ -39,15 +40,28 @@ object CrashReporter {
                 crashFile.writeText(text)
                 // 2) 公共下载目录（用户可直接打开）：Android 10+ 用 MediaStore 免权限
                 runCatching {
+                    val resolver = context.contentResolver
+                    val downloadsUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                    // v1.5.36 P5：先清理历史同名崩溃文件（系统对同名 insert 会生成 (1)(2)… 堆积），只保留最新一份
+                    resolver.query(
+                        downloadsUri,
+                        arrayOf(MediaStore.MediaColumns._ID),
+                        "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
+                        arrayOf(PUBLIC_FILE_NAME),
+                        null,
+                    )?.use { c ->
+                        while (c.moveToNext()) {
+                            val id = c.getLong(0)
+                            resolver.delete(ContentUris.withAppendedId(downloadsUri, id), null, null)
+                        }
+                    }
                     val values = ContentValues().apply {
                         put(MediaStore.MediaColumns.DISPLAY_NAME, PUBLIC_FILE_NAME)
                         put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
                         put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
                     }
-                    context.contentResolver.insert(
-                        MediaStore.Downloads.EXTERNAL_CONTENT_URI, values
-                    )?.let { uri ->
-                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                    resolver.insert(downloadsUri, values)?.let { uri ->
+                        resolver.openOutputStream(uri)?.use { out ->
                             out.write(text.toByteArray())
                         }
                     }

@@ -123,6 +123,8 @@ class AppSettings(private val context: Context) {
         private val KEY_RECORD_SEEDED = booleanPreferencesKey("KOiL-record-seeded")
         // v1.5.21 一次性清理标记：apizero 时代残留的 KOiL-price-db-forecast 键已删除（forecast 功能已彻底移除）
         private val KEY_PRICE_DB_FORECAST_CLEARED = booleanPreferencesKey("KOiL-price-db-forecast-cleared")
+        // v1.5.36 P2：通知权限首次请求标记（允许/拒绝过都不再启动时重复请求；Android 13+ 拒绝后系统静默不再弹框）
+        private val KEY_NOTIFICATION_PERMISSION_REQUESTED = booleanPreferencesKey("KOiL-notification-permission-requested")
         // v1.5.21 一次性清理标记：库内"未来生效日"脏记录（effectiveDate > 今天）已删除（窗口日 24 点生效边界修复）
         private val KEY_PRICE_DB_WINDOW_DAY_CLEARED = booleanPreferencesKey("KOiL-price-db-window-day-cleared")
         const val DEFAULT_DEVIATION_THRESHOLD = 25.0
@@ -360,6 +362,13 @@ class AppSettings(private val context: Context) {
 
     val priceDbForecastCleared: Flow<Boolean> =
         context.KOiLDataStore.data.map { it[KEY_PRICE_DB_FORECAST_CLEARED] ?: false }
+
+    /** v1.5.36 P2：通知权限是否已请求过（首次安装启动弹框一次；拒绝后记录，不再每次启动重复无效请求） */
+    val notificationPermissionRequested: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_NOTIFICATION_PERMISSION_REQUESTED] ?: false }
+    suspend fun setNotificationPermissionRequested(requested: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_NOTIFICATION_PERMISSION_REQUESTED] = requested }
+    }
 
     /** v1.5.21 一次性标记：库内"未来生效日"脏记录是否已清理（窗口日 24 点前禁止出现 effectiveDate > 今天 的记录） */
     val priceDbWindowDayCleared: Flow<Boolean> =

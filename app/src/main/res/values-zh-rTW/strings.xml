@@ -57,7 +57,7 @@
     <string name="koil_precheck_price_ok">價格與當日參考價一致</string>
     <string name="koil_precheck_ready">預檢通過 · 距上次加油您行駛 %1$.0f 公里，本次加油優惠 %2$.2f 元</string>
     <string name="koil_precheck_added">已新增，繼續錄入下一筆</string>
-    <string name="koil_precheck_add_failed">新增失敗：%1$s</string>
+    <string name="koil_precheck_add_failed_generic">新增失敗，請重試</string>
     <!-- 定位權限提醒 -->
     <string name="koil_add_loc_permission_title">需要定位權限</string>
     <string name="koil_add_loc_permission_message">定位到您目前所在省份需要位置權限，是否允許存取？</string>

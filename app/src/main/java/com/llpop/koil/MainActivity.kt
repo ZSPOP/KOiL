@@ -15,6 +15,7 @@ import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.MainScreen
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 
@@ -24,11 +25,17 @@ class MainActivity : ComponentActivity() {
         // 系统 SplashScreen（Android 12+ 原生，低版本兼容库）：品牌水滴 + KOiL
         installSplashScreen()
         super.onCreate(savedInstanceState)
-        // 调价推送通知权限（API 33+ 运行时申请；拒绝则通知静默跳过，可在系统设置重开）
+        // 调价推送通知权限（API 33+ 运行时申请；仅首次安装请求一次，拒绝后标记记忆，
+        // 不再每次启动重复无效请求——Android 13+ 拒绝后系统静默不弹框；用户想开启时经设置页开关跳系统通知设置）
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
+            lifecycleScope.launch {
+                val requested = GlobalContext.get().get<AppSettings>().notificationPermissionRequested.first()
+                if (!requested) {
+                    ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
+                }
+            }
         }
         enableEdgeToEdge()
         setContent {
@@ -51,11 +58,14 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 100) {
+            // v1.5.36 P2：无论允许/拒绝都记录已请求（首次安装只弹一次框；拒绝则推送开关联动置关）
             val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
-            if (!granted) {
-                runCatching {
-                    lifecycleScope.launch {
-                        GlobalContext.get().get<AppSettings>().setPricePush(false)
+            runCatching {
+                lifecycleScope.launch {
+                    val settings = GlobalContext.get().get<AppSettings>()
+                    settings.setNotificationPermissionRequested(true)
+                    if (!granted) {
+                        settings.setPricePush(false)
                     }
                 }
             }

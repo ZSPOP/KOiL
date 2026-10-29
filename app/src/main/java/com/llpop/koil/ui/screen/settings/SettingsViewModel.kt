@@ -263,26 +263,26 @@ class SettingsViewModel(
             val nextWindow = OilPriceDateUtil.normalize(settings.priceDbNextAdjustment.first())
             var adjustWindowDate: String? = prevWindow
             var nextAdjustWindowDate: String? = nextWindow
-            // 接口 next 已过期时顺延一个周期显示（与录入页 effectiveNext 一致），避免显示过去窗口
+            // v1.5.36 P1：接口 next 过期/缺失时优先权威窗口日历（含节假日推算）取 ≥今天 第一个窗口；
+            // 权威日历为空才回退 +14 天顺延（极端兜底，原语义）
             if (nextAdjustWindowDate != null) {
-                val nextDate = runCatching { LocalDate.parse(nextAdjustWindowDate!!, DateTimeFormatter.ofPattern("yyyy-MM-dd")) }.getOrNull()
-                if (nextDate != null && nextDate.isBefore(LocalDate.now())) {
-                    nextAdjustWindowDate = nextDate.plusDays(14).toString()
+                val nextDate = runCatching { LocalDate.parse(nextAdjustWindowDate, DateTimeFormatter.ofPattern("yyyy-MM-dd")) }.getOrNull()
+                if (nextDate == null || nextDate.isBefore(LocalDate.now())) {
+                    nextAdjustWindowDate = windowDates.firstOrNull { it >= LocalDate.now().toString() }
+                        ?: nextDate?.plusDays(14)?.toString()
                 }
             }
-            // W1（最近已过调价窗口）优先级：① 接口 prev 存档（滚动窗口链）→ ② next − 14 天推算
-            //（首次同步 prev 未形成时，10-29 → 10-15，真实窗口）→ ③ 最后兜底 lastWindowChecked
+            // W1（最近已过调价窗口）优先级：① 接口 prev 存档（滚动窗口链）→ ② v1.5.36 P1：
+            // 权威日历最后一个 <今天（含搁浅窗口日，替代 next − 14 天推算，节假日不错位）→
+            // ③ next − 14 天推算（首次同步 prev 未形成时，10-29 → 10-15，真实窗口）→ ④ 最后兜底 lastWindowChecked
             //（仅当接口无任何窗口信息时；注意核对当天可能不是调价窗口日，故不能作为首选）
             if (adjustWindowDate == null) {
-                val nextDate = runCatching { LocalDate.parse(nextAdjustWindowDate ?: "", DateTimeFormatter.ofPattern("yyyy-MM-dd")) }.getOrNull()
-                if (nextDate != null) {
-                    adjustWindowDate = nextDate.minusDays(14).toString()
-                } else {
-                    val checkedDate = OilPriceDateUtil.normalize(lastWindowChecked)
-                    if (checkedDate != null) {
-                        adjustWindowDate = checkedDate
-                    }
-                }
+                val todayStr = LocalDate.now().toString()
+                adjustWindowDate = windowDates.filter { it < todayStr }.lastOrNull()
+                    ?: runCatching {
+                        LocalDate.parse(nextAdjustWindowDate ?: "", DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                    }.getOrNull()?.minusDays(14)?.toString()
+                    ?: OilPriceDateUtil.normalize(lastWindowChecked)
             }
             var windowStranded = false
             var adjustWindowPrice: String? = null
@@ -800,14 +800,14 @@ class SettingsViewModel(
                 // 恢复设置
                 val settingsObj = json.optJSONObject("settings")
                 if (settingsObj != null) {
-                    settingsObj.optString("themeMode")?.let {
+                    settingsObj.optString("themeMode").takeIf { it.isNotEmpty() }?.let {
                         runCatching { settings.setThemeMode(AppSettings.ThemeMode.valueOf(it)) }
                     }
-                    settingsObj.optString("language")?.let {
+                    settingsObj.optString("language").takeIf { it.isNotEmpty() }?.let {
                         runCatching { settings.setLanguage(AppSettings.Language.valueOf(it)) }
                     }
-                    settingsObj.optString("defaultProvince")?.takeIf { it.isNotEmpty() }?.let { settings.setDefaultProvince(it) }
-                    settingsObj.optString("defaultGrade")?.takeIf { it.isNotEmpty() }?.let { settings.setDefaultOilGrade(it) }
+                    settingsObj.optString("defaultProvince").takeIf { it.isNotEmpty() }?.let { settings.setDefaultProvince(it) }
+                    settingsObj.optString("defaultGrade").takeIf { it.isNotEmpty() }?.let { settings.setDefaultOilGrade(it) }
                     if (!settingsObj.isNull("tankCapacity")) settings.setTankCapacity(settingsObj.getDouble("tankCapacity").toFloat())
                     if (!settingsObj.isNull("keepLastGrade")) settings.setKeepLastGrade(settingsObj.getBoolean("keepLastGrade"))
                     if (!settingsObj.isNull("abnormalThreshold")) settings.setAbnormalThreshold(settingsObj.getDouble("abnormalThreshold"))
@@ -836,7 +836,11 @@ class SettingsViewModel(
     private fun String.normalizeDate(): String = replace("/", "-").let {
         val parts = it.split("-")
         if (parts.size == 3) {
-            "%04d-%02d-%02d".format(Locale.ROOT, parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+            // v1.5.36 P3：非法数字日期（如 abc-01-01）单行容错——返回原串，由调用方正则判 format_error，
+            // 不再抛 NumberFormatException 拖垮整文件解析
+            runCatching {
+                "%04d-%02d-%02d".format(Locale.ROOT, parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+            }.getOrDefault(it)
         } else it
     }
 

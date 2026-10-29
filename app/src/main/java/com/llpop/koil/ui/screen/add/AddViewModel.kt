@@ -86,6 +86,7 @@ private val GRADE_LABELS = mapOf(
     "0" to "0号柴油",
 )
 
+@OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AddViewModel(
     private val recordDao: KOiLRecordDao,
     private val priceDao: KOiLPriceDao,
@@ -285,13 +286,22 @@ class AddViewModel(
                 // 接口 next_adjustment 存档（未同步 → null → v1.4.192 回退本地推算窗口日历，
                 // 与数据库卡「下个窗口」同一来源；两者皆无 → 不显示推算假窗口）
                 val cfgNextRaw = settings.priceDbNextAdjustment.first()
+                val todayStr = LocalDate.now().toString()
+                val adjustDates = settings.priceDbAdjustDates.first()
+                    .split(",").map { it.trim() }.filter { it.isNotBlank() }
                 val cfgNext = OilPriceDateUtil.normalize(cfgNextRaw)
-                    ?: settings.priceDbAdjustDates.first()
-                        .split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        .firstOrNull { it >= LocalDate.now().toString() }
-                val next: LocalDate? = if (cfgNext != null) {
-                    try { LocalDate.parse(cfgNext, dateFormatter) } catch (_: Exception) { null }
-                } else null
+                // v1.5.36 P1：下个窗口优先取权威窗口日历（含节假日推算）——接口存档过期时
+                // 不再 ±14 天硬编码顺延（春节等长假期会漂到非窗口日）；日历为空才回退接口存档
+                val next: LocalDate? = when {
+                    cfgNext != null -> {
+                        val parsed = runCatching { LocalDate.parse(cfgNext, dateFormatter) }.getOrNull()
+                        if (parsed != null && !parsed.isBefore(LocalDate.now())) parsed
+                        else adjustDates.firstOrNull { it >= todayStr }
+                            ?.let { runCatching { LocalDate.parse(it, dateFormatter) }.getOrNull() }
+                    }
+                    else -> adjustDates.firstOrNull { it >= todayStr }
+                        ?.let { runCatching { LocalDate.parse(it, dateFormatter) }.getOrNull() }
+                }
                 var nextAdjustDate: String? = null
                 var days = -1
                 var urgent = false
@@ -299,7 +309,8 @@ class AddViewModel(
                     val today = LocalDate.now()
                     // 接口 next 已过期（days<0）时循环顺延一个周期直到 ≥ 今天（v1.5.0：
                     // 原只顺延一次，长期未开 App 且存档过期很远时仍显示过去窗口；循环覆盖
-                    // 春节等长周期 + 多轮错过场景）
+                    // 春节等长周期 + 多轮错过场景）。P1：正常场景 next 已优先来自权威日历，
+                    // 此循环仅在权威日历为空（极端离线）时兜底。
                     var effectiveNext: LocalDate = next
                     while (effectiveNext.isBefore(today)) effectiveNext = effectiveNext.plusDays(14)
                     nextAdjustDate = effectiveNext.format(dateFormatter)
@@ -307,9 +318,11 @@ class AddViewModel(
                     urgent = days in 0..3
                 }
                 // 数据库版本号：V+最近调价窗口日（与设置页油价库标题同一口径）。
-                // 取 prev 接口存档（滚动窗口链）→ 无则 next−14 推算 → 再无则 DB 最新调价日兜底（灌库即有，不再 V——）
+                // 取 prev 接口存档（滚动窗口链）→ P1：权威日历最后一个 <今天（含搁浅窗口日）→
+                // 再无则 next−14 推算 → 最后 DB 最新调价日兜底（灌库即有，不再 V——）
                 val prevWindow = OilPriceDateUtil.normalize(settings.priceDbPrevNextAdjustment.first())
                 val recentWindow: String? = prevWindow
+                    ?: adjustDates.filter { it < todayStr }.lastOrNull()
                     ?: next?.minusDays(14)?.toString()
                     ?: p.effectiveDate
                 val versionLabel = recentWindow?.replace("-", "")?.let { "V$it" } ?: "V——"
@@ -419,13 +432,14 @@ class AddViewModel(
         }
     }
 
-    /** 一键沿用上次加油：油号/里程/油量/实付（当前价由 observeCurrentPrice 自动刷新） */
+    /** 一键沿用上次加油：油号/油量/实付（当前价由 observeCurrentPrice 自动刷新）。
+     *  v1.5.36 P6：不再沿用上次里程——沿用旧值必触发"里程递减"拦截，置空由用户输入本次新里程。 */
     fun applyLastRecord() {
         val last = _uiState.value.lastRecord ?: return
         _uiState.update {
             it.copy(
                 oilGrade = last.oilGrade ?: "92",
-                mileage = last.mileage.toString(),
+                mileage = "",
                 oilAmount = last.oilAmount.toString(),
                 actualAmount = last.actualAmount.toString(),
             )
@@ -529,7 +543,8 @@ class AddViewModel(
                 }
                 isReady -> {
                     // 优惠金额 = 应付金额 - 实付金额（实付 ≥ 应付则无优惠，记 0）
-                    val discount = if (payable != null && actual != null && actual < payable) payable - actual else 0.0
+                    // actual 在 isReady 分支恒非空（v1.5.36 清 warning）
+                    val discount = if (payable != null && actual < payable) payable - actual else 0.0
                     messageKey = "ready"
                     messageArgs = listOf(distanceKm ?: 0.0, discount)
                 }
@@ -585,10 +600,11 @@ class AddViewModel(
                 val last = recordDao.getLatest()
                 _uiState.value = _uiState.value.copy(lastRecord = last, addSuccess = false)
                 runPrecheck()
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isAdding = false,
-                    precheck = PrecheckResult(messageKey = "add_failed", messageArgs = listOf(e.message ?: "")),
+                    // v1.5.36 P7：失败提示固定文案，不透出数据库内部异常文本
+                    precheck = PrecheckResult(messageKey = "add_failed"),
                 )
             }
         }

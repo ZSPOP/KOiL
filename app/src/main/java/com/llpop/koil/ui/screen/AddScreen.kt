@@ -944,7 +944,7 @@ private fun PrecheckBanner(uiState: AddUiState) {
             precheck.messageArgs.getOrNull(1) ?: 0.0,
         )
         "added" -> stringResource(R.string.koil_precheck_added)
-        "add_failed" -> stringResource(R.string.koil_precheck_add_failed, precheck.messageArgs.firstOrNull() ?: "")
+        "add_failed" -> stringResource(R.string.koil_precheck_add_failed_generic)  // v1.5.36 P7：固定文案，不透出内部异常
         else -> stringResource(R.string.koil_precheck_default)
     }
     val (bgColor, textColor) = when {

@@ -28,6 +28,8 @@ import java.util.Locale
 // v1.5.20：RecordWithDerived / ConsumptionStatus / computeDerived 已抽取到
 // domain.logic.DerivedCalculator（总览页与 CSV 导出共用同一口径）
 private const val MIN_DISTANCE = DerivedCalculator.MIN_DISTANCE
+/** v1.5.36 P4：趋势点抽样上限——记录极多时均匀抽样，避免全量点进 UI */
+private const val MAX_TREND_POINTS = 60
 private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
 /** 9 项汇总指标（对齐 Web 版口径） */
@@ -746,8 +748,14 @@ class OverviewViewModel(
         )
     }
 
-    private fun computeTrend(derived: List<RecordWithDerived>): List<TrendPoint> =
-        derived.map {
+    private fun computeTrend(derived: List<RecordWithDerived>): List<TrendPoint> {
+        // v1.5.36 P4：超过 60 点时均匀抽样（保留首尾形态），不再全量传递
+        val sampled = if (derived.size <= MAX_TREND_POINTS) derived
+        else {
+            val step = derived.size.toDouble() / MAX_TREND_POINTS
+            List(MAX_TREND_POINTS) { i -> derived[(i * step).toInt()] }
+        }
+        return sampled.map {
             TrendPoint(
                 date = it.record.reoilDate.takeLast(5),
                 oilConsumption = it.oilConsumption,
@@ -755,4 +763,5 @@ class OverviewViewModel(
                 actualAmount = it.record.actualAmount,
             )
         }
+    }
 }
