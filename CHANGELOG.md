@@ -1,5 +1,17 @@
 # KOiL CHANGELOG
 
+## v1.5.25（versionCode 225）— 2026-10-29（基于 v1.5.24，修复吸顶闪退）
+
+> 用户实测 v1.5.24 总览页月份标题吸顶时闪退。不涉及 DB schema（覆盖升级安全）。
+
+### 🐛 修复：月份标题吸顶闪退（OverviewScreen）
+- **根因**：吸顶背景用 `textureBlur(backdrop)` 毛玻璃——月份标题位于 backdrop **录制子树内部**（与顶栏不同，
+  顶栏是 Scaffold 兄弟节点、在录制子树外），textureBlur 采样 backdrop 层时会包含 header 自身 → **自采样递归** → GPU 渲染崩溃闪退
+- **修复**：移除 header 上的 textureBlur（及 blur 相关 import），吸顶背景改为**半透明 surface**（`surface.copy(alpha=0.92f)`）——
+  观感接近顶栏毛玻璃、无递归风险；贴顶 offset、吸顶检测、未吸顶无色块等逻辑全部保留不变
+
+---
+
 ## v1.5.24（versionCode 224）— 2026-10-29（基于 v1.5.23，UI 三处 + 设置页缺口实时刷新）
 
 > 用户点名的 3 处 UI 改动 + 已批准的「设置页油价库缺口实时刷新」改进。不涉及 DB schema（覆盖升级安全）。
