@@ -1,5 +1,22 @@
 # KOiL CHANGELOG
 
+## v1.5.30（versionCode 230）— 2026-10-29（基于 v1.5.29，通知设置跳转加固 + 提示行收紧）
+
+> 用户反馈 v1.5.29 通知开关仍"没反应、没跳转"、红色字仍偏远。修复根因。不涉及 DB schema（覆盖升级安全）。
+
+### 🔧 通知设置跳转加固（治"点开关没反应也没跳转"）
+- **根因**：v1.5.29 用 `runCatching` 包裹 startActivity——异常被**静默吞掉**。若 `ACTION_APP_NOTIFICATION_SETTINGS` 在 ROM 上无处理者（ActivityNotFoundException）、或 context 非 Activity 缺 `NEW_TASK` 标志，跳转直接失败且无任何反馈 = "没反应"
+- **修复**（新增 `openNotificationSettings()` 辅助函数，开关与提示行共用）：
+  1. Intent 加 `FLAG_ACTIVITY_NEW_TASK`——兼容非 Activity context
+  2. `resolveActivity` 预检——该 action 无处理者时不再盲跳
+  3. fallback：`ACTION_APPLICATION_DETAILS_SETTINGS`（应用信息页，所有 ROM 必有；通知开关就在 App 详情里）
+  4. 不再静默吞异常——总有一个可感知的跳转结果
+
+### 🖌 提示行收紧
+- 通知 + 定位两处红色提示行：`padding vertical 2dp` 移除 + `offset(y = -3.dp)` 上移，消除 SettingSwitchRow 副标题底内边距造成的悬空感
+
+---
+
 ## v1.5.29（versionCode 229）— 2026-10-29（基于 v1.5.28，通知开关跳系统设置 + 4 项小修）
 
 > 用户报 3 个问题（通知开关拒绝后点开没反应 / 提示行间距 / 同步来源位置）+ 待办（异常油耗 30→20）一并执行。不涉及 DB schema（覆盖升级安全）。

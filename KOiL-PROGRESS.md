@@ -3,7 +3,22 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.29（versionCode 229）— 2026-10-29 已交付
+## 当前版本：v1.5.30（versionCode 230）— 2026-10-29 已交付
+
+- 定位：通知设置跳转加固（NEW_TASK + resolveActivity 预检 + 应用详情 fallback，不再静默吞异常）+ 提示行 offset 收紧
+- commit：`7ecfb01`（基于 v1.5.29，不涉及 DB schema，覆盖升级安全）
+- APK：`KOiL-v1.5.30-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1530.zip`
+- 变更明细：见 CHANGELOG v1.5.30
+- 待用户验收：① 拒绝过通知权限后，点推送开关/提示行 → 应跳转到系统通知设置（HyperOS 若拒绝该 action 则落应用信息页）；
+  开启后返回 App 开关自动打开；② 红色提示行紧贴副标题下方
+- 说明：v1.5.29 跳转失败的根因是 runCatching 吞异常（ACTION_APP_NOTIFICATION_SETTINGS 无处理者或缺 NEW_TASK 都会静默失败），本轮已三重加固
+
+### v1.5.30 变更速览
+- 🔧 openNotificationSettings()：NEW_TASK + resolveActivity 预检 + ACTION_APPLICATION_DETAILS_SETTINGS fallback（开关/提示行共用）
+- 🖌 提示行：vertical padding 移除 + offset(-3.dp) 上移贴近副标题（通知/定位两处）
+
+## 历史版本：v1.5.29（versionCode 229）— 2026-10-29 已交付
 
 - 定位：通知开关跳系统设置（治 HyperOS 拒绝后点开无反应）+ 提示行间距 + 同步来源移底部 + 异常油耗默认 30→20
 - commit：`8aa5a63`（基于 v1.5.28，不涉及 DB schema，覆盖升级安全）
