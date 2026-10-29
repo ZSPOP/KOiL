@@ -132,14 +132,12 @@ class OilPriceDbSyncer(
         }
         // 3) 拉取推算（仅当无任何缓存时）
         // 锚点回退链（v1.4.194 apizero 已收费移除；同源互备 xxapi 优先）：
-        // ① 发改委公告（v1.5.23 D4：公告标题年份+月日=权威窗口日，含搁浅窗口——最近窗口搁浅时
-        //    xxapi/ruseo 快照 date 会停在上一调价窗口，date−1 锚点错位；发改委兜底修正）
-        // ② xxapi date−1 → ③ ruseo date−1 → ④ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，
-        // 实测 18/18 与发改委公告吻合）→ ⑤ calculateAdjustDates 本地推算当年全年窗口日历（节假日顺延）
-        val ndrcDates = runCatching { network.fetchNdrcAdjustDates() }.getOrNull().orEmpty()
-        val anchor = ndrcDates.lastOrNull()
-            ?: network.fetchAnchorWindowDate()
+        // ① xxapi date−1 → ② ruseo date−1 → ③ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，
+        // 实测 18/18 与发改委公告吻合）→ ④ 发改委公告（v1.5.23 D4：公告标题年份+月日=权威窗口日，
+        // 含搁浅窗口；但它是网页抓取，公告格式一旦变化即抓取为空 → 自动跳过，不影响主链锚点）
+        val anchor = network.fetchAnchorWindowDate()
             ?: abapiAnchor()
+            ?: runCatching { network.fetchNdrcAdjustDates() }.getOrNull()?.lastOrNull()
         if (anchor == null) {
             // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
             return emptyList()

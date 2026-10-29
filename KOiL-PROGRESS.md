@@ -21,7 +21,7 @@
 - 🐛 A2 定位 CountDownLatch 2s / A3 IP 节流 30min / A4 缓存时效 30min / B1 Locale.ROOT 39 处
   / C1 CSV 引号解析 / C3 JSON NaN 防御 / D3 通知独立 ID / E4 日期正则锚定
 - 🧹 D7 删 lastGrade 死键 / B4 总览范围持久化
-- 🏛️ D4 发改委公告锚点优先（实测命中，搁浅窗口不错锚）
+- 🏛️ D4 发改委公告锚点（第 4 级兜底，主链 xxapi→ruseo→abapi 不变；格式变化自动跳过）
 
 ## 历史版本：v1.5.22（versionCode 222）— 2026-10-29 已交付
 
