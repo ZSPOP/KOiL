@@ -87,8 +87,13 @@ class KOiLApplication : Application() {
         }
         appScope.launch {
             try {
-                kotlinx.coroutines.delay(3000) // 等当前省先就绪，再后台补全国（幂等：只补缺失省）
-                GlobalContext.get().get<OilPriceDbSyncer>().seedRemainingProvinces()
+                // v1.5.26：全国补灌重试循环——窗口日历未就绪（锚点链启动瞬间失败、重装后缓存为空）时
+                // 30 秒轮询重试，最多 6 次（约 3 分钟内自愈）；就绪即灌全国，无需手动点「立即更新」
+                val syncer = GlobalContext.get().get<OilPriceDbSyncer>()
+                repeat(6) { attempt ->
+                    kotlinx.coroutines.delay(if (attempt == 0) 3000 else 30_000) // 首轮等当前省先就绪
+                    if (syncer.fillRemainingProvincesIfCalendarReady()) return@repeat
+                }
             } catch (t: Throwable) {
                 Log.e("KOiL", "PriceDb fill remaining failed", t)
             }

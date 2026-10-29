@@ -325,7 +325,9 @@ class OilPriceDbSyncer(
             runCatching { seedRemainingProvinces() }
             result
         } catch (e: Exception) {
-            settings.setPriceDbLastCheckAt(System.currentTimeMillis())
+            // v1.5.26：失败不再写 lastCheckAt——原实现失败也打 8h 节流时间戳，
+            // 一次瞬时失败会把自动检测锁死 8 小时（配合无重试的补灌链，用户只能手动点立即更新）；
+            // 失败后保持旧时间戳，下次启动/周期 Worker 可立即重试，直到成功才写节流
             val message = "更新失败：${e.message ?: e.javaClass.simpleName}"
             settings.setPriceDbCache(message)
             OilPriceSyncResult(
@@ -408,6 +410,18 @@ class OilPriceDbSyncer(
         } finally {
             seedLock.set(false)
         }
+    }
+
+    /**
+     * v1.5.26：窗口日历就绪则执行全国补灌，返回是否已执行。
+     * 用于启动兜底的重试循环——重装/弱网下锚点链（xxapi→ruseo→abapi→发改委）启动瞬间失败时，
+     * getAdjustDates() 为空 → seedRemainingProvinces 静默跳过，补灌永久等待，只有点「立即更新」(force) 才能绕过。
+     * 本方法把"日历未就绪"变成可观测状态，让启动任务 30s 轮询重试直到就绪（保留防假日期纪律：就绪前不灌）。
+     */
+    suspend fun fillRemainingProvincesIfCalendarReady(): Boolean {
+        if (getAdjustDates().isEmpty()) return false
+        seedRemainingProvinces()
+        return true
     }
 
     /**

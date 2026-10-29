@@ -727,7 +727,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
         cornerRadius = 20f,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // —— 六指标 3×2（v1.5.24：2×3 改 3×2，每行 3 项）——
+            // —— 六指标 3×2（v1.5.24：2×3 改 3×2，每行 3 项；v1.5.26：列间显式 12dp 间距 + 内容居中）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -738,6 +738,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
                     valueFontSize = 24.sp,
                 )
+                Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Money,
@@ -747,6 +748,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
                     valueFontSize = 24.sp,
                 )
+                Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Speed,
@@ -766,6 +768,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     unit = "L",
                     comparePct = pct(stats.totalOilAmount, prev?.totalOilAmount),
                 )
+                Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
@@ -774,6 +777,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     unit = "",
                     comparePct = pct(stats.totalActual, prev?.totalActual),
                 )
+                Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Receipt,
@@ -832,7 +836,9 @@ private fun StatCell(
     comparePct: Double? = null,
     valueFontSize: TextUnit = 19.sp,
 ) {
-    Column(modifier = modifier.padding(vertical = 4.dp)) {
+    // v1.5.26：单元格内容水平居中——原 start 对齐导致三列内容都挤在格子左侧、
+    // 右侧留白约 20% 屏宽，视觉整体偏左；居中后三列视觉完全平衡
+    Column(modifier = modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = icon,
