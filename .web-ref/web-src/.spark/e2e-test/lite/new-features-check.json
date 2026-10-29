@@ -1,1 +1,0 @@
-{"cases":[{"id":1,"priority":"p0","description":"汇总页数据总览卡片正常显示"},{"id":2,"priority":"p0","description":"汇总页趋势分析区块可见，含三张图（油耗折线、费用折线、月度环形）"},{"id":3,"priority":"p1","description":"历史记录按月份分组显示，有月份标题"},{"id":4,"priority":"p1","description":"历史页右侧有月份快速索引条"},{"id":5,"priority":"p0","description":"录入页显示「上次加油参考」信息卡，含日期、里程、预计行驶里程"}]}

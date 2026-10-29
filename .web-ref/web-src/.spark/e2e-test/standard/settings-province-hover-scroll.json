@@ -1,1 +1,0 @@
-{"cases":[{"id":1,"priority":"p0","description":"桌面端：鼠标悬停向下按钮，列表自动连续滚动；移出按钮后停止滚动"},{"id":2,"priority":"p0","description":"桌面端：鼠标悬停向上按钮，列表自动连续滚动；移出按钮后停止滚动"},{"id":3,"priority":"p0","description":"触屏端：长按向下按钮连续滚动，松开后停止"},{"id":4,"priority":"p0","description":"触屏端：长按向上按钮连续滚动，松开后停止"},{"id":5,"priority":"p1","description":"上下按钮高度均≥44px，触屏热区达标"}]}

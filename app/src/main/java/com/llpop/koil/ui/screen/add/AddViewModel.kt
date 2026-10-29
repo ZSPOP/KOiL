@@ -13,6 +13,7 @@ import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,8 +53,9 @@ data class AddUiState(
     val nextAdjustDate: String? = null,
     val daysUntilAdjust: Int = -1,
     val adjustUrgent: Boolean = false,
-    val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌，v1.5.21 起恒来自 EIA/腾讯本地估算）
-    val perLiterEquivalent: Double? = null,      // 折合 元/升
+    val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌，恒来自 EIA/腾讯本地估算）
+    val forecastSource: String? = null,          // 估算来源："EIA"（窗口幅度估算）/ "腾讯"（单日方向参考）
+    val perLiterEquivalent: Double? = null,      // 折合 元/升（按当前油号密度折算）
     val showPriceAdjust: Boolean = false,        // 油价调整窗口提醒板块（由设置页开关控制）
     val tankCapacity: Float = 65f,
     val priceTrend: Map<String, Double> = emptyMap(), // 油号 -> 涨跌百分比(正涨负跌，调价窗口建议用)
@@ -98,6 +100,9 @@ class AddViewModel(
     private val precheckFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+    /** v1.5.22：估值周期刷新间隔（8h，与油价同步节流对齐） */
+    private val OIL_ESTIMATE_REFRESH_MS = 8L * 60 * 60 * 1000
 
     init {
         val today = LocalDate.now().format(dateFormatter)
@@ -148,6 +153,13 @@ class AddViewModel(
                         loadViewProvinceTrend()
                         loadPriceAdjustInfo()
                     }
+                }
+            }
+            // v1.5.22：估值周期刷新——原油跨日变动后首页不停留旧估值（8h 粒度，与同步周期对齐；首刷由灌库触发）
+            viewModelScope.launch {
+                while (true) {
+                    delay(OIL_ESTIMATE_REFRESH_MS)
+                    refreshForecast()
                 }
             }
             runPrecheck()
@@ -309,20 +321,25 @@ class AddViewModel(
             }
         }
         // 第二段：预测幅度（v1.5.21 起 apizero forecast 已彻底移除，恒走 EIA/腾讯原油本地估算；含网络请求，异步补更新）
-        viewModelScope.launch {
-            val province = _uiState.value.province
-            val p = priceDao.getNewest(province, "92号汽油")
-            if (p != null) {
-                val estimate = runCatching { estimator.estimate() }.getOrNull()
-                val forecastAmount = estimate?.amountPerTon
-                // 折合元/升：元/吨 ÷ 1316 升/吨（92# 汽油密度约 0.76 kg/L）
-                val perLiterEquivalent = forecastAmount?.let { Math.round(it / 1316.0 * 100) / 100.0 }
-                _uiState.value = _uiState.value.copy(
-                    forecastAmount = forecastAmount,
-                    perLiterEquivalent = perLiterEquivalent,
-                )
-            }
-        }
+        viewModelScope.launch { refreshForecast() }
+    }
+
+    /**
+     * 刷新预测幅度（EIA 窗口幅度估算 / 腾讯单日方向参考）+ 折合元/升。
+     * v1.5.22：折合按当前油号密度折算——92/95/98 汽油 0.76 → 1316 升/吨；0# 柴油 0.83 → 1205 升/吨；
+     * 来源写入 forecastSource，UI 按来源标注「估算」/「单日参考」。
+     */
+    private suspend fun refreshForecast() {
+        val p = priceDao.getNewest(_uiState.value.province, "92号汽油") ?: return
+        val estimate = runCatching { estimator.estimate() }.getOrNull()
+        val forecastAmount = estimate?.amountPerTon
+        val litersPerTon = if (_uiState.value.oilGrade == "0") 1205.0 else 1316.0
+        val perLiterEquivalent = forecastAmount?.let { Math.round(it / litersPerTon * 100) / 100.0 }
+        _uiState.value = _uiState.value.copy(
+            forecastAmount = forecastAmount,
+            forecastSource = estimate?.sourceLabel,
+            perLiterEquivalent = perLiterEquivalent,
+        )
     }
 
     fun showProvincePicker() { _uiState.value = _uiState.value.copy(showProvincePicker = true) }

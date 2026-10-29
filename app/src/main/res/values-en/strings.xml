@@ -35,6 +35,7 @@
     <string name="koil_add_forecast_down">Est. down</string>
     <string name="koil_add_forecast_per_ton">¥/ton</string>
     <string name="koil_add_forecast_estimated">Est.</string>
+    <string name="koil_add_forecast_single_day">1-day ref.</string>
     <string name="koil_add_approx_per_liter_up">≈ up ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter_down">≈ down ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter">≈ ¥%1$.2f/L</string>
@@ -255,6 +256,7 @@
 <string name="koil_pdb_stats">%1$d provinces %2$d grades %3$d adjustments %4$d records</string>
     <string name="koil_pdb_updated_and_until">Updated %1$s · Data to %2$s</string>
     <string name="koil_pdb_adjust_stranded">Window %1$s (stranded, price held at %2$s)</string>
+    <string name="koil_pdb_adjust_stranded_short">Window %1$s (stranded)</string>
     <string name="koil_pdb_adjust_adjusted">Window %1$s · adjusted to %2$s yuan/L</string>
     <string name="koil_pdb_next_window">Next window: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>

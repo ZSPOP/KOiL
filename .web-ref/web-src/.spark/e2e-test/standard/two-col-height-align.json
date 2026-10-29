@@ -1,8 +1,0 @@
-{"cases": [
-  {"id": 1, "priority": "p0", "description": "两字段都为空且未触发校验时，本次里程和加油量两列输入框高度完全一致，底部对齐"},
-  {"id": 2, "priority": "p0", "description": "只填里程不填加油量（加油量列显示校验错误），两列高度仍完全一致，底部对齐"},
-  {"id": 3, "priority": "p0", "description": "只填加油量不填里程（里程列显示校验错误），两列高度仍完全一致，底部对齐"},
-  {"id": 4, "priority": "p0", "description": "两列都填且都有错误提示时，两列高度一致"},
-  {"id": 5, "priority": "p1", "description": "375px宽度下表单布局正常，输入框与错误提示不溢出"},
-  {"id": 6, "priority": "p1", "description": "切换英文态，错误提示翻译正常显示，两列高度仍然对齐"}
-]}

@@ -533,15 +533,14 @@ private fun OilPriceCard(
                 Spacer(Modifier.height(12.dp))
                 val urgent = uiState.adjustUrgent
                 val days = uiState.daysUntilAdjust
-                val avgTrend = uiState.priceTrend.values.average()
                 val forecast = uiState.forecastAmount
                 val perLiter = uiState.perLiterEquivalent
                 val rising = forecast != null && forecast > 0
+                // v1.5.22：估算失败（EIA+腾讯均不可用）时不驱动建议——历史涨跌不预示下一轮方向（因果不成立），
+                // 只显示「待检测」徽章（forecast==null 时 suggestion 为空，由 else 分支兜底）
                 val suggestion = when {
                     rising -> stringResource(R.string.koil_add_suggest_early)
                     forecast != null -> stringResource(R.string.koil_add_suggest_wait)
-                    avgTrend > 0.5 -> stringResource(R.string.koil_add_suggest_early)
-                    avgTrend < -0.5 -> stringResource(R.string.koil_add_suggest_wait)
                     else -> ""
                 }
                 val bgColor = if (dark) Color(0xFF17191D)
@@ -601,7 +600,11 @@ private fun OilPriceCard(
                                         text = stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
                                             "${kotlin.math.abs(forecast).toInt()}" +
                                             stringResource(R.string.koil_add_forecast_per_ton) +
-                                            "(" + stringResource(R.string.koil_add_forecast_estimated) + ")" +
+                                            "(" + stringResource(
+                                                // v1.5.22：按来源标注——EIA=「估算」（窗口幅度）；腾讯=「单日参考」（当日波动，仅方向）
+                                                if (uiState.forecastSource == "腾讯") R.string.koil_add_forecast_single_day
+                                                else R.string.koil_add_forecast_estimated,
+                                            ) + ")" +
                                             " " +
                                             stringResource(
                                                 if (rising) R.string.koil_add_approx_per_liter_up

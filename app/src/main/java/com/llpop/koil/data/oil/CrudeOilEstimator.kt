@@ -2,6 +2,7 @@ package com.llpop.koil.data.oil
 
 import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.flow.first
+import java.time.LocalDate
 
 /** 原油估算结果：有符号元/吨（正涨负跌）+ 来源说明 */
 data class CrudeOilEstimate(val amountPerTon: Double, val sourceLabel: String)
@@ -31,17 +32,20 @@ class CrudeOilEstimator(
         // v1.5.1：数据源开关——关 = 直接用腾讯（不请求 EIA）；开 = EIA 主源 → 失败降级腾讯
         val eiaOn = settings.eiaEnabled.first()
         if (eiaOn) {
-            // 主源：EIA 官方布伦特现货日度 → 10 交易日均值比较（完整历史，最接近官方口径）
+            // 主源：EIA 官方布伦特现货日度 → 窗口对齐均值比较（完整历史，最接近官方口径）
             val key = settings.eiaApiKey.first()
             if (key.isNotBlank()) {
                 val eia = runCatching { network.fetchEiaBrentDaily(key, length = 30) }.getOrNull()
                 if (eia != null && eia.size >= MIN_EIA_POINTS) {
-                    val amount = calcFromEiaSeries(eia)
+                    // v1.5.22：传入窗口日历做语义对齐（本窗口 vs 上窗口）
+                    val adjustDates = settings.priceDbAdjustDates.first()
+                        .split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    val amount = calcFromEiaSeries(eia, adjustDates)
                     if (amount != null) return CrudeOilEstimate(amount, "EIA")
                 }
             }
         }
-        // 降级/直选：腾讯布伦特期货实时（当日涨跌幅，方向可靠、幅度粗）
+        // 降级/直选：腾讯布伦特期货实时（单日涨跌，仅方向参考——v1.5.22 UI 按来源标注「单日参考」，不冒充窗口幅度）
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
             val pct = (tencent.first - tencent.second) / tencent.second
@@ -51,13 +55,30 @@ class CrudeOilEstimator(
     }
 
     /**
-     * EIA 布伦特现货日度序列（升序）→ 估算幅度（元/吨）：
-     * 最近 10 个交易日均值 vs 前 10 个交易日均值 → 变化率 → × 系数。
+     * EIA 布伦特现货日度序列（升序）→ 估算幅度（元/吨）。
+     * v1.5.22：按窗口日历对齐切分——本窗口 = (上一窗口日, 今天] 的数据（窗口日当天数据 T+1 未出属正常缺位），
+     * 上窗口 = 上一窗口日往前一窗口；与成品油"10 工作日均值环比"口径一致，非窗口日不再混窗口。
+     * 窗口日历未就绪（从未成功推算）时回退原"最近 10 vs 前 10"硬切。
      */
-    private fun calcFromEiaSeries(points: List<Pair<String, Double>>): Double? {
+    private fun calcFromEiaSeries(
+        points: List<Pair<String, Double>>,
+        adjustDates: List<String>,
+    ): Double? {
         if (points.size < MIN_EIA_POINTS) return null
-        val recent = points.takeLast(10).map { it.second }
-        val previous = points.drop(points.size - 20).take(10).map { it.second }
+        val today = LocalDate.now().toString()
+        val prevWindow = adjustDates.filter { it < today }.lastOrNull()
+        val recent: List<Double>
+        val previous: List<Double>
+        if (prevWindow != null) {
+            val idx1 = points.indexOfLast { it.first > prevWindow && it.first <= today }
+            val idx0 = points.indexOfLast { it.first <= prevWindow }
+            if (idx1 < 0 || idx0 < 0) return null
+            recent = points.subList(maxOf(0, idx1 - 9), idx1 + 1).map { it.second }
+            previous = points.subList(maxOf(0, idx0 - 9), idx0 + 1).map { it.second }
+        } else {
+            recent = points.takeLast(10).map { it.second }
+            previous = points.drop(points.size - 20).take(10).map { it.second }
+        }
         val prevAvg = previous.average()
         if (prevAvg <= 0) return null
         val changePct = (recent.average() - prevAvg) / prevAvg * 100.0

@@ -336,6 +336,8 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 syncer.checkAndUpdate(force = true)
+                // v1.5.22 B：手动「立即更新」成功后也触发调价/窗口提醒（与周期 Worker 共用同一入口）
+                syncer.notifyPriceChanges(context)
             } catch (e: Exception) {
                 _exportMessage.value = ExportNotice("pdb_update_failed", listOf(e.message ?: ""))
             } finally {

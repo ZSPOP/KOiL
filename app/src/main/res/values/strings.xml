@@ -35,6 +35,7 @@
     <string name="koil_add_forecast_down">预计下调</string>
     <string name="koil_add_forecast_per_ton">元/吨</string>
     <string name="koil_add_forecast_estimated">估算</string>
+    <string name="koil_add_forecast_single_day">单日参考</string>
     <string name="koil_add_approx_per_liter_up">折合上调约%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter_down">折合下调约%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter">折合约%1$.2f元/升</string>

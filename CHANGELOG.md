@@ -1,5 +1,35 @@
 # KOiL CHANGELOG
 
+## v1.5.22（versionCode 222）— 2026-10-29（基于 v1.5.21，正确性小修批量）
+
+> 批量执行待办 #3~#12：翻译补漏 + 通知逻辑四修（A/B/C/D）+ 估值链路五修（#8~#12）。
+> 不涉及 DB schema 变更（Room 无 Migration，覆盖升级安全）。
+
+### 🌐 #3 三语翻译补漏（消除 Lint MissingTranslation Error）
+- `koil_pdb_adjust_stranded_short` 补 en（`Window %1$s (stranded)`）/ zh-rTW（`調整日 %1$s（擱淺）`）
+
+### 🔔 #4~#7 通知逻辑四修
+- **#4（Bug A）搁浅不再误发"调价生效"通知**：`notifyPriceChanges` 推送条件加"价格实际变化"
+  （`prev==null || prev.price != newest.price`）；搁浅窗口（维持价）只锚定 `lastNotified` 不推送，
+  后续真调价仍正常推（防旧锚点干扰）
+- **#5（B）手动「立即更新」后也触发通知**：`notifyPriceChanges` 从 Worker 抽到
+  `OilPriceDbSyncer`（公共方法），`SettingsViewModel.checkPriceDbNow` 成功后同入口调用
+- **#6（C）通知点击跳转 App**：`OilPriceNotifier` 加 PendingIntent（MainActivity，FLAG_IMMUTABLE）
+- **#7（D）同步失败窗口提醒不丢**：`OilPriceSyncWorker.doWork` 把通知移出 `success` 判断
+  （网络挂也跑通知，逻辑幂等；retry 策略不变）
+
+### 📈 #8~#12 估值链路五修（预计涨跌正确性）
+- **#8 腾讯降级按来源标注**：`forecastSource` 写入 UI 状态，腾讯来源显示「单日参考」（新三语 key
+  `koil_add_forecast_single_day`），EIA 显示「估算」——不再用"单日波动"冒充"窗口幅度"
+- **#9 EIA 窗口日历对齐切分**：`calcFromEiaSeries(points, adjustDates)`——本窗口 = (上一窗口日, 今天]，
+  上窗口 = 再往前一窗口（与"10 工作日均值环比"口径一致）；窗口日历未就绪回退原 10+10 硬切
+- **#10 建议逻辑去历史反推**：`AddScreen` suggestion 删 avgTrend fallback——估算失败（EIA+腾讯均不可用）
+  时不驱动"早加/等"（历史涨跌不预示下一轮方向，因果不成立）
+- **#11 估值周期刷新**：`AddViewModel` 每 8h 重算一次估值（进程存活期间；首刷由灌库触发）——
+  原油跨日变动后首页不停留旧估值
+- **#12 柴油密度修正**：折合元/升按当前油号折算——92/95/98 汽油 0.76→1316 升/吨、0# 柴油 0.83→1205 升/吨
+  （柴油每升幅度不再偏 9%）
+
 ## v1.5.21（versionCode 221）— 2026-10-29（基于 v1.5.20，数据正确性专项）
 
 > 两项数据正确性修复：#1 彻底删除 apizero 时代 forecast 残留；#2 窗口日 24 点生效边界（修复"29 号 0 点生效"假象）。

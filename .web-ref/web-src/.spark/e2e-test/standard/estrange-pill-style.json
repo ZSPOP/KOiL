@@ -1,8 +1,0 @@
-{"cases": [
-  {"id": 1, "priority": "p0", "description": "打开录入加油页，输入加油量后预计可行驶显示为玫瑰粉色胶囊横幅样式（背景色、边框、14px字号）"},
-  {"id": 2, "priority": "p0", "description": "预计可行驶胶囊与优惠胶囊视觉语言一致（圆角、内边距、字号、动画风格相同）"},
-  {"id": 3, "priority": "p0", "description": "375px 宽度下预计可行驶胶囊不溢出，内容完整"},
-  {"id": 4, "priority": "p1", "description": "切换英文态，Estimated range 胶囊不溢出"},
-  {"id": 5, "priority": "p1", "description": "切换深色主题，预计可行驶胶囊对比清晰可读"},
-  {"id": 6, "priority": "p0", "description": "未输入加油量时不显示胶囊（显示原空态提示），显示条件不变"}
-]}

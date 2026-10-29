@@ -1,1 +1,0 @@
-{"cases":[{"id":1,"priority":"p0","description":"打开设置页默认省份弹窗，验证上下滚动按钮存在且可滚动列表"},{"id":2,"priority":"p1","description":"点击ChevronDown按钮后列表向下滚动，点击ChevronUp按钮后列表向上滚动"},{"id":3,"priority":"p1","description":"按住ChevronDown连续滚动松开后停止滚动"}]}

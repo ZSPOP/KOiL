@@ -1,6 +1,8 @@
 package com.llpop.koil.data.oil
 
+import android.content.Context
 import androidx.room.withTransaction
+import com.llpop.koil.R
 import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
@@ -788,6 +790,68 @@ class OilPriceDbSyncer(
             Triple(verified, 0, 0)
         } catch (_: Exception) {
             Triple(0, 0, 1)
+        }
+    }
+
+    // ===== 调价通知（v1.5.22：从 OilPriceSyncWorker 抽出，Worker 与设置页「立即更新」共用；
+    //     独立于同步成功与否——网络挂时窗口提醒也不丢）=====
+
+    suspend fun notifyPriceChanges(context: Context) {
+        if (!settings.pricePush.first()) return
+
+        // 1) 调价生效通知：默认省 + 默认油号的最新生效日变化。
+        // v1.5.22 修复：仅价格实际变化（prev==null 或 prev.price != newest.price）才推送——
+        // 搁浅窗口（维持价）不再误发"调价至同价"通知；价格未变只锚定 lastNotified，
+        // 后续真调价仍正常推送（防旧锚点干扰）。
+        val province = defaultProvince()
+        val gradeCode = settings.defaultOilGrade.first()
+            .takeIf { it in OilPriceNetwork.GRADE_LABELS } ?: "92"
+        val grade = OilPriceNetwork.GRADE_LABELS[gradeCode] ?: gradeCode
+        val newest = priceDao.getLatestPrice(province, grade, LocalDate.now().format(DATE_FMT))
+        if (newest != null) {
+            val lastNotified = settings.priceLastNotifiedDate.first()
+            if (lastNotified.isBlank()) {
+                // 首次启用：静默锚定当前生效日，不打扰
+                settings.setPriceLastNotifiedDate(newest.effectiveDate)
+            } else if (newest.effectiveDate != lastNotified) {
+                val prev = priceDao.getPrevious(province, grade)
+                val priceChanged = prev == null || prev.price != newest.price
+                if (priceChanged) {
+                    val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
+                    val title = context.getString(R.string.koil_noti_title_price_adjust)
+                    val message = if (prev != null && prev.effectiveDate < newest.effectiveDate) {
+                        context.getString(
+                            R.string.koil_noti_msg_price_adjust,
+                            province, gradeLabel, prev.price, newest.price,
+                        )
+                    } else {
+                        context.getString(
+                            R.string.koil_noti_msg_price_adjust,
+                            province, gradeLabel, newest.price, newest.price,
+                        )
+                    }
+                    OilPriceNotifier.notify(context, title, message)
+                }
+                settings.setPriceLastNotifiedDate(newest.effectiveDate)
+            }
+        }
+
+        // 2) 窗口日前一天提醒：下一个未过期窗口 == 明天
+        val adjustDates = settings.priceDbAdjustDates.first()
+            .split(",").map { it.trim() }.filter { it.isNotBlank() }
+        if (adjustDates.isNotEmpty()) {
+            val today = LocalDate.now()
+            val tomorrow = today.plusDays(1).toString()
+            val next = adjustDates.firstOrNull { it >= today.toString() }
+            val reminded = settings.priceLastWindowReminded.first()
+            if (next == tomorrow && reminded != next) {
+                OilPriceNotifier.notify(
+                    context,
+                    context.getString(R.string.koil_noti_title_window_tomorrow),
+                    context.getString(R.string.koil_noti_msg_window_tomorrow, next),
+                )
+                settings.setPriceLastWindowReminded(next)
+            }
         }
     }
 }

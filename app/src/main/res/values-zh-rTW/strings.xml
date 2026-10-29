@@ -35,6 +35,7 @@
     <string name="koil_add_forecast_down">預計下調</string>
     <string name="koil_add_forecast_per_ton">元/噸</string>
     <string name="koil_add_forecast_estimated">估算</string>
+    <string name="koil_add_forecast_single_day">單日參考</string>
     <string name="koil_add_approx_per_liter_up">折合上調約%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter_down">折合下調約%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter">折合约%1$.2f元/升</string>
@@ -255,6 +256,7 @@
 <string name="koil_pdb_stats">%1$d 省份 %2$d 油號 %3$d 調價 %4$d 記錄</string>
     <string name="koil_pdb_updated_and_until">更新於 %1$s · 數據截至 %2$s</string>
     <string name="koil_pdb_adjust_stranded">調整日 %1$s（擱淺，價格維持 %2$s）</string>
+    <string name="koil_pdb_adjust_stranded_short">調整日 %1$s（擱淺）</string>
     <string name="koil_pdb_adjust_adjusted">調整日 %1$s · 調價至 %2$s 元/升</string>
     <string name="koil_pdb_next_window">下個窗口：%1$s</string>
     <string name="koil_pdb_not_checked">尚未檢測</string>
