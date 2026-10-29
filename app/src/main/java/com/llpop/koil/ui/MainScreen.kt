@@ -18,9 +18,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -151,8 +151,8 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
 
             val navigationItems = listOf(
-                NavigationItem(label = stringResource(R.string.koil_nav_add), icon = Icons.Filled.Edit),
-                NavigationItem(label = stringResource(R.string.koil_nav_overview), icon = Icons.Filled.BarChart),
+                NavigationItem(label = stringResource(R.string.koil_nav_add), icon = Icons.Filled.Home),
+                NavigationItem(label = stringResource(R.string.koil_nav_overview), icon = Icons.Filled.Storage),
                 NavigationItem(label = stringResource(R.string.koil_nav_settings), icon = Icons.Filled.Settings),
             )
             val showLabels = barMode == BottomBarMode.IconAndText.storageValue

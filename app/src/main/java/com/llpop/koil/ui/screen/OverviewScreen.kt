@@ -97,6 +97,7 @@ import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.domain.logic.ConsumptionStatus
+import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.overview.OverviewUiState
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
 import com.llpop.koil.domain.logic.RecordWithDerived
@@ -140,6 +141,8 @@ fun OverviewScreen(
     val scope = rememberCoroutineScope()
     var showBackToTop by remember { mutableStateOf(false) }
     var moreMenuFor by remember { mutableStateOf<Long?>(null) }
+    // v1.5.31：异常卡点击 → 异常明细弹窗
+    var showAbnormalDetail by remember { mutableStateOf(false) }
     // v1.5.5：长按操作的卡片引用 + 全局位置（全屏遮罩点击任意处收起）
     var actionRecord by remember { mutableStateOf<RecordWithDerived?>(null) }
     var actionRect by remember { mutableStateOf<Rect?>(null) }
@@ -237,13 +240,14 @@ fun OverviewScreen(
             item { TrendChart(trend = uiState.trend) }
             item { Spacer(Modifier.height(12.dp)) }
 
-            // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）
+            // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）；v1.5.31：有异常时可点击查看明细
             item {
                 AbnormalAlertCard(
                     count = uiState.abnormalRecords.size,
                     rangeLabel = rangeLabel(uiState.range),
                     recordCount = uiState.records.size,
                     avgConsumption = uiState.avgConsumption,
+                    onClick = if (uiState.abnormalRecords.isNotEmpty()) { { showAbnormalDetail = true } } else { null },
                 )
             }
             item { Spacer(Modifier.height(12.dp)) }
@@ -445,6 +449,68 @@ fun OverviewScreen(
             }
         }
     }
+    }
+
+    // v1.5.31：异常明细弹窗（有异常时点异常卡弹出，逐条展示日期/油号/油耗/状态与偏差）
+    if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
+        com.llpop.koil.ui.component.KOiLGlassDialog(
+            show = true,
+            onDismissRequest = { showAbnormalDetail = false },
+            title = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
+            contentPadding = 20.dp,
+            scrollable = true,
+            maxHeight = 480.dp,
+            widthFraction = 0.82f,
+        ) {
+            uiState.abnormalRecords.forEach { d ->
+                val rec = d.record
+                val isHigh = d.consumptionStatus == ConsumptionStatus.HIGH
+                val accentColor = if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B)
+                val statusTxt = stringResource(
+                    if (isHigh) R.string.koil_ov_abnormal_high else R.string.koil_ov_abnormal_low
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = rec.reoilDate.takeLast(5),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "${rec.oilGrade ?: "-"}#",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = KOiLColors.Primary,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = "${NumberFormat.measure(d.oilConsumption ?: 0.0)} L/100km",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "$statusTxt ${NumberFormat.pct(d.deviationPct)}%",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = accentColor,
+                    )
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                )
+            }
+        }
     }
 
     // v1.5.9：删除确认弹窗（防误删）
@@ -733,7 +799,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.WaterDrop,
                     label = stringResource(R.string.koil_stat_avg_consumption),
-                    value = "%.2f".format(Locale.ROOT, stats.avgOilConsumption ?: 0.0),
+                    value = NumberFormat.measure(stats.avgOilConsumption ?: 0.0),
                     unit = "L/100km",
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
                     valueFontSize = 24.sp,
@@ -743,7 +809,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.Money,
                     label = stringResource(R.string.koil_stat_cost_per_km),
-                    value = "%.3f".format(Locale.ROOT, stats.avgCostPerKm ?: 0.0),
+                    value = NumberFormat.money(stats.avgCostPerKm ?: 0.0),
                     unit = stringResource(R.string.koil_stat_cost_unit),
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
                     valueFontSize = 24.sp,
@@ -773,7 +839,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
                     label = stringResource(R.string.koil_stat_total_cost),
-                    value = "¥%.0f".format(Locale.ROOT, stats.totalActual),
+                    value = "¥${NumberFormat.money(stats.totalActual)}",
                     unit = "",
                     comparePct = pct(stats.totalActual, prev?.totalActual),
                 )
@@ -782,7 +848,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.Receipt,
                     label = stringResource(R.string.koil_stat_total_payable),
-                    value = "¥%.0f".format(Locale.ROOT, stats.totalPayable),
+                    value = "¥${NumberFormat.money(stats.totalPayable)}",
                     unit = "",
                     comparePct = pct(stats.totalPayable, prev?.totalPayable),
                 )
@@ -805,9 +871,9 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "%s ¥%.2f/%s · %s %d km".format(Locale.ROOT, 
+                    text = "%s ¥%s/%s · %s %d km".format(Locale.ROOT, 
                         stringResource(R.string.koil_stat_avg_price),
-                        stats.avgUnitPriceActual ?: 0.0,
+                        NumberFormat.measure(stats.avgUnitPriceActual ?: 0.0),
                         stringResource(R.string.koil_stat_price_unit),
                         stringResource(R.string.koil_stat_avg_distance),
                         (stats.avgDistancePerReoil ?: 0.0).toInt(),
@@ -876,7 +942,7 @@ private fun StatCell(
                 Spacer(Modifier.height(2.dp))
                 val up = pct > 0
                 Text(
-                    text = "${if (up) "↑" else "↓"}%.1f%%".format(Locale.ROOT, abs(pct)),
+                    text = "${if (up) "↑" else "↓"}${NumberFormat.pct(abs(pct))}%",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (up) Color(0xFFE65100) else Color(0xFF2E7D32),
@@ -999,10 +1065,10 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
                     )
                     textSize = 9.dp.toPx()
                 }
-                drawText("%.1f".format(Locale.ROOT, lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), paint)
                 // 右轴标签
                 val rv = rightMin + rightRange * (1 - frac)
-                drawText("%.2f".format(Locale.ROOT, rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), paint)
             }
         }
 
@@ -1063,13 +1129,14 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
     }
 }
 
-// ===== 异常卡（对齐 Web：空态 + 右上"N 次加油"） =====
+// ===== 异常卡（对齐 Web：空态 + 右上"N 次加油"）；v1.5.31：有异常时可点击查看明细 =====
 @Composable
 private fun AbnormalAlertCard(
     count: Int,
     rangeLabel: String,
     recordCount: Int,
     avgConsumption: Double,
+    onClick: (() -> Unit)? = null,
 ) {
     KOiLBlurBackground(
         modifier = Modifier.fillMaxWidth(),
@@ -1078,7 +1145,15 @@ private fun AbnormalAlertCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .then(
+                    if (onClick != null) {
+                        Modifier
+                            .clickable(enabled = count > 0, onClick = onClick)
+                            .padding(16.dp)
+                    } else {
+                        Modifier.padding(16.dp)
+                    }
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
@@ -1207,7 +1282,7 @@ private fun RecordCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Pill(
-                        text = if (r.oilPrice != null) "${r.oilGrade ?: "-"}# ¥%.2f".format(Locale.ROOT, r.oilPrice) else "${r.oilGrade ?: "-"}#",
+                        text = if (r.oilPrice != null) "${r.oilGrade ?: "-"}# ¥${NumberFormat.measure(r.oilPrice)}" else "${r.oilGrade ?: "-"}#",
                         color = KOiLColors.Primary.copy(alpha = 0.12f),
                         textColor = KOiLColors.Primary,
                         border = KOiLColors.Primary.copy(alpha = 0.25f),
@@ -1282,7 +1357,7 @@ private fun RecordCard(
                             MetricCell(
                                 Modifier.weight(1f),
                                 label = stringResource(R.string.koil_ov_metric_consumption),
-                                value = "%.2f".format(Locale.ROOT, record.oilConsumption),
+                                value = NumberFormat.measure(record.oilConsumption),
                                 unit = "L/100km",
                                 valueColor = accentColor,
                                 delta = deltaText(record.oilConsumption, prevRecord?.oilConsumption, lowerBetter = true),
@@ -1290,7 +1365,7 @@ private fun RecordCard(
                             MetricCell(
                                 Modifier.weight(1f),
                                 label = stringResource(R.string.koil_ov_metric_cost),
-                                value = "¥%.3f".format(Locale.ROOT, record.costPerKm ?: 0.0),
+                                value = "¥${NumberFormat.money(record.costPerKm ?: 0.0)}",
                                 unit = "",
                                 valueColor = accentColor,
                                 delta = deltaText(record.costPerKm, prevRecord?.costPerKm, lowerBetter = true),
@@ -1340,19 +1415,19 @@ private fun RecordCard(
                     RecordDetail(
                         Modifier.weight(1f),
                         stringResource(R.string.koil_col_oil_amount),
-                        "%.1f".format(Locale.ROOT, r.oilAmount),
+                        NumberFormat.measure(r.oilAmount),
                         "L",
                     )
                     RecordDetail(
                         Modifier.weight(1f),
                         stringResource(R.string.koil_col_actual),
-                        "¥%.2f".format(Locale.ROOT, r.actualAmount),
+                        "¥${NumberFormat.money(r.actualAmount)}",
                         "",
                     )
                     RecordDetail(
                         Modifier.weight(1f),
                         stringResource(R.string.koil_col_unit_price),
-                        "¥%.2f".format(Locale.ROOT, record.unitPriceActual ?: 0.0),
+                        "¥${NumberFormat.measure(record.unitPriceActual ?: 0.0)}",
                         "",
                         warn = false,
                     )
@@ -1405,8 +1480,9 @@ private fun deltaText(cur: Double?, prev: Double?, lowerBetter: Boolean, digits:
     val good = if (lowerBetter) diff < 0 else diff > 0
     val color = if (good) Color(0xFF2E7D32) else Color(0xFFE65100)
     val fmt = if (digits <= 0) "%.0f" else "%.${digits}f"
+    val diffTxt = if (digits <= 0) fmt.format(abs(diff)) else NumberFormat.measure(abs(diff))
     return DeltaText(
-        text = "$arrow ${fmt.format(abs(diff))} (%.1f%%)".format(Locale.ROOT, abs(pct)),
+        text = "$arrow $diffTxt (${NumberFormat.pct(abs(pct))}%)",
         color = color,
     )
 }
@@ -2059,7 +2135,7 @@ private fun GradePriceSelect(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "$grade# · ${price?.let { "¥%.2f/L".format(Locale.ROOT, it) } ?: "¥--/L"}",
+                    text = "$grade# · ${price?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L"}",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,

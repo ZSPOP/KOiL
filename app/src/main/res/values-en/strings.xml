@@ -3,8 +3,8 @@
     <string name="koil_app_name">KOiL</string>
 
     <!-- ===== Bottom navigation ===== -->
-    <string name="koil_nav_add">Log</string>
-    <string name="koil_nav_overview">Overview</string>
+    <string name="koil_nav_add">Home</string>
+    <string name="koil_nav_overview">Data</string>
     <string name="koil_nav_settings">Settings</string>
 
     <!-- ===== Common buttons ===== -->
@@ -12,7 +12,7 @@
     <string name="koil_common_save">Save</string>
 
     <!-- ===== Add / Log screen ===== -->
-    <string name="koil_add_title">Refueling</string>
+    <string name="koil_add_title">KOiL</string>
     <string name="koil_add_grade_title">Grade</string>
     <string name="koil_add_grade_gasoline">%1$s# Gasoline</string>
     <string name="koil_add_grade_diesel">0# Diesel</string>
@@ -65,7 +65,7 @@
     <string name="koil_add_loc_cancel">Cancel</string>
 
     <!-- ===== Overview screen ===== -->
-    <string name="koil_ov_title">Overview</string>
+    <string name="koil_ov_title">Data Overview</string>
     <string name="koil_range_all">All</string>
     <string name="koil_range_year">This year</string>
     <string name="koil_range_6m">6 months</string>
@@ -113,6 +113,9 @@
     <string name="koil_ov_abnormal_avg">vs mean · avg %1$.2f L/100km</string>
     <string name="koil_ov_abnormal_empty">No abnormal records</string>
     <string name="koil_ov_abnormal_stable">Steady fuel economy in this range</string>
+    <string name="koil_ov_abnormal_detail_title">Anomaly details (%1$d)</string>
+    <string name="koil_ov_abnormal_high">High</string>
+    <string name="koil_ov_abnormal_low">Low</string>
     <string name="koil_ov_record_count">%1$d fill-ups</string>
     <string name="koil_ov_oil_days">%1$dd</string>
     <string name="koil_ov_high">High</string>

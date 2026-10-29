@@ -3,8 +3,8 @@
     <string name="koil_app_name">KOiL</string>
 
     <!-- ===== 底部導航 ===== -->
-    <string name="koil_nav_add">加油</string>
-    <string name="koil_nav_overview">總覽</string>
+    <string name="koil_nav_add">首頁</string>
+    <string name="koil_nav_overview">數據</string>
     <string name="koil_nav_settings">設定</string>
 
     <!-- ===== 通用按鈕 ===== -->
@@ -12,7 +12,7 @@
     <string name="koil_common_save">儲存</string>
 
     <!-- ===== 錄入頁 ===== -->
-    <string name="koil_add_title">本次加油</string>
+    <string name="koil_add_title">KOiL</string>
     <string name="koil_add_grade_title">油號</string>
     <string name="koil_add_grade_gasoline">%1$s# 汽油</string>
     <string name="koil_add_grade_diesel">0# 柴油</string>
@@ -65,7 +65,7 @@
     <string name="koil_add_loc_cancel">取消</string>
 
     <!-- ===== 總覽頁 ===== -->
-    <string name="koil_ov_title">資料總覽</string>
+    <string name="koil_ov_title">數據總覽</string>
     <string name="koil_range_all">全部</string>
     <string name="koil_range_year">今年</string>
     <string name="koil_range_6m">近6個月</string>
@@ -113,6 +113,9 @@
     <string name="koil_ov_abnormal_avg">偏離均值 · 平均油耗 %1$.2f L/100km</string>
     <string name="koil_ov_abnormal_empty">暫無異常油耗記錄</string>
     <string name="koil_ov_abnormal_stable">本範圍油耗表現平穩</string>
+    <string name="koil_ov_abnormal_detail_title">油耗異常明細（%1$d 筆）</string>
+    <string name="koil_ov_abnormal_high">偏高</string>
+    <string name="koil_ov_abnormal_low">偏低</string>
     <string name="koil_ov_record_count">%1$d次加油</string>
     <string name="koil_ov_oil_days">%1$d天</string>
     <string name="koil_ov_high">偏高</string>

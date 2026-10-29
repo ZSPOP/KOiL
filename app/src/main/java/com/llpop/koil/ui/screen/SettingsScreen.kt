@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
@@ -631,6 +632,24 @@ fun SettingsScreen(
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
                         }
+                        // v1.5.31：同步来源行——移回「下个窗口｜最近更新」行正下方（v1.5.29 曾在区块底部，
+                        // 用户要求与窗口信息归组）；两行间加 0.5dp 细分隔线，字号与行2 一致（12sp/15sp）
+                        if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(0.5.dp)
+                                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                                fontSize = 12.sp,
+                                lineHeight = 15.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -665,17 +684,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-                }
-                // v1.5.29：同步来源脚注（v1.5.27 时在窗口链条 Column 第 3 行，用户反馈位置不妥；
-                // 来源属排查元信息，移到区块底部"立即更新"行之后当脚注，不干扰主信息流）
-                if (priceDbStatus.lastSyncSources.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                        fontSize = 11.sp,
-                        lineHeight = 14.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
-                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 // —— 待确认更新（有数据需核实时才展开；无数据整块连间距、横线一起隐藏）——
@@ -972,8 +980,8 @@ fun SettingsScreen(
                             ) {
                                 Text(r.date, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackground, modifier = Modifier.width(70.dp))
                                 Text("${r.mileage.toInt()}km", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(60.dp))
-                                Text("%.1fL".format(Locale.ROOT, r.oilAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
-                                Text("¥%.0f".format(Locale.ROOT, r.actualAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                                Text("${NumberFormat.measure(r.oilAmount)}L", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
+                                Text("¥${NumberFormat.money(r.actualAmount)}", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
                                 r.errorKey?.let { key ->
                                     Spacer(Modifier.width(4.dp))
                                     Text(

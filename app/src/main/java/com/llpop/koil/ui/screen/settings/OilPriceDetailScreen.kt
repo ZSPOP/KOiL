@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.theme.KOiLColors
@@ -235,7 +236,7 @@ fun OilPriceDetailScreen(
                             SummaryCell(
                                 modifier = Modifier.weight(1f),
                                 label = stringResource(R.string.koil_pdb_latest_price),
-                                value = state.latestPrice?.let { "¥%.2f".format(Locale.ROOT, it) } ?: "--",
+                                value = state.latestPrice?.let { "¥${NumberFormat.measure(it)}" } ?: "--",
                                 valueColor = MiuixTheme.colorScheme.onBackground,
                             )
                             SummaryCell(
@@ -487,7 +488,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
                     )
                     textSize = 10.dp.toPx()
                 }
-                drawText("%.2f".format(Locale.ROOT, pv), 2.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText(NumberFormat.measure(pv), 2.dp.toPx(), y + 3.dp.toPx(), paint)
             }
         }
 
@@ -548,7 +549,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
                 center = Offset(sx, sy),
             )
             // 气泡文字
-            val bubbleText = "${items[sel].label}  ¥%.2f".format(Locale.ROOT, items[sel].price)
+            val bubbleText = "${items[sel].label}  ¥${NumberFormat.measure(items[sel].price)}"
             drawContext.canvas.nativeCanvas.apply {
                 val paint = android.graphics.Paint().apply {
                     color = android.graphics.Color.argb(
@@ -649,7 +650,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             Spacer(Modifier.width(8.dp))
             // 列2：价格（固定宽，左对齐；搁浅行灰色显示维持价）
             Text(
-                text = "¥%.2f".format(Locale.ROOT, item.price),
+                text = "¥${NumberFormat.measure(item.price)}",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (item.isStranded) {

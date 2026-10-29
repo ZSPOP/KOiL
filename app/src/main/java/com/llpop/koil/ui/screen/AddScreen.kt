@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
@@ -176,7 +178,7 @@ fun AddScreen(
                     GradeField(
                         modifier = Modifier.weight(1f),
                         grade = uiState.oilGrade,
-                        priceText = uiState.currentPrice?.let { "¥%.2f/L".format(Locale.ROOT, it) } ?: "¥--/L",
+                        priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
                         onGradeSelected = viewModel::setOilGrade,
                     )
                 }
@@ -216,6 +218,7 @@ fun AddScreen(
                         onValueChange = viewModel::setPayableAmount,
                         keyboardType = KeyboardType.Decimal,
                         readOnly = true,
+                        placeholder = stringResource(R.string.koil_ov_payable_pending),
                     )
                     Spacer(Modifier.width(12.dp))
                     FormField(
@@ -474,10 +477,12 @@ private fun OilPriceCard(
                             color = containerText,
                         )
                         Spacer(Modifier.width(2.dp))
-                        Text(
-                            text = "▾",
-                            fontSize = 10.sp,
-                            color = containerText,
+                        // v1.5.31：省份下拉三角——原为文本字符 ▾(10sp) 过小，改矢量箭头 16dp（与设置页 Dropdown 同风格）
+                        Icon(
+                            imageVector = Icons.Filled.ArrowDropDown,
+                            contentDescription = null,
+                            tint = containerText,
+                            modifier = Modifier.size(16.dp),
                         )
                     }
                 }
@@ -687,7 +692,7 @@ private fun PriceCell(
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = if (price != null) "%.2f".format(Locale.ROOT, price) else "--",
+            text = if (price != null) NumberFormat.measure(price) else "--",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MiuixTheme.colorScheme.primary,
@@ -787,6 +792,7 @@ private fun FormField(
     keyboardType: KeyboardType = KeyboardType.Text,
     readOnly: Boolean = false,
     error: Boolean = false,
+    placeholder: String? = null,
 ) {
     val errorColor = Color(0xFFFF3B30)
     // 错误态：用 TextFieldColors 把边框/标签设为红色；正常态边框透明（无蓝色聚焦框）
@@ -811,16 +817,29 @@ private fun FormField(
             )
         }
         Spacer(Modifier.height(6.dp))
-        TextField(
-            value = value,
-            onValueChange = { onValueChange(it.sanitizeDecimalInput()) },
-            modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            readOnly = readOnly,
-            singleLine = true,
-            colors = tfColors,
-            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-        )
+        // v1.5.31：miuix TextField 无 placeholder 参数，用 Box 叠加层实现"待计算"占位（对齐补录卡 v1.5.14 同款做法）
+        Box(modifier = Modifier.fillMaxWidth()) {
+            TextField(
+                value = value,
+                onValueChange = { onValueChange(it.sanitizeDecimalInput()) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+                readOnly = readOnly,
+                singleLine = true,
+                colors = tfColors,
+                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+            )
+            if (placeholder != null && value.isEmpty()) {
+                Text(
+                    text = placeholder,
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(start = 14.dp),
+                )
+            }
+        }
     }
 }
 

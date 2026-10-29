@@ -9,6 +9,7 @@ import com.llpop.koil.data.local.dao.KOiLPricePendingDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLPricePendingEntity
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
+import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceDateUtil
@@ -296,7 +297,7 @@ class SettingsViewModel(
                 val w1Row = priceDao.getPrice(home, "92号汽油", w1Eff)
                 if (w1Row != null && !w1Row.isStranded) {
                     windowStranded = false
-                    adjustWindowPrice = "%.2f".format(Locale.ROOT, w1Row.price)
+                    adjustWindowPrice = NumberFormat.measure(w1Row.price)
                 } else {
                     // 搁浅：维持「默认省 92# 上一条调价记录」的价格（如 10-15 窗口维持 09-25 的 ¥8.63），
                     // 而非生效日 10-16——上一版本误显示生效日导致歧义。
@@ -304,7 +305,7 @@ class SettingsViewModel(
                     val kept = priceDao.getLatestNonStranded(home, "92号汽油", w1Eff)
                     if (kept != null) {
                         strandedKeptDate = kept.effectiveDate.takeLast(5)
-                        strandedKeptPrice = "%.2f".format(Locale.ROOT, kept.price)
+                        strandedKeptPrice = NumberFormat.measure(kept.price)
                     }
                 }
             }
@@ -399,7 +400,7 @@ class SettingsViewModel(
                             p.province,
                             p.grade,
                             p.effectiveDate,
-                            "%.2f".format(Locale.ROOT, p.price),
+                            NumberFormat.measure(p.price),
                             p.source ?: "内置",
                         ).joinToString(",")
                     )
@@ -547,10 +548,10 @@ class SettingsViewModel(
                     val r = d.record
                     val prev = derived.getOrNull(index - 1)?.record
                     val distance = d.distance
-                    val unitPayable = d.unitPricePayable?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
-                    val unitActual = d.unitPriceActual?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
-                    val consumption = d.oilConsumption?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
-                    val costPerKm = d.costPerKm?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
+                    val unitPayable = d.unitPricePayable?.let { NumberFormat.measure(it) } ?: "-"
+                    val unitActual = d.unitPriceActual?.let { NumberFormat.measure(it) } ?: "-"
+                    val consumption = d.oilConsumption?.let { NumberFormat.measure(it) } ?: "-"
+                    val costPerKm = d.costPerKm?.let { NumberFormat.money(it) } ?: "-"
                     // 里程保留原始小数（原 %.0f 会把 89050.5 截成 89050，导入回环失真）
                     val mileageStr = r.mileage.fmtMileage()
                     val prevMileageStr = prev?.mileage?.fmtMileage() ?: "-"
@@ -569,15 +570,15 @@ class SettingsViewModel(
                             r.reoilDate,
                             prev?.reoilDate ?: "-",
                             "${r.oilGrade ?: "-"}号",
-                            "%.2f".format(Locale.ROOT, r.oilAmount),
-                            r.oilPrice?.let { "%.2f".format(Locale.ROOT, it) } ?: "-",
-                            "%.2f".format(Locale.ROOT, r.payableAmount),
-                            "%.2f".format(Locale.ROOT, r.actualAmount),
+                            NumberFormat.measure(r.oilAmount),
+                            r.oilPrice?.let { NumberFormat.measure(it) } ?: "-",
+                            NumberFormat.money(r.payableAmount),
+                            NumberFormat.money(r.actualAmount),
                             mileageStr,
                             prevMileageStr,
                             distanceStr,
-                            prev?.let { "%.2f".format(Locale.ROOT, it.oilAmount) } ?: "-",
-                            prev?.let { "%.2f".format(Locale.ROOT, it.actualAmount) } ?: "-",
+                            prev?.let { NumberFormat.measure(it.oilAmount) } ?: "-",
+                            prev?.let { NumberFormat.money(it.actualAmount) } ?: "-",
                             unitPayable,
                             unitActual,
                             d.oilDays?.toString() ?: "-",
