@@ -1,6 +1,7 @@
 package com.llpop.koil.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -13,6 +14,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -53,13 +56,20 @@ fun KOiLGlassDialog(
             val widthMod = if (widthFraction != null)
                 Modifier.width((LocalConfiguration.current.screenWidthDp * widthFraction).dp)
             else Modifier.fillMaxWidth()
+            // v1.5.32：弹窗内点击空白失焦（composable 上下文取 focusManager 供 pointerInput 使用）
+            val focusManager = LocalFocusManager.current
             Box(
                 modifier = Modifier
                     .then(widthMod)
                     .then(if (maxHeight != null) Modifier.heightIn(max = maxHeight) else Modifier)
                     .clip(RoundedCornerShape(24.dp))
-                    .background(MiuixTheme.colorScheme.surface.copy(alpha = 0.94f))
-                    .padding(contentPadding),
+                    // v1.5.32：背景完全不透明，确保盖住弹窗背后内容（原 0.94 alpha 在矮弹窗时透出下层文字造成"叠加"观感）
+                    .background(MiuixTheme.colorScheme.surface)
+                    .padding(contentPadding)
+                    // v1.5.32：点击弹窗内空白处取消输入框选中/失焦（子输入框消费点击，不误触）
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    },
             ) {
                 if (scrollable) {
                     Box(

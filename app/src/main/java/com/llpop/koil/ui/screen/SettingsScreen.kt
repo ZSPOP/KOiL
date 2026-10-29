@@ -632,24 +632,6 @@ fun SettingsScreen(
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
                         }
-                        // v1.5.31：同步来源行——移回「下个窗口｜最近更新」行正下方（v1.5.29 曾在区块底部，
-                        // 用户要求与窗口信息归组）；两行间加 0.5dp 细分隔线，字号与行2 一致（12sp/15sp）
-                        if (priceDbStatus.lastSyncSources.isNotBlank()) {
-                            Spacer(Modifier.height(6.dp))
-                            Box(
-                                Modifier
-                                    .fillMaxWidth()
-                                    .height(0.5.dp)
-                                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                                fontSize = 12.sp,
-                                lineHeight = 15.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            )
-                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(
@@ -684,6 +666,24 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+                // v1.5.32：同步来源放区块最底（立即更新按钮行之后）——v1.5.31 放左侧 Column 会把两行文字
+                // 顶上去导致与按钮不垂直居中；来源属排查元信息，放最底不占左列高度
+                if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                    Spacer(Modifier.height(6.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 // —— 待确认更新（有数据需核实时才展开；无数据整块连间距、横线一起隐藏）——

@@ -1,11 +1,14 @@
 package com.llpop.koil.ui.component
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -62,10 +65,15 @@ fun KOiLScreenScaffold(
             }
         },
     ) { innerPadding ->
+        val focusManager = LocalFocusManager.current
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier),
+                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+                // v1.5.32：点击输入框外任意位置取消选中/失焦（子输入框消费点击，不误触；录入卡/总览/设置统一生效）
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                },
         ) {
             content(
                 innerPadding,

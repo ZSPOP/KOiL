@@ -451,64 +451,75 @@ fun OverviewScreen(
     }
     }
 
-    // v1.5.31：异常明细弹窗（有异常时点异常卡弹出，逐条展示日期/油号/油耗/状态与偏差）
+    // v1.5.31：异常明细弹窗（有异常时点异常卡弹出）；v1.5.32：修复记录叠加——KOiLGlassDialog 滚动容器是
+    // Box，多个直接子项会全部叠在同一位置，必须在 content 内包 Column 垂直排列；补标题（title 参数未渲染）；偏差取绝对值
     if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
         com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
             onDismissRequest = { showAbnormalDetail = false },
-            title = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
             contentPadding = 20.dp,
             scrollable = true,
             maxHeight = 480.dp,
             widthFraction = 0.82f,
         ) {
-            uiState.abnormalRecords.forEach { d ->
-                val rec = d.record
-                val isHigh = d.consumptionStatus == ConsumptionStatus.HIGH
-                val accentColor = if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B)
-                val statusTxt = stringResource(
-                    if (isHigh) R.string.koil_ov_abnormal_high else R.string.koil_ov_abnormal_low
+            Column(Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = rec.reoilDate.takeLast(5),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onBackground,
+                Spacer(Modifier.height(4.dp))
+                uiState.abnormalRecords.forEachIndexed { index, d ->
+                    val rec = d.record
+                    val isHigh = d.consumptionStatus == ConsumptionStatus.HIGH
+                    val accentColor = if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B)
+                    val statusTxt = stringResource(
+                        if (isHigh) R.string.koil_ov_abnormal_high else R.string.koil_ov_abnormal_low
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "${rec.oilGrade ?: "-"}#",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = KOiLColors.Primary,
-                    )
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = "${NumberFormat.measure(d.oilConsumption ?: 0.0)} L/100km",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Spacer(Modifier.width(10.dp))
-                    Text(
-                        text = "$statusTxt ${NumberFormat.pct(d.deviationPct)}%",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = accentColor,
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = rec.reoilDate.takeLast(5),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "${rec.oilGrade ?: "-"}#",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = KOiLColors.Primary,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = "${NumberFormat.measure(d.oilConsumption ?: 0.0)} L/100km",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            text = "$statusTxt ${NumberFormat.pct(abs(d.deviationPct))}%",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = accentColor,
+                        )
+                    }
+                    if (index < uiState.abnormalRecords.lastIndex) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(0.5.dp)
+                                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                        )
+                    }
                 }
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                )
             }
         }
     }
