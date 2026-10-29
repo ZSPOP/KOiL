@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
@@ -477,13 +476,9 @@ private fun OilPriceCard(
                             color = containerText,
                         )
                         Spacer(Modifier.width(2.dp))
-                        // v1.5.31：省份下拉三角——原为文本字符 ▾(10sp) 过小，改矢量箭头 16dp（与设置页 Dropdown 同风格）
-                        Icon(
-                            imageVector = Icons.Filled.ArrowDropDown,
-                            contentDescription = null,
-                            tint = containerText,
-                            modifier = Modifier.size(16.dp),
-                        )
+                        // v1.5.33：省份下拉箭头——换 Miuix DropdownArrowEndAction（与设置页 Dropdown / 油号选择
+                        // 行尾同款线条风格），替代 v1.5.31 的实心小三角 ArrowDropDown（用户反馈不显眼）
+                        DropdownArrowEndAction(actionColor = containerText)
                     }
                 }
                 if (showProvincePicker.value) {

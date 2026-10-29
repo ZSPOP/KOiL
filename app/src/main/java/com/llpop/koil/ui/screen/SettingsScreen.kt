@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.screen
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -50,11 +51,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -667,24 +667,6 @@ fun SettingsScreen(
                         }
                     }
                 }
-                // v1.5.32：同步来源放区块最底（立即更新按钮行之后）——v1.5.31 放左侧 Column 会把两行文字
-                // 顶上去导致与按钮不垂直居中；来源属排查元信息，放最底不占左列高度
-                if (priceDbStatus.lastSyncSources.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(0.5.dp)
-                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
                 Spacer(Modifier.height(12.dp))
                 // —— 待确认更新（有数据需核实时才展开；无数据整块连间距、横线一起隐藏）——
                 if (pendingItems.isNotEmpty()) {
@@ -840,6 +822,24 @@ fun SettingsScreen(
                         )
                     }
                 }
+                // v1.5.33：同步来源放油价库区块最底（EIA 项之后、区块闭合前）——用户指定位置；
+                // 上方分隔线与区块内其它分隔线同款（0.5dp / alpha 0.12 / 通栏）
+                if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
             }
         }
@@ -900,21 +900,17 @@ fun SettingsScreen(
         }
         Spacer(Modifier.height(24.dp))
 
-        // 关于：KOiL（Unbounded 字体 20sp）+ 版本号（V 大写）
+        // 关于：KOiL 品牌矢量 logo（v1.5.33：Unbounded Bold 字形轮廓转矢量 drawable，
+        // 不再引用字体——字体文件已随本版删除）+ 版本号（V 大写）
         Column(
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // KOiL 品牌字：Unbounded 可变字体（wght 200-900）——Compose FontVariation 在资源字体上
-            // 有兼容问题（177/178 实测未变粗）；改用 XML font resource 声明可变轴
-            // （res/font/unbounded.xml：android:fontVariationSettings="'wght' 700"），
-            // 由 Android 原生加载器应用可变轴，绕开 Compose FontVariation 层，Bold 真正生效。
-            Text(
-                text = "KOiL",
-                fontFamily = FontFamily(Font(R.font.unbounded, weight = FontWeight.Bold)),
-                fontWeight = FontWeight.Bold,
-                fontSize = 20.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+            Image(
+                painter = painterResource(R.drawable.koil_logo),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f)),
+                modifier = Modifier.size(width = 58.52.dp, height = 20.dp),
             )
             Spacer(Modifier.height(2.dp))
             Text(
