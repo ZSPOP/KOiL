@@ -282,7 +282,7 @@ class SettingsViewModel(
                 val w1Row = priceDao.getPrice(home, "92号汽油", w1Eff)
                 if (w1Row != null && !w1Row.isStranded) {
                     windowStranded = false
-                    adjustWindowPrice = "%.2f".format(w1Row.price)
+                    adjustWindowPrice = "%.2f".format(Locale.ROOT, w1Row.price)
                 } else {
                     // 搁浅：维持「默认省 92# 上一条调价记录」的价格（如 10-15 窗口维持 09-25 的 ¥8.63），
                     // 而非生效日 10-16——上一版本误显示生效日导致歧义。
@@ -290,7 +290,7 @@ class SettingsViewModel(
                     val kept = priceDao.getLatestNonStranded(home, "92号汽油", w1Eff)
                     if (kept != null) {
                         strandedKeptDate = kept.effectiveDate.takeLast(5)
-                        strandedKeptPrice = "%.2f".format(kept.price)
+                        strandedKeptPrice = "%.2f".format(Locale.ROOT, kept.price)
                     }
                 }
             }
@@ -384,7 +384,7 @@ class SettingsViewModel(
                             p.province,
                             p.grade,
                             p.effectiveDate,
-                            "%.2f".format(p.price),
+                            "%.2f".format(Locale.ROOT, p.price),
                             p.source ?: "内置",
                         ).joinToString(",")
                     )
@@ -532,10 +532,10 @@ class SettingsViewModel(
                     val r = d.record
                     val prev = derived.getOrNull(index - 1)?.record
                     val distance = d.distance
-                    val unitPayable = d.unitPricePayable?.let { "%.2f".format(it) } ?: "-"
-                    val unitActual = d.unitPriceActual?.let { "%.2f".format(it) } ?: "-"
-                    val consumption = d.oilConsumption?.let { "%.2f".format(it) } ?: "-"
-                    val costPerKm = d.costPerKm?.let { "%.2f".format(it) } ?: "-"
+                    val unitPayable = d.unitPricePayable?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
+                    val unitActual = d.unitPriceActual?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
+                    val consumption = d.oilConsumption?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
+                    val costPerKm = d.costPerKm?.let { "%.2f".format(Locale.ROOT, it) } ?: "-"
                     // 里程保留原始小数（原 %.0f 会把 89050.5 截成 89050，导入回环失真）
                     val mileageStr = r.mileage.fmtMileage()
                     val prevMileageStr = prev?.mileage?.fmtMileage() ?: "-"
@@ -554,15 +554,15 @@ class SettingsViewModel(
                             r.reoilDate,
                             prev?.reoilDate ?: "-",
                             "${r.oilGrade ?: "-"}号",
-                            "%.2f".format(r.oilAmount),
-                            r.oilPrice?.let { "%.2f".format(it) } ?: "-",
-                            "%.2f".format(r.payableAmount),
-                            "%.2f".format(r.actualAmount),
+                            "%.2f".format(Locale.ROOT, r.oilAmount),
+                            r.oilPrice?.let { "%.2f".format(Locale.ROOT, it) } ?: "-",
+                            "%.2f".format(Locale.ROOT, r.payableAmount),
+                            "%.2f".format(Locale.ROOT, r.actualAmount),
                             mileageStr,
                             prevMileageStr,
                             distanceStr,
-                            prev?.let { "%.2f".format(it.oilAmount) } ?: "-",
-                            prev?.let { "%.2f".format(it.actualAmount) } ?: "-",
+                            prev?.let { "%.2f".format(Locale.ROOT, it.oilAmount) } ?: "-",
+                            prev?.let { "%.2f".format(Locale.ROOT, it.actualAmount) } ?: "-",
                             unitPayable,
                             unitActual,
                             d.oilDays?.toString() ?: "-",
@@ -637,7 +637,8 @@ class SettingsViewModel(
                     // 第一遍：按文件原顺序解析；格式错误直接入 errors，合法行保序暂存
                     val parsed = mutableListOf<ParsedRecord>()
                     for (line in lines.drop(1)) {
-                        val cols = line.split(",")
+                        // v1.5.23 C1：最小 CSV 解析（支持引号包裹字段与 "" 转义）；KOiL 自导出无引号，行为与 split 一致
+                        val cols = parseCsvLine(line)
                         val date = cols.getOrNull(dateIdx)?.trim()?.normalizeDate() ?: ""
                         val mileage = cols.getOrNull(mileageIdx)?.toDoubleOrNull()
                         val oilAmount = cols.getOrNull(oilAmountIdx)?.toDoubleOrNull()
@@ -819,7 +820,7 @@ class SettingsViewModel(
     private fun String.normalizeDate(): String = replace("/", "-").let {
         val parts = it.split("-")
         if (parts.size == 3) {
-            "%04d-%02d-%02d".format(parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
+            "%04d-%02d-%02d".format(Locale.ROOT, parts[0].toInt(), parts[1].toInt(), parts[2].toInt())
         } else it
     }
 
@@ -924,9 +925,36 @@ class SettingsViewModel(
         }
         is List<*> -> obj.joinToString(",", "[", "]") { buildJsonString(it) }
         is String -> "\"${obj.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+        // v1.5.23 C3：NaN/Infinity 输出非法 JSON——防御性写 null（当前数据源不会产生，防外部异常值）
+        is Double -> if (obj.isFinite()) obj.toString() else "null"
         is Number -> obj.toString()
         is Boolean -> obj.toString()
         else -> "\"$obj\""
+    }
+
+    /** v1.5.23 C1：最小 CSV 行解析——双引号包裹字段 + "" 转义；未包裹字段按逗号切分（兼容 KOiL 导出格式，回环等价） */
+    private fun parseCsvLine(line: String): List<String> {
+        val out = mutableListOf<String>()
+        val sb = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            when {
+                inQuotes -> {
+                    if (c == '"') {
+                        if (i + 1 < line.length && line[i + 1] == '"') { sb.append('"'); i++ }
+                        else inQuotes = false
+                    } else sb.append(c)
+                }
+                c == '"' -> inQuotes = true
+                c == ',' -> { out.add(sb.toString()); sb.setLength(0) }
+                else -> sb.append(c)
+            }
+            i++
+        }
+        out.add(sb.toString())
+        return out
     }
 }
 

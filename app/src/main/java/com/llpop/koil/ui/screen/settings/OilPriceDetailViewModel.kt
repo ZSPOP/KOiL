@@ -119,7 +119,9 @@ class OilPriceDetailViewModel(
         // 上一条非搁浅记录（搁浅条目「維持 X 價格」的维持源日期）
         var lastAdjustLabel: String? = null
         yearRecords.forEachIndexed { i, r ->
-            val prev = if (i > 0) yearRecords[i - 1].price else null
+            // v1.5.23：prev 用「全量记录」的上一条而非年过滤后的上一条——年初第一条调价
+            // 相对上年末的涨跌不再丢失（此前 i==0 时 prev=null，当年累计涨跌漏计年初调价）
+            val prev = records.takeWhile { it.effectiveDate < r.effectiveDate }.lastOrNull()?.price
             val diff = if (prev != null) r.price - prev else null
             // 涨跌统计只算非搁浅调价（搁浅 diff=0 天然不进，显式排除更清晰）
             if (diff != null && !r.isStranded) {

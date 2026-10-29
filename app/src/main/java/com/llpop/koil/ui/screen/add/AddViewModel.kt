@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** 录入页 UI 状态 */
 data class AddUiState(
@@ -55,6 +56,7 @@ data class AddUiState(
     val adjustUrgent: Boolean = false,
     val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌，恒来自 EIA/腾讯本地估算）
     val forecastSource: String? = null,          // 估算来源："EIA"（窗口幅度估算）/ "腾讯"（单日方向参考）
+    val forecastDataDate: String? = null,        // v1.5.23：EIA 数据截至日期（T+1 滞后，窗口日当天缺末段），腾讯=null
     val perLiterEquivalent: Double? = null,      // 折合 元/升（按当前油号密度折算）
     val showPriceAdjust: Boolean = false,        // 油价调整窗口提醒板块（由设置页开关控制）
     val tankCapacity: Float = 65f,
@@ -338,6 +340,7 @@ class AddViewModel(
         _uiState.value = _uiState.value.copy(
             forecastAmount = forecastAmount,
             forecastSource = estimate?.sourceLabel,
+            forecastDataDate = estimate?.dataDate,
             perLiterEquivalent = perLiterEquivalent,
         )
     }
@@ -411,7 +414,7 @@ class AddViewModel(
         val price = state.currentPrice
         if (amount != null && price != null && amount > 0) {
             _uiState.value = _uiState.value.copy(
-                payableAmount = String.format("%.2f", amount * price)
+                payableAmount = String.format(Locale.ROOT, "%.2f", amount * price)
             )
         }
     }

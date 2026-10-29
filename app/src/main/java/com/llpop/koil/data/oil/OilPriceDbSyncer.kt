@@ -132,9 +132,13 @@ class OilPriceDbSyncer(
         }
         // 3) 拉取推算（仅当无任何缓存时）
         // 锚点回退链（v1.4.194 apizero 已收费移除；同源互备 xxapi 优先）：
-        // ① xxapi date−1 → ② ruseo date−1 → ③ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，
-        // 实测 18/18 与发改委公告吻合）→ ④ calculateAdjustDates 本地推算当年全年窗口日历（节假日顺延）
-        val anchor = network.fetchAnchorWindowDate()
+        // ① 发改委公告（v1.5.23 D4：公告标题年份+月日=权威窗口日，含搁浅窗口——最近窗口搁浅时
+        //    xxapi/ruseo 快照 date 会停在上一调价窗口，date−1 锚点错位；发改委兜底修正）
+        // ② xxapi date−1 → ③ ruseo date−1 → ④ 主源 abapi 全年曲线最近调价日（生效日 − 3 天，
+        // 实测 18/18 与发改委公告吻合）→ ⑤ calculateAdjustDates 本地推算当年全年窗口日历（节假日顺延）
+        val ndrcDates = runCatching { network.fetchNdrcAdjustDates() }.getOrNull().orEmpty()
+        val anchor = ndrcDates.lastOrNull()
+            ?: network.fetchAnchorWindowDate()
             ?: abapiAnchor()
         if (anchor == null) {
             // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
@@ -609,11 +613,23 @@ class OilPriceDbSyncer(
                     nextAdjustment = nextAdjustment,
                 )
             }
+            // v1.5.23 D2：搁浅结论只在「窗口日次日」落账——非窗口日重复检查不再滚动 lastWindowChecked
+            //（此前普通日检查也会把版本号滚成检查日，如 V20261031 而非真实窗口 V20261029）
+            val lastWindow = getAdjustDates().filter { it < today }.lastOrNull()
+            val strandedConfirmDay = lastWindow?.let { LocalDate.parse(it).plusDays(1).toString() }
+            if (strandedConfirmDay != null && strandedConfirmDay == today) {
+                return OilPriceSyncResult(
+                    success = true,
+                    message = "已核对至 $today，油价无变化（搁浅）",
+                    latestDate = latestDate,
+                    strandedWindowDate = today,
+                    nextAdjustment = nextAdjustment,
+                )
+            }
             return OilPriceSyncResult(
                 success = true,
-                message = "已核对至 $today，油价无变化（搁浅）",
+                message = "已核对至 $today，油价无变化（非窗口日，正常维持）",
                 latestDate = latestDate,
-                strandedWindowDate = today,
                 nextAdjustment = nextAdjustment,
             )
         }
@@ -849,6 +865,7 @@ class OilPriceDbSyncer(
                     context,
                     context.getString(R.string.koil_noti_title_window_tomorrow),
                     context.getString(R.string.koil_noti_msg_window_tomorrow, next),
+                    OilPriceNotifier.NOTIFICATION_ID_WINDOW_REMINDER,   // v1.5.23 D3：独立 ID 不覆盖调价通知
                 )
                 settings.setPriceLastWindowReminded(next)
             }

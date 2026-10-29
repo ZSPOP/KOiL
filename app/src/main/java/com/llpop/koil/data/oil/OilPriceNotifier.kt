@@ -24,6 +24,8 @@ object OilPriceNotifier {
 
     const val CHANNEL_ID = "oil_price_adjust"
     private const val NOTIFICATION_ID = 1001
+    /** v1.5.23 D3：窗口日前一天提醒独立 ID——与调价生效通知不再互相覆盖 */
+    const val NOTIFICATION_ID_WINDOW_REMINDER = 1002
 
     fun ensureChannel(context: Context) {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -39,8 +41,8 @@ object OilPriceNotifier {
         }
     }
 
-    /** 发通知；未授权通知权限时静默跳过（不 crash） */
-    fun notify(context: Context, title: String, message: String) {
+    /** 发通知；未授权通知权限时静默跳过（不 crash）；notificationId 区分不同通知（v1.5.23 D3） */
+    fun notify(context: Context, title: String, message: String, notificationId: Int = NOTIFICATION_ID) {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
@@ -66,6 +68,6 @@ object OilPriceNotifier {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 }

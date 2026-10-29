@@ -83,6 +83,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.util.Locale
 
 private val PROVINCES = listOf(
     "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
@@ -853,8 +854,8 @@ fun SettingsScreen(
                             ) {
                                 Text(r.date, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackground, modifier = Modifier.width(70.dp))
                                 Text("${r.mileage.toInt()}km", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(60.dp))
-                                Text("%.1fL".format(r.oilAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
-                                Text("¥%.0f".format(r.actualAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                                Text("%.1fL".format(Locale.ROOT, r.oilAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
+                                Text("¥%.0f".format(Locale.ROOT, r.actualAmount), fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
                                 r.errorKey?.let { key ->
                                     Spacer(Modifier.width(4.dp))
                                     Text(

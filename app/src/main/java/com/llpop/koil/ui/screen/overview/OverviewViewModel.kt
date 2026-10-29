@@ -23,6 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 // v1.5.20：RecordWithDerived / ConsumptionStatus / computeDerived 已抽取到
 // domain.logic.DerivedCalculator（总览页与 CSV 导出共用同一口径）
@@ -173,10 +174,20 @@ class OverviewViewModel(
                 }
             }
         }
+        // v1.5.23 B4：启动恢复上次范围选择（此前的选择只存内存，重启回「全部」）
+        viewModelScope.launch {
+            val saved = settings.summaryRange.first()
+            if (saved in listOf("all", "3m", "6m", "year")) {
+                _uiState.update { it.copy(range = saved) }
+                recompute()
+            }
+        }
     }
 
     fun setRange(range: String) {
         _uiState.value = _uiState.value.copy(range = range)
+        // v1.5.23 B4：范围选择持久化（重启后仍保持上次选择）
+        viewModelScope.launch { settings.setSummaryRange(range) }
         recompute()
     }
 
@@ -290,7 +301,7 @@ class OverviewViewModel(
         val amount = s.editOilAmount.toDoubleOrNull()
         val price = s.editReferencePrice
         val payable = if (amount != null && price != null && amount > 0 && price > 0)
-            String.format("%.2f", amount * price)
+            String.format(Locale.ROOT, "%.2f", amount * price)
         else ""
         _uiState.value = s.copy(editPayableAmount = payable)
     }
@@ -516,7 +527,7 @@ class OverviewViewModel(
         val amount = s.backfillOilAmount.toDoubleOrNull()
         val price = s.backfillReferencePrice
         val payable = if (amount != null && price != null && amount > 0 && price > 0)
-            String.format("%.2f", amount * price)
+            String.format(Locale.ROOT, "%.2f", amount * price)
         else ""
         _uiState.value = s.copy(backfillPayableAmount = payable)
     }

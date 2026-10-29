@@ -77,6 +77,7 @@ import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.util.Locale
 
 /**
  * 录入页（M2 完整实现）
@@ -174,7 +175,7 @@ fun AddScreen(
                     GradeField(
                         modifier = Modifier.weight(1f),
                         grade = uiState.oilGrade,
-                        priceText = uiState.currentPrice?.let { "¥%.2f/L".format(it) } ?: "¥--/L",
+                        priceText = uiState.currentPrice?.let { "¥%.2f/L".format(Locale.ROOT, it) } ?: "¥--/L",
                         onGradeSelected = viewModel::setOilGrade,
                     )
                 }
@@ -605,6 +606,15 @@ private fun OilPriceCard(
                                                 if (uiState.forecastSource == "腾讯") R.string.koil_add_forecast_single_day
                                                 else R.string.koil_add_forecast_estimated,
                                             ) + ")" +
+                                            // v1.5.23：EIA 数据 T+1 滞后——窗口日当天缺末段，标注数据截至日，避免误解
+                                            if (uiState.forecastSource != "腾讯" && uiState.forecastDataDate != null) {
+                                                "(" + stringResource(
+                                                    R.string.koil_add_forecast_as_of,
+                                                    uiState.forecastDataDate!!.takeLast(5),
+                                                ) + ")"
+                                            } else {
+                                                ""
+                                            } +
                                             " " +
                                             stringResource(
                                                 if (rising) R.string.koil_add_approx_per_liter_up
@@ -668,7 +678,7 @@ private fun PriceCell(
         )
         Spacer(Modifier.height(2.dp))
         Text(
-            text = if (price != null) "%.2f".format(price) else "--",
+            text = if (price != null) "%.2f".format(Locale.ROOT, price) else "--",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             color = MiuixTheme.colorScheme.primary,

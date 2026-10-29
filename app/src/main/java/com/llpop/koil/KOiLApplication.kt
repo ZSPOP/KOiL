@@ -49,10 +49,10 @@ class KOiLApplication : Application() {
         // 首次启动预置：仅历史加油记录（油价库已改为联网灌库，见下两段）
         appScope.launch {
             try {
-                val db = AppDatabase.getInstance(this@KOiLApplication)
-                SeedInitializer.seedIfEmpty(this@KOiLApplication, db)
-                // v1.5.16：一次性回填历史 payable=0 记录（无参考价且未手填应付的旧数据，按实付入账），仅执行一次
                 val settings = GlobalContext.get().get<AppSettings>()
+                val db = AppDatabase.getInstance(this@KOiLApplication)
+                SeedInitializer.seedIfEmpty(this@KOiLApplication, db, settings)
+                // v1.5.16：一次性回填历史 payable=0 记录（无参考价且未手填应付的旧数据，按实付入账），仅执行一次
                 if (!settings.recordPayableZeroFixed.first()) {
                     val fixed = db.KOiLRecordDao().fixZeroPayable()
                     settings.setRecordPayableZeroFixed(true)

@@ -66,6 +66,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.ceil
+import java.util.Locale
 
 /**
  * 自研日期选择弹窗（柔光玻璃风格，移植 Web 端 OilKCalendar 设计）。
@@ -205,7 +206,7 @@ fun KOiLDatePickerDialog(
                         }
                         Spacer(Modifier.weight(1f))
                         Text(
-                            text = String.format(monthFormat, viewMonth.year, viewMonth.monthValue),
+                            text = String.format(Locale.ROOT, monthFormat, viewMonth.year, viewMonth.monthValue),
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onBackground,

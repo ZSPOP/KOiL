@@ -66,6 +66,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.util.Locale
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
 private val UpColor = Color(0xFFE53935)
@@ -234,7 +235,7 @@ fun OilPriceDetailScreen(
                             SummaryCell(
                                 modifier = Modifier.weight(1f),
                                 label = stringResource(R.string.koil_pdb_latest_price),
-                                value = state.latestPrice?.let { "¥%.2f".format(it) } ?: "--",
+                                value = state.latestPrice?.let { "¥%.2f".format(Locale.ROOT, it) } ?: "--",
                                 valueColor = MiuixTheme.colorScheme.onBackground,
                             )
                             SummaryCell(
@@ -486,7 +487,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
                     )
                     textSize = 10.dp.toPx()
                 }
-                drawText("%.2f".format(pv), 2.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText("%.2f".format(Locale.ROOT, pv), 2.dp.toPx(), y + 3.dp.toPx(), paint)
             }
         }
 
@@ -547,7 +548,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
                 center = Offset(sx, sy),
             )
             // 气泡文字
-            val bubbleText = "${items[sel].label}  ¥%.2f".format(items[sel].price)
+            val bubbleText = "${items[sel].label}  ¥%.2f".format(Locale.ROOT, items[sel].price)
             drawContext.canvas.nativeCanvas.apply {
                 val paint = android.graphics.Paint().apply {
                     color = android.graphics.Color.argb(
@@ -648,7 +649,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             Spacer(Modifier.width(8.dp))
             // 列2：价格（固定宽，左对齐；搁浅行灰色显示维持价）
             Text(
-                text = "¥%.2f".format(item.price),
+                text = "¥%.2f".format(Locale.ROOT, item.price),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = if (item.isStranded) {

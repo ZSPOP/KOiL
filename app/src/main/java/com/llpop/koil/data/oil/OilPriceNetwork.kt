@@ -18,6 +18,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * 油价数据抓取（v1.4.194 起 apizero 已收费移除，回归单源）：
@@ -176,7 +177,7 @@ class OilPriceNetwork {
                 val d = m.groupValues[3].toInt()
                 if (y == year && (mon in 1..12) && (d in 1..31)) {
                     anyCurrentYear = true
-                    val date = "%04d-%02d-%02d".format(y, mon, d)
+                    val date = "%04d-%02d-%02d".format(Locale.ROOT, y, mon, d)
                     if (date <= today.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE)) {
                         dates.add(date)
                     }

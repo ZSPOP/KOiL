@@ -114,6 +114,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import java.util.Locale
 
 private enum class SwipeActionValue { CLOSED, OPEN }
 
@@ -701,7 +702,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.WaterDrop,
                     label = stringResource(R.string.koil_stat_avg_consumption),
-                    value = "%.2f".format(stats.avgOilConsumption ?: 0.0),
+                    value = "%.2f".format(Locale.ROOT, stats.avgOilConsumption ?: 0.0),
                     unit = "L/100km",
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
                     valueFontSize = 24.sp,
@@ -710,7 +711,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.Money,
                     label = stringResource(R.string.koil_stat_cost_per_km),
-                    value = "%.3f".format(stats.avgCostPerKm ?: 0.0),
+                    value = "%.3f".format(Locale.ROOT, stats.avgCostPerKm ?: 0.0),
                     unit = stringResource(R.string.koil_stat_cost_unit),
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
                     valueFontSize = 24.sp,
@@ -743,7 +744,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
                     label = stringResource(R.string.koil_stat_total_cost),
-                    value = "¥%.0f".format(stats.totalActual),
+                    value = "¥%.0f".format(Locale.ROOT, stats.totalActual),
                     unit = "",
                     comparePct = pct(stats.totalActual, prev?.totalActual),
                 )
@@ -751,7 +752,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.Receipt,
                     label = stringResource(R.string.koil_stat_total_payable),
-                    value = "¥%.0f".format(stats.totalPayable),
+                    value = "¥%.0f".format(Locale.ROOT, stats.totalPayable),
                     unit = "",
                     comparePct = pct(stats.totalPayable, prev?.totalPayable),
                 )
@@ -766,7 +767,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Text(
                         text = stringResource(
                             if (saved) R.string.koil_ov_vs_actual_saved else R.string.koil_ov_vs_actual_over,
-                            "%.0f".format(abs(payableDiff)),
+                            "%.0f".format(Locale.ROOT, abs(payableDiff)),
                         ),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
@@ -792,7 +793,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "%s ¥%.2f/%s · %s %d km".format(
+                    text = "%s ¥%.2f/%s · %s %d km".format(Locale.ROOT, 
                         stringResource(R.string.koil_stat_avg_price),
                         stats.avgUnitPriceActual ?: 0.0,
                         stringResource(R.string.koil_stat_price_unit),
@@ -861,7 +862,7 @@ private fun StatCell(
                 Spacer(Modifier.height(2.dp))
                 val up = pct > 0
                 Text(
-                    text = "${if (up) "↑" else "↓"}%.1f%%".format(abs(pct)),
+                    text = "${if (up) "↑" else "↓"}%.1f%%".format(Locale.ROOT, abs(pct)),
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
                     color = if (up) Color(0xFFE65100) else Color(0xFF2E7D32),
@@ -984,10 +985,10 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
                     )
                     textSize = 9.dp.toPx()
                 }
-                drawText("%.1f".format(lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText("%.1f".format(Locale.ROOT, lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), paint)
                 // 右轴标签
                 val rv = rightMin + rightRange * (1 - frac)
-                drawText("%.2f".format(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText("%.2f".format(Locale.ROOT, rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), paint)
             }
         }
 
@@ -1192,7 +1193,7 @@ private fun RecordCard(
                     )
                     Spacer(Modifier.width(8.dp))
                     Pill(
-                        text = if (r.oilPrice != null) "${r.oilGrade ?: "-"}# ¥%.2f".format(r.oilPrice) else "${r.oilGrade ?: "-"}#",
+                        text = if (r.oilPrice != null) "${r.oilGrade ?: "-"}# ¥%.2f".format(Locale.ROOT, r.oilPrice) else "${r.oilGrade ?: "-"}#",
                         color = KOiLColors.Primary.copy(alpha = 0.12f),
                         textColor = KOiLColors.Primary,
                         border = KOiLColors.Primary.copy(alpha = 0.25f),
@@ -1267,7 +1268,7 @@ private fun RecordCard(
                             MetricCell(
                                 Modifier.weight(1f),
                                 label = stringResource(R.string.koil_ov_metric_consumption),
-                                value = "%.2f".format(record.oilConsumption),
+                                value = "%.2f".format(Locale.ROOT, record.oilConsumption),
                                 unit = "L/100km",
                                 valueColor = accentColor,
                                 delta = deltaText(record.oilConsumption, prevRecord?.oilConsumption, lowerBetter = true),
@@ -1275,7 +1276,7 @@ private fun RecordCard(
                             MetricCell(
                                 Modifier.weight(1f),
                                 label = stringResource(R.string.koil_ov_metric_cost),
-                                value = "¥%.3f".format(record.costPerKm ?: 0.0),
+                                value = "¥%.3f".format(Locale.ROOT, record.costPerKm ?: 0.0),
                                 unit = "",
                                 valueColor = accentColor,
                                 delta = deltaText(record.costPerKm, prevRecord?.costPerKm, lowerBetter = true),
@@ -1325,19 +1326,19 @@ private fun RecordCard(
                     RecordDetail(
                         Modifier.weight(1f),
                         stringResource(R.string.koil_col_oil_amount),
-                        "%.1f".format(r.oilAmount),
+                        "%.1f".format(Locale.ROOT, r.oilAmount),
                         "L",
                     )
                     RecordDetail(
                         Modifier.weight(1f),
                         stringResource(R.string.koil_col_actual),
-                        "¥%.2f".format(r.actualAmount),
+                        "¥%.2f".format(Locale.ROOT, r.actualAmount),
                         "",
                     )
                     RecordDetail(
                         Modifier.weight(1f),
                         stringResource(R.string.koil_col_unit_price),
-                        "¥%.2f".format(record.unitPriceActual ?: 0.0),
+                        "¥%.2f".format(Locale.ROOT, record.unitPriceActual ?: 0.0),
                         "",
                         warn = false,
                     )
@@ -1391,7 +1392,7 @@ private fun deltaText(cur: Double?, prev: Double?, lowerBetter: Boolean, digits:
     val color = if (good) Color(0xFF2E7D32) else Color(0xFFE65100)
     val fmt = if (digits <= 0) "%.0f" else "%.${digits}f"
     return DeltaText(
-        text = "$arrow ${fmt.format(abs(diff))} (%.1f%%)".format(abs(pct)),
+        text = "$arrow ${fmt.format(abs(diff))} (%.1f%%)".format(Locale.ROOT, abs(pct)),
         color = color,
     )
 }
@@ -2044,7 +2045,7 @@ private fun GradePriceSelect(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "$grade# · ${price?.let { "¥%.2f/L".format(it) } ?: "¥--/L"}",
+                    text = "$grade# · ${price?.let { "¥%.2f/L".format(Locale.ROOT, it) } ?: "¥--/L"}",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,

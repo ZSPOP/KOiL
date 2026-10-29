@@ -78,7 +78,6 @@ class AppSettings(private val context: Context) {
         private val KEY_DEFAULT_OIL_GRADE = stringPreferencesKey("KOiL-default-oil-grade")
         private val KEY_TANK_CAPACITY = floatPreferencesKey("KOiL-tank-capacity")
         private val KEY_KEEP_LAST_GRADE = booleanPreferencesKey("KOiL-keep-last-grade")
-        private val KEY_LAST_GRADE = stringPreferencesKey("KOiL-last-grade")
         private val KEY_ABNORMAL_THRESHOLD = doublePreferencesKey("KOiL-abnormal-threshold")
         private val KEY_PRICE_ALERT = booleanPreferencesKey("KOiL-price-alert")
         private val KEY_PRICE_PUSH = booleanPreferencesKey("KOiL-price-push")
@@ -114,6 +113,8 @@ class AppSettings(private val context: Context) {
         const val DEFAULT_ABNORMAL_THRESHOLD = 30.0
         // v1.5.16 一次性数据修复标记：历史 payable=0 记录回填为 actual（仅执行一次）
         private val KEY_RECORD_PAYABLE_ZERO_FIXED = booleanPreferencesKey("KOiL-record-payable-zero-fixed")
+        // v1.5.23 一次性预置标记：种子记录已灌入（防用户删光记录后重启「复活」）
+        private val KEY_RECORD_SEEDED = booleanPreferencesKey("KOiL-record-seeded")
         // v1.5.21 一次性清理标记：apizero 时代残留的 KOiL-price-db-forecast 键已删除（forecast 功能已彻底移除）
         private val KEY_PRICE_DB_FORECAST_CLEARED = booleanPreferencesKey("KOiL-price-db-forecast-cleared")
         // v1.5.21 一次性清理标记：库内"未来生效日"脏记录（effectiveDate > 今天）已删除（窗口日 24 点生效边界修复）
@@ -188,13 +189,9 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_TANK_CAPACITY] = capacity }
     }
 
-    // ---- 沿用上次油号（koil-keep-last-grade，默认开启）----
+    // ---- 沿用上次油号（koil-keep-last-grade，默认开启；实际取上次记录油号，见 AddViewModel）----
     val keepLastGrade: Flow<Boolean> =
         context.KOiLDataStore.data.map { it[KEY_KEEP_LAST_GRADE] ?: true }
-    val lastGrade: Flow<String> = context.KOiLDataStore.data.map { it[KEY_LAST_GRADE] ?: "92" }
-    suspend fun setLastGrade(grade: String) {
-        context.KOiLDataStore.edit { it[KEY_LAST_GRADE] = grade }
-    }
     suspend fun setKeepLastGrade(keep: Boolean) {
         context.KOiLDataStore.edit { it[KEY_KEEP_LAST_GRADE] = keep }
     }
@@ -211,6 +208,13 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.map { it[KEY_RECORD_PAYABLE_ZERO_FIXED] ?: false }
     suspend fun setRecordPayableZeroFixed(fixed: Boolean) {
         context.KOiLDataStore.edit { it[KEY_RECORD_PAYABLE_ZERO_FIXED] = fixed }
+    }
+
+    // ---- v1.5.23 一次性预置标记：种子记录是否已灌入（已灌则永不重灌，删除后不复活） ----
+    val recordSeeded: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_RECORD_SEEDED] ?: false }
+    suspend fun setRecordSeeded(seeded: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_RECORD_SEEDED] = seeded }
     }
 
     // ---- 油价调整提醒开关（koil-price-alert）----

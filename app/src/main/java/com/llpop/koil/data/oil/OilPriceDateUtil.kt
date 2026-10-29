@@ -23,18 +23,19 @@ object OilPriceDateUtil {
         if (raw.isNullOrBlank()) return null
         val s = raw.trim()
 
-        PATTERN_ISO.find(s)?.let {
+        // v1.5.23 E4：matchEntire 完整匹配（此前 find 部分匹配——"2026-10-29 剩余文本"也会误命中，宽容输入）
+        PATTERN_ISO.matchEntire(s)?.let {
             return "${it.groupValues[1]}-${it.groupValues[2].padStart(2, '0')}-${it.groupValues[3].padStart(2, '0')}"
         }
-        PATTERN_CN_FULL.find(s)?.let {
+        PATTERN_CN_FULL.matchEntire(s)?.let {
             return "${it.groupValues[1]}-${it.groupValues[2].padStart(2, '0')}-${it.groupValues[3].padStart(2, '0')}"
         }
-        PATTERN_CN_SHORT.find(s)?.let {
+        PATTERN_CN_SHORT.matchEntire(s)?.let {
             val mm = it.groupValues[1].toIntOrNull() ?: return null
             val dd = it.groupValues[2].toIntOrNull() ?: return null
             return withYear(mm, dd)
         }
-        PATTERN_MD.find(s)?.let {
+        PATTERN_MD.matchEntire(s)?.let {
             val mm = it.groupValues[1].toIntOrNull() ?: return null
             val dd = it.groupValues[2].toIntOrNull() ?: return null
             return withYear(mm, dd)
