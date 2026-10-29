@@ -1,5 +1,40 @@
 # KOiL CHANGELOG
 
+## v1.5.36（versionCode 236）— 2026-10-29（基于 v1.5.35，深度压测 8 项修复）
+
+> 用户确认执行压测报告 P1~P8 全部修复。不涉及 DB schema（覆盖升级安全）。
+
+### 🔴 P1 调价窗口"±14 天硬编码"→ 权威日历优先（2 处）
+- 首页 `AddViewModel`：接口 next 存档过期时，"下个窗口"改取权威日历 `priceDbAdjustDates` 第一个 ≥今天 的窗口（含节假日推算）；版本号"最近窗口"改取日历最后一个 <今天 的窗口，替代 next−14 推算
+- 设置页 `SettingsViewModel`：W1"调整日"/下个窗口同理，权威日历为空才回退 ±14 天（极端兜底）
+- 效果：春节等长假期（10 工作日漂 20+ 天）下，首页下个窗口、设置页调整日、V 版本号恒落真窗口
+
+### 🔴 P2 通知权限"拒绝记忆"
+- 新增 DataStore 键 `KOiL-notification-permission-requested`；MainActivity 仅首次安装请求一次权限，允许/拒绝都落标记，拒绝后不再每次启动重复无效请求（Android 13+ 拒绝后系统静默不弹框）；设置页开关跳系统设置链路不变
+
+### 🟡 P3 CSV 导入日期单行容错
+- `normalizeDate` 对非法数字日期（如 abc-01-01）runCatching 返回原串，由调用方正则判 format_error；不再抛 NumberFormatException 拖垮整文件解析
+
+### 🟡 P4 总览趋势点抽样
+- `computeTrend` 超过 60 点均匀抽样，记录量增长时趋势图不再全量传递
+
+### 🟡 P5 崩溃日志同名清理
+- `CrashReporter` 写公共目录前按 DISPLAY_NAME 清理历史 `KOiL-crash.txt`（系统同名 insert 会生成 (1)(2)… 堆积），只保留最新一份
+
+### 🟡 P6 "沿用上次加油"里程置空
+- 沿用旧里程必触发"里程递减"拦截（mileage <= last），改为不预填里程，由用户输入本次新里程
+
+### 🟡 P7 录入失败提示固定文案
+- `addRecord` 失败不再透出数据库内部异常文本；新增三语 `koil_precheck_add_failed_generic`（添加失败，请重试），原带参 key 删除（死键清理）
+
+### 🟡 P8 增量入库仅限"生效日"
+- `verifyProvince` 写入闸由 `eff > today` 收窄为 `eff != today` 跳过——非窗口日价格抖动（数据源四舍五入）不再写"上一窗口生效日"假变化点；窗口日 24 点生效边界不变
+
+### 附：零 warning 构建
+- 清理 9 处 Kotlin warning（discount 恒真条件、多余 !!、optString 多余 ?.、AddViewModel 补 FlowPreview/ExperimentalCoroutinesApi OptIn）
+
+# KOiL CHANGELOG
+
 ## v1.5.35（versionCode 235）— 2026-10-29（基于 v1.5.34，省份按钮间距 + logo 放大 + 同步来源行间距）
 
 > 用户报 3 处一次执行。不涉及 DB schema（覆盖升级安全）。

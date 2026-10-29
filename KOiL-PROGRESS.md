@@ -1,5 +1,20 @@
-## 当前版本：v1.5.35（versionCode 235）— 2026-10-29 已交付
+# KOiL 工程进度记录
 
+> 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
+> 版本提交见 git log；变更明细见 CHANGELOG.md。
+
+## 当前版本：v1.5.36（versionCode 236）— 2026-10-29 已交付
+
+- 定位：深度压测报告 P1~P8 全部修复（窗口权威日历定位 / 权限拒绝记忆 / CSV 单行容错 / 趋势抽样 / 崩溃日志清理 / 沿用里程置空 / 失败文案固定 / 仅生效日入库）+ 零 warning 构建
+- commit：`3031d23`（基于 v1.5.35，不涉及 DB schema，覆盖升级安全）
+- APK：`KOiL-v1.5.36-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史）：`KOiL-src-v1536.zip`
+- 压测报告：`KOiL-压力测试报告-2026-10-29.md`（P1~P8 已全部闭环）
+
+---
+## 历史版本（归档）
+
+### v1.5.35（versionCode 235）— 2026-10-29 已交付
 - 定位：省份按钮文字→箭头 8dp 间距 + 设置页底部 logo 放大 10%（64.4×22dp）+ 同步来源行底部 1dp
 - commit：`7f83a97`（基于 v1.5.34，不涉及 DB schema，覆盖升级安全）
 - APK：`KOiL-v1.5.35-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
@@ -12,7 +27,7 @@
 - 🎨 logo 64.4×22dp（放大 10%）
 - ⚙️ 同步来源行底 1dp
 
-## 当前版本：v1.5.34（versionCode 234）— 2026-10-29 已交付
+### v1.5.34（versionCode 234）— 2026-10-29 已交付
 
 - 定位：KOiL logo 矢量渲染缺失修复（M 隐式 LineTo 坐标丢失）+ 省份文字 14sp Bold 去手动间距对齐油号行尾 + 同步来源行底部间隔 12→6dp
 - commit：`2796c17`（基于 v1.5.33，不涉及 DB schema，覆盖升级安全）
@@ -27,12 +42,7 @@
 - 🔽 省份文字 14sp Bold + 箭头直接跟随（无手动间距）
 - ⚙️ 同步来源行底部 6dp
 
-# KOiL 工程进度记录
-
-> 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
-> 版本提交见 git log；变更明细见 CHANGELOG.md。
-
-## 当前版本：v1.5.33（versionCode 233）— 2026-10-29 已交付
+### v1.5.33（versionCode 233）— 2026-10-29 已交付
 
 - 定位：KOiL 品牌 logo 转矢量（Unbounded 字体彻底移除）+ 同步来源移油价库区块最底（EIA 后）+ 省份箭头换设置页同款线条风
 - commit：`a765cb5`（基于 v1.5.32，不涉及 DB schema，覆盖升级安全）
@@ -47,7 +57,7 @@
 - ⚙️ 同步来源从按钮行下移至油价库区块最底（EIA API Key 之后），同款 0.5dp 分隔线
 - 🔽 省份箭头 ArrowDropDown(16dp) → Miuix DropdownArrowEndAction（设置页同款线条风）
 
-## 历史版本：v1.5.32（versionCode 232）— 2026-10-29 已交付
+### v1.5.32（versionCode 232）— 2026-10-29 已交付
 
 - 定位：异常弹窗三修（叠加/负号/标题+背景）+ 油价库两行居中 + 同步来源移最底 + 全局点击空白清焦
 - commit：`df042e7`（基于 v1.5.31，不涉及 DB schema，覆盖升级安全）
@@ -62,7 +72,7 @@
 - ⚙️ 同步来源移区块最底，左列两行与按钮垂直居中
 - ⌨️ KOiLScreenScaffold / KOiLGlassDialog 统一点击空白 clearFocus
 
-## 历史版本：v1.5.31（versionCode 231）— 2026-10-29 已交付
+### v1.5.31（versionCode 231）— 2026-10-29 已交付
 
 - 定位：改名（KOiL/数据总览/首页/数据+图标）+ 异常卡点击明细弹窗 + 应付待计算占位 + 省份箭头 16dp + 同步来源行间隔线 12sp + 数字显示规范化
 - commit：`fe83019`（基于 v1.5.30，不涉及 DB schema，覆盖升级安全）
@@ -80,7 +90,7 @@
 - ➖ 同步来源行移回窗口行下 + 0.5dp 间隔线 + 12sp
 - 🔢 NumberFormat 工具：金额 2 位 / 度量剪尾零 / 百分比 1 位，全局统一
 
-## 历史版本：v1.5.30（versionCode 230）— 2026-10-29 已交付
+### v1.5.30（versionCode 230）— 2026-10-29 已交付
 
 - 定位：通知设置跳转加固（NEW_TASK + resolveActivity 预检 + 应用详情 fallback，不再静默吞异常）+ 提示行 offset 收紧
 - commit：`7ecfb01`（基于 v1.5.29，不涉及 DB schema，覆盖升级安全）
@@ -95,7 +105,7 @@
 - 🔧 openNotificationSettings()：NEW_TASK + resolveActivity 预检 + ACTION_APPLICATION_DETAILS_SETTINGS fallback（开关/提示行共用）
 - 🖌 提示行：vertical padding 移除 + offset(-3.dp) 上移贴近副标题（通知/定位两处）
 
-## 历史版本：v1.5.29（versionCode 229）— 2026-10-29 已交付
+### v1.5.29（versionCode 229）— 2026-10-29 已交付
 
 - 定位：通知开关跳系统设置（治 HyperOS 拒绝后点开无反应）+ 提示行间距 + 同步来源移底部 + 异常油耗默认 30→20
 - commit：`8aa5a63`（基于 v1.5.28，不涉及 DB schema，覆盖升级安全）
@@ -111,7 +121,7 @@
 - 🖌 提示行 vertical 4→2dp；同步来源从窗口链条第 3 行移到区块底部脚注
 - ⚙️ DEFAULT_ABNORMAL_THRESHOLD 30.0 → 20.0
 
-## 历史版本：v1.5.28（versionCode 228）— 2026-10-29 已交付
+### v1.5.28（versionCode 228）— 2026-10-29 已交付
 
 - 定位：通知弹窗升级（方案A：HIGH通道+BigTextStyle）+ 通知/定位开关权限联动（拒绝→自动关、点开→再请求）
 - commit：`1eb63c3`（基于 v1.5.27，不涉及 DB schema，覆盖升级安全）
@@ -127,7 +137,7 @@
 - 🔐 权限联动：通知开关（MainActivity 启动被拒写关 + 设置页未授权恒关 + 点开先请求 + 提示行跳系统设置）；
   定位开关（同逻辑，同意后自动定位）；返回前台刷新权限状态；KOiLColors.Warning 提示色；三语 2 新 key
 
-## 历史版本：v1.5.27（versionCode 227）— 2026-10-29 已交付
+### v1.5.27（versionCode 227）— 2026-10-29 已交付
 
 - 定位：窗口日当天"今晚24点生效"提醒（建议#2）+ 设置页多源一致性展示（建议#3）
 - commit：`02a0ce5`（基于 v1.5.26，不涉及 DB schema，覆盖升级安全）
@@ -144,7 +154,7 @@
 - 🔍 多源一致性：锚点链返回命中来源（xxapi/ruseo/abapi/ndrc）落盘 + 同步来源组合快照
   KOiL-price-db-last-sources；设置页新增「同步来源」展示行（三语）
 
-## 历史版本：v1.5.26（versionCode 226）— 2026-10-29 已交付
+### v1.5.26（versionCode 226）— 2026-10-29 已交付
 
 - 定位：总览页六指标居中+列间距；油价库补灌自动重试（含"失败不再锁 8h"）
 - commit：`080ffe5`（基于 v1.5.25，不涉及 DB schema，覆盖升级安全）
@@ -158,7 +168,7 @@
 - 🐛 吸顶闪退修复：header 在 backdrop 录制子树内，textureBlur 采样含自身 → 递归崩溃；
   改半透明 surface 背景（alpha 0.92），移除 blur imports；贴顶/检测/无色块逻辑不变
 
-## 历史版本：v1.5.24（versionCode 224）— 2026-10-29 已交付
+### v1.5.24（versionCode 224）— 2026-10-29 已交付
 
 - 定位：UI 三处（调价窗口提醒徽章/文案、月份标题吸顶+字号、六指标 3×2）+ 设置页油价库缺口实时刷新
 - commit：`6cca520`（基于 v1.5.23，不涉及 DB schema，覆盖升级安全）
@@ -176,7 +186,7 @@
 - 🖌 UI4 六指标：2列×3行 → 3列×2行；删除实付较应付对比条（死键 koil_ov_vs_actual_saved/over 三语清理）
 - 🔄 设置页缺口实时刷新：observeCount 监听自动重算（根因=进页面一次性快照不随后台补灌刷新）；新增「后台补灌中」提示（koil_pdb_seeding 三语）
 
-## 历史版本：v1.5.23（versionCode 223）— 2026-10-29 已交付
+### v1.5.23（versionCode 223）— 2026-10-29 已交付
 
 - 定位：深度检测清单批量执行 + 估值基准修复 —— E5 基准锚定（搁浅不重置）+ E6 数据截至标注 + 中危三修（D1/A1/D2）+ 低危八修（A2/A3/A4/B1/C1/C3/D3/E4）+ 死键清理接线（D7/B4）+ 发改委锚点接入（D4）
 - commit：`0ee9240`（基于 v1.5.22，不涉及 DB schema，覆盖升级安全）
@@ -196,7 +206,7 @@
 - 🧹 D7 删 lastGrade 死键 / B4 总览范围持久化
 - 🏛️ D4 发改委公告锚点（第 4 级兜底，主链 xxapi→ruseo→abapi 不变；格式变化自动跳过）
 
-## 历史版本：v1.5.22（versionCode 222）— 2026-10-29 已交付
+### v1.5.22（versionCode 222）— 2026-10-29 已交付
 
 - 定位：正确性小修批量 —— #3 三语翻译补漏 + 通知逻辑四修（搁浅误通知/立即更新通知/点击跳转/失败不丢）+ 估值链路五修（腾讯标注/窗口对齐/建议去历史反推/周期刷新/柴油密度）
 - commit：`cdd7791`（基于 v1.5.21，不涉及 DB schema，覆盖升级安全）
@@ -213,7 +223,7 @@
 - 📈 #8~#12：EIA 窗口日历对齐切分（本窗口 vs 上窗口）；腾讯降级 UI 标「单日参考」；
   建议文案删 avgTrend 反推；估值 8h 周期刷新；折合元/升按油号密度（汽油 1316 / 柴油 1205）
 
-## 历史版本：v1.5.21（versionCode 221）— 2026-10-29 已交付
+### v1.5.21（versionCode 221）— 2026-10-29 已交付
 
 - 定位：数据正确性专项 —— ① 结清常驻待办（KOiL-price-db-forecast 彻底删除）；② 窗口日 24 点生效边界（B1~B8）
 - commit：`c5544e7`（基于 v1.5.20 `2a6b593`，不涉及 DB schema，覆盖升级安全）
@@ -229,7 +239,7 @@
   核验搁浅窗口日保护（B3）；调价次数口径同改（B4）；verifyProvince 降级不写 today（B5）；写入闸拦 `effectiveDate>today`（B8）；
   启动一次性删未来生效日记录（B6，标记 `KOiL-price-db-window-day-cleared`）；四宫格/当前价/调价通知改 ≤今天 查询（B7）
 
-## 历史版本：v1.5.20（versionCode 220）— 2026-10-29 已交付
+### v1.5.20（versionCode 220）— 2026-10-29 已交付
 
 - commit：`2a6b593`（基于 v1.5.16 `65eb51f`，合并原计划 v1.5.17/v1.5.18，不涉及 DB schema 与新功能）
 - APK：`KOiL-v1.5.20-release.apk`（62MB，release 正式签名；apksigner 校验通过，证书 SHA-256 恒定 `cc962f1e...`）
@@ -244,7 +254,7 @@
 - #7 导入预检 O(n²)→O(n log n)（TreeSet.lower/higher 二分）；#6 observeAll debounce 120ms + 排序/派生计算切 Default、CSV 读写切 IO、确认导入改 insertAllIgnore 单事务批量
 - #8 历史列表 Column+verticalScroll → LazyColumn + stickyHeader 月份吸顶；#9 groupBy/buildPrevMap remember 缓存；#10 items(key=记录id)+稳定回调（顺手删 RecordCard 死参数）；#11 返回顶部显隐改 snapshotFlow distinctUntilChanged
 
-## 历史版本：v1.5.16（versionCode 216）— 2026-10-27 已交付
+### v1.5.16（versionCode 216）— 2026-10-27 已交付
 
 - commit：`65eb51f`（基于 v1.5.15 `4882e1d`）
 - 定位：深度压力测试 18 项问题的第一批稳定性 hotfix（低风险、可独立回退）
