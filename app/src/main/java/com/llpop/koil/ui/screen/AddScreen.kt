@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
@@ -585,9 +586,20 @@ private fun OilPriceCard(
                                 fontWeight = FontWeight.Medium,
                                 color = textColor,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
                             )
+                            // v1.5.24：建议徽章从第二行移到窗口日行右侧（右对齐、垂直居中）
+                            if (suggestion.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+                                AdjustBadge(
+                                    text = suggestion,
+                                    color = if (urgent) urgentColor else accent,
+                                    bold = true,
+                                )
+                            }
                         }
-                        if (forecast != null || suggestion.isNotEmpty()) {
+                        if (forecast != null) {
                             Spacer(Modifier.height(6.dp))
                             FlowRow(
                                 modifier = Modifier.fillMaxWidth(),
@@ -596,16 +608,19 @@ private fun OilPriceCard(
                             ) {
                                 // v1.5.0：预测幅度 + 折合单价合并为一个徽章；v1.5.21 起 apizero forecast 彻底移除，
                                 // 幅度恒来自 EIA/腾讯本地估算 → 「估算」标注恒显示
+                                // v1.5.24：(估算/单日参考) 前置到「预计」后 → 预计(估算)上调170元/吨
                                 if (forecast != null && perLiter != null) {
                                     AdjustBadge(
-                                        text = stringResource(if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down) +
-                                            "${kotlin.math.abs(forecast).toInt()}" +
-                                            stringResource(R.string.koil_add_forecast_per_ton) +
+                                        text = stringResource(
+                                            if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down,
                                             "(" + stringResource(
                                                 // v1.5.22：按来源标注——EIA=「估算」（窗口幅度）；腾讯=「单日参考」（当日波动，仅方向）
                                                 if (uiState.forecastSource == "腾讯") R.string.koil_add_forecast_single_day
                                                 else R.string.koil_add_forecast_estimated,
-                                            ) + ")" +
+                                            ) + ")",
+                                        ) +
+                                            "${kotlin.math.abs(forecast).toInt()}" +
+                                            stringResource(R.string.koil_add_forecast_per_ton) +
                                             // v1.5.23：EIA 数据 T+1 滞后——窗口日当天缺末段，标注数据截至日，避免误解
                                             if (uiState.forecastSource != "腾讯" && uiState.forecastDataDate != null) {
                                                 "(" + stringResource(
@@ -615,20 +630,14 @@ private fun OilPriceCard(
                                             } else {
                                                 ""
                                             } +
-                                            " " +
+                                            // v1.5.24：截至标注后加逗号分隔折合文案
+                                            stringResource(R.string.koil_add_forecast_sep) +
                                             stringResource(
                                                 if (rising) R.string.koil_add_approx_per_liter_up
                                                 else R.string.koil_add_approx_per_liter_down,
                                                 kotlin.math.abs(perLiter),
                                             ),
                                         color = textColor,
-                                    )
-                                }
-                                if (suggestion.isNotEmpty()) {
-                                    AdjustBadge(
-                                        text = suggestion,
-                                        color = if (urgent) urgentColor else accent,
-                                        bold = true,
                                     )
                                 }
                             }

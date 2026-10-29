@@ -31,12 +31,13 @@
     <string name="koil_add_suggest_wait">建议等降价后再加</string>
     <string name="koil_add_window_prefix">下一个调价窗口日 %1$s 24:00</string>
     <string name="koil_add_window_days"> · 还有 %1$d 天</string>
-    <string name="koil_add_forecast_up">预计上调</string>
-    <string name="koil_add_forecast_down">预计下调</string>
+    <string name="koil_add_forecast_up">预计%1$s上调</string>
+    <string name="koil_add_forecast_down">预计%1$s下调</string>
     <string name="koil_add_forecast_per_ton">元/吨</string>
     <string name="koil_add_forecast_estimated">估算</string>
     <string name="koil_add_forecast_single_day">单日参考</string>
     <string name="koil_add_forecast_as_of">截至 %1$s</string>
+    <string name="koil_add_forecast_sep">，</string>
     <string name="koil_add_approx_per_liter_up">折合上调约%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter_down">折合下调约%1$.2f元/升</string>
     <string name="koil_add_approx_per_liter">折合约%1$.2f元/升</string>
@@ -117,8 +118,6 @@
     <string name="koil_ov_high">偏高</string>
     <string name="koil_ov_low">偏低</string>
     <string name="koil_ov_more_actions">更多操作</string>
-    <string name="koil_ov_vs_actual_saved">实付较应付节省 ¥%1$s</string>
-    <string name="koil_ov_vs_actual_over">实付较应付超支 ¥%1$s</string>
     <string name="koil_ov_prev_line">上次 %1$s · 里程 %2$d → %3$d km</string>
     <string name="koil_ov_current_mileage">当前里程 %1$d km</string>
     <string name="koil_ov_metric_consumption">平均油耗</string>
@@ -283,6 +282,7 @@
     <string name="koil_pdb_first_base">基准价</string>
     <string name="koil_pdb_view_detail">查看</string>
     <string name="koil_pdb_incomplete">%1$d 省数据未拉取完整</string>
+    <string name="koil_pdb_seeding">后台补灌中，完成后自动刷新</string>
     <string name="koil_set_price_push">调价推送通知</string>
     <string name="koil_set_price_push_sub">调价生效与窗口日前推送系统通知</string>
     <string name="koil_noti_title_price_adjust">油价已调整</string>

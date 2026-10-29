@@ -31,12 +31,13 @@
     <string name="koil_add_suggest_wait">Wait for a price drop</string>
     <string name="koil_add_window_prefix">Next adjustment window %1$s 24:00</string>
     <string name="koil_add_window_days"> · %1$d days left</string>
-    <string name="koil_add_forecast_up">Est. up</string>
-    <string name="koil_add_forecast_down">Est. down</string>
+    <string name="koil_add_forecast_up">%1$s up</string>
+    <string name="koil_add_forecast_down">%1$s down</string>
     <string name="koil_add_forecast_per_ton">¥/ton</string>
     <string name="koil_add_forecast_estimated">Est.</string>
     <string name="koil_add_forecast_single_day">1-day ref.</string>
     <string name="koil_add_forecast_as_of">as of %1$s</string>
+    <string name="koil_add_forecast_sep">, </string>
     <string name="koil_add_approx_per_liter_up">≈ up ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter_down">≈ down ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter">≈ ¥%1$.2f/L</string>
@@ -117,8 +118,6 @@
     <string name="koil_ov_high">High</string>
     <string name="koil_ov_low">Low</string>
     <string name="koil_ov_more_actions">More</string>
-    <string name="koil_ov_vs_actual_saved">Actual vs payable: saved ¥%1$s</string>
-    <string name="koil_ov_vs_actual_over">Actual vs payable: over ¥%1$s</string>
     <string name="koil_ov_prev_line">Last %1$s · mileage %2$d → %3$d km</string>
     <string name="koil_ov_current_mileage">Current mileage %1$d km</string>
     <string name="koil_ov_metric_consumption">Consumption</string>
@@ -284,6 +283,7 @@
     <string name="koil_pdb_first_base">Baseline</string>
     <string name="koil_pdb_view_detail">View</string>
     <string name="koil_pdb_incomplete">%1$d province(s) incomplete</string>
+    <string name="koil_pdb_seeding">Seeding in background, will refresh automatically</string>
     <string name="koil_set_price_push">Price change notifications</string>
     <string name="koil_set_price_push_sub">System notification on adjustment &amp; day before window</string>
     <string name="koil_noti_title_price_adjust">Oil price adjusted</string>

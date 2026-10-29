@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -99,6 +100,17 @@ class SettingsViewModel(
     private val locationHelper: LocationHelper,
     private val context: Context,
 ) : ViewModel() {
+
+    init {
+        // v1.5.24：库行数变化（后台补全国/立即更新写库）时自动刷新缺口统计，
+        // 解决"重装后自动补灌完成但设置页缺口停留旧快照"的问题；
+        // loadPriceDbStatus 只读不写库，无循环风险
+        viewModelScope.launch {
+            priceDao.observeCount()
+                .distinctUntilChanged()
+                .collect { loadPriceDbStatus() }
+        }
+    }
 
     private val _exportMessage = MutableStateFlow(ExportNotice())
     val exportMessage: StateFlow<ExportNotice> = _exportMessage.asStateFlow()

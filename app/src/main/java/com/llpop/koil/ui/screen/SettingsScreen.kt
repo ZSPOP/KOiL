@@ -431,6 +431,13 @@ fun SettingsScreen(
                         fontSize = 12.sp,
                         color = Color(0xFFE53935),
                     )
+                    // v1.5.24：缺口存在即提示后台补灌中（补完缺口归零、文案自动消失）
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = stringResource(R.string.koil_pdb_seeding),
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
 

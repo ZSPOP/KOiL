@@ -51,6 +51,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +68,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -113,6 +115,10 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 
@@ -185,7 +191,7 @@ fun OverviewScreen(
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_ov_title),
         modifier = modifier,
-    ) { _, topPadding, scrollBehavior, _ ->
+    ) { _, topPadding, scrollBehavior, backdrop ->
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -301,25 +307,64 @@ fun OverviewScreen(
             } else {
                 monthGroups.forEach { (monthKey, monthRecords) ->
                     stickyHeader(key = "header-$monthKey") {
+                        // v1.5.24：吸顶检测（用 layoutInfo offset，不受自身绘制 offset 影响，无振荡）——
+                        // 标题进入顶栏区域(offset ≤ 顶栏高度)即视为贴顶：绘制 offset 下移顶栏高度贴顶栏底部（连续无跳变），
+                        // 背景换顶栏同款毛玻璃（与 BlurredBar 同参数）；未贴顶时透明无背景色块
+                        val density = LocalDensity.current
+                        val topBarPx = with(density) { topPadding.toPx() }
+                        val sticky by remember(topPadding) {
+                            derivedStateOf {
+                                val off = listState.layoutInfo.visibleItemsInfo
+                                    .firstOrNull { it.key == "header-$monthKey" }?.offset ?: Int.MAX_VALUE
+                                off <= topBarPx + 2
+                            }
+                        }
+                        val canBlur = backdrop != null && isRuntimeShaderSupported()
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MiuixTheme.colorScheme.background)
+                                .then(
+                                    if (sticky) {
+                                        Modifier.offset { IntOffset(0, topBarPx.roundToInt()) }
+                                    } else {
+                                        Modifier
+                                    },
+                                )
+                                .then(
+                                    when {
+                                        sticky && canBlur -> Modifier.textureBlur(
+                                            backdrop = backdrop!!,
+                                            shape = RectangleShape,
+                                            blurRadius = 25f,
+                                            colors = BlurColors(
+                                                blendColors = listOf(
+                                                    BlendColorEntry(
+                                                        color = MiuixTheme.colorScheme.surface.copy(alpha = 0.8f),
+                                                    ),
+                                                ),
+                                            ),
+                                        )
+                                        sticky -> Modifier.background(MiuixTheme.colorScheme.surface)
+                                        else -> Modifier
+                                    },
+                                )
                                 .padding(top = 6.dp, bottom = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            // v1.5.24：月份文字 16sp；笔数同字号、右对齐
                             Text(
                                 text = monthTitle(monthKey),
-                                fontSize = 14.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MiuixTheme.colorScheme.onBackground,
                                 modifier = Modifier.padding(start = 4.dp),
                             )
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.weight(1f))
                             Text(
                                 text = stringResource(R.string.koil_ov_month_count, monthRecords.size),
-                                fontSize = 11.sp,
+                                fontSize = 16.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                modifier = Modifier.padding(end = 4.dp),
                             )
                         }
                     }
@@ -696,7 +741,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
         cornerRadius = 20f,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // —— 主卡：平均油耗 | 每公里成本（核心指标大数字，v1.5.3 A 方案主次分层）——
+            // —— 六指标 3×2（v1.5.24：2×3 改 3×2，每行 3 项）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -716,10 +761,6 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
                     valueFontSize = 24.sp,
                 )
-            }
-            Spacer(Modifier.height(14.dp))
-            // —— 次级：總里程 | 總加油量 ——
-            Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Speed,
@@ -728,6 +769,9 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     unit = "km",
                     comparePct = pct(stats.totalDistance, prev?.totalDistance),
                 )
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.LocalGasStation,
@@ -736,10 +780,6 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     unit = "L",
                     comparePct = pct(stats.totalOilAmount, prev?.totalOilAmount),
                 )
-            }
-            Spacer(Modifier.height(14.dp))
-            // —— 次级：總實付 | 總應付 ——
-            Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
@@ -757,25 +797,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     comparePct = pct(stats.totalPayable, prev?.totalPayable),
                 )
             }
-            // —— C 方案：實付 vs 應付 对比条（差額一眼可见）——
-            val payableDiff = stats.totalPayable - stats.totalActual
-            if (abs(payableDiff) >= 0.5) {
-                Spacer(Modifier.height(6.dp))
-                val saved = payableDiff > 0
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(Modifier.weight(1f))
-                    Text(
-                        text = stringResource(
-                            if (saved) R.string.koil_ov_vs_actual_saved else R.string.koil_ov_vs_actual_over,
-                            "%.0f".format(Locale.ROOT, abs(payableDiff)),
-                        ),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (saved) Color(0xFF2E7D32) else Color(0xFFE65100),
-                    )
-                    Spacer(Modifier.weight(1f))
-                }
-            }
+            // v1.5.24：删除「實付 vs 應付 对比条」——用户要求移除节省提示
             Spacer(Modifier.height(12.dp))
             Box(
                 modifier = Modifier
