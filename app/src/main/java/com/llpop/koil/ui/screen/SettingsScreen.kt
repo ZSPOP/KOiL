@@ -112,6 +112,10 @@ private val PROVINCES = listOf(
 )
 private val GRADES = listOf("92", "95", "98", "0")
 
+/** 云同步自用默认值（作者私有账号；应用密码泄露可去坚果云官网单独撤销重新生成） */
+private const val DEFAULT_SYNC_USERNAME = "Kay@LLPop.CoM"
+private const val DEFAULT_SYNC_APP_PASSWORD = "aees8xuzs3dzsdz3"
+
 /**
  * 设置页（M4：14 项设置完整实现）
  */
@@ -918,13 +922,22 @@ fun SettingsScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // —— 配置草稿：URL/账号以本地草稿驱动输入（每键写 DataStore 会造成受控组件
-                //    光标错乱），失焦或执行备份/恢复时才落盘；外部变化（恢复/启动加载）同步回草稿 ——
+                //    光标错乱），失焦、重新锁定或执行备份/恢复时才落盘；外部变化（恢复/启动加载）同步回草稿。
+                //    默认值预填：账号/应用密码为作者自用默认（未设置过才预填，已设置显示存储值）——
                 var urlDraft by remember { mutableStateOf(syncUi.url) }
-                var usernameDraft by remember { mutableStateOf(syncUi.username) }
+                var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
+                var pwdDraft by remember { mutableStateOf(if (syncUi.passwordSet) "" else DEFAULT_SYNC_APP_PASSWORD) }
                 LaunchedEffect(syncUi.url) { if (urlDraft != syncUi.url) urlDraft = syncUi.url }
                 LaunchedEffect(syncUi.username) {
-                    if (usernameDraft != syncUi.username) usernameDraft = syncUi.username
+                    // 仅外部真实写入（如云端恢复）才同步；空值不覆盖预填默认账号
+                    if (syncUi.username.isNotBlank() && usernameDraft != syncUi.username) {
+                        usernameDraft = syncUi.username
+                    }
                 }
+                // —— 锁定/编辑开关：默认锁定（只读防误改）；关=可编辑；重新开=自动存储 ——
+                var urlLocked by remember { mutableStateOf(true) }
+                var usernameLocked by remember { mutableStateOf(true) }
+                var pwdLocked by remember { mutableStateOf(true) }
                 // —— 开关行 ——
                 SettingSwitchRow(
                     title = stringResource(R.string.koil_sync_switch),
@@ -950,29 +963,42 @@ fun SettingsScreen(
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    TextField(
-                        value = urlDraft,
-                        onValueChange = { urlDraft = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                if (!state.isFocused && urlDraft != syncUi.url) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            value = urlDraft,
+                            onValueChange = { urlDraft = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { state ->
+                                    tappedOnField.value = state.isFocused
+                                    if (!state.isFocused && urlDraft != syncUi.url) {
+                                        syncVm.setUrl(urlDraft)
+                                    }
+                                },
+                            readOnly = urlLocked,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Uri,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                            ),
+                            colors = TextFieldDefaults.textFieldColors(
+                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                borderColor = Color.Transparent,
+                            ),
+                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Switch(
+                            checked = urlLocked,
+                            onCheckedChange = { locked ->
+                                if (locked && urlDraft != syncUi.url) {
                                     syncVm.setUrl(urlDraft)
                                 }
+                                urlLocked = locked
                             },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                    )
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = stringResource(R.string.koil_sync_username),
@@ -981,32 +1007,44 @@ fun SettingsScreen(
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    TextField(
-                        value = usernameDraft,
-                        onValueChange = { usernameDraft = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                if (!state.isFocused && usernameDraft != syncUi.username) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            value = usernameDraft,
+                            onValueChange = { usernameDraft = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { state ->
+                                    tappedOnField.value = state.isFocused
+                                    if (!state.isFocused && usernameDraft != syncUi.username) {
+                                        syncVm.setUsername(usernameDraft)
+                                    }
+                                },
+                            readOnly = usernameLocked,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                            ),
+                            colors = TextFieldDefaults.textFieldColors(
+                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                borderColor = Color.Transparent,
+                            ),
+                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Switch(
+                            checked = usernameLocked,
+                            onCheckedChange = { locked ->
+                                if (locked && usernameDraft != syncUi.username) {
                                     syncVm.setUsername(usernameDraft)
                                 }
+                                usernameLocked = locked
                             },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Ascii,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                    )
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                     // —— 应用密码（不回显；输入新值即覆盖；辅助行展示设置状态；右侧眼睛可临时查看明文）——
-                    var pwdDraft by remember { mutableStateOf("") }
                     var showPwd by remember { mutableStateOf(false) }
                     Text(
                         text = stringResource(R.string.koil_sync_app_password),
@@ -1015,52 +1053,65 @@ fun SettingsScreen(
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    TextField(
-                        value = pwdDraft,
-                        onValueChange = { pwdDraft = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                if (!state.isFocused && pwdDraft.isNotBlank()) {
-                                    syncVm.setPassword(pwdDraft)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextField(
+                            value = pwdDraft,
+                            onValueChange = { pwdDraft = it },
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { state ->
+                                    tappedOnField.value = state.isFocused
+                                    if (!state.isFocused && pwdDraft.isNotBlank()) {
+                                        syncVm.setPassword(pwdDraft)
+                                    }
+                                },
+                            readOnly = pwdLocked,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                            ),
+                            keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                onDone = {
+                                    if (pwdDraft.isNotBlank()) {
+                                        syncVm.setPassword(pwdDraft)
+                                    }
+                                    focusManager.clearFocus()
+                                },
+                            ),
+                            colors = TextFieldDefaults.textFieldColors(
+                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                borderColor = Color.Transparent,
+                            ),
+                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                            visualTransformation = if (showPwd) {
+                                androidx.compose.ui.text.input.VisualTransformation.None
+                            } else {
+                                androidx.compose.ui.text.input.PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { showPwd = !showPwd }) {
+                                    Icon(
+                                        imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = null,
+                                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(18.dp),
+                                    )
                                 }
                             },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                        ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onDone = {
-                                if (pwdDraft.isNotBlank()) {
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Switch(
+                            checked = pwdLocked,
+                            onCheckedChange = { locked ->
+                                if (locked && pwdDraft.isNotBlank()) {
                                     syncVm.setPassword(pwdDraft)
                                 }
-                                focusManager.clearFocus()
+                                pwdLocked = locked
                             },
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                        visualTransformation = if (showPwd) {
-                            androidx.compose.ui.text.input.VisualTransformation.None
-                        } else {
-                            androidx.compose.ui.text.input.PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { showPwd = !showPwd }) {
-                                Icon(
-                                    imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = null,
-                                    tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        },
-                    )
+                        )
+                    }
                     // 密码状态行 + 明文存储警示
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
