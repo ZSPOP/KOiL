@@ -986,6 +986,14 @@ fun SettingsScreen(
                                 }
                             },
                         readOnly = urlLocked,
+                        // v1.5.44 补丁：miuix 的 labelColor 不作用于输入文字，锁定态用 textStyle 强制暗色（整体禁用观感）
+                        textStyle = TextStyle(
+                            color = if (urlLocked) {
+                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
+                            } else {
+                                MiuixTheme.colorScheme.onBackground
+                            },
+                        ),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
@@ -1040,6 +1048,14 @@ fun SettingsScreen(
                                 }
                             },
                         readOnly = usernameLocked,
+                        // v1.5.44 补丁：锁定态用 textStyle 强制暗色文字（labelColor 不作用于输入文字）
+                        textStyle = TextStyle(
+                            color = if (usernameLocked) {
+                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
+                            } else {
+                                MiuixTheme.colorScheme.onBackground
+                            },
+                        ),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Ascii,
@@ -1096,6 +1112,14 @@ fun SettingsScreen(
                                 }
                             },
                         readOnly = pwdLocked,
+                        // v1.5.44 补丁：锁定态用 textStyle 强制暗色文字（labelColor 不作用于输入文字）
+                        textStyle = TextStyle(
+                            color = if (pwdLocked) {
+                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
+                            } else {
+                                MiuixTheme.colorScheme.onBackground
+                            },
+                        ),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,

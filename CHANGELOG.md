@@ -1,5 +1,15 @@
 # KOiL CHANGELOG
 
+## v1.5.45（versionCode 245）— 2026-10-30（基于 v1.5.44，修复锁定态输入框文字仍白色 + 云同步副标题文案）
+
+> ① **修复锁定态（开关开=只读）输入框文字仍为白色**：v1.5.44 改 `TextFieldColors.labelColor` 无效——
+>    反编译确认 miuix TextField 的 labelColor 不作用于输入文字（输入文字样式来自 TextStyles.main），
+>    改用 **`textStyle` 参数直接传 TextStyle 颜色**：锁定态 `onBackground 30%` 暗灰（灰底+暗字+只读，
+>    整体呈"禁止编辑"的禁用观感），非锁定态 `onBackground` 正常色；三处输入框（URL/账号/密码）同改；
+> ② 云端同步副标题文案由「自动备份加油记录与设置到你的 WebDAV 云端」改为
+>    **「自动备份加油记录到 WebDAV 云端」**（简中/繁中/英文三语同步，与 v1.5.44 仅同步记录口径一致）。
+> 不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.44（versionCode 244）— 2026-10-30（基于 v1.5.43，云同步只备份加油记录 + 恢复按钮/弹窗/锁定色修复）
 
 > ① 同步范围收窄为**仅加油记录**：`BackupCodec.buildBackup` 不再输出 settings 块；

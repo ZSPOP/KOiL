@@ -333,7 +333,7 @@
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_sync_section">云同步</string>
     <string name="koil_sync_switch">云同步</string>
-    <string name="koil_sync_switch_sub">自动备份加油记录与设置到你的 WebDAV 网盘</string>
+    <string name="koil_sync_switch_sub">自动备份加油记录到 WebDAV 云端</string>
     <string name="koil_sync_url">WebDAV 地址</string>
     <string name="koil_sync_username">账号</string>
     <string name="koil_sync_app_password">应用密码</string>

@@ -334,7 +334,7 @@
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_sync_section">Cloud Sync</string>
     <string name="koil_sync_switch">Cloud Sync</string>
-    <string name="koil_sync_switch_sub">Auto-backup records &amp; settings to your WebDAV drive</string>
+    <string name="koil_sync_switch_sub">Auto-backup fuel records to your WebDAV drive</string>
     <string name="koil_sync_url">WebDAV URL</string>
     <string name="koil_sync_username">Account</string>
     <string name="koil_sync_app_password">App Password</string>
