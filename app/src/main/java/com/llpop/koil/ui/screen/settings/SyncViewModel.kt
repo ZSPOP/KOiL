@@ -67,13 +67,24 @@ class SyncViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SyncUiState())
 
-    fun setEnabled(on: Boolean) {
+    /** 开关切换。打开 = 立即同步：先落盘草稿（含默认值）→ 空库自动恢复 / 非空库立即推送 */
+    fun setEnabled(
+        on: Boolean,
+        urlDraft: String? = null,
+        usernameDraft: String? = null,
+        passwordDraft: String? = null,
+    ) {
+        if (_busy.value) return
         viewModelScope.launch {
             settings.setSyncEnabled(on)
             if (on) {
-                // 开启且本地空库 → 立即自动恢复（对齐 CloudSyncManager.startupCheck 语义）
+                persistDrafts(urlDraft, usernameDraft, passwordDraft)
                 if (recordDao.count() == 0 && manager.isConfigured()) {
+                    // 新机/空库：从云端全量恢复
                     restoreNow()
+                } else if (recordDao.count() > 0 && manager.isConfigured()) {
+                    // 非空库：本地权威 → 立即推送到云端（镜像本地）
+                    manager.pushNow(force = true)
                 }
             }
         }

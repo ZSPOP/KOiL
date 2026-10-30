@@ -334,15 +334,14 @@
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_sync_section">Cloud Sync</string>
     <string name="koil_sync_switch">Cloud Sync</string>
-    <string name="koil_sync_switch_sub">Auto-backup records &amp; settings to your WebDAV drive (Jianguoyun)</string>
+    <string name="koil_sync_switch_sub">Auto-backup records &amp; settings to your WebDAV drive</string>
     <string name="koil_sync_url">WebDAV URL</string>
     <string name="koil_sync_username">Account</string>
     <string name="koil_sync_app_password">App Password</string>
-    <string name="koil_sync_app_password_unset">Not set (get one at Jianguoyun "Security Options")</string>
+    <string name="koil_sync_app_password_unset">Not set</string>
     <string name="koil_sync_app_password_set">Set — enter a new value to change</string>
     <string name="koil_sync_password_plain_warn">App password stored unencrypted (Keystore unavailable)</string>
     <string name="koil_sync_password_clear">Clear</string>
-    <string name="koil_sync_help">Jianguoyun → Security Options → App Password; revoke anytime if leaked</string>
     <string name="koil_sync_backup_now">Backup Now</string>
     <string name="koil_sync_restore">Restore</string>
     <string name="koil_sync_status_not_configured">Incomplete: fill in URL, account and app password</string>

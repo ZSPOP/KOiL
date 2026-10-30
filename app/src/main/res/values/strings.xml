@@ -333,15 +333,14 @@
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_sync_section">云同步</string>
     <string name="koil_sync_switch">云同步</string>
-    <string name="koil_sync_switch_sub">自动备份加油记录与设置到你的 WebDAV 网盘（坚果云）</string>
+    <string name="koil_sync_switch_sub">自动备份加油记录与设置到你的 WebDAV 网盘</string>
     <string name="koil_sync_url">WebDAV 地址</string>
     <string name="koil_sync_username">账号</string>
     <string name="koil_sync_app_password">应用密码</string>
-    <string name="koil_sync_app_password_unset">未设置（坚果云官网「安全选项」申请）</string>
+    <string name="koil_sync_app_password_unset">未设置</string>
     <string name="koil_sync_app_password_set">已设置，输入新值以修改</string>
     <string name="koil_sync_password_plain_warn">应用密码未加密存储（设备不支持 Keystore）</string>
     <string name="koil_sync_password_clear">清除</string>
-    <string name="koil_sync_help">坚果云 → 安全选项 → 应用密码；泄露可在官网单独撤销</string>
     <string name="koil_sync_backup_now">立即备份</string>
     <string name="koil_sync_restore">从云端恢复</string>
     <string name="koil_sync_status_not_configured">未配置完整：填齐地址、账号与应用密码后生效</string>
