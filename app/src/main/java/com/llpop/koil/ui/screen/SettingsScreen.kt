@@ -34,7 +34,9 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import top.yukonga.miuix.kmp.basic.IconButton
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
@@ -808,6 +810,7 @@ fun SettingsScreen(
                     // 开关开 = 用 EIA → 隐藏输入框（防误改）；开关关 = 用腾讯 → 显示输入框供修改
                     if (!eiaEnabled) {
                         Spacer(Modifier.height(8.dp))
+                        var showEiaKey by remember { mutableStateOf(false) }
                         TextField(
                             value = eiaKey,
                             onValueChange = { viewModel.setEiaApiKey(it) },
@@ -823,6 +826,21 @@ fun SettingsScreen(
                                 borderColor = Color.Transparent,
                             ),
                             cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                            visualTransformation = if (showEiaKey) {
+                                androidx.compose.ui.text.input.VisualTransformation.None
+                            } else {
+                                androidx.compose.ui.text.input.PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { showEiaKey = !showEiaKey }) {
+                                    Icon(
+                                        imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = null,
+                                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            },
                         )
                     }
                 }
@@ -987,8 +1005,9 @@ fun SettingsScreen(
                         cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
                     )
                     Spacer(Modifier.height(10.dp))
-                    // —— 应用密码（不回显；输入新值即覆盖；辅助行展示设置状态）——
+                    // —— 应用密码（不回显；输入新值即覆盖；辅助行展示设置状态；右侧眼睛可临时查看明文）——
                     var pwdDraft by remember { mutableStateOf("") }
+                    var showPwd by remember { mutableStateOf(false) }
                     Text(
                         text = stringResource(R.string.koil_sync_app_password),
                         fontSize = 14.sp,
@@ -1016,7 +1035,6 @@ fun SettingsScreen(
                             onDone = {
                                 if (pwdDraft.isNotBlank()) {
                                     syncVm.setPassword(pwdDraft)
-                                    pwdDraft = ""
                                 }
                                 focusManager.clearFocus()
                             },
@@ -1027,7 +1045,21 @@ fun SettingsScreen(
                             borderColor = Color.Transparent,
                         ),
                         cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        visualTransformation = if (showPwd) {
+                            androidx.compose.ui.text.input.VisualTransformation.None
+                        } else {
+                            androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { showPwd = !showPwd }) {
+                                Icon(
+                                    imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = null,
+                                    tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        },
                     )
                     // 密码状态行 + 明文存储警示
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1050,7 +1082,10 @@ fun SettingsScreen(
                                 color = KOiLColors.Primary,
                                 modifier = Modifier
                                     .padding(top = 4.dp, start = 8.dp)
-                                    .clickable { syncVm.clearPassword() },
+                                    .clickable {
+                                        syncVm.clearPassword()
+                                        pwdDraft = ""
+                                    },
                             )
                         }
                     }
@@ -1071,9 +1106,7 @@ fun SettingsScreen(
                             .clip(RoundedCornerShape(18.dp))
                             .background(MiuixTheme.colorScheme.secondaryContainer)
                             .clickable(enabled = !syncUi.busy) {
-                                val pwd = pwdDraft
-                                if (pwd.isNotBlank()) pwdDraft = ""
-                                syncVm.saveAndTest(urlDraft, usernameDraft, pwd)
+                                syncVm.saveAndTest(urlDraft, usernameDraft, pwdDraft)
                             }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -1104,9 +1137,7 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(KOiLColors.Primary)
                                 .clickable(enabled = !syncUi.busy) {
-                                    val pwd = pwdDraft
-                                    if (pwd.isNotBlank()) pwdDraft = ""
-                                    syncVm.backupNow(urlDraft, usernameDraft, pwd)
+                                    syncVm.backupNow(urlDraft, usernameDraft, pwdDraft)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
