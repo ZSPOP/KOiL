@@ -1,7 +1,7 @@
 # KOiL 云同步设计（坚果云 WebDAV · 私有数据备份/恢复）
 
-> 设计基线：v1.5.36（2026-10-30），本文档为功能设计稿，未实现。
-> 目标：为加油记录与用户设置提供「作者自用级」云端备份/恢复，不引入付费依赖、不引入第三方 SDK。
+> 设计基线：v1.5.36（2026-10-30）；v1.5.44 起同步范围收窄为**仅加油记录**（设置不再随云同步备份/恢复，详见 §3.2）。
+> 目标：为加油记录提供「作者自用级」云端备份/恢复，不引入付费依赖、不引入第三方 SDK。
 
 ---
 
@@ -29,9 +29,9 @@
 
 ```
                     ┌─────────────────────────────┐
-  本地 Room/DataStore │                             │   坚果云 WebDAV
-  koil_record         │  CloudSyncManager           │   dav.jianguoyun.com/dav/KOiL/
-  KOiL_settings       │   · 变更订阅 → 全量快照 PUT  │──►  koil_backup.json（固定名）
+  本地 Room          │                             │   坚果云 WebDAV
+  koil_record        │  CloudSyncManager           │   dav.jianguoyun.com/dav/KOiL/
+                    │   · 记录变更 → 全量快照 PUT   │──►  koil_backup.json（固定名）
                     │   · 首次/手动 → GET + 恢复合并 │◄──  （云端永远是最新镜像）
                     └─────────────────────────────┘
 ```
@@ -57,14 +57,12 @@
 - 存储语义：**以 `(reoilDate, mileage)` 唯一索引为合并键**（与 CSV 导入、补录校验同一把尺子），`id` 不跨设备传递。
 - 派生字段（distance/oilDays/consumption/costPerKm）随快照保留（与现有备份一致），恢复后不依赖它们，本地派生计算会自动重算。
 
-### 3.2 设置字段（在现有 11 项基础上扩展 2 项）
+### 3.2 设置不参与同步（v1.5.44 起）
 
-| 现有字段（exportBackup 已含） | 云同步新增 |
-|---|---|
-| themeMode / language / defaultProvince / defaultGrade / tankCapacity / keepLastGrade / abnormalThreshold / deviationThreshold / priceAlert / locationEnabled / priceDbAutoUpdate | **eiaEnabled / eiaApiKey**（用户私有注册 Key，应随备份迁移） |
-
-- 兼容：`importBackup` 用 `optString/optDouble` 解析，**未知字段自动忽略、缺失字段保持本地默认** → 新增字段对旧备份文件天然向后兼容。
-- 同步**不包含**：派生状态键（窗口日历、lastChecked、通知去重戳等）——可重建，避免新设备被旧派生状态污染。
+- 云同步**仅备份加油记录**；用户设置（themeMode / language / 默认地区 / 油价库开关 / EIA Key 等 13 项）**不随云端备份/恢复**，各设备本地独立。
+- 理由（用户决策）：设置属个人偏好，换机重配一次成本低；EIA Key 等私有凭据不随源码包外的云端文件流转，降低泄露面。
+- 旧版云端文件（含 `settings` 块）恢复时**忽略该块**，不写回本地（向后兼容：`parseRecords` 只读 records，旧文件仍可正常恢复记录）。
+- 手动备份（§7.10 `exportBackup`）保持原行为（记录 + 设置），与云同步范围解耦。
 
 ### 3.3 快照信封（version 2 扩展，向后兼容）
 
@@ -74,13 +72,12 @@
   "exportTime": "2026-10-30 10:00:00",
   "recordCount": 128,
   "records": [...],
-  "settings": {...},
-  "meta": { "appVersion": "1.5.36", "deviceName": "" }
+  "meta": { "appVersion": "1.5.44", "deviceName": "" }
 }
 ```
 
-- version 1（现有手动备份）→ 2：仅增加 `meta` 块，records/settings 结构不变；`importBackup` 不感知 meta，**新旧互读**。
-- 手动备份（Download/KOiL/KOiL_完整备份_*.json）与云端快照格式**统一为同一种**，`importBackup` 双向可恢复。
+- version 1（现有手动备份）→ 2：仅增加 `meta` 块，records 结构不变；`importBackup` 不感知 meta，**新旧互读**。
+- 云端快照不含 `settings` 块（v1.5.44 起）；读取含 `settings` 块的旧文件时忽略该块。
 
 ---
 
@@ -115,15 +112,14 @@
 ### 5.2 拉取恢复：仅两条受控路径（避免"删除复活"）
 | 路径 | 触发 | 合并策略 |
 |---|---|---|
-| **A. 首次自动恢复** | 开启同步 且 本地记录数 == 0 | 直接 `insertAllIgnore` 全量入库 + 应用 settings |
+| **A. 首次自动恢复** | 开启同步 且 本地记录数 == 0 | 直接 `insertAllIgnore` 全量入库（设置不同步，不写回） |
 | **B. 手动「从云端恢复」** | 设置页按钮 | 本地记录数==0 → 同 A；本地有数据 → **预览式合并**（复用 CSV 导入四分组：valid/duplicate/mileage_conflict/error），用户确认后 `insertAllIgnore`（IGNORE 命中唯一索引防重，**不删本地**） |
 
 - **不做**「每次启动自动合并拉取」：本地删掉的记录会被云端旧快照复活（备份不含删除墓碑）。这是刻意的取舍，文档明确。
 - 合并键冲突（同日同里程但数值不同）：归入 mileage_conflict 组，人工确认，不自动覆盖——沿用 CSV 导入的判定逻辑（`MileageKey` TreeSet 二分，v1.5.20）。
 
-### 5.3 设置应用规则
-- 恢复时 settings 整体应用（themeMode 等），**恢复后本地为新权威**，下次变更即推。
-- 只应用上述 13 项，派生状态键不恢复。
+### 5.3 设置应用规则（v1.5.44 起不再适用）
+- 恢复**不应用**云端设置（settings 块忽略），各设备设置保持本地独立。
 
 ---
 
@@ -136,7 +132,7 @@ recordDao.observeAll()
   .distinctUntilChanged()
   → 同步开启 && 上次推送 >30s → 生成快照 PUT（协程 IO，失败静默记状态）
 ```
-- 订阅点在 `CloudSyncManager`（App 级单例，Koin），**不改 AddViewModel/Overview 任何录入逻辑**；设置项变更（setDefaultProvince 等）在 `AppSettings` setter 里统一调 `schedulePush()`（轻量，防抖复用）。
+- 订阅点在 `CloudSyncManager`（App 级单例，Koin），**不改 AddViewModel/Overview 任何录入逻辑**；设置项变更**不触发**推送（v1.5.44 起设置不同步）。
 
 ### 6.2 启动链路（KOiLApplication，对齐现有启动链）
 1. 同步开启？→ 读云端快照 `meta.exportTime` vs 本地 `KOiL-sync-last-push-at`：
@@ -189,7 +185,7 @@ recordDao.observeAll()
 |---|---|
 | `di/AppModule.kt` | 注册 `singleOf(::WebDavClient)`、`singleOf(::CloudSyncManager)`、`viewModelOf(::SyncViewModel)` |
 | `KOiLApplication.kt` | 启动链加「云同步首拉/状态刷新」（对齐 §6.2） |
-| `data/settings/AppSettings.kt` | 新增键：`KOiL-sync-enabled` / `-url` / `-username` / `-app-password`（密文）/ `-last-push-at` / `-last-status`；setter 触发 schedulePush 钩子 |
+| `data/settings/AppSettings.kt` | 新增键：`KOiL-sync-enabled` / `-url` / `-username` / `-app-password`（密文）/ `-last-push-at` / `-last-status`（设置业务项不触发同步推送） |
 | `ui/screen/settings/SettingsScreen.kt` | 新增云同步区块（沿用区块/分隔线/下拉组件样式） |
 | `strings.xml` + `values-en` + `values-zh-rTW` | 三语 key |
 | `SettingsViewModel.kt` | `exportBackup`/`importBackup` 改用 `BackupCodec`（行为不变，防重复实现）；恢复逻辑增加「合并预览」入口复用 |
@@ -220,7 +216,7 @@ recordDao.observeAll()
 
 1. 设置页可配置 WebDAV（URL/账号/应用密码），三语完整。
 2. 开启同步后，录入/编辑/删除任一记录 → 5s 内自动推送云端（可抓包或查状态行验证）。
-3. 新设备（本地空库）开启同步 → 自动拉取恢复：记录数、设置项与云端一致。
+3. 新设备（本地空库）开启同步 → 自动拉取恢复：记录数与云端一致（设置不随同步）。
 4. 手动「从云端恢复」：本地有数据时走预览合并，无删除复活、无重复插入。
 5. 断网/密码错误：App 正常使用，状态行提示失败，恢复网络后自动重试成功。
 6. 油价库不随同步（新设备联网自动重建，行为与现状一致）。

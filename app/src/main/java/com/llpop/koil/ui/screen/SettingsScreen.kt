@@ -998,7 +998,8 @@ fun SettingsScreen(
                                 MiuixTheme.colorScheme.secondaryContainer
                             },
                             labelColor = if (urlLocked) {
-                                MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f)
+                                // v1.5.44：锁定态文字用暗化禁用色（原 onBackgroundVariant 45% 仍偏白）
+                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
                             } else {
                                 MiuixTheme.colorScheme.onSecondaryContainer
                             },
@@ -1051,7 +1052,8 @@ fun SettingsScreen(
                                 MiuixTheme.colorScheme.secondaryContainer
                             },
                             labelColor = if (usernameLocked) {
-                                MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f)
+                                // v1.5.44：锁定态文字用暗化禁用色（原 onBackgroundVariant 45% 仍偏白）
+                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
                             } else {
                                 MiuixTheme.colorScheme.onSecondaryContainer
                             },
@@ -1114,7 +1116,8 @@ fun SettingsScreen(
                                 MiuixTheme.colorScheme.secondaryContainer
                             },
                             labelColor = if (pwdLocked) {
-                                MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f)
+                                // v1.5.44：锁定态文字用暗化禁用色（原 onBackgroundVariant 45% 仍偏白）
+                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
                             } else {
                                 MiuixTheme.colorScheme.onSecondaryContainer
                             },
@@ -1233,9 +1236,8 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(KOiLColors.Primary)
                                 .clickable(enabled = !syncUi.busy) {
-                                    val pwd = pwdDraft
-                                    if (pwd.isNotBlank()) pwdDraft = ""
-                                    syncVm.restoreNow(urlDraft, usernameDraft, pwd)
+                                    // 恢复后保留密码草稿（不再清空，避免误以为未填）
+                                    syncVm.restoreNow(urlDraft, usernameDraft, pwdDraft)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
@@ -1321,14 +1323,16 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth()) {
+                        // v1.5.44：去掉固定 40dp 高度——miuix Button 自带 13dp 垂直内边距，
+                        // 固定高度会挤掉文字上下（内容区仅 14dp < 13sp 文字行高）导致文字下缘被裁
                         Button(
                             onClick = syncVm::dismissRestorePreview,
-                            modifier = Modifier.weight(1f).height(40.dp),
+                            modifier = Modifier.weight(1f),
                         ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
                         Spacer(Modifier.width(10.dp))
                         Button(
                             onClick = syncVm::confirmRestore,
-                            modifier = Modifier.weight(1f).height(40.dp),
+                            modifier = Modifier.weight(1f),
                         ) {
                             Text(
                                 stringResource(R.string.koil_sync_restore_confirm, preview.valid),
@@ -1469,9 +1473,10 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f).height(40.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    // v1.5.44：与恢复弹窗同修——去掉固定 40dp 高度，防文字下缘被裁
+                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
                     Spacer(Modifier.width(10.dp))
-                    Button(onClick = viewModel::confirmImport, modifier = Modifier.weight(1f).height(40.dp)) {
+                    Button(onClick = viewModel::confirmImport, modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.koil_import_confirm, preview.valid.size), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                 }

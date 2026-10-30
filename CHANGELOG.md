@@ -1,5 +1,18 @@
 # KOiL CHANGELOG
 
+## v1.5.44（versionCode 244）— 2026-10-30（基于 v1.5.43，云同步只备份加油记录 + 恢复按钮/弹窗/锁定色修复）
+
+> ① 同步范围收窄为**仅加油记录**：`BackupCodec.buildBackup` 不再输出 settings 块；
+>    `CloudSyncManager` 删除设置变更订阅/collectSettingsMap/applySettingsMap/RestoreResult.settings；
+>    从云端恢复不再写回任何设置，旧云端文件里的 settings 块恢复时忽略（向后兼容，记录照常恢复）；
+>    设计文档 §3.2/架构图/恢复路径/触发/验收同步更新；手动备份（记录+设置）保持原样与云同步解耦；
+> ② 修复「从云端恢复」按钮遗留清空密码草稿逻辑（v1.5.41 其余按钮已去清空，仅此按钮漏网）——恢复后保留密码掩码草稿；
+> ③ 修复恢复确认弹窗/CSV 导入弹窗按钮文字下缘被裁：miuix Button 自带 13dp 垂直内边距，
+>    原强制 `.height(40.dp)` 致内容区仅 14dp < 13sp 文字行高，去掉固定高度按内容自然撑高；
+> ④ 锁定（开关开=只读）态输入框文字颜色不再偏白：由 onBackgroundVariant 45% 改为 onBackground 30%
+>    （深色主题下呈暗灰禁用观感，与灰化背景匹配）。
+> 不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.43（versionCode 243）— 2026-10-30（基于 v1.5.42，云同步板块对齐规范 + 打开开关即同步）
 
 > 用户 UI 规范 + 同步语义讨论后一起实现：

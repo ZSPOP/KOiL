@@ -12,10 +12,9 @@ import java.util.Locale
 /**
  * 云同步备份编解码（对齐 §7.10 手动备份 JSON 格式，version 1→2 向后兼容）：
  * - records：与 SettingsViewModel.exportBackup 同构（含派生字段，恢复后本地重算覆盖）
- * - settings：13 项用户私有设置（themeMode/language/defaultProvince/defaultGrade/tankCapacity/
- *   keepLastGrade/abnormalThreshold/deviationThreshold/priceAlert/locationEnabled/priceDbAutoUpdate/
- *   eiaEnabled/eiaApiKey）
  * - meta：version 2 新增（appVersion/exportTime），旧文件（version 1）解析时自动忽略
+ * - 同步范围：仅加油记录（v1.5.44 起设置不再随云同步备份/恢复；旧文件里的 settings 块
+ *   恢复时忽略，不写回本地）
  *
  * 解析兼容性：org.json 的 opt* 系列——未知字段忽略、缺失字段给默认值，新旧互读。
  */
@@ -54,9 +53,9 @@ object BackupCodec {
 
     /**
      * 生成完整备份 JSON（records 按 reoilDate 升序，含派生字段 distance/oilDays/oilConsumption/costPerKm）。
-     * settingsMap：键 = 设置字段名，值 = 原始类型（String/Double/Boolean/Float）。
+     * 仅含加油记录，不含设置（云同步范围 = 记录数据）。
      */
-    fun buildBackup(records: List<KOiLRecordEntity>, settingsMap: Map<String, Any?>, appVersion: String): String {
+    fun buildBackup(records: List<KOiLRecordEntity>, appVersion: String): String {
         val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val recordsArr = JSONArray()
         var prev: KOiLRecordEntity? = null
@@ -92,26 +91,11 @@ object BackupCodec {
             prev = r
         }
 
-        val settingsObj = JSONObject()
-        settingsMap.forEach { (k, v) ->
-            when (v) {
-                null -> settingsObj.put(k, JSONObject.NULL)
-                is Double -> settingsObj.put(k, v)
-                is Float -> settingsObj.put(k, v.toDouble())
-                is Int -> settingsObj.put(k, v)
-                is Long -> settingsObj.put(k, v)
-                is Boolean -> settingsObj.put(k, v)
-                is String -> settingsObj.put(k, v)
-                else -> settingsObj.put(k, v.toString())
-            }
-        }
-
         val backup = JSONObject()
             .put("version", BACKUP_VERSION)
             .put("exportTime", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
             .put("recordCount", records.size)
             .put("records", recordsArr)
-            .put("settings", settingsObj)
             .put(
                 "meta", JSONObject()
                     .put("appVersion", appVersion)
@@ -155,22 +139,6 @@ object BackupCodec {
                     source = o.optString("source", "cloud_sync").takeIf { it.isNotEmpty() },
                 )
             )
-        }
-        return out
-    }
-
-    /** 解析备份 JSON 的 settings 对象；无则返回空 map。值类型保持原样（String/Double/Boolean） */
-    fun parseSettings(jsonText: String): Map<String, Any?> {
-        val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: return emptyMap()
-        val s = root.optJSONObject("settings") ?: return emptyMap()
-        val out = mutableMapOf<String, Any?>()
-        for (key in s.keys()) {
-            when (val v = s.opt(key)) {
-                JSONObject.NULL -> out[key] = null
-                is Number -> out[key] = v.toDouble()
-                is Boolean -> out[key] = v
-                else -> out[key] = v?.toString()
-            }
         }
         return out
     }
