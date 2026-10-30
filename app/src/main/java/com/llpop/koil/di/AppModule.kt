@@ -9,11 +9,14 @@ import com.llpop.koil.data.oil.CrudeOilEstimator
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.data.sync.CloudSyncManager
+import com.llpop.koil.data.sync.WebDavClient
 import com.llpop.koil.ui.MainViewModel
 import com.llpop.koil.ui.screen.add.AddViewModel
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
 import com.llpop.koil.ui.screen.settings.OilPriceDetailViewModel
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.ui.screen.settings.SyncViewModel
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.core.module.dsl.singleOf
@@ -25,6 +28,8 @@ val appModule = module {
     singleOf(::OilPriceNetwork)
     singleOf(::CrudeOilEstimator)
     singleOf(::OilPriceDbSyncer)
+    singleOf(::WebDavClient)
+    singleOf(::CloudSyncManager)
 
     single<KOiLRecordDao> { get<AppDatabase>().KOiLRecordDao() }
     single<KOiLPriceDao> { get<AppDatabase>().koilPriceDao() }
@@ -36,4 +41,5 @@ val appModule = module {
     viewModelOf(::OverviewViewModel)
     viewModelOf(::SettingsViewModel)
     viewModelOf(::OilPriceDetailViewModel)
+    viewModelOf(::SyncViewModel)
 }

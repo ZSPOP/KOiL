@@ -110,6 +110,17 @@ class AppSettings(private val context: Context) {
         private val KEY_EIA_API_KEY = stringPreferencesKey("KOiL-eia-api-key")
         private val KEY_EIA_ENABLED = booleanPreferencesKey("KOiL-eia-enabled")
 
+        // ---- 云同步（坚果云 WebDAV：私有数据备份/恢复，见 docs/KOiL云同步设计.md）----
+        private val KEY_SYNC_ENABLED = booleanPreferencesKey("KOiL-sync-enabled")
+        private val KEY_SYNC_URL = stringPreferencesKey("KOiL-sync-url")
+        private val KEY_SYNC_USERNAME = stringPreferencesKey("KOiL-sync-username")
+        // 应用密码：优先 Android Keystore 密文，Keystore 不可用时明文回退（KOiL-sync-password-encrypted=false）
+        private val KEY_SYNC_APP_PASSWORD = stringPreferencesKey("KOiL-sync-app-password")
+        private val KEY_SYNC_PASSWORD_ENCRYPTED = booleanPreferencesKey("KOiL-sync-password-encrypted")
+        private val KEY_SYNC_LAST_PUSH_AT = longPreferencesKey("KOiL-sync-last-push-at")
+        private val KEY_SYNC_LAST_STATUS = stringPreferencesKey("KOiL-sync-last-status")
+        const val DEFAULT_SYNC_URL = "https://dav.jianguoyun.com/dav/KOiL/"
+
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
@@ -422,6 +433,51 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.map { it[KEY_EIA_ENABLED] ?: true }
     suspend fun setEiaEnabled(enabled: Boolean) {
         context.KOiLDataStore.edit { it[KEY_EIA_ENABLED] = enabled }
+    }
+
+    // ---- 云同步（坚果云 WebDAV，docs/KOiL云同步设计.md）----
+    val syncEnabled: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_ENABLED] ?: false }
+    suspend fun setSyncEnabled(enabled: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_ENABLED] = enabled }
+    }
+
+    val syncUrl: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_URL] ?: DEFAULT_SYNC_URL }
+    suspend fun setSyncUrl(url: String) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_URL] = url.trim() }
+    }
+
+    val syncUsername: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_USERNAME] ?: "" }
+    suspend fun setSyncUsername(username: String) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_USERNAME] = username.trim() }
+    }
+
+    /** 应用密码存储值（密文或明文回退，原样返回；是否密文看 syncPasswordEncrypted） */
+    val syncAppPassword: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_APP_PASSWORD] ?: "" }
+    suspend fun setSyncAppPassword(encryptedOrPlain: String) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_APP_PASSWORD] = encryptedOrPlain }
+    }
+
+    val syncPasswordEncrypted: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_PASSWORD_ENCRYPTED] ?: false }
+    suspend fun setSyncPasswordEncrypted(encrypted: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted }
+    }
+
+    val syncLastPushAt: Flow<Long> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_LAST_PUSH_AT] ?: 0L }
+    suspend fun setSyncLastPushAt(at: Long) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_LAST_PUSH_AT] = at }
+    }
+
+    /** 同步状态（"ok@MM-dd HH:mm" / "fail:<原因>" / 空=未同步过），设置页状态行展示 */
+    val syncLastStatus: Flow<String> =
+        context.KOiLDataStore.data.map { it[KEY_SYNC_LAST_STATUS] ?: "" }
+    suspend fun setSyncLastStatus(status: String) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_LAST_STATUS] = status }
     }
 
     /** 异常生效日（不在任何窗口日+1 内的假记录，如"原日期+1"产生的 10-25）是否已一次性清理 */

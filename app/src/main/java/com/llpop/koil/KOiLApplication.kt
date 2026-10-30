@@ -9,6 +9,7 @@ import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceSyncWorker
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.di.appModule
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -106,6 +107,14 @@ class KOiLApplication : Application() {
             } catch (t: Throwable) {
                 Log.e("KOiL", "PriceDb fill remaining failed", t)
             }
+        }
+
+        // 云同步（坚果云 WebDAV，docs/KOiL云同步设计.md）：启动接入——
+        // 空库自动恢复 / 上次失败补推 / 记录与设置变更订阅推送（内部幂等，不影响主流程）
+        appScope.launch {
+            runCatching {
+                GlobalContext.get().get<CloudSyncManager>().init(appScope)
+            }.onFailure { Log.e("KOiL", "CloudSync init failed", it) }
         }
 
         // 油价库每 8 小时自动检测（对齐 Web koil_price_auto_sync；受开关+节流约束）

@@ -331,4 +331,32 @@
     <string name="koil_cal_confirm">確定</string>
     <string name="koil_cal_cancel">取消</string>
 
+    <!-- 雲端同步（堅果雲 WebDAV） -->
+    <string name="koil_sync_section">雲端同步</string>
+    <string name="koil_sync_switch">雲端同步</string>
+    <string name="koil_sync_switch_sub">自動備份加油記錄與設定到你的 WebDAV 雲端（堅果雲）</string>
+    <string name="koil_sync_url">WebDAV 位址</string>
+    <string name="koil_sync_username">帳號</string>
+    <string name="koil_sync_app_password">應用程式密碼</string>
+    <string name="koil_sync_app_password_unset">未設定（堅果雲官網「安全選項」申請）</string>
+    <string name="koil_sync_app_password_set">已設定，輸入新值以修改</string>
+    <string name="koil_sync_password_plain_warn">應用程式密碼未加密儲存（裝置不支援 Keystore）</string>
+    <string name="koil_sync_password_clear">清除</string>
+    <string name="koil_sync_help">堅果雲 → 安全選項 → 應用程式密碼；外洩可於官網單獨撤銷</string>
+    <string name="koil_sync_backup_now">立即備份</string>
+    <string name="koil_sync_restore">從雲端復原</string>
+    <string name="koil_sync_status_not_configured">未設定完整：填齊位址、帳號與應用程式密碼後生效</string>
+    <string name="koil_sync_status_busy">同步中…</string>
+    <string name="koil_sync_status_ok">已備份 %1$s</string>
+    <string name="koil_sync_status_fail">同步失敗：%1$s（下次自動重試）</string>
+    <string name="koil_sync_status_never">尚未備份</string>
+    <string name="koil_sync_restore_confirm_title">從雲端復原</string>
+    <string name="koil_sync_restore_confirm_msg">雲端共 %1$d 筆記錄：新增 %2$d 筆、重複 %3$d 筆、無效 %4$d 筆。確認後不會刪除本地記錄。</string>
+    <string name="koil_sync_restore_confirm">復原 %1$d 筆</string>
+    <string name="koil_sync_backup_done">已備份</string>
+    <string name="koil_sync_backup_failed">備份失敗，請檢查帳號與網路</string>
+    <string name="koil_sync_restore_no_cloud">雲端暫無備份</string>
+    <string name="koil_sync_restore_done">已復原</string>
+    <string name="koil_sync_restore_failed">復原失敗，請檢查帳號與網路</string>
+
 </resources>

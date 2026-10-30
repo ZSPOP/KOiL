@@ -31,6 +31,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Place
@@ -82,6 +84,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLColors
@@ -884,6 +887,296 @@ fun SettingsScreen(
                 onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
             )
         }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复，docs/KOiL云同步设计.md） =====
+        val syncVm: SyncViewModel = koinViewModel()
+        val syncUi by syncVm.uiState.collectAsState()
+        SectionTitle(stringResource(R.string.koil_sync_section))
+        KOiLBlurBackground(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 20f,
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // —— 开关行 ——
+                SettingSwitchRow(
+                    title = stringResource(R.string.koil_sync_switch),
+                    subtitle = stringResource(R.string.koil_sync_switch_sub),
+                    checked = syncUi.enabled,
+                    onCheckedChange = syncVm::setEnabled,
+                )
+                if (syncUi.enabled) {
+                    Spacer(Modifier.height(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    // —— 配置表单：URL / 账号 / 应用密码 ——
+                    Text(
+                        text = stringResource(R.string.koil_sync_url),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    TextField(
+                        value = syncUi.url,
+                        onValueChange = syncVm::setUrl,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Uri,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                        ),
+                        colors = TextFieldDefaults.textFieldColors(
+                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                            borderColor = Color.Transparent,
+                        ),
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.koil_sync_username),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    TextField(
+                        value = syncUi.username,
+                        onValueChange = syncVm::setUsername,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                        ),
+                        colors = TextFieldDefaults.textFieldColors(
+                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                            borderColor = Color.Transparent,
+                        ),
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    // —— 应用密码（不回显；输入新值即覆盖；辅助行展示设置状态）——
+                    var pwdDraft by remember { mutableStateOf("") }
+                    Text(
+                        text = stringResource(R.string.koil_sync_app_password),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    TextField(
+                        value = pwdDraft,
+                        onValueChange = { pwdDraft = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { state ->
+                                if (!state.isFocused && pwdDraft.isNotBlank()) {
+                                    syncVm.setPassword(pwdDraft)
+                                    pwdDraft = ""
+                                }
+                            },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = {
+                                if (pwdDraft.isNotBlank()) {
+                                    syncVm.setPassword(pwdDraft)
+                                    pwdDraft = ""
+                                }
+                                focusManager.clearFocus()
+                            },
+                        ),
+                        colors = TextFieldDefaults.textFieldColors(
+                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                            borderColor = Color.Transparent,
+                        ),
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    )
+                    // 密码状态行 + 明文存储警示
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = when {
+                                !syncUi.passwordSet -> stringResource(R.string.koil_sync_app_password_unset)
+                                !syncUi.passwordEncrypted -> stringResource(R.string.koil_sync_password_plain_warn)
+                                else -> stringResource(R.string.koil_sync_app_password_set)
+                            },
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = if (syncUi.passwordSet && !syncUi.passwordEncrypted) KOiLColors.Warning
+                            else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                            modifier = Modifier.weight(1f).padding(top = 4.dp),
+                        )
+                        if (syncUi.passwordSet) {
+                            Text(
+                                text = stringResource(R.string.koil_sync_password_clear),
+                                fontSize = 11.sp,
+                                color = KOiLColors.Primary,
+                                modifier = Modifier
+                                    .padding(top = 4.dp, start = 8.dp)
+                                    .clickable { syncVm.clearPassword() },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    // 帮助行：如何申请坚果云应用密码
+                    Text(
+                        text = stringResource(R.string.koil_sync_help),
+                        fontSize = 11.sp,
+                        lineHeight = 14.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    // —— 操作按钮行：立即备份 / 从云端恢复 ——
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(KOiLColors.Primary)
+                                .clickable(enabled = !syncUi.busy) { syncVm.backupNow() }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.Upload,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.koil_sync_backup_now),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(KOiLColors.Primary)
+                                .clickable(enabled = !syncUi.busy) { syncVm.restoreNow() }
+                                .padding(horizontal = 14.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Filled.Download,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = stringResource(R.string.koil_sync_restore),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+
+                    // —— 状态行（未配置 / 已备份时间 / 失败待重试）——
+                    val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
+                    val statusText = when {
+                        !configured -> stringResource(R.string.koil_sync_status_not_configured)
+                        syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
+                        syncUi.lastStatus.startsWith("ok@") ->
+                            stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
+                        syncUi.lastStatus.startsWith("fail:") ->
+                            stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
+                        else -> stringResource(R.string.koil_sync_status_never)
+                    }
+                    Text(
+                        text = statusText,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        color = if (!configured || syncUi.lastStatus.startsWith("fail:")) KOiLColors.Warning
+                        else MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                    Spacer(Modifier.height(1.dp))
+                }
+            }
+        }
+
+        // 云同步 Toast（备份/恢复结果）
+        val syncMessage by syncVm.message.collectAsState()
+        val syncToastContext = LocalContext.current
+        val syncText = syncMessage?.let { formatSyncNotice(it) }
+        LaunchedEffect(syncMessage) {
+            if (syncText != null) {
+                android.widget.Toast.makeText(
+                    syncToastContext,
+                    syncText,
+                    android.widget.Toast.LENGTH_SHORT,
+                ).show()
+                syncVm.consumeMessage()
+            }
+        }
+
+        // 云同步恢复确认弹窗（预览 valid/dup/errors，确认后不删本地）
+        val syncRestorePreview by syncVm.restorePreview.collectAsState()
+        syncRestorePreview?.let { preview ->
+            KOiLGlassDialog(show = true, onDismissRequest = syncVm::dismissRestorePreview) {
+                Column {
+                    Text(
+                        stringResource(R.string.koil_sync_restore_confirm_title),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.koil_sync_restore_confirm_msg,
+                            preview.total, preview.valid, preview.duplicates, preview.errors,
+                        ),
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = syncVm::dismissRestorePreview,
+                            modifier = Modifier.weight(1f).height(40.dp),
+                        ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                        Spacer(Modifier.width(10.dp))
+                        Button(
+                            onClick = syncVm::confirmRestore,
+                            modifier = Modifier.weight(1f).height(40.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.koil_sync_restore_confirm, preview.valid),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // 导出/备份/更新结果提示：Toast 短暂提醒（自动消失，替代常驻卡片）
         val exportNotice by viewModel.exportMessage.collectAsState()
@@ -1409,6 +1702,17 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 }
 
 
+
+/** 云同步结果通知翻译（backup_done/backup_failed/restore_no_cloud/restore_done/restore_failed） */
+@Composable
+private fun formatSyncNotice(key: String): String = when (key) {
+    "backup_done" -> stringResource(R.string.koil_sync_backup_done)
+    "backup_failed" -> stringResource(R.string.koil_sync_backup_failed)
+    "restore_no_cloud" -> stringResource(R.string.koil_sync_restore_no_cloud)
+    "restore_done" -> stringResource(R.string.koil_sync_restore_done)
+    "restore_failed" -> stringResource(R.string.koil_sync_restore_failed)
+    else -> key
+}
 
 /**
  * v1.5.30：跳系统通知设置（通知开关/提示行共用）。

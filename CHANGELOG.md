@@ -1,5 +1,23 @@
 # KOiL CHANGELOG
 
+## v1.5.37（versionCode 237）— 2026-10-30（基于 v1.5.36，云同步 + 种子机制移除）
+
+> 新增坚果云 WebDAV 私有数据备份/恢复（设计文档 `docs/KOiL云同步设计.md`）；发布前清理内置种子机制。
+> 不涉及 DB schema（覆盖升级安全）。构建零新 warning（仅存量）。
+
+### 🟢 新增：云同步（坚果云 WebDAV）
+- 新增 `data/sync/`：`WebDavClient`（Ktor PUT/GET/MKCOL + Basic Auth，超时 15s）、`CloudSyncManager`（编排）、`BackupCodec`（备份 JSON 编解码，复用 §7.10 手动备份格式，version 1→2 向后兼容）、`CryptoHelper`（Android Keystore AES-GCM 加密应用密码）
+- 同步语义：本地权威 → 云端镜像（全量快照幂等覆盖 `koil_backup.json`）；恢复仅两条受控路径——①新设备空库自动恢复 ②设置页手动「从云端恢复」（预览 valid/重复/无效 + 确认后不删本地）
+- 触发：记录变更 5s 防抖 / 设置变更 3s 防抖自动推送（30s 频率闸 + Mutex 防并发）；启动空库自动恢复、上次失败补推；失败指数退避（15s/60s 共 3 次）
+- 同步内容：加油记录全量 + 13 项用户设置（含 EIA Key）；**油价库不上传**（可重灌，见设计文档）
+- 设置页新增「云同步」区块：开关、WebDAV 地址/账号/应用密码（不回显、可清除）、立即备份/从云端恢复、状态行（未配置/已备份/失败待重试）、三语 27 个新 key
+- AppSettings 新增 7 键（KOiL-sync-*）；AppModule/KOiLApplication 接入；不依赖第三方 SDK
+
+### 🟠 发布前清理：内置种子记录机制移除
+- 删除 `assets/seed_records.json` + `SeedInitializer`/`SeedModels`（16 条测试记录不再灌入任何新装用户）
+- KOiLApplication 移除 seedIfEmpty；一次性物理删除旧键 `KOiL-record-seeded`（标记 `-cleared`）
+- 已装用户：已灌入测试记录需在 App 内手动删除（删光后不复活）
+
 ## v1.5.36（versionCode 236）— 2026-10-29（基于 v1.5.35，深度压测 8 项修复）
 
 > 用户确认执行压测报告 P1~P8 全部修复。不涉及 DB schema（覆盖升级安全）。
