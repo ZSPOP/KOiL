@@ -80,6 +80,15 @@ class CloudSyncManager(
         } else stored
     }
 
+    /** 连接测试（设置页「保存并测试连接」）：读取最新配置，PROPFIND 验证认证与可达性 */
+    suspend fun testConnection(): Boolean {
+        val url = settings.syncUrl.first()
+        val username = settings.syncUsername.first()
+        val password = getAppPassword()
+        if (url.isBlank() || username.isBlank() || password.isBlank()) return false
+        return client.checkConnection(url, username, password)
+    }
+
     // ===== 推送 =====
 
     /** 手动立即备份（force=true 绕过 30s 频率闸）。成功返回 true；失败返回 false */

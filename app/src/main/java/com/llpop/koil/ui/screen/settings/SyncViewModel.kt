@@ -161,6 +161,27 @@ class SyncViewModel(
         }
     }
 
+    /** 保存配置并测试连接：草稿落盘（挂起等待）→ PROPFIND 验证，结果经 message 反馈 */
+    fun saveAndTest(
+        urlDraft: String? = null,
+        usernameDraft: String? = null,
+        passwordDraft: String? = null,
+    ) {
+        if (_busy.value) return
+        _busy.value = true
+        viewModelScope.launch {
+            try {
+                persistDrafts(urlDraft, usernameDraft, passwordDraft)
+                val ok = manager.testConnection()
+                _message.value = if (ok) "config_saved" else "config_test_failed"
+            } catch (e: Exception) {
+                _message.value = "config_test_failed"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
     /** 草稿落盘：挂起等待 DataStore 写入完成，保证后续 push/restore 读取到最新配置 */
     private suspend fun persistDrafts(
         urlDraft: String?,

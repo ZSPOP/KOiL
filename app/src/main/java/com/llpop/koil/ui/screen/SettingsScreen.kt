@@ -31,6 +31,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Check
@@ -1063,6 +1064,38 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(12.dp))
 
+                    // —— 保存并测试连接：配置草稿落盘 + PROPFIND 验证（明确"登入"反馈）——
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(18.dp))
+                            .background(MiuixTheme.colorScheme.secondaryContainer)
+                            .clickable(enabled = !syncUi.busy) {
+                                val pwd = pwdDraft
+                                if (pwd.isNotBlank()) pwdDraft = ""
+                                syncVm.saveAndTest(urlDraft, usernameDraft, pwd)
+                            }
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MiuixTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.koil_sync_save_test),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MiuixTheme.colorScheme.onSecondaryContainer,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+
                     // —— 操作按钮行：立即备份 / 从云端恢复 ——
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Box(
@@ -1733,7 +1766,7 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 
 
 
-/** 云同步结果通知翻译（backup_done/backup_failed/restore_no_cloud/restore_done/restore_failed） */
+/** 云同步结果通知翻译（backup_done / backup_failed / restore_no_cloud / restore_done / restore_failed / config_saved / config_test_failed） */
 @Composable
 private fun formatSyncNotice(key: String): String = when (key) {
     "backup_done" -> stringResource(R.string.koil_sync_backup_done)
@@ -1741,6 +1774,8 @@ private fun formatSyncNotice(key: String): String = when (key) {
     "restore_no_cloud" -> stringResource(R.string.koil_sync_restore_no_cloud)
     "restore_done" -> stringResource(R.string.koil_sync_restore_done)
     "restore_failed" -> stringResource(R.string.koil_sync_restore_failed)
+    "config_saved" -> stringResource(R.string.koil_sync_config_saved)
+    "config_test_failed" -> stringResource(R.string.koil_sync_config_test_failed)
     else -> key
 }
 

@@ -358,5 +358,8 @@
     <string name="koil_sync_restore_no_cloud">No backup on cloud</string>
     <string name="koil_sync_restore_done">Restored</string>
     <string name="koil_sync_restore_failed">Restore failed — check account and network</string>
+    <string name="koil_sync_save_test">Save &amp; Test</string>
+    <string name="koil_sync_config_saved">Saved, connection OK</string>
+    <string name="koil_sync_config_test_failed">Connection failed — check account &amp; app password</string>
 
 </resources>

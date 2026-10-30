@@ -1,5 +1,13 @@
 # KOiL CHANGELOG
 
+## v1.5.40（versionCode 240）— 2026-10-30（基于 v1.5.39，云同步「保存并测试连接」）
+
+> 用户 UX 反馈：输入完邮箱/应用密码后没有明确的"保存/登入"入口（此前仅失焦自动保存 + 立即备份）。
+> 新增：设置页云同步区块「保存并测试连接」按钮——草稿落盘（挂起等待）→ WebDAV PROPFIND 验证
+> 认证与可达性 → Toast 明确反馈（连接正常 / 检查账号与应用密码）。三语 3 个新 key。
+> WebDavClient 新增 checkConnection()；CloudSyncManager.testConnection()；SyncViewModel.saveAndTest()。
+> 保留失焦自动保存（无副作用）。不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.39（versionCode 239）— 2026-10-30（基于 v1.5.38，云同步输入框光标错乱修复）
 
 > 用户实测反馈（v1.5.38 后仍复现）：账号输入框"输入第二个字母时第一个跳到后面"。

@@ -85,4 +85,19 @@ class WebDavClient {
             else -> error("WebDAV download failed: HTTP ${resp.status.value}")
         }
     }
+
+    /**
+     * 连接测试（设置页「保存并测试连接」）：
+     * 对目录根发 PROPFIND（Depth: 0），认证通过返回 207（或 404=目录尚不存在但认证 OK，备份时会自动建），
+     * 401/403 = 账号或应用密码错误；其余异常抛给调用方。
+     */
+    suspend fun checkConnection(dirUrl: String, username: String, password: String): Boolean {
+        val auth = authHeader(username, password)
+        val resp = client.request(targetUrl(dirUrl, "").trimEnd('/')) {
+            method = HttpMethod("PROPFIND")
+            header(HttpHeaders.Authorization, auth)
+            header("Depth", "0")
+        }
+        return resp.status.value !in 401..403
+    }
 }

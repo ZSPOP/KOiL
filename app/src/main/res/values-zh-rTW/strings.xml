@@ -358,5 +358,8 @@
     <string name="koil_sync_restore_no_cloud">雲端暫無備份</string>
     <string name="koil_sync_restore_done">已復原</string>
     <string name="koil_sync_restore_failed">復原失敗，請檢查帳號與網路</string>
+    <string name="koil_sync_save_test">儲存並測試連線</string>
+    <string name="koil_sync_config_saved">設定已儲存，連線正常</string>
+    <string name="koil_sync_config_test_failed">連線失敗：請檢查帳號與應用程式密碼</string>
 
 </resources>
