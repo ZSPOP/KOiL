@@ -926,7 +926,9 @@ fun SettingsScreen(
                     TextField(
                         value = syncUi.url,
                         onValueChange = syncVm::setUrl,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { state -> tappedOnField.value = state.isFocused },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
@@ -950,7 +952,9 @@ fun SettingsScreen(
                     TextField(
                         value = syncUi.username,
                         onValueChange = syncVm::setUsername,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { state -> tappedOnField.value = state.isFocused },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Ascii,
@@ -979,6 +983,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .onFocusChanged { state ->
+                                tappedOnField.value = state.isFocused
                                 if (!state.isFocused && pwdDraft.isNotBlank()) {
                                     syncVm.setPassword(pwdDraft)
                                     pwdDraft = ""

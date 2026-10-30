@@ -1,5 +1,11 @@
 # KOiL CHANGELOG
 
+## v1.5.38（versionCode 238）— 2026-10-30（基于 v1.5.37，云同步输入框焦点修复）
+
+> 用户实测反馈：云同步"账号"输入框输入第一个字母后焦点跳到下一个输入框。
+> 根因：设置页根层"点击外部收起焦点"手势（`tappedOnField` 标志）未覆盖云同步区块的 URL/账号/密码三个输入框——点击输入框后抬手瞬间被全局手势清焦点，首个字符被路由到下一个可聚焦元素。
+> 修复：三个 TextField 均挂接 `onFocusChanged { state -> tappedOnField.value = state.isFocused }`，与既有输入组件同一机制。不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.37（versionCode 237）— 2026-10-30（基于 v1.5.36，云同步 + 种子机制移除）
 
 > 新增坚果云 WebDAV 私有数据备份/恢复（设计文档 `docs/KOiL云同步设计.md`）；发布前清理内置种子机制。
