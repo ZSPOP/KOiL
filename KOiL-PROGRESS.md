@@ -9,7 +9,7 @@
 - 版本链：v1.5.37(4d9470f 云同步+种子移除) → v1.5.38(7ff0c18 输入框焦点) → v1.5.39(674cc69 光标错乱·草稿模式) → v1.5.40(428396a 保存并测试连接·PROPFIND) → v1.5.41(c5aa435 密码眼睛+提交保留掩码+清除联动) → v1.5.42(feda59b 默认值预填+三输入框锁定开关) → v1.5.43(c350b2c 板块对齐16dp+锁定开关移标签行+锁定灰化+去坚果云文案+打开开关即同步) → **v1.5.44（本轮）**
 - v1.5.44 变更：① 云同步范围=仅加油记录（buildBackup 去 settings 块、删设置变更订阅/collectSettingsMap/applySettingsMap/RestoreResult.settings、恢复不写回设置、旧文件 settings 块忽略、设计文档同步更新）；② 修复「从云端恢复」按钮清空密码草稿遗留；③ 弹窗按钮去掉固定 40dp 高度（文字下缘被裁修复，恢复确认弹窗+CSV导入弹窗）；④ 锁定态输入框文字改 onBackground 30%（不再偏白）
 - 设计文档：`docs/KOiL云同步设计.md`（v1.5.44 口径：仅记录同步、设置忽略、旧文件兼容）
-- commit：`（待提交）`
+- commit：`c7ae89e`（v1.5.44 云同步只备份加油记录 + 恢复按钮/弹窗/锁定色修复；基于 v1.5.43）
 - APK：`KOiL-v1.5.44-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
 - 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1544.zip`
 - 不涉及 DB schema（覆盖升级安全）
