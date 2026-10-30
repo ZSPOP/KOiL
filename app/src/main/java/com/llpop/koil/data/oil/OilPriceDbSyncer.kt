@@ -349,7 +349,7 @@ class OilPriceDbSyncer(
         }
     }
 
-    /** 对齐 Web lazyInitIfEmpty：已有数据时补齐初始化/最新日期配置（种子由 SeedInitializer 负责灌入） */
+    /** 对齐 Web lazyInitIfEmpty：已有数据时补齐初始化/最新日期配置（油价库由 initPriceDb 联网灌库） */
     private suspend fun ensureInitConfig() {
         val total = priceDao.count()
         if (total > 0) {

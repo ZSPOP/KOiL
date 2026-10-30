@@ -6,7 +6,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.llpop.koil.data.local.AppDatabase
-import com.llpop.koil.data.local.seed.SeedInitializer
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceSyncWorker
 import com.llpop.koil.data.settings.AppSettings
@@ -46,12 +45,11 @@ class KOiLApplication : Application() {
         // 移入 IO 后台执行，避免冷启动主线程阻塞（首次迁移含文件读写）
         appScope.launch { runCatching { GlobalContext.get().get<AppSettings>().migrateLegacyIfNeeded() } }
 
-        // 首次启动预置：仅历史加油记录（油价库已改为联网灌库，见下两段）
+        // 首次启动一次性清理（油价库已改为联网灌库，见下两段；种子预置机制已移除）
         appScope.launch {
             try {
                 val settings = GlobalContext.get().get<AppSettings>()
                 val db = AppDatabase.getInstance(this@KOiLApplication)
-                SeedInitializer.seedIfEmpty(this@KOiLApplication, db, settings)
                 // v1.5.16：一次性回填历史 payable=0 记录（无参考价且未手填应付的旧数据，按实付入账），仅执行一次
                 if (!settings.recordPayableZeroFixed.first()) {
                     val fixed = db.KOiLRecordDao().fixZeroPayable()
@@ -68,6 +66,12 @@ class KOiLApplication : Application() {
                     val cleared = db.koilPriceDao().deleteFutureRecords(java.time.LocalDate.now().toString())
                     settings.setPriceDbWindowDayCleared(true)
                     Log.i("KOiL", "v1.5.21 cleared $cleared future-effectiveDate record(s)")
+                }
+                // 种子机制移除（发布前清理）：一次性物理删除 KOiL-record-seeded 键（种子功能已彻底移除，
+                // 已灌入的 16 条测试记录由用户在 App 内自行删除，删除后不再复活）
+                if (!settings.recordSeededCleared.first()) {
+                    settings.clearLegacyRecordSeeded()
+                    Log.i("KOiL", "seed mechanism removed: cleared legacy KOiL-record-seeded key")
                 }
             } catch (t: Throwable) {
                 Log.e("KOiL", "Seed init failed", t)

@@ -119,8 +119,8 @@ class AppSettings(private val context: Context) {
         const val DEFAULT_ABNORMAL_THRESHOLD = 20.0   // v1.5.29：默认异常油耗阈值 30% → 20%（用户要求）
         // v1.5.16 一次性数据修复标记：历史 payable=0 记录回填为 actual（仅执行一次）
         private val KEY_RECORD_PAYABLE_ZERO_FIXED = booleanPreferencesKey("KOiL-record-payable-zero-fixed")
-        // v1.5.23 一次性预置标记：种子记录已灌入（防用户删光记录后重启「复活」）
-        private val KEY_RECORD_SEEDED = booleanPreferencesKey("KOiL-record-seeded")
+        // 种子机制移除（发布前清理）：一次性物理删除旧键 KOiL-record-seeded 的标记
+        private val KEY_RECORD_SEEDED_CLEARED = booleanPreferencesKey("KOiL-record-seeded-cleared")
         // v1.5.21 一次性清理标记：apizero 时代残留的 KOiL-price-db-forecast 键已删除（forecast 功能已彻底移除）
         private val KEY_PRICE_DB_FORECAST_CLEARED = booleanPreferencesKey("KOiL-price-db-forecast-cleared")
         // v1.5.36 P2：通知权限首次请求标记（允许/拒绝过都不再启动时重复请求；Android 13+ 拒绝后系统静默不再弹框）
@@ -218,11 +218,16 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_RECORD_PAYABLE_ZERO_FIXED] = fixed }
     }
 
-    // ---- v1.5.23 一次性预置标记：种子记录是否已灌入（已灌则永不重灌，删除后不复活） ----
-    val recordSeeded: Flow<Boolean> =
-        context.KOiLDataStore.data.map { it[KEY_RECORD_SEEDED] ?: false }
-    suspend fun setRecordSeeded(seeded: Boolean) {
-        context.KOiLDataStore.edit { it[KEY_RECORD_SEEDED] = seeded }
+    // ---- 种子机制移除（发布前清理）：KOiL-record-seeded 旧键一次性物理删除（种子功能已彻底移除） ----
+    val recordSeededCleared: Flow<Boolean> =
+        context.KOiLDataStore.data.map { it[KEY_RECORD_SEEDED_CLEARED] ?: false }
+    suspend fun clearLegacyRecordSeeded() {
+        // 旧键名（已从常量表删除，用字面量定位物理键）
+        val legacyKey = stringPreferencesKey("KOiL-record-seeded")
+        context.KOiLDataStore.edit { p ->
+            p.remove(legacyKey)
+            p[KEY_RECORD_SEEDED_CLEARED] = true
+        }
     }
 
     // ---- 油价调整提醒开关（koil-price-alert）----
