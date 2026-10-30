@@ -898,6 +898,14 @@ fun SettingsScreen(
             cornerRadius = 20f,
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // —— 配置草稿：URL/账号以本地草稿驱动输入（每键写 DataStore 会造成受控组件
+                //    光标错乱），失焦或执行备份/恢复时才落盘；外部变化（恢复/启动加载）同步回草稿 ——
+                var urlDraft by remember { mutableStateOf(syncUi.url) }
+                var usernameDraft by remember { mutableStateOf(syncUi.username) }
+                LaunchedEffect(syncUi.url) { if (urlDraft != syncUi.url) urlDraft = syncUi.url }
+                LaunchedEffect(syncUi.username) {
+                    if (usernameDraft != syncUi.username) usernameDraft = syncUi.username
+                }
                 // —— 开关行 ——
                 SettingSwitchRow(
                     title = stringResource(R.string.koil_sync_switch),
@@ -924,11 +932,16 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     TextField(
-                        value = syncUi.url,
-                        onValueChange = syncVm::setUrl,
+                        value = urlDraft,
+                        onValueChange = { urlDraft = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { state -> tappedOnField.value = state.isFocused },
+                            .onFocusChanged { state ->
+                                tappedOnField.value = state.isFocused
+                                if (!state.isFocused && urlDraft != syncUi.url) {
+                                    syncVm.setUrl(urlDraft)
+                                }
+                            },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
@@ -950,11 +963,16 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(6.dp))
                     TextField(
-                        value = syncUi.username,
-                        onValueChange = syncVm::setUsername,
+                        value = usernameDraft,
+                        onValueChange = { usernameDraft = it },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { state -> tappedOnField.value = state.isFocused },
+                            .onFocusChanged { state ->
+                                tappedOnField.value = state.isFocused
+                                if (!state.isFocused && usernameDraft != syncUi.username) {
+                                    syncVm.setUsername(usernameDraft)
+                                }
+                            },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Ascii,
@@ -986,7 +1004,6 @@ fun SettingsScreen(
                                 tappedOnField.value = state.isFocused
                                 if (!state.isFocused && pwdDraft.isNotBlank()) {
                                     syncVm.setPassword(pwdDraft)
-                                    pwdDraft = ""
                                 }
                             },
                         singleLine = true,
@@ -1053,7 +1070,11 @@ fun SettingsScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(KOiLColors.Primary)
-                                .clickable(enabled = !syncUi.busy) { syncVm.backupNow() }
+                                .clickable(enabled = !syncUi.busy) {
+                                    val pwd = pwdDraft
+                                    if (pwd.isNotBlank()) pwdDraft = ""
+                                    syncVm.backupNow(urlDraft, usernameDraft, pwd)
+                                }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -1079,7 +1100,11 @@ fun SettingsScreen(
                                 .weight(1f)
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(KOiLColors.Primary)
-                                .clickable(enabled = !syncUi.busy) { syncVm.restoreNow() }
+                                .clickable(enabled = !syncUi.busy) {
+                                    val pwd = pwdDraft
+                                    if (pwd.isNotBlank()) pwdDraft = ""
+                                    syncVm.restoreNow(urlDraft, usernameDraft, pwd)
+                                }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
                         ) {

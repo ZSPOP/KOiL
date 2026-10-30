@@ -109,12 +109,17 @@ class SyncViewModel(
         }
     }
 
-    /** 立即备份（手动强制推送，绕过 30s 频率闸） */
-    fun backupNow() {
+    /** 立即备份（手动强制推送，绕过 30s 频率闸）。draft 参数优先落盘（挂起等待完成）后推送 */
+    fun backupNow(
+        urlDraft: String? = null,
+        usernameDraft: String? = null,
+        passwordDraft: String? = null,
+    ) {
         if (_busy.value) return
         _busy.value = true
         viewModelScope.launch {
             try {
+                persistDrafts(urlDraft, usernameDraft, passwordDraft)
                 val ok = manager.pushNow(force = true)
                 _message.value = if (ok) "backup_done" else "backup_failed"
             } catch (e: Exception) {
@@ -125,12 +130,17 @@ class SyncViewModel(
         }
     }
 
-    /** 从云端恢复：先取预览（弹窗确认后再 commit） */
-    fun restoreNow() {
+    /** 从云端恢复：先取预览（弹窗确认后再 commit）。draft 参数优先落盘 */
+    fun restoreNow(
+        urlDraft: String? = null,
+        usernameDraft: String? = null,
+        passwordDraft: String? = null,
+    ) {
         if (_busy.value) return
         _busy.value = true
         viewModelScope.launch {
             try {
+                persistDrafts(urlDraft, usernameDraft, passwordDraft)
                 val result = manager.restorePreview()
                 if (result == null) {
                     _message.value = "restore_no_cloud"
@@ -147,6 +157,26 @@ class SyncViewModel(
                 _message.value = "restore_failed"
             } finally {
                 _busy.value = false
+            }
+        }
+    }
+
+    /** 草稿落盘：挂起等待 DataStore 写入完成，保证后续 push/restore 读取到最新配置 */
+    private suspend fun persistDrafts(
+        urlDraft: String?,
+        usernameDraft: String?,
+        passwordDraft: String?,
+    ) {
+        if (urlDraft != null) settings.setSyncUrl(urlDraft)
+        if (usernameDraft != null) settings.setSyncUsername(usernameDraft)
+        if (!passwordDraft.isNullOrBlank()) {
+            val encrypted = CryptoHelper.encrypt(passwordDraft)
+            if (encrypted != null) {
+                settings.setSyncAppPassword(encrypted)
+                settings.setSyncPasswordEncrypted(true)
+            } else {
+                settings.setSyncAppPassword(passwordDraft)
+                settings.setSyncPasswordEncrypted(false)
             }
         }
     }
