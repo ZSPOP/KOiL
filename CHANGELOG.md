@@ -1,5 +1,27 @@
 # KOiL CHANGELOG
 
+## v1.5.46（versionCode 246）— 2026-10-31（基于 v1.5.45，第二轮回迭代：排版 UI + 数据可靠性 + 工程质量）
+
+> 用户拍板执行改进建议「一（排版/UI）+ 三（数据可靠性）+ 四（工程质量）」，**暂缓功能新增**。本轮交付：
+> ① **总览趋势图油号筛选**：趋势图新增「全部/92/95/98/0」胶囊（仅展示当前范围有数据的油号），
+>    按油号过滤双轴趋势线（油耗/成本）；`OverviewViewModel` 加 `trendGrade` 状态（不持久化）+ `setTrendGrade()` +
+>    recompute 按油号过滤；`OverviewScreen` 加 `GradeFilterChip` + `availableGrades` 派生；三语新增 `koil_ov_trend_all`。
+> ② **空状态引导**：总览历史列表空态新增「去录入」按钮，一键跳转录入页（OverviewScreen 增 `onNavigateToAdd` 回调 +
+>    MainScreen 传入切 Pager 到录入页）；三语新增 `koil_ov_empty_action`。
+> ③ **首页密度微调**：录入页区块间距（四宫格→上次加油条→表单卡→预检提示）14dp 收紧至 12dp，高频录入页一屏更紧凑。
+> ④ **深色细节审计**：确认深色已良好——`KOiLTheme` 主色经 `darkColorScheme(primary=PrimaryDark)` 随主题切换，
+>    `AddScreen` 对 `PrimaryContainer` 已做主题感知（深色用 surfaceVariant 避免发白），硬编码白字均用于主色底/毛玻璃高光；
+>    本轮不盲改（避免破坏 Mishka 零覆盖纪律）。
+> ⑤ **零 warning 构建**：清理全部 Kotlin 编译警告——`KeyboardArrowLeft/Right`→`AutoMirrored`、`TrendingUp`→`AutoMirrored`、
+>    冗余 `!!` 断言（PaymentSummaryCard / OilPriceDbSyncer 多处）、冗余 `.toDouble()`、恒真条件（KOiLScreenScaffold /
+>    OilPriceDbSyncer 单源入库）、`AppSettings` unchecked cast `@Suppress`、`OilPriceDetailViewModel` `@OptIn(ExperimentalCoroutinesApi)`、
+>    `Locale("zh","TW")`→`forLanguageTag`、`onRequestPermissionsResult` `@Suppress(DEPRECATION)` 保留兼容旧权限回调。
+> ⑥ **构建提速**：`gradle.properties` 开启 `org.gradle.configuration-cache=true` +
+>    `android.suppressUnsupportedCompileSdk=37.0`（消除 AGP 对 compileSdk 37 的警告）；增量构建 2m33s、配置缓存复用。
+> 数据可靠性：本轮确认 4 个在用数据源纪律不变（不增删），「同步来源」已由 v1.5.27 快照 + 设置页油价库区展示构成可观测；
+>   「官方源核对」口径待用户确认（见交付说明）。
+> 不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.45（versionCode 245）— 2026-10-30（基于 v1.5.44，修复锁定态输入框文字仍白色 + 云同步副标题文案）
 
 > ① **修复锁定态（开关开=只读）输入框文字仍为白色**：v1.5.44 改 `TextFieldColors.labelColor` 无效——

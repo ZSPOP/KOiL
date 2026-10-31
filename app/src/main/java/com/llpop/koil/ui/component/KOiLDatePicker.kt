@@ -24,8 +24,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -197,7 +197,7 @@ fun KOiLDatePickerDialog(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.KeyboardArrowLeft,
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                 contentDescription = null,
                                 tint = if (canPrevMonth) MiuixTheme.colorScheme.onBackground
                                 else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
@@ -220,7 +220,7 @@ fun KOiLDatePickerDialog(
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.KeyboardArrowRight,
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = null,
                                 tint = if (canNextMonth) MiuixTheme.colorScheme.onBackground
                                 else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),

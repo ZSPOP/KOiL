@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
 
     // v1.5.28：首次启动通知权限框被拒 → 推送开关联动置关（设置页开关恒以系统权限状态为准，
     // 用户想开时点开关会再次请求权限）
+    // v1.5.46：保留兼容旧权限回调路径，抑制 DEPRECATION（迁移 Activity Result API 属后续工程项）
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<String>,

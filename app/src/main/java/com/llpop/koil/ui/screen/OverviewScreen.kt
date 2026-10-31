@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -35,7 +36,6 @@ import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -96,6 +96,7 @@ import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.overview.OverviewUiState
@@ -133,6 +134,7 @@ private enum class SwipeActionValue { CLOSED, OPEN }
 fun OverviewScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    onNavigateToAdd: (() -> Unit)? = null,
     viewModel: OverviewViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -164,6 +166,14 @@ fun OverviewScreen(
         uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }.toList()
     }
     val prevMap = remember(uiState.records) { buildPrevMap(uiState.records) }
+    // v1.5.46：趋势图可选的油号（当前范围有数据的油号，按 92/95/98/0 固定顺序）
+    val availableGrades = remember(uiState.records) {
+        val order = listOf("92", "95", "98", "0")
+        uiState.records.mapNotNull { it.record.oilGrade }
+            .distinct()
+            .filter { it in order }
+            .sortedBy { order.indexOf(it) }
+    }
     // v1.5.20（#10）：长按相关回调稳定（remember 一次），配合 items(key=id) 让未变化卡片可跳过重组
     val onMoreMenuCard = remember {
         { rec: RecordWithDerived ->
@@ -236,8 +246,15 @@ fun OverviewScreen(
             item { SummaryGrid(uiState = uiState) }
             item { Spacer(Modifier.height(12.dp)) }
 
-            // 趋势分析（双轴一张图）
-            item { TrendChart(trend = uiState.trend) }
+            // 趋势分析（双轴一张图）；v1.5.46：支持油号筛选
+            item {
+                TrendChart(
+                    trend = uiState.trend,
+                    grade = uiState.trendGrade,
+                    onGradeChange = viewModel::setTrendGrade,
+                    availableGrades = availableGrades,
+                )
+            }
             item { Spacer(Modifier.height(12.dp)) }
 
             // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）；v1.5.31：有异常时可点击查看明细
@@ -302,7 +319,7 @@ fun OverviewScreen(
             // v1.5.20（#8）：LazyColumn 惰性渲染——月份标题 stickyHeader 吸顶，卡片仅组合可见项；
             // 无记录时显示空态引导。已移除手动按月分页（visibleMonths）与"滚动加载更多"提示
             if (uiState.records.isEmpty()) {
-                item { EmptyHistoryBox() }
+                item { EmptyHistoryBox(onAddClick = onNavigateToAdd) }
             } else {
                 monthGroups.forEach { (monthKey, monthRecords) ->
                     stickyHeader(key = "header-$monthKey") {
@@ -760,11 +777,11 @@ private fun buildPrevMap(records: List<RecordWithDerived>): Map<Long, RecordWith
 
 /** 加油历史空态：无记录时的引导提示 */
 @Composable
-private fun EmptyHistoryBox() {
+private fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 48.dp),
+            .padding(vertical = 40.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -787,6 +804,24 @@ private fun EmptyHistoryBox() {
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
             )
+            // v1.5.46：#5 空状态引导——可一键前往录入页（仅当宿主传入导航回调时显示）
+            if (onAddClick != null) {
+                Spacer(Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(KOiLColors.Primary)
+                        .clickable(onClick = onAddClick)
+                        .padding(horizontal = 22.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.koil_ov_empty_action),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                    )
+                }
+            }
         }
     }
 }
@@ -972,17 +1007,22 @@ private fun StatCell(
 
 // ===== 趋势分析：双轴折线图（对齐 Web） =====
 @Composable
-private fun TrendChart(trend: List<TrendPoint>) {
+private fun TrendChart(
+    trend: List<TrendPoint>,
+    grade: String,
+    onGradeChange: (String) -> Unit,
+    availableGrades: List<String>,
+) {
     KOiLBlurBackground(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp),
+            .height(if (availableGrades.size >= 2) 228.dp else 200.dp),
         cornerRadius = 20f,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Filled.TrendingUp,
+                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
                     contentDescription = null,
                     tint = KOiLColors.Primary,
                     modifier = Modifier.size(16.dp),
@@ -1007,11 +1047,31 @@ private fun TrendChart(trend: List<TrendPoint>) {
                 }
             }
             Spacer(Modifier.height(8.dp))
+            // v1.5.46：油号筛选胶囊（全部 + 当前范围有数据的油号）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                GradeFilterChip(
+                    label = stringResource(R.string.koil_ov_trend_all),
+                    selected = grade == "all",
+                    onClick = { onGradeChange("all") },
+                )
+                availableGrades.forEach { g ->
+                    GradeFilterChip(
+                        label = OilPriceNetwork.GRADE_LABELS[g]?.removeSuffix("号汽油")?.removeSuffix("号柴油")
+                            ?.plus("#") ?: "$g#",
+                        selected = grade == g,
+                        onClick = { onGradeChange(g) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             if (trend.size >= 2) {
                 DualAxisCanvas(trend = trend)
             } else {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(130.dp),
+                    modifier = Modifier.fillMaxWidth().height(118.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -1022,6 +1082,25 @@ private fun TrendChart(trend: List<TrendPoint>) {
                 }
             }
         }
+    }
+}
+
+/** v1.5.46：趋势图油号筛选胶囊（选中主色实底） */
+@Composable
+private fun GradeFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackgroundVariant,
+        )
     }
 }
 
@@ -1044,8 +1123,8 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
         val h = size.height - padT - padB
 
         // 左轴（油耗 2.0~8.0 对齐 Web，自动兜底）
-        val leftMin = consumptions.minOrNull()?.let { (it * 0.75).toDouble() } ?: 2.0
-        val leftMax = consumptions.maxOrNull()?.let { (it * 1.25).toDouble() } ?: 8.0
+        val leftMin = consumptions.minOrNull()?.let { it * 0.75 } ?: 2.0
+        val leftMax = consumptions.maxOrNull()?.let { it * 1.25 } ?: 8.0
         val leftRange = (leftMax - leftMin).coerceAtLeast(0.1)
 
         // 右轴（成本 0.10~0.60 对齐 Web，自动兜底）
@@ -1183,7 +1262,7 @@ private fun AbnormalAlertCard(
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Text(
-                        text = stringResource(R.string.koil_ov_abnormal_avg, avgConsumption ?: 0.0),
+                        text = stringResource(R.string.koil_ov_abnormal_avg, avgConsumption),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -1974,7 +2053,7 @@ private fun PaymentSummaryCard(
     var savingsText: String? = null
     var savingsColor: Color = gray
     if (hasPayable && hasActual) {
-        val diff = payable!! - actual!!
+        val diff = payable - actual
         val pct = if (payable > 0) diff / payable * 100 else 0.0
         when {
             diff > 0.005 -> { savingsText = stringResource(R.string.koil_ps_savings, abs(diff), abs(pct)); savingsColor = green }
@@ -1984,11 +2063,11 @@ private fun PaymentSummaryCard(
     }
 
     // 第二行：实际单价对比（加油量>0 且 实付>0）
-    val actualUnitPrice = if (hasFuel && hasActual) actual!! / fuelAmount!! else null
+    val actualUnitPrice = if (hasFuel && hasActual) actual / fuelAmount else null
     var unitDiffText: String? = null
     var unitDiffColor: Color = gray
     if (actualUnitPrice != null && actualUnitPrice > 0 && hasReference) {
-        val diff = referencePrice!! - actualUnitPrice
+        val diff = referencePrice - actualUnitPrice
         val pct = if (referencePrice > 0) diff / referencePrice * 100 else 0.0
         when {
             diff > 0.005 -> { unitDiffText = stringResource(R.string.koil_ps_save_per_l, abs(diff), abs(pct)); unitDiffColor = green }
@@ -2013,7 +2092,7 @@ private fun PaymentSummaryCard(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = stringResource(R.string.koil_ps_payable_actual, payable!!, actual!!),
+                        text = stringResource(R.string.koil_ps_payable_actual, payable, actual),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier.weight(1f),
@@ -2030,7 +2109,7 @@ private fun PaymentSummaryCard(
                     Text(
                         text = buildString {
                             append(stringResource(R.string.koil_ps_actual_unit, actualUnitPrice))
-                            if (hasReference) append("  ·  ").append(stringResource(R.string.koil_ps_ref_price, referencePrice!!))
+                            if (hasReference) append("  ·  ").append(stringResource(R.string.koil_ps_ref_price, referencePrice))
                         },
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,

@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
 
@@ -63,6 +64,7 @@ class OilPriceDetailViewModel(
     private val gradeFlow = MutableStateFlow("92号汽油")
     private val yearFlow = MutableStateFlow(java.time.LocalDate.now().year.toString())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     val uiState = combine(
         provinceFlow,
         gradeFlow,
@@ -71,8 +73,7 @@ class OilPriceDetailViewModel(
     ) { p, g, y, d -> OilPriceDetailParams(p, g, y, d) }
         .flatMapLatest { params ->
             priceDao.observeByProvinceGrade(params.province, params.grade).map { records ->
-                buildUiState(params, records)
-            }
+                buildUiState(params, records)            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OilPriceDetailUiState())
 

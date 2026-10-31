@@ -62,6 +62,8 @@ data class OverviewUiState(
     val abnormalRecords: List<RecordWithDerived> = emptyList(),
     val avgConsumption: Double = 0.0,
     val range: String = "all",
+    /** 趋势图油号筛选："all"=全部油号合并，否则为 92/95/98/0（v1.5.46 新增，仅作用于趋势图） */
+    val trendGrade: String = "all",
     val editingRecord: KOiLRecordEntity? = null,
     val editDate: String = "",
     val editMileage: String = "",
@@ -193,6 +195,12 @@ class OverviewViewModel(
         recompute()
     }
 
+    /** 切换趋势图油号（仅影响趋势曲线，不落盘持久化） */
+    fun setTrendGrade(grade: String) {
+        _uiState.value = _uiState.value.copy(trendGrade = grade)
+        recompute()
+    }
+
     private fun recompute() {
         val range = _uiState.value.range
         val (start, prevStart, prevEnd) = rangeBounds(range)
@@ -206,7 +214,9 @@ class OverviewViewModel(
         }
         val stats = computeSummary(filtered)
         val prevStats = if (prevFiltered.isNotEmpty()) computeSummary(prevFiltered) else null
-        val trend = computeTrend(filtered)
+        // v1.5.46：趋势图按油号筛选（全部/92/95/98/0），六指标/异常卡/历史列表仍走全部记录
+        val tg = _uiState.value.trendGrade
+        val trend = computeTrend(if (tg == "all") filtered else filtered.filter { it.record.oilGrade == tg })
         val avgCons = filtered.mapNotNull { it.oilConsumption }.average().let { if (it.isNaN()) 0.0 else it }
         val abnormal = filtered.filter {
             it.consumptionStatus == ConsumptionStatus.HIGH || it.consumptionStatus == ConsumptionStatus.LOW

@@ -155,11 +155,12 @@ fun AddScreen(
                 }
             },
         )
-        Spacer(Modifier.height(14.dp))
+        // v1.5.46：#8 首页密度微调——区块间 14dp 收紧至 12dp，高频录入页一屏更紧凑
+        Spacer(Modifier.height(12.dp))
 
         // 上次加油条
         LastRecordBar(uiState = uiState, onApply = viewModel::applyLastRecord)
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
         // 加油表单卡
         KOiLBlurBackground(
@@ -232,7 +233,8 @@ fun AddScreen(
                 }
             }
         }
-        Spacer(Modifier.height(14.dp))
+        // v1.5.46：#8 首页密度微调
+        Spacer(Modifier.height(12.dp))
 
         // 实时预检提示
         PrecheckBanner(uiState = uiState)
@@ -611,7 +613,7 @@ private fun OilPriceCard(
                                 // v1.5.0：预测幅度 + 折合单价合并为一个徽章；v1.5.21 起 apizero forecast 彻底移除，
                                 // 幅度恒来自 EIA/腾讯本地估算 → 「估算」标注恒显示
                                 // v1.5.24：(估算/单日参考) 前置到「预计」后 → 预计(估算)上调170元/吨
-                                if (forecast != null && perLiter != null) {
+                                if (perLiter != null) {
                                     AdjustBadge(
                                         text = stringResource(
                                             if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down,
@@ -627,7 +629,7 @@ private fun OilPriceCard(
                                             if (uiState.forecastSource != "腾讯" && uiState.forecastDataDate != null) {
                                                 "(" + stringResource(
                                                     R.string.koil_add_forecast_as_of,
-                                                    uiState.forecastDataDate!!.takeLast(5),
+                                                    uiState.forecastDataDate.takeLast(5),
                                                 ) + ")"
                                             } else {
                                                 ""

@@ -85,7 +85,7 @@ class OilPriceDbSyncer(
         points.forEach { pt ->
             val p = pt.p92
             if (p != null) {
-                if (last != null && kotlin.math.abs(p - last!!) > 1e-9) change = pt.date
+                if (last != null && kotlin.math.abs(p - last) > 1e-9) change = pt.date
                 last = p
             }
         }
@@ -322,10 +322,10 @@ class OilPriceDbSyncer(
             val anchorSrc = settings.priceDbLastAnchorSource.first().ifBlank { "—" }
             settings.setPriceDbLastSources("锚点:$anchorSrc · 今日价:abapi")
             if (result.newAdjustments > 0 && result.latestDate != null) {
-                settings.setPriceDbLastUpdateDate(result.latestDate!!)
-                settings.setPriceDbLastWindowChecked(result.latestDate!!)
+                settings.setPriceDbLastUpdateDate(result.latestDate)
+                settings.setPriceDbLastWindowChecked(result.latestDate)
             } else if (result.strandedWindowDate != null) {
-                settings.setPriceDbLastWindowChecked(result.strandedWindowDate!!)
+                settings.setPriceDbLastWindowChecked(result.strandedWindowDate)
             }
             // 顺带补灌缺失省份一整年曲线（幂等：只拉库内尚未覆盖的省）：
             // 全新安装只灌了当前省/断网部分省失败的场景下，"立即更新"或定时自动更新
@@ -558,16 +558,16 @@ class OilPriceDbSyncer(
             // 补搁浅（v1.4.189 回滚）：只补「库里无记录」的已过窗口（hasChange 防本次新增变化点重复补）；
             // 已有的记录（调价或搁浅）一律不删不动——v1.4.188 曾误删已有调价记录导致全搁浅。
             if (keptPoint.p92 != null && !hasChange("92号汽油", eff) && ("$province|92号汽油|$eff") !in existing) {
-                entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92!!, "窗口搁淺·維持(abapi)", false, true))
+                entities.add(KOiLPriceEntity(province, "92号汽油", eff, keptPoint.p92, "窗口搁淺·維持(abapi)", false, true))
             }
             if (keptPoint.p95 != null && !hasChange("95号汽油", eff) && ("$province|95号汽油|$eff") !in existing) {
-                entities.add(KOiLPriceEntity(province, "95号汽油", eff, keptPoint.p95!!, "窗口搁淺·維持(abapi)", false, true))
+                entities.add(KOiLPriceEntity(province, "95号汽油", eff, keptPoint.p95, "窗口搁淺·維持(abapi)", false, true))
             }
             if (keptPoint.p98 != null && !hasChange("98号汽油", eff) && ("$province|98号汽油|$eff") !in existing) {
-                entities.add(KOiLPriceEntity(province, "98号汽油", eff, keptPoint.p98!!, "窗口搁淺·維持(abapi)", false, true))
+                entities.add(KOiLPriceEntity(province, "98号汽油", eff, keptPoint.p98, "窗口搁淺·維持(abapi)", false, true))
             }
             if (keptPoint.p0 != null && !hasChange("0号柴油", eff) && ("$province|0号柴油|$eff") !in existing) {
-                entities.add(KOiLPriceEntity(province, "0号柴油", eff, keptPoint.p0!!, "窗口搁淺·維持(abapi)", false, true))
+                entities.add(KOiLPriceEntity(province, "0号柴油", eff, keptPoint.p0, "窗口搁淺·維持(abapi)", false, true))
             }
         }
         if (entities.isEmpty()) return 0
@@ -812,16 +812,14 @@ class OilPriceDbSyncer(
                 val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
                 val pPrice = pItem.price
                 val pSource = pItem.source.ifBlank { "youjia.abapi.cn" }
-                // 单源有价即自动入库（真实调价必然变价；同价非搁浅假点由 purge 清理）
-                if (pPrice != null) {
-                    val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
-                    if ((latest == null || kotlin.math.abs(latest.price - pPrice) > 1e-9) &&
-                        priceDao.getPrice(province, gradeLabel, eff) == null
-                    ) {
-                        toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, pPrice, pSource, true))
-                    }
-                    verified++
+                // 单源有价即自动入库（真实调价必然变价；同价非搁浅假点由 purge 清理）；pPrice 已由 PrimaryPrice 保证非空
+                val latest = priceDao.getLatestPrice(province, gradeLabel, eff)
+                if ((latest == null || kotlin.math.abs(latest.price - pPrice) > 1e-9) &&
+                    priceDao.getPrice(province, gradeLabel, eff) == null
+                ) {
+                    toInsert.add(KOiLPriceEntity(province, gradeLabel, eff, pPrice, pSource, true))
                 }
+                verified++
             }
 
             if (toInsert.isNotEmpty()) priceDao.insertAll(toInsert)

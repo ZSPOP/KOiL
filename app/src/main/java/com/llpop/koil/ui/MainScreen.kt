@@ -299,7 +299,12 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                             ) { page ->
                                 when (page) {
                                     0 -> AddScreen(modifier = contentModifier, bottomPadding = bottomPad)
-                                    1 -> OverviewScreen(modifier = contentModifier, bottomPadding = bottomPad)
+                                    1 -> OverviewScreen(
+                                        modifier = contentModifier,
+                                        bottomPadding = bottomPad,
+                                        // v1.5.46：#5 空态「去录入」一键跳转录入页
+                                        onNavigateToAdd = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                    )
                                     2 -> SettingsScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,

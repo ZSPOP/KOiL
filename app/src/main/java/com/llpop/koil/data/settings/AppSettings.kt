@@ -52,7 +52,7 @@ class AppSettings(private val context: Context) {
                         val newName = k.name.replace("koil-", "KOiL-")
                         when (v) {
                             is String -> new[stringPreferencesKey(newName)] = v
-                            is Set<*> -> new[stringSetPreferencesKey(newName)] = v as Set<String>
+                            is Set<*> -> new[stringSetPreferencesKey(newName)] = @Suppress("UNCHECKED_CAST") (v as Set<String>)
                             is Int -> new[intPreferencesKey(newName)] = v
                             is Long -> new[longPreferencesKey(newName)] = v
                             is Float -> new[floatPreferencesKey(newName)] = v

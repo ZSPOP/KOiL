@@ -31,6 +31,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * - topPadding：TopAppBar 当前高度（含状态栏，折叠时变化），内容开头应放等高 Spacer 避让
  * - scrollBehavior：内容滚动容器需 .nestedScroll(scrollBehavior.nestedScrollConnection) 联动折叠
  */
+@Suppress("SENSELESS_COMPARISON") // backdrop 由 rememberLayerBackdrop 构造恒非空，保留可空签名给 content 调用方
 @Composable
 fun KOiLScreenScaffold(
     title: String,

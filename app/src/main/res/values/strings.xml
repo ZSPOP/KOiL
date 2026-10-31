@@ -73,6 +73,7 @@
     <string name="koil_ov_history">加油历史</string>
     <string name="koil_ov_empty_title">暂无加油记录</string>
     <string name="koil_ov_empty_hint">前往「录入」页添加第一条加油记录</string>
+    <string name="koil_ov_empty_action">去录入</string>
     <string name="koil_ov_total_count_in_list">共%1$d条</string>
     <string name="koil_ov_backfill">补录</string>
     <string name="koil_ov_month_count">%1$d条</string>
@@ -109,6 +110,7 @@
     <string name="koil_ov_legend_consumption">平均油耗</string>
     <string name="koil_ov_legend_cost">每公里成本</string>
     <string name="koil_ov_trend_insufficient">数据不足，无法绘制趋势图</string>
+    <string name="koil_ov_trend_all">全部</string>
     <string name="koil_ov_abnormal_count">%1$d 条异常油耗记录</string>
     <string name="koil_ov_abnormal_avg">偏离均值 · 平均油耗 %1$.2f L/100km</string>
     <string name="koil_ov_abnormal_empty">暂无异常油耗记录</string>

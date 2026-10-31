@@ -11,7 +11,7 @@ object LocaleManager {
 
     fun resolve(lang: AppSettings.Language): Locale = when (lang) {
         AppSettings.Language.ZH_CN -> Locale.SIMPLIFIED_CHINESE
-        AppSettings.Language.ZH_TW -> Locale("zh", "TW")
+        AppSettings.Language.ZH_TW -> Locale.forLanguageTag("zh-TW")
         AppSettings.Language.EN -> Locale.ENGLISH
         AppSettings.Language.SYSTEM -> Locale.getDefault()
     }
