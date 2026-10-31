@@ -1,5 +1,23 @@
 # KOiL CHANGELOG
 
+## v1.5.47（versionCode 247）— 2026-10-31（基于 v1.5.46，修复设置页开关"关→开"短暂闪烁）
+
+> 用户反馈：切换到设置页时，部分开关按钮能观察到"从关到开"的短暂过程（时间很短）。
+> 根因：`SettingsViewModel.SettingsUiState` 初始值全为硬编码默认（priceAlert=false、keepLastGrade=false、
+> priceDbAutoUpdate=false、floatingBottomBar=true…），DataStore 16 个 Flow combine 异步首值到达后整体跳变为真实值，
+> 导致"默认关→真实开"（或反之）的闪烁；`SyncViewModel.SyncUiState.enabled` 初始 false 同理；`SettingsViewModel.eiaEnabled`
+> 初始 true（`loadEiaApiKey()` 先写 key、后写 enabled，存在竞态）。
+> 修复方案（加载完成前不渲染，杜绝默认值先行）：
+> ① **三处 UiState 加 `loaded` 标志**：`SettingsUiState` / `SyncUiState` 尾加 `loaded: Boolean = false`，combine 组装时置
+>    `loaded = true`；`SettingsViewModel` 加 `_eiaLoaded = MutableStateFlow(false)` + `val eiaLoaded`，`loadEiaApiKey()`
+>    加载完 EIA key/enabled 后置 `true`（同时消除 key 先写、enabled 后写的竞态）。
+> ② **五处 UI 渲染门控**（`SettingsScreen.kt`）：导航设置卡（悬浮导航/底部栏模式）`if (uiState.loaded)`；录入设置卡
+>    （定位/价格预警/推送/沿用油号/默认油号）`if (uiState.loaded)`；油价库「自动更新」行 `if (uiState.loaded)`；
+>    EIA 区块（开关+输入框）`if (eiaLoaded)`；云同步总开关 `if (syncUi.loaded)`。
+>    加载完成前整块不渲染，加载后一次性呈现真实值，无状态跳变。
+> 影响面：仅设置页 UI 渲染时机，不改任何设置默认值、不改行为逻辑；`compileReleaseKotlin` 零错误零警告。
+> 不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.46（versionCode 246）— 2026-10-31（基于 v1.5.45，第二轮回迭代：排版 UI + 数据可靠性 + 工程质量）
 
 > 用户拍板执行改进建议「一（排版/UI）+ 三（数据可靠性）+ 四（工程质量）」，**暂缓功能新增**。本轮交付：

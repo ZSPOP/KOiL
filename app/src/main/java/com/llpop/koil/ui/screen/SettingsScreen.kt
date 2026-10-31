@@ -259,6 +259,8 @@ fun SettingsScreen(
         // Overlay 宿主层级错位导致点击闪退。Window 版同样式同交互，但走系统 Dialog，不闪退。
         SectionTitle(stringResource(R.string.koil_set_section_nav))
         SettingsCard {
+            // v1.5.47：设置异步加载完成前不渲染开关/下拉（杜绝默认值先行导致的"关→开"闪烁）
+            if (uiState.loaded) {
             SettingSwitchRow(
                             title = stringResource(R.string.koil_set_floating_bar),
                 subtitle = stringResource(R.string.koil_set_floating_bar_sub),
@@ -298,12 +300,15 @@ fun SettingsScreen(
                     viewModel.setBottomBarMode(barModes[index].storageValue)
                 },
             )
+            }
         }
         Spacer(Modifier.height(16.dp))
 
         // ===== 录入 =====
         SectionTitle(stringResource(R.string.koil_set_section_entry))
         SettingsCard {
+            // v1.5.47：设置异步加载完成前不渲染开关/下拉（杜绝"关→开"闪烁）
+            if (uiState.loaded) {
             // 定位开关：开启后自动定位省份并写入默认省份
             // v1.5.28：权限联动——未授权恒显示关；点开先请求权限，同意才真正开启
             SettingSwitchRow(
@@ -431,6 +436,7 @@ fun SettingsScreen(
                         viewModel.setDefaultOilGrade(oilGrades[index])
                     },
                 )
+            }
             }
         }
         Spacer(Modifier.height(16.dp))
@@ -759,6 +765,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // —— 自动更新开关 ——
+                if (uiState.loaded) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -779,12 +786,16 @@ fun SettingsScreen(
                         onCheckedChange = viewModel::setPriceDbAutoUpdate,
                     )
                 }
+                }
                 Spacer(Modifier.height(12.dp))
 
                 // —— EIA API Key（原油估算数据源；v1.5.1：数据源开关——开=用 EIA 隐藏输入框；
                 //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
                 val eiaKey by viewModel.eiaApiKey.collectAsState()
                 val eiaEnabled by viewModel.eiaEnabled.collectAsState()
+                val eiaLoaded by viewModel.eiaLoaded.collectAsState()
+                // v1.5.47：EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
+                if (eiaLoaded) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -848,6 +859,7 @@ fun SettingsScreen(
                             },
                         )
                     }
+                }
                 }
                 // v1.5.33：同步来源放油价库区块最底（EIA 项之后、区块闭合前）——用户指定位置；
                 // 上方分隔线与区块内其它分隔线同款（0.5dp / alpha 0.12 / 通栏）
@@ -941,6 +953,8 @@ fun SettingsScreen(
                 var pwdLocked by remember { mutableStateOf(true) }
                 // —— 开关行（复用工程规范组件：自带 16dp 内边距，与其他板块同基准）——
                 //    打开开关 = 立即同步：先落盘草稿（含默认值）→ 空库自动恢复 / 非空库立即推送
+                // v1.5.47：云同步配置加载完成前不渲染总开关（杜绝"关→开"闪烁）
+                if (syncUi.loaded) {
                 SettingSwitchRow(
                     title = stringResource(R.string.koil_sync_switch),
                     subtitle = stringResource(R.string.koil_sync_switch_sub),
@@ -949,6 +963,7 @@ fun SettingsScreen(
                         syncVm.setEnabled(on, urlDraft, usernameDraft, pwdDraft)
                     },
                 )
+                }
                 if (syncUi.enabled) {
                     SettingDivider()
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {

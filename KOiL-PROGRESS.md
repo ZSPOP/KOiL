@@ -3,26 +3,30 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.46（versionCode 246）— 2026-10-31 已构建
+## 当前版本：v1.5.47（versionCode 247）— 2026-10-31 已构建
 
-- 定位：第二轮回迭代（用户拍板「一排版/UI + 三数据可靠性 + 四工程质量」，暂缓功能新增）——趋势图油号筛选 / 空态去录入引导 / 首页密度微调 / 深色细节审计 / 零 warning 构建 / 构建提速（配置缓存）
-- 版本链：… → v1.5.44(c7ae89e) → v1.5.45(5cd7388) → **v1.5.46（本轮）**
-- v1.5.46 变更：
-  ① **趋势图油号筛选**（全部/92/95/98/0 胶囊，按油号过滤双轴趋势线；OverviewViewModel+UI 三语）
-  ② **空态去录入引导**（总览空态新增按钮，一键跳转录入页；OverviewScreen 回调 + MainScreen Tab 导航）
-  ③ **首页密度微调**（区块间距 14→12dp，录入页更紧凑）
-  ④ **深色细节审计**（确认深色已良好：主题主色随切换 + PrimaryContainer 感知，本轮不盲改）
-  ⑤ **零 warning 构建**（全部 Kotlin 编译警告清零）
-  ⑥ **构建提速**（`org.gradle.configuration-cache=true` + `suppressUnsupportedCompileSdk=37.0`；增量 2m33s）
-- 数据可靠性：4 个在用源纪律不变；「同步来源」可观测已有（v1.5.27 快照 + 设置页展示）；「官方源核对」口径待用户确认
-- 设计文档：无网络层/油价库机制变更（零 warning 清理不改行为）
-- commit：`待 git commit`
-- APK：`KOiL-v1.5.46-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1546.zip`
+- 定位：修复设置页开关"从关到开"短暂闪烁（UiState 默认值先行 + DataStore 异步加载后跳变 → 加载完成前不渲染）
+- 版本链：… → v1.5.44(c7ae89e) → v1.5.45(5cd7388) → v1.5.46(494777a) → **v1.5.47（本轮）**
+- v1.5.47 变更：
+  ① **三处 UiState 加 `loaded` 标志**（SettingsUiState / SyncUiState / `_eiaLoaded`），combine 组装置 true、EIA 加载完置 true
+  ② **五处 UI 渲染门控**（SettingsScreen）：导航设置卡 / 录入设置卡 / 自动更新行 / EIA 区块 / 云同步总开关，加载完成前不渲染
+  ③ 顺带消除 `loadEiaApiKey()` 的 key 先写、enabled 后写竞态
+- 影响面：仅设置页渲染时机，不改默认值/行为；compileReleaseKotlin 零错误零警告
+- 设计文档：无网络层/油价库机制变更
+- commit：`待 git commit`（v1.5.47 实际提交见 git log，交付说明给出）
+- APK：`KOiL-v1.5.47-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1547.zip`
 - 不涉及 DB schema（覆盖升级安全）
 
 ---
 ## 历史版本（归档）
+
+### v1.5.46（versionCode 246）— 2026-10-31 已交付
+- 定位：第二轮回迭代（用户拍板「一排版/UI + 三数据可靠性 + 四工程质量」，暂缓功能新增）——趋势图油号筛选 / 空态去录入引导 / 首页密度微调 / 深色细节审计 / 零 warning 构建 / 构建提速（配置缓存）
+- commit：`494777a`
+- APK：`KOiL-v1.5.46-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip：`KOiL-src-v1546.zip`
+- 变更明细：见 CHANGELOG v1.5.46
 
 ### v1.5.45（versionCode 245）— 2026-10-30 已交付
 - 定位：坚果云 WebDAV 云同步（**仅加油记录**备份/受控恢复，设置不参与云同步）+ 锁定态输入框"禁止编辑"观感修复

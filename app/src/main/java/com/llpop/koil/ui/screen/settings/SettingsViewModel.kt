@@ -61,6 +61,8 @@ data class SettingsUiState(
     val floatingBottomBar: Boolean = true,
     val floatingBottomBarStyle: String = "miuix",
     val bottomBarMode: String = "icon_and_text",
+    // v1.5.47：设置异步加载完成标志（DataStore 首值到达前不渲染开关，杜绝"关→开"闪烁）
+    val loaded: Boolean = false,
 )
 
 /** CSV 导入预览（四分组） */
@@ -170,6 +172,10 @@ class SettingsViewModel(
     private val _eiaEnabled = MutableStateFlow(true)
     val eiaEnabled: StateFlow<Boolean> = _eiaEnabled.asStateFlow()
 
+    // v1.5.47：EIA 配置加载完成标志（首值到达前不渲染 EIA 开关，杜绝"开→关/关→开"闪烁）
+    private val _eiaLoaded = MutableStateFlow(false)
+    val eiaLoaded: StateFlow<Boolean> = _eiaLoaded.asStateFlow()
+
     private val _importPreview = MutableStateFlow<ImportPreview?>(null)
     val importPreview: StateFlow<ImportPreview?> = _importPreview.asStateFlow()
 
@@ -180,6 +186,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             _eiaApiKey.value = settings.eiaApiKey.first()
             _eiaEnabled.value = settings.eiaEnabled.first()
+            _eiaLoaded.value = true
         }
     }
 
@@ -455,6 +462,7 @@ class SettingsViewModel(
             floatingBottomBar = args[13] as Boolean,
             floatingBottomBarStyle = args[14] as String,
             bottomBarMode = args[15] as String,
+            loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
 

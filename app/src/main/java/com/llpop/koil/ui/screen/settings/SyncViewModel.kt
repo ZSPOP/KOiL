@@ -23,6 +23,8 @@ data class SyncUiState(
     val passwordEncrypted: Boolean = false,
     val lastStatus: String = "",          // 原始状态（ok@时间 / fail:原因 / 空）
     val busy: Boolean = false,
+    // v1.5.47：云同步配置异步加载完成标志（首值到达前不渲染开关，杜绝"关→开"闪烁）
+    val loaded: Boolean = false,
 )
 
 /** 恢复预览（UI 确认弹窗用） */
@@ -64,6 +66,7 @@ class SyncViewModel(
             passwordEncrypted = args[4] as Boolean,
             lastStatus = args[5] as String,
             busy = args[6] as Boolean,
+            loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SyncUiState())
 
