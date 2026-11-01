@@ -65,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -331,6 +332,8 @@ fun OverviewScreen(
                         // 半透明 surface 观感接近顶栏毛玻璃且无递归风险
                         val density = LocalDensity.current
                         val topBarPx = with(density) { topPadding.toPx() }
+                        // v1.5.49：吸顶分隔线颜色在 Composable 上下文取（drawBehind 内不可读主题色）
+                        val stickyLineColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
                         val sticky by remember(topPadding) {
                             derivedStateOf {
                                 val off = listState.layoutInfo.visibleItemsInfo
@@ -350,7 +353,19 @@ fun OverviewScreen(
                                 )
                                 .then(
                                     if (sticky) {
-                                        Modifier.background(MiuixTheme.colorScheme.surface.copy(alpha = 0.92f))
+                                        // v1.5.49：吸顶背景对齐顶栏混合参数（surface 0.8，与 BlurredBar 同参）
+                                        // + 底部 0.5dp 细线（同 SettingDivider 颜色），视觉上呈顶栏"半透明延续"
+                                        Modifier
+                                            .background(MiuixTheme.colorScheme.surface.copy(alpha = 0.8f))
+                                            .drawBehind {
+                                                val y = size.height - 0.5.dp.toPx()
+                                                drawLine(
+                                                    color = stickyLineColor,
+                                                    start = Offset(0f, y),
+                                                    end = Offset(size.width, y),
+                                                    strokeWidth = 0.5.dp.toPx(),
+                                                )
+                                            }
                                     } else {
                                         Modifier
                                     },

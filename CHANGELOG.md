@@ -1,5 +1,19 @@
 # KOiL CHANGELOG
 
+## v1.5.49（versionCode 249）— 2026-11-01（基于 v1.5.47，总览页历史月份标题吸顶背景与顶栏视觉统一）
+
+> 用户反馈：历史记录月份标题"贴顶"时的背景与顶栏背景不一致，希望统一。
+> 技术背景：顶栏为真毛玻璃（`textureBlur` 采样整页 backdrop + `surface 0.8` 混合）；月份标题位于 backdrop
+> 录制子树内部，v1.5.25 实证直接用 `textureBlur` 会自采样递归闪退（顶栏是 backdrop 兄弟节点才安全），
+> 故此前用半透明 `surface 0.92` 纯色块近似。本轮做视觉最大近似：
+> ① **吸顶背景对齐顶栏混合参数**：`surface 0.92` → **`surface 0.8`**（与 `BlurredBar` 的 blend 色完全同参，透度一致）；
+> ② **贴顶时底部加 0.5dp 细线**（颜色同 `SettingDivider`：onBackgroundVariant 0.12），吸顶标题呈顶栏"半透明延续"，
+>    滚动经过无接缝感；未贴顶时保持透明无背景（原逻辑不变）。
+> 实现：`OverviewScreen` 月份 stickyHeader 的 `Modifier.background` + `drawBehind` 画底边线；
+> 分隔线颜色在 Composable 上下文预取（drawBehind 内不可读主题色）。
+> 影响面：仅总览页吸顶标题视觉，不改数据/行为；`compileReleaseKotlin` 零错误零警告。
+> 不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.47（versionCode 247）— 2026-10-31（基于 v1.5.46，修复设置页开关"关→开"短暂闪烁）
 
 > 用户反馈：切换到设置页时，部分开关按钮能观察到"从关到开"的短暂过程（时间很短）。

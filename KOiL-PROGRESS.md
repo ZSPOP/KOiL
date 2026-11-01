@@ -3,23 +3,30 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.47（versionCode 247）— 2026-10-31 已构建
+## 当前版本：v1.5.49（versionCode 249）— 2026-11-01 已构建
 
-- 定位：修复设置页开关"从关到开"短暂闪烁（UiState 默认值先行 + DataStore 异步加载后跳变 → 加载完成前不渲染）
-- 版本链：… → v1.5.44(c7ae89e) → v1.5.45(5cd7388) → v1.5.46(494777a) → **v1.5.47（本轮）**
-- v1.5.47 变更：
-  ① **三处 UiState 加 `loaded` 标志**（SettingsUiState / SyncUiState / `_eiaLoaded`），combine 组装置 true、EIA 加载完置 true
-  ② **五处 UI 渲染门控**（SettingsScreen）：导航设置卡 / 录入设置卡 / 自动更新行 / EIA 区块 / 云同步总开关，加载完成前不渲染
-  ③ 顺带消除 `loadEiaApiKey()` 的 key 先写、enabled 后写竞态
-- 影响面：仅设置页渲染时机，不改默认值/行为；compileReleaseKotlin 零错误零警告
+- 定位：总览页历史月份标题吸顶背景与顶栏视觉统一（surface 0.92 → 0.8 对齐顶栏混合参数 + 贴顶底部 0.5dp 细线）
+- 版本链：… → v1.5.45(5cd7388) → v1.5.46(494777a) → v1.5.47(bc5660d) → **v1.5.49（本轮）**（v1.5.48 已按用户要求回退移除）
+- v1.5.49 变更：
+  ① **吸顶背景对齐顶栏**：月份 stickyHeader 吸顶背景 `surface 0.92` → **`surface 0.8`**（与 BlurredBar 顶栏 blend 同参）
+  ② **贴顶底部 0.5dp 细线**（同 SettingDivider 色），吸顶标题呈顶栏"半透明延续"，无接缝感
+- 技术边界：完全复刻顶栏毛玻璃（textureBlur）不可行——月份标题在 backdrop 录制子树内，v1.5.25 实证自采样递归闪退；本轮为视觉最大近似
+- 影响面：仅总览页吸顶标题视觉；compileReleaseKotlin 零错误零警告
 - 设计文档：无网络层/油价库机制变更
-- commit：`待 git commit`（v1.5.47 实际提交见 git log，交付说明给出）
-- APK：`KOiL-v1.5.47-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1547.zip`
+- commit：`待 git commit`（v1.5.49 实际提交见 git log，交付说明给出）
+- APK：`KOiL-v1.5.49-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1549.zip`
 - 不涉及 DB schema（覆盖升级安全）
 
 ---
 ## 历史版本（归档）
+
+### v1.5.47（versionCode 247）— 2026-10-31 已交付
+- 定位：修复设置页开关"从关到开"短暂闪烁（UiState 默认值先行 + DataStore 异步加载后跳变 → 加载完成前不渲染）
+- commit：`bc5660d`
+- APK：`KOiL-v1.5.47-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip：`KOiL-src-v1547.zip`
+- 变更明细：见 CHANGELOG v1.5.47
 
 ### v1.5.46（versionCode 246）— 2026-10-31 已交付
 - 定位：第二轮回迭代（用户拍板「一排版/UI + 三数据可靠性 + 四工程质量」，暂缓功能新增）——趋势图油号筛选 / 空态去录入引导 / 首页密度微调 / 深色细节审计 / 零 warning 构建 / 构建提速（配置缓存）
