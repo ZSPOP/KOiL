@@ -1,6 +1,6 @@
-# KOiL Release 构建（v1.6.0 引入）
+# KOiL Release 构建（v1.6.0 引入，起用单主线 main）
 #
-# 触发：推送 v173-bold 分支 / 手动 workflow_dispatch。
+# 触发：推送 main 分支 / 推送大写 V 标签（V1.6.0 等，与 App versionName 风格统一）/ 手动 workflow_dispatch。
 # 产物：app-release.apk（release 签名，keystore 取自仓库内 keystore/ + keystore.properties）。
 # versionCode：由本 workflow 注入 KOIL_CI_VERSION_CODE = github.run_number + 251，
 #   与本地构建基准（252，每轮手动 +1）衔接、全局单调递增；versionName 读自 app/build.gradle.kts（手动维护）。
@@ -11,7 +11,8 @@ name: KOiL Release Build
 
 on:
   push:
-    branches: [v173-bold]
+    branches: [main]
+    tags: ['V*']
   workflow_dispatch:
 
 env:
