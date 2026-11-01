@@ -213,7 +213,9 @@ fun OverviewScreen(
         overlay = { backdrop, _, topPadding ->
             // v1.5.50：吸顶月份标题覆盖层——位于 backdrop 录制树外，可安全 textureBlur(backdrop)
             // 达到与顶栏同款真毛玻璃（采样不到自身，无递归）
-            val pinnedMonth = rememberTopPinnedMonth(listState, topPadding)
+            // monthKeys 用 remember 稳定引用（避免重组重建列表导致 LaunchedEffect 重启、吸顶闪烁）
+            val monthKeys = remember(monthGroups) { monthGroups.map { it.first } }
+            val pinnedMonth = rememberTopPinnedMonth(listState, topPadding, monthKeys)
             if (pinnedMonth != null) {
                 val count = monthGroups.firstOrNull { it.first == pinnedMonth }?.second?.size ?: 0
                 StickyMonthOverlay(
@@ -782,44 +784,53 @@ private fun MonthHeaderRow(monthKey: String, count: Int) {
 }
 
 /**
- * v1.5.50：计算"当前吸顶月份"（等价原 stickyHeader 的钉住语义）：
- * - 取所有可见月份标题中 offset ≤ 顶栏高度的**最后一个**为吸顶月份（新标题顶替旧标题；
- *   已滚过顶栏区/滚出屏幕上方的标题 offset 恒 ≤ 顶栏高度，天然保持吸顶）；
- * - 无任何标题在顶栏区（全部 offset > 顶栏高度）时：
- *   - 吸顶标题仍在可见列表（回滚离开顶栏区）→ 取消吸顶；
- *   - 吸顶标题已被回收（滚出屏幕）→ 保持吸顶（吸顶期延续）。
+ * v1.5.50：计算"当前吸顶月份"（等价 Compose stickyHeader 钉住语义，v1.5.50fix 起回滚连续无空档）：
+ * - 取所有可见月份标题中 offset ≤ 顶栏高度的**最后一个**为吸顶月份（新标题顶替旧标题）；
+ * - 无标题在顶栏区时：
+ *   - 无可见标题：列表已回到顶部（未进入历史区）或已滚过历史区末尾 → 取消吸顶；
+ *     否则（吸顶标题滚出视口上方、下一标题未到）→ 保持吸顶；
+ *   - 可见标题都在顶栏下方：吸顶标题自然位置回到顶栏（回滚松开）→ **立即接替为上一个月份标题**
+ *     （此时它必已处于吸顶位，即使视口外），实现回滚时顶栏标题连续切换、无空档；
+ *     吸顶标题已滚出视口上方（上滚中）→ 保持吸顶。
  * 覆盖层据此渲染顶栏同款毛玻璃标题；列表内对应标题行由各自 pinned 判定透明占位。
  */
 @Composable
 private fun rememberTopPinnedMonth(
     listState: LazyListState,
     topPadding: Dp,
+    monthKeys: List<String>,
 ): String? {
     val density = LocalDensity.current
     val topBarPx = with(density) { topPadding.toPx() }
     var pinned by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(listState, topBarPx) {
+    LaunchedEffect(listState, topBarPx, monthKeys) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo }
             .collect { visibleItems: List<LazyListItemInfo> ->
-                // 收集可见月份标题：(key, offset)
+                // 收集可见月份标题：(monthKey, offset) —— key 剥掉 "header-" 前缀
                 val headers: List<Pair<String, Int>> = visibleItems.mapNotNull { info ->
                     val key = info.key
-                    if (key is String && key.startsWith("header-")) key to info.offset else null
-                }
-                if (headers.isEmpty()) {
-                    pinned = null
-                    return@collect
+                    if (key is String && key.startsWith("header-")) {
+                        key.removePrefix("header-") to info.offset
+                    } else {
+                        null
+                    }
                 }
                 val lastInTop = headers.lastOrNull { it.second.toFloat() <= topBarPx + 2f }
                 if (lastInTop != null) {
                     pinned = lastInTop.first
                     return@collect
                 }
-                // 无标题在顶栏区：吸顶标题已被回收（滚出屏幕）→ 保持吸顶期；仍在可见区 → 回滚取消
-                if (pinned != null && headers.none { it.first == pinned }) {
-                    // 保持吸顶（标题已滚出屏幕顶部，吸顶期延续）
-                } else {
-                    pinned = null
+                if (headers.isEmpty()) {
+                    // 列表顶部（未进入历史区）或历史区已滚完 → 取消；否则保持吸顶（吸顶标题滚出视口上方）
+                    val atTop = listState.firstVisibleItemIndex == 0 &&
+                        listState.firstVisibleItemScrollOffset < topBarPx.toInt()
+                    if (atTop || !listState.canScrollForward) pinned = null
+                    return@collect
+                }
+                // 可见标题都在顶栏下方：回滚松开 → 上一个月份标题立即接替（吸顶中）；否则保持
+                if (headers.any { it.first == pinned }) {
+                    val idx = monthKeys.indexOf(pinned)
+                    pinned = if (idx > 0) monthKeys[idx - 1] else null
                 }
             }
     }

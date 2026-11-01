@@ -3,27 +3,30 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.50（versionCode 250）— 2026-11-01 已构建
+## 当前版本：v1.5.51（versionCode 251）— 2026-11-01 已构建
 
-- 定位：总览页吸顶月份标题**真·顶栏同款毛玻璃**（结构改造：吸顶标题移出 backdrop 录制树，textureBlur + surface 0.8 + 底边细线）
-- 版本链：… → v1.5.46(494777a) → v1.5.47(bc5660d) → v1.5.49(8e56528) → **v1.5.50（本轮）**（v1.5.48 已按用户要求回退移除）
-- v1.5.50 变更：
-  ① **KOiLScreenScaffold 新增 `overlay` 插槽**（layerBackdrop 挂载 Box 的兄弟层 = 录制树外，默认空 lambda，其他页无行为变化）
-  ② **总览页月份标题 stickyHeader → 普通 item**：贴顶时列表内该行 alpha 0 透明占位（防叠影），标题由覆盖层呈现
-  ③ **StickyMonthOverlay 覆盖层**：textureBlur(backdrop) 采样整页**不含自身 → 无递归**，与顶栏完全同参
-     （25f + surface 0.8 + 0.5dp 细线）；模糊不可用退化为纯色 surface 0.8；水平 12dp 对齐 contentPadding
-  ④ **rememberTopPinnedMonth 滚动判定**（等价 sticky 钉住语义，已推演 8 类边界）
-- 技术边界：miuix 0.9.4 LayerBackdrop 无排除机制，页内标题直接 textureBlur 必自采样递归（v1.5.25 实证）；
-  本轮以结构改造（移出录制树）实现真模糊，不再是无模糊的视觉近似
-- 影响面：总览页吸顶标题视觉 + 公共 Scaffold 可选插槽；compileReleaseKotlin 零错误零警告
+- 定位：修复 v1.5.50 验收 3 个 bug（空态去录入不跳转 / 贴顶标题 "header-" 前缀与笔数 0 / 回滚时吸顶标题空档）
+- 版本链：… → v1.5.47(bc5660d) → v1.5.49(8e56528) → v1.5.50(5e85dad) → **v1.5.51（本轮）**
+- v1.5.51 变更：
+  ① 空态「去录入」`animateScrollToPage(0)` → `springAnimateToPage(0)`（与底部导航一致，自定义手势管线下已验证可用）
+  ② `rememberTopPinnedMonth` 收集 key 剥 `header-` 前缀（贴顶标题恢复正确月份名与笔数）
+  ③ 回滚松开时**立即接替为上一个月份标题**（monthKeys 视觉顺序传参）+ 补列表回顶/滚完末尾取消分支（回滚连续无空档）
+- 影响面：MainScreen.kt + OverviewScreen.kt；compileReleaseKotlin 零错误零警告
 - 设计文档：无网络层/油价库机制变更
-- commit：`待 git commit`（v1.5.50 实际提交见 git log，交付说明给出）
-- APK：`KOiL-v1.5.50-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1550.zip`
+- commit：`待 git commit`（v1.5.51 实际提交见 git log，交付说明给出）
+- APK：`KOiL-v1.5.51-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1551.zip`
 - 不涉及 DB schema（覆盖升级安全）
 
 ---
 ## 历史版本（归档）
+
+### v1.5.50（versionCode 250）— 2026-11-01 已交付
+- 定位：总览页吸顶月份标题**真·顶栏同款毛玻璃**（结构改造：吸顶标题移出 backdrop 录制树，textureBlur + surface 0.8 + 底边细线）
+- commit：`5e85dad`
+- APK：`KOiL-v1.5.50-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip：`KOiL-src-v1550.zip`
+- 变更明细：见 CHANGELOG v1.5.50（v1.5.51 已修复其 3 个验收 bug）
 
 ### v1.5.49（versionCode 249）— 2026-11-01 已交付
 - 定位：总览页历史月份标题吸顶背景与顶栏视觉统一（surface 0.92 → 0.8 对齐顶栏混合参数 + 贴顶底部 0.5dp 细线）

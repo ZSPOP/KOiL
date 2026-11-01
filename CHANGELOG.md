@@ -1,5 +1,23 @@
 # KOiL CHANGELOG
 
+## v1.5.51（versionCode 251）— 2026-11-01（基于 v1.5.50，修复 v1.5.50 验收 3 个 bug）
+
+> 用户验收 v1.5.50 后反馈 3 个 bug，本轮全部修复：
+> ① **空态「去录入」不跳转录入页**（v1.5.46 引入）：`onNavigateToAdd` 原用 `pagerState.animateScrollToPage(0)`，
+>    在自定义手势管线（`pagerGestureOverride` + `userScrollEnabled=false`）下不生效；
+>    定位：MainScreen 其他页面跳转均用 `springAnimateToPage`（已验证可用），统一改用之。
+> ② **贴顶标题显示 "header-" 前缀 + 右侧笔数恒 0**（v1.5.50 引入）：`rememberTopPinnedMonth` 收集的 key
+>    保留列表 item 的 `"header-$monthKey"` 前缀，导致 ① 覆盖层 `monthTitle("header-2026-10")` 因 split("-")
+>    段数≠2 走 else 分支直接显示原始串；② 带前缀 key 与 `monthGroups` 纯 `YYYY-MM` 匹配失败 → `?: 0` 恒 0。
+>    定位：`key.removePrefix("header-")` 后再参与判定，标题与笔数同时恢复正确。
+> ③ **回滚时吸顶标题不显示、要到该月最后一条才出现**（v1.5.50 引入）：原判定只追踪**可见**标题，
+>    向下回滚吸顶标题自然位置回到顶栏（松开）时，上一个月份标题仍在视口外但已处于吸顶位 → 未被识别 →
+>    顶栏空档（长达上一月整段记录）。定位：吸顶标题松开瞬间**立即接替为上一个月份标题**（传入视觉顺序
+>    monthKeys，monthGroups 前驱 = 视线上方标题），与 Compose stickyHeader「回滚保持、顶替连续」语义一致；
+>    另补列表回顶部 / 滚过历史区末尾两个取消分支（原逻辑在此场景下错误保留/清空）。
+> 影响面：MainScreen.kt（跳转方式）、OverviewScreen.kt（rememberTopPinnedMonth 重构 + monthKeys 传参）；
+> 其余页面零改动。DB schema 不变（version 1）。
+
 ## v1.5.50（versionCode 250）— 2026-11-01（基于 v1.5.49，总览页吸顶月份标题真·顶栏同款毛玻璃）
 
 > 用户诉求（v1.5.49 视觉近似后）："能加点高斯模糊么"——要吸顶标题真正具备顶栏的毛玻璃观感。

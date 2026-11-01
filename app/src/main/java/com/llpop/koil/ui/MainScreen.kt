@@ -303,7 +303,9 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
                                         // v1.5.46：#5 空态「去录入」一键跳转录入页
-                                        onNavigateToAdd = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                        // v1.5.50fix：animateScrollToPage 在自定义手势管线（pagerGestureOverride +
+                                        // userScrollEnabled=false）下不生效，改用与底部导航一致的 springAnimateToPage（已验证可用）
+                                        onNavigateToAdd = { scope.launch { pagerState.springAnimateToPage(0) } },
                                     )
                                     2 -> SettingsScreen(
                                         modifier = contentModifier,
