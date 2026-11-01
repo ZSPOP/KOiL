@@ -1415,7 +1415,8 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(2.dp))
             Text(
-                text = "V${com.llpop.koil.BuildConfig.VERSION_NAME}",
+                // v1.6.0：版本号显示附带 (versionCode)，与 CI 注入的构建流水号对应
+                text = "V${com.llpop.koil.BuildConfig.VERSION_NAME} (${com.llpop.koil.BuildConfig.VERSION_CODE})",
                 fontSize = 11.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
             )

@@ -1,5 +1,22 @@
 # KOiL CHANGELOG
 
+## v1.6.0（versionCode 252）— 2026-11-02（引入 CI + 版本号策略切换，versionName 语义化跳 1.6.0）
+
+> 用户拍板：下个版本开始为 1.6.0（versionCode 继续递增），并在前端版本号显示处附带 (versionCode)。
+> 背景讨论：确认现有 versionName/versionCode 用法合规；对外版本号（versionName）为人工决策的里程碑标签，
+> versionCode 为单调递增构建流水号（适合自动化）。本轮落地：
+> ① **引入 CI（GitHub Actions 双轨）**：新增 `.github/workflows/build.yml`——推送 `v173-bold` 分支或手动触发
+>    即自动构建 release APK 并上传产物；versionCode 由 CI 注入 `KOIL_CI_VERSION_CODE = github.run_number + 251`
+>    （与本地 252 基准衔接、全局单调递增）；versionName 仍手动维护。workflow 含 JDK 21 + Android SDK 37 环境、
+>    AGP 9.1.0 平台目录 `android-37` 修正（与本地环境同款）、Gradle 缓存、artifact 上传。
+> ② **versionCode 自动化**：`app/build.gradle.kts` 读 `KOIL_CI_VERSION_CODE` 环境变量，
+>    无该变量（本地构建）时 fallback 到基准 252，每轮手动 +1——推远程前本地交付流程不断。
+> ③ **前端版本号显示 versionCode**：设置页「关于」区块由 `V1.6.0` 改为 `V1.6.0 (252)`，
+>    与 CI 注入的构建流水号对应，便于核对安装包实际构建号。
+> 影响面：app/build.gradle.kts（版本策略+注入逻辑）、SettingsScreen.kt（显示）、新增 .github/workflows/build.yml；
+> 其余页面零改动。DB schema 不变（version 1）。
+> 注意：仓库内 keystore 为私有项目简化做法，仓库设公开前需迁移至 GitHub Secrets（workflow 内已注释说明）。
+
 ## v1.5.51（versionCode 251）— 2026-11-01（基于 v1.5.50，修复 v1.5.50 验收 3 个 bug）
 
 > 用户验收 v1.5.50 后反馈 3 个 bug，本轮全部修复：

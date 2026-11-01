@@ -35,8 +35,11 @@ android {
         applicationId = "com.llpop.koil"
         minSdk = 33
         targetSdk = 37
-        versionCode = 251
-        versionName = "1.5.51"
+        // v1.6.0：引入 CI（GitHub Actions）——versionCode 支持 CI 注入：
+        // workflow 传 KOIL_CI_VERSION_CODE（run_number+251 偏移，与本地 252 基准衔接、全局单调递增）；
+        // 本地构建无该环境变量时 fallback 到下方基准值，每轮手动 +1。versionName 仍手动维护（语义化里程碑）。
+        versionCode = System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull() ?: 252
+        versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

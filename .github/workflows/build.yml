@@ -1,0 +1,69 @@
+# KOiL Release 构建（v1.6.0 引入）
+#
+# 触发：推送 v173-bold 分支 / 手动 workflow_dispatch。
+# 产物：app-release.apk（release 签名，keystore 取自仓库内 keystore/ + keystore.properties）。
+# versionCode：由本 workflow 注入 KOIL_CI_VERSION_CODE = github.run_number + 251，
+#   与本地构建基准（252，每轮手动 +1）衔接、全局单调递增；versionName 读自 app/build.gradle.kts（手动维护）。
+#
+# 注意：仓库内 keystore 为个人私有项目简化做法。若仓库设为公开，请改为将 keystore 与口令
+#   存入 GitHub Secrets（KEYSTORE_BASE64 / KEYSTORE_PASSWORD 等）并在下方签名步骤解密，勿随仓库分发。
+name: KOiL Release Build
+
+on:
+  push:
+    branches: [v173-bold]
+  workflow_dispatch:
+
+env:
+  # run_number 从 1 起，+251 与本地 252 基准对齐（首次 CI=252，之后 253、254… 单调递增）
+  KOIL_CI_VERSION_CODE: ${{ github.run_number + 251 }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 12.0
+
+      - name: Install platform 37 (AGP 9.1.0 以 hash android-37 查找，与本地环境同款修正)
+        run: |
+          sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+          ln -sfn "$ANDROID_SDK_ROOT/platforms/android-37.0" "$ANDROID_SDK_ROOT/platforms/android-37"
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Build release APK
+        env:
+          KOIL_CI_VERSION_CODE: ${{ github.run_number + 251 }}
+        run: ./gradlew assembleRelease --no-daemon --console=plain
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: KOiL-release
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error

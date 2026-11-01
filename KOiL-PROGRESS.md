@@ -3,23 +3,32 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.51（versionCode 251）— 2026-11-01 已构建
+## 当前版本：v1.6.0（versionCode 252）— 2026-11-02 已构建
 
-- 定位：修复 v1.5.50 验收 3 个 bug（空态去录入不跳转 / 贴顶标题 "header-" 前缀与笔数 0 / 回滚时吸顶标题空档）
-- 版本链：… → v1.5.47(bc5660d) → v1.5.49(8e56528) → v1.5.50(5e85dad) → **v1.5.51（本轮）**
-- v1.5.51 变更：
-  ① 空态「去录入」`animateScrollToPage(0)` → `springAnimateToPage(0)`（与底部导航一致，自定义手势管线下已验证可用）
-  ② `rememberTopPinnedMonth` 收集 key 剥 `header-` 前缀（贴顶标题恢复正确月份名与笔数）
-  ③ 回滚松开时**立即接替为上一个月份标题**（monthKeys 视觉顺序传参）+ 补列表回顶/滚完末尾取消分支（回滚连续无空档）
-- 影响面：MainScreen.kt + OverviewScreen.kt；compileReleaseKotlin 零错误零警告
+- 定位：引入 CI（GitHub Actions 双轨）+ 版本号策略切换——versionName 语义化跳 1.6.0（用户拍板），前端显示附带 (versionCode)
+- 版本链：… → v1.5.49(8e56528) → v1.5.50(5e85dad) → v1.5.51(83ea34e) → **v1.6.0（本轮）**
+- v1.6.0 变更：
+  ① **CI（GitHub Actions）**：新增 `.github/workflows/build.yml`——推送 v173-bold / 手动触发自动构建 release APK 并上传产物；
+     versionCode 由 CI 注入 `run_number + 251`（与本地 252 基准衔接、单调递增）
+  ② **versionCode 自动化**：gradle 读 `KOIL_CI_VERSION_CODE` 环境变量，无则 fallback 252（本地手动 +1）
+  ③ **前端显示 versionCode**：设置页「关于」`V1.6.0 (252)`
+- 版本号纪律（v1.6.0 起）：versionName = 人工决定的里程碑标签（语义化）；versionCode = 单调递增流水号（CI 自动/本地手动）
+- 影响面：app/build.gradle.kts + SettingsScreen.kt + 新增 workflow；compileReleaseKotlin 零错误零警告
 - 设计文档：无网络层/油价库机制变更
-- commit：`待 git commit`（v1.5.51 实际提交见 git log，交付说明给出）
-- APK：`KOiL-v1.5.51-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1551.zip`
+- commit：`待 git commit`（v1.6.0 实际提交见 git log，交付说明给出）
+- APK：`KOiL-v1.6.0-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v160.zip`
 - 不涉及 DB schema（覆盖升级安全）
 
 ---
 ## 历史版本（归档）
+
+### v1.5.51（versionCode 251）— 2026-11-01 已交付
+- 定位：修复 v1.5.50 验收 3 个 bug（空态去录入不跳转 / 贴顶标题 "header-" 前缀与笔数 0 / 回滚时吸顶标题空档）
+- commit：`83ea34e`
+- APK：`KOiL-v1.5.51-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip：`KOiL-src-v1551.zip`
+- 变更明细：见 CHANGELOG v1.5.51
 
 ### v1.5.50（versionCode 250）— 2026-11-01 已交付
 - 定位：总览页吸顶月份标题**真·顶栏同款毛玻璃**（结构改造：吸顶标题移出 backdrop 录制树，textureBlur + surface 0.8 + 底边细线）
