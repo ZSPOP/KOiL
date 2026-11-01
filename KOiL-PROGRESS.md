@@ -3,23 +3,34 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.5.49（versionCode 249）— 2026-11-01 已构建
+## 当前版本：v1.5.50（versionCode 250）— 2026-11-01 已构建
 
-- 定位：总览页历史月份标题吸顶背景与顶栏视觉统一（surface 0.92 → 0.8 对齐顶栏混合参数 + 贴顶底部 0.5dp 细线）
-- 版本链：… → v1.5.45(5cd7388) → v1.5.46(494777a) → v1.5.47(bc5660d) → **v1.5.49（本轮）**（v1.5.48 已按用户要求回退移除）
-- v1.5.49 变更：
-  ① **吸顶背景对齐顶栏**：月份 stickyHeader 吸顶背景 `surface 0.92` → **`surface 0.8`**（与 BlurredBar 顶栏 blend 同参）
-  ② **贴顶底部 0.5dp 细线**（同 SettingDivider 色），吸顶标题呈顶栏"半透明延续"，无接缝感
-- 技术边界：完全复刻顶栏毛玻璃（textureBlur）不可行——月份标题在 backdrop 录制子树内，v1.5.25 实证自采样递归闪退；本轮为视觉最大近似
-- 影响面：仅总览页吸顶标题视觉；compileReleaseKotlin 零错误零警告
+- 定位：总览页吸顶月份标题**真·顶栏同款毛玻璃**（结构改造：吸顶标题移出 backdrop 录制树，textureBlur + surface 0.8 + 底边细线）
+- 版本链：… → v1.5.46(494777a) → v1.5.47(bc5660d) → v1.5.49(8e56528) → **v1.5.50（本轮）**（v1.5.48 已按用户要求回退移除）
+- v1.5.50 变更：
+  ① **KOiLScreenScaffold 新增 `overlay` 插槽**（layerBackdrop 挂载 Box 的兄弟层 = 录制树外，默认空 lambda，其他页无行为变化）
+  ② **总览页月份标题 stickyHeader → 普通 item**：贴顶时列表内该行 alpha 0 透明占位（防叠影），标题由覆盖层呈现
+  ③ **StickyMonthOverlay 覆盖层**：textureBlur(backdrop) 采样整页**不含自身 → 无递归**，与顶栏完全同参
+     （25f + surface 0.8 + 0.5dp 细线）；模糊不可用退化为纯色 surface 0.8；水平 12dp 对齐 contentPadding
+  ④ **rememberTopPinnedMonth 滚动判定**（等价 sticky 钉住语义，已推演 8 类边界）
+- 技术边界：miuix 0.9.4 LayerBackdrop 无排除机制，页内标题直接 textureBlur 必自采样递归（v1.5.25 实证）；
+  本轮以结构改造（移出录制树）实现真模糊，不再是无模糊的视觉近似
+- 影响面：总览页吸顶标题视觉 + 公共 Scaffold 可选插槽；compileReleaseKotlin 零错误零警告
 - 设计文档：无网络层/油价库机制变更
-- commit：`待 git commit`（v1.5.49 实际提交见 git log，交付说明给出）
-- APK：`KOiL-v1.5.49-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1549.zip`
+- commit：`待 git commit`（v1.5.50 实际提交见 git log，交付说明给出）
+- APK：`KOiL-v1.5.50-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v1550.zip`
 - 不涉及 DB schema（覆盖升级安全）
 
 ---
 ## 历史版本（归档）
+
+### v1.5.49（versionCode 249）— 2026-11-01 已交付
+- 定位：总览页历史月份标题吸顶背景与顶栏视觉统一（surface 0.92 → 0.8 对齐顶栏混合参数 + 贴顶底部 0.5dp 细线）
+- commit：`8e56528`
+- APK：`KOiL-v1.5.49-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- 源码 zip：`KOiL-src-v1549.zip`
+- 变更明细：见 CHANGELOG v1.5.49
 
 ### v1.5.47（versionCode 247）— 2026-10-31 已交付
 - 定位：修复设置页开关"从关到开"短暂闪烁（UiState 默认值先行 + DataStore 异步加载后跳变 → 加载完成前不渲染）

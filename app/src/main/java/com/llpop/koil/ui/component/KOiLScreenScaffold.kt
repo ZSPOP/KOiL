@@ -30,6 +30,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * content 回调给出：
  * - topPadding：TopAppBar 当前高度（含状态栏，折叠时变化），内容开头应放等高 Spacer 避让
  * - scrollBehavior：内容滚动容器需 .nestedScroll(scrollBehavior.nestedScrollConnection) 联动折叠
+ *
+ * overlay 插槽（v1.5.50）：可选覆盖层，渲染在 backdrop 录制树**之外**（与 content 容器同层兄弟），
+ * 因此可安全地 textureBlur(backdrop) 而不自采样递归——用于"吸顶标题"等需要顶栏同款毛玻璃、
+ * 却又位于列表（backdrop 子树）内的元素。不传则无覆盖层（各页行为不变）。
  */
 @Suppress("SENSELESS_COMPARISON") // backdrop 由 rememberLayerBackdrop 构造恒非空，保留可空签名给 content 调用方
 @Composable
@@ -37,6 +41,7 @@ fun KOiLScreenScaffold(
     title: String,
     modifier: Modifier = Modifier,
     navigationIcon: (@Composable () -> Unit)? = null,
+    overlay: @Composable (backdrop: LayerBackdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
     content: @Composable (
         innerPadding: PaddingValues,
         topPadding: Dp,
@@ -67,21 +72,25 @@ fun KOiLScreenScaffold(
         },
     ) { innerPadding ->
         val focusManager = LocalFocusManager.current
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
-                // v1.5.32：点击输入框外任意位置取消选中/失焦（子输入框消费点击，不误触；录入卡/总览/设置统一生效）
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = { focusManager.clearFocus() })
-                },
-        ) {
-            content(
-                innerPadding,
-                innerPadding.calculateTopPadding(),
-                scrollBehavior,
-                backdrop,
-            )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+                    // v1.5.32：点击输入框外任意位置取消选中/失焦（子输入框消费点击，不误触；录入卡/总览/设置统一生效）
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    },
+            ) {
+                content(
+                    innerPadding,
+                    innerPadding.calculateTopPadding(),
+                    scrollBehavior,
+                    backdrop,
+                )
+            }
+            // v1.5.50：覆盖层（backdrop 录制树外，可安全 textureBlur(backdrop) 而不自采样递归）
+            overlay(backdrop, innerPadding, innerPadding.calculateTopPadding())
         }
     }
 }

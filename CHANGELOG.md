@@ -1,5 +1,27 @@
 # KOiL CHANGELOG
 
+## v1.5.50（versionCode 250）— 2026-11-01（基于 v1.5.49，总览页吸顶月份标题真·顶栏同款毛玻璃）
+
+> 用户诉求（v1.5.49 视觉近似后）："能加点高斯模糊么"——要吸顶标题真正具备顶栏的毛玻璃观感。
+> 技术背景：miuix 0.9.4 的 `LayerBackdrop` 是录制整棵挂载子树（GraphicsLayer.recordLayer），无排除节点机制；
+> 月份标题原位于 backdrop 录制树内（LazyColumn item），直接 `textureBlur(backdrop)` 会自采样递归闪退
+> （v1.5.25 实证）。本轮做**结构改造**把吸顶标题移出录制树，从而安全启用真模糊：
+> ① **`KOiLScreenScaffold` 新增 `overlay` 插槽**：渲染在 `layerBackdrop` 挂载 Box 的兄弟层（录制树外），
+>    默认空 lambda，其他页面行为不变；调用方拿到 backdrop + innerPadding + topPadding。
+> ② **总览页月份标题改为普通 item**（原 stickyHeader 移除）：标题进入顶栏区域时列表内该行自身
+>    `alpha 0` 透明占位（高度保持，防叠影），标题文字改由覆盖层呈现。
+> ③ **新增 `StickyMonthOverlay` 覆盖层**：位于录制树外，`textureBlur(backdrop)` 采样整页内容
+>    **不含自身 → 无递归**，参数与顶栏完全同参（blurRadius 25f + surface 0.8 混合 + 底部 0.5dp 细线）；
+>    模糊不可用（SDK<33 / 无 RuntimeShader）退化为纯色 surface 0.8。水平 12dp 对齐 LazyColumn contentPadding，
+>    标题行与列表内共用 `MonthHeaderRow`（布局/字号/间距完全一致，切换无跳变）。
+> ④ **新增 `rememberTopPinnedMonth` 滚动判定**（等价原 stickyHeader 钉住语义）：可见标题中
+>    offset ≤ 顶栏高度的最后一个为吸顶月份（新标题顶替旧标题；滚过顶栏区/滚出屏幕的标题 offset 恒 ≤ 顶栏高度
+>    天然延续吸顶）；全部可见标题都在顶栏下方时——吸顶标题已被回收（滚出屏幕）→ 延续吸顶期，
+>    仍在可见区（向下回滚）→ 取消吸顶。已推演 8 类滚动边界（进入/顶替/回滚/滚完/快速滚动/空态等）。
+> 影响面：总览页吸顶标题视觉（真毛玻璃）+ 公共 Scaffold 新增可选插槽（默认无行为变化）；
+> `compileReleaseKotlin` 零错误零警告。
+> 不涉及 DB schema（覆盖升级安全）。
+
 ## v1.5.49（versionCode 249）— 2026-11-01（基于 v1.5.47，总览页历史月份标题吸顶背景与顶栏视觉统一）
 
 > 用户反馈：历史记录月份标题"贴顶"时的背景与顶栏背景不一致，希望统一。

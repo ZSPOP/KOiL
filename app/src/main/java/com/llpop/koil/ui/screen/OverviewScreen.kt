@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListItemInfo
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -64,11 +66,13 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -83,6 +87,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -116,6 +121,11 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.popup.WindowDropdownPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
@@ -200,6 +210,20 @@ fun OverviewScreen(
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_ov_title),
         modifier = modifier,
+        overlay = { backdrop, _, topPadding ->
+            // v1.5.50：吸顶月份标题覆盖层——位于 backdrop 录制树外，可安全 textureBlur(backdrop)
+            // 达到与顶栏同款真毛玻璃（采样不到自身，无递归）
+            val pinnedMonth = rememberTopPinnedMonth(listState, topPadding)
+            if (pinnedMonth != null) {
+                val count = monthGroups.firstOrNull { it.first == pinnedMonth }?.second?.size ?: 0
+                StickyMonthOverlay(
+                    backdrop = backdrop,
+                    pinnedMonth = pinnedMonth,
+                    monthCount = count,
+                    topPadding = topPadding,
+                )
+            }
+        },
     ) { _, topPadding, scrollBehavior, _ ->
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -317,77 +341,28 @@ fun OverviewScreen(
             }
             item { Spacer(Modifier.height(10.dp)) }
 
-            // v1.5.20（#8）：LazyColumn 惰性渲染——月份标题 stickyHeader 吸顶，卡片仅组合可见项；
+            // v1.5.20（#8）：LazyColumn 惰性渲染——月份标题分组展示，卡片仅组合可见项；
             // 无记录时显示空态引导。已移除手动按月分页（visibleMonths）与"滚动加载更多"提示
+            // v1.5.50：月份标题从 stickyHeader 改为普通 item——吸顶由覆盖层（StickyMonthOverlay，
+            // 位于 backdrop 录制树外）承担：贴顶期间列表内标题行自身透明占位（高度保持，防叠影），
+            // 标题文字由覆盖层以顶栏同款真毛玻璃（textureBlur + surface 0.8）呈现
             if (uiState.records.isEmpty()) {
                 item { EmptyHistoryBox(onAddClick = onNavigateToAdd) }
             } else {
                 monthGroups.forEach { (monthKey, monthRecords) ->
-                    stickyHeader(key = "header-$monthKey") {
-                        // v1.5.24：吸顶检测（用 layoutInfo offset，不受自身绘制 offset 影响，无振荡）——
-                        // 标题进入顶栏区域(offset ≤ 顶栏高度)即视为贴顶：绘制 offset 下移顶栏高度贴顶栏底部（连续无跳变），
-                        // 未贴顶时透明无背景色块
-                        // v1.5.25：吸顶背景改半透明 surface——原 textureBlur(backdrop) 会采样到 header 自身
-                        //（header 位于 backdrop 录制子树内部，与顶栏不同）→ 自采样递归导致闪退；
-                        // 半透明 surface 观感接近顶栏毛玻璃且无递归风险
+                    item(key = "header-$monthKey") {
                         val density = LocalDensity.current
                         val topBarPx = with(density) { topPadding.toPx() }
-                        // v1.5.49：吸顶分隔线颜色在 Composable 上下文取（drawBehind 内不可读主题色）
-                        val stickyLineColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
-                        val sticky by remember(topPadding) {
+                        val pinned by remember(topPadding) {
                             derivedStateOf {
                                 val off = listState.layoutInfo.visibleItemsInfo
                                     .firstOrNull { it.key == "header-$monthKey" }?.offset ?: Int.MAX_VALUE
                                 off <= topBarPx + 2
                             }
                         }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(
-                                    if (sticky) {
-                                        Modifier.offset { IntOffset(0, topBarPx.roundToInt()) }
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .then(
-                                    if (sticky) {
-                                        // v1.5.49：吸顶背景对齐顶栏混合参数（surface 0.8，与 BlurredBar 同参）
-                                        // + 底部 0.5dp 细线（同 SettingDivider 颜色），视觉上呈顶栏"半透明延续"
-                                        Modifier
-                                            .background(MiuixTheme.colorScheme.surface.copy(alpha = 0.8f))
-                                            .drawBehind {
-                                                val y = size.height - 0.5.dp.toPx()
-                                                drawLine(
-                                                    color = stickyLineColor,
-                                                    start = Offset(0f, y),
-                                                    end = Offset(size.width, y),
-                                                    strokeWidth = 0.5.dp.toPx(),
-                                                )
-                                            }
-                                    } else {
-                                        Modifier
-                                    },
-                                )
-                                .padding(top = 6.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            // v1.5.24：月份文字 16sp；笔数同字号、右对齐
-                            Text(
-                                text = monthTitle(monthKey),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MiuixTheme.colorScheme.onBackground,
-                                modifier = Modifier.padding(start = 4.dp),
-                            )
-                            Spacer(Modifier.weight(1f))
-                            Text(
-                                text = stringResource(R.string.koil_ov_month_count, monthRecords.size),
-                                fontSize = 16.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                modifier = Modifier.padding(end = 4.dp),
-                            )
+                        // 贴顶（进入顶栏区域）时自身透明占位；标题由覆盖层显示
+                        Box(Modifier.alpha(if (pinned) 0f else 1f)) {
+                            MonthHeaderRow(monthKey = monthKey, count = monthRecords.size)
                         }
                     }
                     // v1.5.20（#10）：key=记录 id，回调稳定；未变化的滚出/滚入卡片可被跳过/回收
@@ -778,6 +753,129 @@ private fun monthTitle(monthKey: String): String {
     return if (parts.size == 2)
         stringResource(R.string.koil_ov_month_title, parts[0].toInt(), parts[1].toInt())
     else monthKey
+}
+
+/** v1.5.50：月份标题行（列表 item 与吸顶覆盖层共用，保证两处布局/字号/间距完全一致，切换无跳变） */
+@Composable
+private fun MonthHeaderRow(monthKey: String, count: Int) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = monthTitle(monthKey),
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = MiuixTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            text = stringResource(R.string.koil_ov_month_count, count),
+            fontSize = 16.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant,
+            modifier = Modifier.padding(end = 4.dp),
+        )
+    }
+}
+
+/**
+ * v1.5.50：计算"当前吸顶月份"（等价原 stickyHeader 的钉住语义）：
+ * - 取所有可见月份标题中 offset ≤ 顶栏高度的**最后一个**为吸顶月份（新标题顶替旧标题；
+ *   已滚过顶栏区/滚出屏幕上方的标题 offset 恒 ≤ 顶栏高度，天然保持吸顶）；
+ * - 无任何标题在顶栏区（全部 offset > 顶栏高度）时：
+ *   - 吸顶标题仍在可见列表（回滚离开顶栏区）→ 取消吸顶；
+ *   - 吸顶标题已被回收（滚出屏幕）→ 保持吸顶（吸顶期延续）。
+ * 覆盖层据此渲染顶栏同款毛玻璃标题；列表内对应标题行由各自 pinned 判定透明占位。
+ */
+@Composable
+private fun rememberTopPinnedMonth(
+    listState: LazyListState,
+    topPadding: Dp,
+): String? {
+    val density = LocalDensity.current
+    val topBarPx = with(density) { topPadding.toPx() }
+    var pinned by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(listState, topBarPx) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
+            .collect { visibleItems: List<LazyListItemInfo> ->
+                // 收集可见月份标题：(key, offset)
+                val headers: List<Pair<String, Int>> = visibleItems.mapNotNull { info ->
+                    val key = info.key
+                    if (key is String && key.startsWith("header-")) key to info.offset else null
+                }
+                if (headers.isEmpty()) {
+                    pinned = null
+                    return@collect
+                }
+                val lastInTop = headers.lastOrNull { it.second.toFloat() <= topBarPx + 2f }
+                if (lastInTop != null) {
+                    pinned = lastInTop.first
+                    return@collect
+                }
+                // 无标题在顶栏区：吸顶标题已被回收（滚出屏幕）→ 保持吸顶期；仍在可见区 → 回滚取消
+                if (pinned != null && headers.none { it.first == pinned }) {
+                    // 保持吸顶（标题已滚出屏幕顶部，吸顶期延续）
+                } else {
+                    pinned = null
+                }
+            }
+    }
+    return pinned
+}
+
+/**
+ * v1.5.50：吸顶月份标题覆盖层——位于 backdrop 录制树外（KOiLScreenScaffold overlay 插槽），
+ * 可安全 textureBlur(backdrop) 采样整页内容（不含自身）→ 与顶栏同款真毛玻璃：
+ * blurRadius 25f + surface 0.8 混合（对齐 BlurredBar）+ 底部 0.5dp 细线（同 SettingDivider 色）。
+ * 模糊不可用（SDK<33 / 无 RuntimeShader）时退化为纯色 surface 0.8。
+ */
+@Composable
+private fun StickyMonthOverlay(
+    backdrop: LayerBackdrop?,
+    pinnedMonth: String,
+    monthCount: Int,
+    topPadding: Dp,
+) {
+    val bd = backdrop
+    val canBlur = bd != null && isRuntimeShaderSupported()
+    // 分隔线颜色在 Composable 上下文预取（drawBehind 内不可读主题色）
+    val stickyLineColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 水平 12dp 对齐 LazyColumn contentPadding，标题文字与列表内标题行位置一致（切换无错位）
+            .padding(start = 12.dp, end = 12.dp, top = topPadding)
+            .then(
+                if (canBlur) {
+                    Modifier.textureBlur(
+                        backdrop = bd,
+                        shape = RectangleShape,
+                        blurRadius = 25f,
+                        colors = BlurColors(
+                            blendColors = listOf(
+                                BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(alpha = 0.8f)),
+                            ),
+                        ),
+                    )
+                } else {
+                    Modifier.background(MiuixTheme.colorScheme.surface.copy(alpha = 0.8f))
+                },
+            )
+            .drawBehind {
+                val y = size.height - 0.5.dp.toPx()
+                drawLine(
+                    color = stickyLineColor,
+                    start = Offset(0f, y),
+                    end = Offset(size.width, y),
+                    strokeWidth = 0.5.dp.toPx(),
+                )
+            },
+    ) {
+        MonthHeaderRow(monthKey = pinnedMonth, count = monthCount)
+    }
 }
 
 /** 构建正序前一条记录映射（用于环比与区间） */
