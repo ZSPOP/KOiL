@@ -71,9 +71,13 @@ jobs:
           archive: false
 
       # 打 V 标签（如 V1.6.0）时自动发布 Release，附件即 APK 原文件，直接下载无需解压
+      - name: Rename APK for release
+        if: startsWith(github.ref, 'refs/tags/V')
+        run: cp app/build/outputs/apk/release/app-release.apk "KOiL-${GITHUB_REF_NAME}-release.apk"
+
       - name: Publish Release
         if: startsWith(github.ref, 'refs/tags/V')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/app-release.apk
+          files: KOiL-*.apk
           generate_release_notes: true
