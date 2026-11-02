@@ -22,6 +22,9 @@ concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Build APK
@@ -59,9 +62,18 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon --console=plain
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload APK (artifact 供日常查看，下载为原文件)
+        uses: actions/upload-artifact@v7
         with:
           name: KOiL-release
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
+          archive: false
+
+      # 打 V 标签（如 V1.6.0）时自动发布 Release，附件即 APK 原文件，直接下载无需解压
+      - name: Publish Release
+        if: startsWith(github.ref, 'refs/tags/V')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/app-release.apk
+          generate_release_notes: true
