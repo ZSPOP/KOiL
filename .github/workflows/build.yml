@@ -16,8 +16,9 @@ on:
   workflow_dispatch:
 
 env:
-  # run_number 从 1 起，+251 与本地 252 基准对齐（首次 CI=252，之后 253、254… 单调递增）
-  KOIL_CI_VERSION_CODE: ${{ github.run_number + 251 }}
+  # 只传 github.run_number（GitHub Actions 表达式不支持 +，+251 偏移在 app/build.gradle.kts 内做）：
+  # 首次 CI run_number=1 → versionCode=252，与本地 252 基准衔接，之后 253、254… 全局单调递增
+  KOIL_CI_RUN_NUMBER: ${{ github.run_number }}
 
 jobs:
   build:
@@ -59,7 +60,7 @@ jobs:
 
       - name: Build release APK
         env:
-          KOIL_CI_VERSION_CODE: ${{ github.run_number + 251 }}
+          KOIL_CI_RUN_NUMBER: ${{ github.run_number }}
         run: ./gradlew assembleRelease --no-daemon --console=plain
 
       - name: Upload APK

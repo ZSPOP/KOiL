@@ -36,9 +36,11 @@ android {
         minSdk = 33
         targetSdk = 37
         // v1.6.0：引入 CI（GitHub Actions）——versionCode 支持 CI 注入：
-        // workflow 传 KOIL_CI_VERSION_CODE（run_number+251 偏移，与本地 252 基准衔接、全局单调递增）；
-        // 本地构建无该环境变量时 fallback 到下方基准值，每轮手动 +1。versionName 仍手动维护（语义化里程碑）。
-        versionCode = System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull() ?: 252
+        // CI 侧传 KOIL_CI_RUN_NUMBER（github.run_number），此处 +251 偏移，与本地 252 基准衔接、全局单调递增；
+        // （GitHub Actions 表达式不支持 +，故加法放在 gradle 侧做）
+        // 兼容旧变量名 KOIL_CI_VERSION_CODE（直接用其值）；本地构建无环境变量时 fallback 到下方基准值，每轮手动 +1。
+        versionCode = System.getenv("KOIL_CI_RUN_NUMBER")?.toIntOrNull()?.let { it + 251 }
+            ?: System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull() ?: 252
         versionName = "1.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
