@@ -1,28 +1,33 @@
-# KOiL Release 构建（v1.6.0 引入，起用单主线 main）
+# KOiL Build（v1.6.0 引入，仿 Mishka 结构）
 #
-# 触发：推送 main 分支 / 推送大写 V 标签（V1.6.0 等，与 App versionName 风格统一）/ 手动 workflow_dispatch。
-# 产物：app-release.apk（release 签名，keystore 取自仓库内 keystore/ + keystore.properties）。
-# versionCode：由本 workflow 注入 KOIL_CI_VERSION_CODE = github.run_number + 251，
-#   与本地构建基准（252，每轮手动 +1）衔接、全局单调递增；versionName 读自 app/build.gradle.kts（手动维护）。
+# 触发：推送 main / 推送大写 V 标签（V1.6.0，与 App versionName 风格统一）/ 手动 workflow_dispatch。
+#       文档（*.md）改动不触发构建。
+# 产物：app-release.apk（release 签名，keystore 取自仓库内 keystore/ + keystore.properties——私有仓库简化做法）。
+# versionCode：注入 KOIL_CI_RUN_NUMBER = github.run_number，+251 偏移在 app/build.gradle.kts 内完成
+#   （GitHub Actions 表达式不支持 +），与本地 252 基准衔接、全局单调递增。
 #
-# 注意：仓库内 keystore 为个人私有项目简化做法。若仓库设为公开，请改为将 keystore 与口令
-#   存入 GitHub Secrets（KEYSTORE_BASE64 / KEYSTORE_PASSWORD 等）并在下方签名步骤解密，勿随仓库分发。
-name: KOiL Release Build
+# 注意：仓库内 keystore 为私有仓库简化做法；若仓库设公开，请迁移至 GitHub Secrets
+#   （如 SIGNING_KEY=base64(keystore)、KEY_STORE_PASSWORD），在下方签名步骤解码，勿随仓库分发。
+name: Build
 
 on:
   push:
     branches: [main]
     tags: ['V*']
+    paths-ignore:
+      - '**.md'
   workflow_dispatch:
 
-env:
-  # 只传 github.run_number（GitHub Actions 表达式不支持 +，+251 偏移在 app/build.gradle.kts 内做）：
-  # 首次 CI run_number=1 → versionCode=252，与本地 252 基准衔接，之后 253、254… 全局单调递增
-  KOIL_CI_RUN_NUMBER: ${{ github.run_number }}
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
 
 jobs:
-  build:
+  build-apk:
+    name: Build APK
     runs-on: ubuntu-latest
+    env:
+      KOIL_CI_RUN_NUMBER: ${{ github.run_number }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -42,22 +47,16 @@ jobs:
           "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
           ln -sfn "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37.0" "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37"
 
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Build release APK
-        env:
-          KOIL_CI_RUN_NUMBER: ${{ github.run_number }}
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --console=plain
+
+      - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon --console=plain
 
       - name: Upload APK
