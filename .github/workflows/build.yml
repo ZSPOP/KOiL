@@ -37,9 +37,10 @@ jobs:
 
       - name: Install SDK packages (runner 预装 SDK，用预装 sdkmanager 补 platform 37 + build-tools 37)
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
-          ln -sfn "$ANDROID_SDK_ROOT/platforms/android-37.0" "$ANDROID_SDK_ROOT/platforms/android-37"
+          SDKMANAGER="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+          ln -sfn "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37.0" "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37"
 
       - name: Cache Gradle
         uses: actions/cache@v4
