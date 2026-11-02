@@ -35,13 +35,9 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: 12.0
-
-      - name: Install platform 37 (AGP 9.1.0 以 hash android-37 查找，与本地环境同款修正)
+      - name: Install SDK packages (runner 预装 SDK，用预装 sdkmanager 补 platform 37 + build-tools 37)
         run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
           ln -sfn "$ANDROID_SDK_ROOT/platforms/android-37.0" "$ANDROID_SDK_ROOT/platforms/android-37"
 
