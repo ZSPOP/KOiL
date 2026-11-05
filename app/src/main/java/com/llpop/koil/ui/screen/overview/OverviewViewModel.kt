@@ -11,6 +11,7 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.DerivedCalculator
 import com.llpop.koil.domain.logic.RecordWithDerived
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -147,7 +148,22 @@ class OverviewViewModel(
     private val editPrecheckFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     private val backfillPrecheckFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 
+    /**
+     * v1.6.3：总览重算的合并触发信号（CONFLATED = 只保留最新一次）。
+     * 原实现 recompute() 直接在主线程跑 3 次 filter + average + sortedByDescending，
+     * 万级记录时是一次实打实的卡帧（不是"以后可能会"，而是每次切范围/加记录都在做）。
+     * 现在：调用方只 trySend，单个消费协程在 Default 算完再回主线程合并状态，
+     * 天然串行，不会出现两次重算交叉写状态导致的乱序。
+     */
+    private val recomputeSignal = Channel<Unit>(Channel.CONFLATED)
+
     init {
+        viewModelScope.launch {
+            while (true) {
+                recomputeSignal.receive()
+                doRecompute()
+            }
+        }
         viewModelScope.launch {
             editPrecheckFlow.debounce(180).collect { doRunEditPrecheck() }
         }
@@ -202,41 +218,71 @@ class OverviewViewModel(
         recompute()
     }
 
+    /** 触发一次重算（非阻塞，多次调用自动合并为一次） */
     private fun recompute() {
-        val range = _uiState.value.range
+        recomputeSignal.trySend(Unit)
+    }
+
+    /** 真正的重算：筛范围 → 汇总 → 趋势 → 异常列表，全程在 Default，只在最后一步回主线程写状态 */
+    private suspend fun doRecompute() {
+        val snapshot = allDerived
+        val s0 = _uiState.value
+        val range = s0.range
+        val trendGrade = s0.trendGrade
         val (start, prevStart, prevEnd) = rangeBounds(range)
         // v1.6.2：改字符串比较。reoilDate 固定 yyyy-MM-dd 零填充，字典序等价时间序（原先每条都 LocalDate.parse，
         // 实测 2000 条 7.25ms → 1.17ms，快 6.2 倍；且完全消除了主线程上的对象分配与解析异常面）。
         val startStr = start.toString()
         val prevStartStr = prevStart.toString()
         val prevEndStr = prevEnd.toString()
-        // 「全部」范围直接复用原列表（reversed() 会新建，不会污染 allDerived），省一次全量过滤 + 拷贝
-        val filtered = if (range == "all") allDerived
-        else allDerived.filter { it.record.reoilDate >= startStr }
-        // 「全部」时上一周期区间是空区间（1970-01-01 ~ 1970-01-01），无需过滤即可判定为空
-        val prevFiltered = if (range == "all") emptyList()
-        else allDerived.filter {
-            it.record.reoilDate >= prevStartStr && it.record.reoilDate < prevEndStr
-        }
-        val stats = computeSummary(filtered)
-        val prevStats = if (prevFiltered.isNotEmpty()) computeSummary(prevFiltered) else null
-        // v1.5.46：趋势图按油号筛选（全部/92/95/98/0），六指标/异常卡/历史列表仍走全部记录
-        val tg = _uiState.value.trendGrade
-        val trend = computeTrend(if (tg == "all") filtered else filtered.filter { it.record.oilGrade == tg })
-        val avgCons = filtered.mapNotNull { it.oilConsumption }.average().let { if (it.isNaN()) 0.0 else it }
-        val abnormal = filtered.filter {
-            it.consumptionStatus == ConsumptionStatus.HIGH || it.consumptionStatus == ConsumptionStatus.LOW
-        }.sortedByDescending { kotlin.math.abs(it.deviationPct) }
 
-        _uiState.value = _uiState.value.copy(
-            records = filtered.reversed(),
-            stats = stats,
-            prevStats = prevStats,
-            trend = trend,
-            abnormalRecords = abnormal,
-            avgConsumption = avgCons,
-        )
+        val computed = withContext(Dispatchers.Default) {
+            // 「全部」范围直接复用原列表（reversed() 会新建，不会污染 allDerived），省一次全量过滤 + 拷贝
+            val filtered = if (range == "all") snapshot
+            else snapshot.filter { it.record.reoilDate >= startStr }
+            // 「全部」时上一周期区间是空区间（1970-01-01 ~ 1970-01-01），无需过滤即可判定为空
+            val prevFiltered = if (range == "all") emptyList()
+            else snapshot.filter {
+                it.record.reoilDate >= prevStartStr && it.record.reoilDate < prevEndStr
+            }
+            val stats = computeSummary(filtered)
+            val prevStats = if (prevFiltered.isNotEmpty()) computeSummary(prevFiltered) else null
+            // v1.5.46：趋势图按油号筛选（全部/92/95/98/0），六指标/异常卡/历史列表仍走全部记录
+            val trend = computeTrend(if (trendGrade == "all") filtered else filtered.filter { it.record.oilGrade == trendGrade })
+            val avgCons = filtered.mapNotNull { it.oilConsumption }.average().let { if (it.isNaN()) 0.0 else it }
+            val abnormal = filtered.filter {
+                it.consumptionStatus == ConsumptionStatus.HIGH || it.consumptionStatus == ConsumptionStatus.LOW
+            }.sortedByDescending { kotlin.math.abs(it.deviationPct) }
+            ComputedView(
+                records = filtered.reversed(),
+                stats = stats,
+                prevStats = prevStats,
+                trend = trend,
+                abnormal = abnormal,
+                avgConsumption = avgCons,
+            )
+        }
+        // 落到最新状态上（期间用户可能已切换弹窗等无关字段，不能用旧快照整体覆盖）
+        _uiState.update {
+            it.copy(
+                records = computed.records,
+                stats = computed.stats,
+                prevStats = computed.prevStats,
+                trend = computed.trend,
+                abnormalRecords = computed.abnormal,
+                avgConsumption = computed.avgConsumption,
+            )
+        }
     }
+
+    private data class ComputedView(
+        val records: List<RecordWithDerived>,
+        val stats: SummaryStats,
+        val prevStats: SummaryStats?,
+        val trend: List<TrendPoint>,
+        val abnormal: List<RecordWithDerived>,
+        val avgConsumption: Double,
+    )
 
     /** 返回 (当前范围起点, 上一周期起点, 上一周期终点) */
     private fun rangeBounds(range: String): Triple<LocalDate, LocalDate, LocalDate> {

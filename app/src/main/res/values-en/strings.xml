@@ -40,7 +40,6 @@
     <string name="koil_add_forecast_sep">, </string>
     <string name="koil_add_approx_per_liter_up">≈ up ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter_down">≈ down ¥%1$.2f/L</string>
-    <string name="koil_add_approx_per_liter">≈ ¥%1$.2f/L</string>
     <string name="koil_add_unit_per_liter">¥/L</string>
     <string name="koil_add_last_refuel">Last fill-up</string>
     <string name="koil_add_no_record">No records yet</string>
@@ -54,7 +53,6 @@
     <string name="koil_precheck_over_payable">Paid amount exceeds payable, please confirm</string>
     <string name="koil_precheck_over_tank">Amount exceeds tank capacity %1$d L, please confirm</string>
     <string name="koil_precheck_deviation">Price deviation %1$.1f%%, please confirm before adding</string>
-    <string name="koil_precheck_price_ok">Price matches the reference price</string>
     <string name="koil_precheck_ready">Pre-check passed · %1$.0f km since last refuel, saved %2$.2f yuan</string>
     <string name="koil_precheck_added">Added — enter the next fill-up</string>
     <string name="koil_precheck_add_failed_generic">Add failed, please try again</string>
@@ -77,11 +75,8 @@
     <string name="koil_ov_total_count_in_list">%1$d records</string>
     <string name="koil_ov_backfill">Backfill</string>
     <string name="koil_ov_month_count">%1$d</string>
-    <string name="koil_ov_load_more">Load more (%1$d left)</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>
-    <string name="koil_ov_field_mileage">Mileage (km)</string>
     <string name="koil_ov_grade">Grade</string>
-    <string name="koil_ov_backfill_save">Backfill</string>
     <string name="koil_ov_field_province">Province</string>
     <string name="koil_ps_payable_actual">Payable ¥%1$.2f · Actual ¥%2$.2f</string>
     <string name="koil_ps_savings">Save ¥%1$.2f (%2$.1f%%)</string>
@@ -102,8 +97,6 @@
     <string name="koil_stat_avg_price">Avg fuel price</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">Avg per fill-up</string>
-    <string name="koil_stat_avg_interval">Avg interval</string>
-    <string name="koil_stat_interval_unit">days</string>
     <string name="koil_ov_total_count">%1$d fill-ups</string>
     <string name="koil_ov_vs_prev">vs prev.</string>
     <string name="koil_ov_trend">Trend</string>
@@ -122,7 +115,6 @@
     <string name="koil_ov_oil_days">%1$dd</string>
     <string name="koil_ov_high">High</string>
     <string name="koil_ov_low">Low</string>
-    <string name="koil_ov_more_actions">More</string>
     <string name="koil_ov_prev_line">Last %1$s · mileage %2$d → %3$d km</string>
     <string name="koil_ov_current_mileage">Current mileage %1$d km</string>
     <string name="koil_ov_metric_consumption">Consumption</string>
@@ -169,12 +161,10 @@
     <string name="koil_set_section_entry">Entry</string>
     <string name="koil_set_default_province">Default province</string>
     <string name="koil_set_default_province_sum">Price query &amp; location · %1$s</string>
-    <string name="koil_set_default_province_auto">Auto-located · %1$s</string>
     <string name="koil_set_default_grade">Default grade</string>
     <string name="koil_set_default_grade_sum">Preselect %1$s# for new records</string>
     <string name="koil_set_tank">Tank capacity</string>
     <string name="koil_set_tank_sub_fmt">Tank capacity %1$dL · Overfill check</string>
-    <string name="koil_set_tank_sub">Overfill check</string>
     <string name="koil_set_keep_grade">Keep last grade</string>
     <string name="koil_set_keep_grade_sub">Auto-fill on entry</string>
     <string name="koil_set_section_remind">Reminders &amp; checks</string>
@@ -185,38 +175,20 @@
     <string name="koil_set_price_alert">Price adjustment window</string>
     <string name="koil_set_price_alert_sub">Show next window, forecast &amp; per-liter on home</string>
     <string name="koil_set_section_price_db">Oil price database</string>
-    <string name="koil_set_check_update">Check update</string>
-    <string name="koil_pdb_data_until">Data until</string>
-    <string name="koil_pdb_last_change">Last change: %1$s</string>
-    <string name="koil_pdb_stranded">Stranded, price holds %1$s</string>
-    <string name="koil_pdb_follow_note">Auto-follow domestic fuel adjustment windows, incl. stranded</string>
     <string name="koil_pdb_provinces">Provinces</string>
     <string name="koil_pdb_grades">Grades</string>
     <string name="koil_pdb_adjustments">Adjustments</string>
     <string name="koil_pdb_records">Records</string>
     <string name="koil_pdb_last_update">Last update: %1$s</string>
-    <string name="koil_pdb_checked_until">Checked until %1$s, no change (stranded)</string>
     <string name="koil_pdb_pending_title">Pending updates</string>
-    <string name="koil_pdb_no_pending">No pending updates</string>
     <string name="koil_pdb_update_now">Update now</string>
     <string name="koil_pdb_auto_sub">Check every 8h, apply on release</string>
-    <string name="koil_pdb_deviation_title">Price deviation threshold</string>
-    <string name="koil_pdb_deviation_sub">Alert when actual unit price deviates from confirmed price</string>
     <string name="koil_set_section_data">Data</string>
     <string name="koil_set_location">Location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_price_db_auto">Auto-update price DB</string>
-    <string name="koil_set_price_db_auto_sub">Check for new prices on launch</string>
     <string name="koil_set_eia_key_title">EIA API Key</string>
-    <string name="koil_set_eia_key_edit">Edit</string>
     <string name="koil_set_eia_key_sub">Crude estimation source (editable; blank falls back to Tencent)</string>
-    <string name="koil_set_price_db_status">Price DB status</string>
-    <string name="koil_set_price_db_status_sum">%1$d entries · %2$d provinces × %3$d grades · latest %4$s</string>
-    <string name="koil_set_pending_count">%1$d pending</string>
-    <string name="koil_set_normal">Normal</string>
-    <string name="koil_set_no_pending">No pending prices</string>
-    <string name="koil_set_primary_source">Primary</string>
-    <string name="koil_set_secondary_source">Secondary</string>
     <string name="koil_set_primary_secondary_price">Primary ¥%1$.2f / Secondary ¥%2$.2f</string>
     <string name="koil_set_accept_primary">Use primary</string>
     <string name="koil_set_accept_secondary">Use secondary</string>
@@ -235,7 +207,6 @@
     <string name="koil_set_restore">Restore backup</string>
     <string name="koil_set_restore_sub">Restore records + settings from JSON</string>
     <string name="koil_act_restore">Restore</string>
-    <string name="koil_set_footer">KOiL v%1$s · com.llpop.koil</string>
     <string name="koil_import_tab_valid">Valid (%1$d)</string>
     <string name="koil_import_tab_dup">Duplicates (%1$d)</string>
     <string name="koil_import_tab_conflict">Mileage conflict (%1$d)</string>
@@ -258,8 +229,6 @@
     <string name="koil_msg_pdb_update_failed">Update failed: %1$s</string>
         <string name="koil_pdb_db_title">Database version (%1$s)</string>
     <string name="koil_pdb_db_title_plain">Database version (pending)</string>
-<string name="koil_pdb_stats">%1$d provinces %2$d grades %3$d adjustments %4$d records</string>
-    <string name="koil_pdb_updated_and_until">Updated %1$s · Data to %2$s</string>
     <string name="koil_pdb_adjust_stranded">Window %1$s (stranded, price held at %2$s ¥%3$s)</string>
     <string name="koil_pdb_adjust_stranded_short">Window %1$s (stranded)</string>
     <string name="koil_pdb_adjust_adjusted">Window %1$s · adjusted to %2$s yuan/L</string>
@@ -268,13 +237,9 @@
     <string name="koil_pdb_sync_sources">Sync sources: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>
     <string name="koil_pdb_detail_title">Price Adjustments</string>
-    <string name="koil_pdb_back">Back to settings</string>
     <string name="koil_pdb_detail_empty">No adjustment records yet</string>
-    <string name="koil_pdb_rise_total">Total rises (YTD)</string>
-    <string name="koil_pdb_fall_total">Total falls (YTD)</string>
     <string name="koil_pdb_latest_price">Latest price</string>
     <string name="koil_pdb_col_date">Date</string>
-    <string name="koil_pdb_col_action">Change</string>
     <string name="koil_pdb_col_price">Price</string>
     <string name="koil_pdb_col_change">Change</string>
     <string name="koil_pdb_up_count">Rises</string>
@@ -330,8 +295,6 @@
     </string-array>
     <string name="koil_cal_month">%2$d / %1$d</string>
     <string name="koil_cal_today">Today</string>
-    <string name="koil_cal_confirm">OK</string>
-    <string name="koil_cal_cancel">Cancel</string>
 
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_sync_section">Cloud Sync</string>
@@ -367,4 +330,6 @@
     <string name="koil_detail_stranded">Stranded</string>
     <string name="koil_detail_held_price">Held at %1$s</string>
     <string name="koil_detail_last_year">last year</string>
+    <string name="koil_sync_password_invalid">App password is unreadable (key lost after device change) — please re-enter it</string>
+    <string name="koil_sync_status_password_invalid">Sync paused: re-enter the app password</string>
 </resources>

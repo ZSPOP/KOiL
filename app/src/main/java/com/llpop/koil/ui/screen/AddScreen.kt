@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -455,30 +456,43 @@ private fun OilPriceCard(
                     )
                 }
                 // 定位按钮
+                // v1.6.3：命中区补到 48×48dp（视觉仍是小胶囊）。原来只有 30×24dp，远低于 Material 的 48dp 建议，
+                // 手指点偏就落到省份按钮上。做法是外层撑开 48dp 承担点击，内层保持原样只管外观。
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerBg)
-                        .clickable { onLocateClick() }
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .clickable(onClick = onLocateClick),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.MyLocation,
-                        contentDescription = stringResource(R.string.koil_add_locate_cd),
-                        tint = containerText,
-                        modifier = Modifier.size(14.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(containerBg)
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MyLocation,
+                            contentDescription = stringResource(R.string.koil_add_locate_cd),
+                            tint = containerText,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(2.dp))
                 // 省份选择按钮（点击弹设置页同款 OverlayDropdownPopup 下拉，锚定按钮下方、跟随位置）
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerBg)
-                        .clickable { showProvincePicker.value = true }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .clickable { showProvincePicker.value = true },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(containerBg)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         // v1.5.34：省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
                         // v1.5.35：文字→箭头加 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
                         Text(

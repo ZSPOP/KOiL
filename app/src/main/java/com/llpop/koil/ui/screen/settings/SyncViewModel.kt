@@ -6,11 +6,14 @@ import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.sync.CryptoHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -21,6 +24,9 @@ data class SyncUiState(
     val username: String = "",
     val passwordSet: Boolean = false,
     val passwordEncrypted: Boolean = false,
+    // v1.6.3：密文存着但解不开（换机/重装后 Keystore 主密钥丢失）——此时 isConfigured() 为 false，
+    // 推送/恢复全部静默跳过，开关却仍是"已开启"。UI 必须把这件事说出来，否则用户以为同步在跑。
+    val passwordInvalid: Boolean = false,
     val lastStatus: String = "",          // 原始状态（ok@时间 / fail:原因 / 空）
     val busy: Boolean = false,
     // v1.5.47：云同步配置异步加载完成标志（首值到达前不渲染开关，杜绝"关→开"闪烁）
@@ -48,6 +54,18 @@ class SyncViewModel(
     val message: StateFlow<String?> = _message.asStateFlow()
     val restorePreview: StateFlow<SyncRestorePreview?> = _restorePreview.asStateFlow()
 
+    /**
+     * v1.6.3：密文能否解开。Keystore 解密涉及 Cipher 初始化（有 IPC 成本），
+     * 放 Default 且只在「密文/加密标志」变化时算一次——不能放在组合用的 combine 里，
+     * 否则 busy 之类的开关抖动都会触发一次解密码。
+     */
+    private val passwordBrokenFlow: Flow<Boolean> = combine(
+        settings.syncAppPassword,
+        settings.syncPasswordEncrypted,
+    ) { stored, encrypted ->
+        stored.isNotBlank() && encrypted && CryptoHelper.decrypt(stored).isNullOrBlank()
+    }.flowOn(Dispatchers.Default)
+
     val uiState: StateFlow<SyncUiState> = combine<Any, SyncUiState>(
         settings.syncEnabled,
         settings.syncUrl,
@@ -56,6 +74,7 @@ class SyncViewModel(
         settings.syncPasswordEncrypted,
         settings.syncLastStatus,
         _busy,
+        passwordBrokenFlow,
     ) { args ->
         val stored = args[3] as String
         SyncUiState(
@@ -64,6 +83,7 @@ class SyncViewModel(
             username = args[2] as String,
             passwordSet = stored.isNotBlank(),
             passwordEncrypted = args[4] as Boolean,
+            passwordInvalid = args[7] as Boolean,
             lastStatus = args[5] as String,
             busy = args[6] as Boolean,
             loaded = true,

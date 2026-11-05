@@ -1,14 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  网络明文策略（v1.6.2）：
-  targetSdk 28+ 默认禁止明文 HTTP，而 IP 归属地降级链用的 ip-api.com 免费接口只提供 http。
-  原状态下该请求在真机上必然抛 UnknownServiceException（被 catch 吞掉）→ IP 定位整条链路静默失效，
-  用户拒绝定位权限后永远停留在默认省份。
-  这里只对 ip-api.com 开放明文（请求仅含省份查询、无任何账号/记录数据），其余域名仍强制 HTTPS。
+  网络明文策略（v1.6.3）：
+  targetSdk 28+ 默认禁止明文 HTTP。v1.6.2 曾为 IP 归属地接口 ip-api.com 单独放行明文（那个免费接口只给 http），
+  本版已把该接口换成 HTTPS（whois.pconline.com.cn），因此重新全局禁止明文——不再有任何域名例外。
+  保留本文件而不是删掉属性：显式声明比依赖平台默认更抗未来 targetSdk 变化，也便于以后真需要例外时有落脚点。
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">ip-api.com</domain>
-    </domain-config>
 </network-security-config>

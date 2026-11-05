@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1233,11 +1234,8 @@ private fun GradeFilterChip(label: String, selected: Boolean, onClick: () -> Uni
 private fun DualAxisCanvas(trend: List<TrendPoint>) {
     val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
     val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
-    val consumptions = trend.mapNotNull { it.oilConsumption }
-    val costs = trend.mapNotNull { it.costPerKm }
     // v1.6.2：Paint 提到绘制回调之外缓存。原实现在 Canvas 的 onDraw 里每画一个标签就 new 一个
-    // android.graphics.Paint（单帧最多 4 组轴标签 + N 个日期标签，共 ~35 个对象），
-    // 滑动/刷新时每帧都产生垃圾并触发文本重测量。这里按 (颜色, 字号) 记住，density 变化才重建。
+    // android.graphics.Paint（单帧最多 4 组轴标签 + N 个日期标签，共 ~35 个对象）。
     val density = LocalDensity.current
     val axisTextSizePx = with(density) { 9.dp.toPx() }
     val dateTextSizePx = with(density) { 8.dp.toPx() }
@@ -1247,17 +1245,78 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
     val dateLabelPaint = remember(labelColor, dateTextSizePx) {
         labelPaint(labelColor, alpha = 102, textSizePx = dateTextSizePx)
     }
-    Canvas(
+    // v1.6.3：几何（Path、点坐标、标签文本与其基线坐标、画笔宽度）整体抽进 remember。
+    // 原先这些都在 onDraw 里逐帧重建：2 个 Path、2 个 MutableList<Offset>、10 次 NumberFormat.measure
+    //（每次 BigDecimal + 字符串）、以及每个标签一次字符串拼接与测量。图表本身没有动画，
+    // 只有"数据/尺寸/主题色变化"才需要重算，逐帧重算纯粹是白烧 CPU 并制造垃圾。
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(140.dp)
     ) {
+        // 尺寸按 density 只取标量做 key：Density 是接口，不同实例未必 equals，用它当 key 会让几何每次都重算
+        val wPx = if (maxWidth.value.isFinite()) with(density) { maxWidth.toPx() } else 0f
+        val hPx = if (maxHeight.value.isFinite()) with(density) { maxHeight.toPx() } else 0f
+        val geometry = remember(trend, wPx, hPx, density.density, density.fontScale) {
+            if (wPx <= 0f || hPx <= 0f) null else buildChartGeometry(trend, wPx, hPx, density)
+        }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val geo = geometry ?: return@Canvas   // 尺寸异常（无界约束）时不画，也不崩
+            val native = drawContext.canvas.nativeCanvas
+            geo.gridLines.forEach { drawLine(gridColor, it.first, it.second, geo.gridStroke) }
+            geo.axisLabels.forEach { native.drawText(it.text, it.x, it.y, axisLabelPaint) }
+            geo.consumptionPath?.let { path ->
+                drawPath(path = path, color = KOiLColors.Primary, style = geo.lineStroke)
+                geo.consumptionPoints.forEach {
+                    drawCircle(color = KOiLColors.Primary, radius = geo.dotRadius, center = it)
+                }
+            }
+            geo.costPath?.let { path ->
+                drawPath(path = path, color = CHART_COST_COLOR, style = geo.lineStroke)
+                geo.costPoints.forEach {
+                    drawCircle(color = CHART_COST_COLOR, radius = geo.dotRadius, center = it)
+                }
+            }
+            geo.dateLabels.forEach { native.drawText(it.text, it.x, it.y, dateLabelPaint) }
+        }
+    }
+}
+
+private val CHART_COST_COLOR = Color(0xFFF97316)
+
+/** 轴/日期标签：坐标为绘制时直接用（已包含 padding 与基线偏移） */
+private class ChartLabel(val text: String, val x: Float, val y: Float)
+
+/** 图表几何快照：全部在 remember 里算一次，onDraw 只负责画 */
+private class ChartGeometry(
+    val gridLines: List<Pair<Offset, Offset>>,
+    val gridStroke: Float,
+    val lineStroke: Stroke,
+    val dotRadius: Float,
+    val axisLabels: List<ChartLabel>,
+    val dateLabels: List<ChartLabel>,
+    val consumptionPath: Path?,
+    val consumptionPoints: List<Offset>,
+    val costPath: Path?,
+    val costPoints: List<Offset>,
+)
+
+private fun buildChartGeometry(
+    trend: List<TrendPoint>,
+    widthPx: Float,
+    heightPx: Float,
+    density: androidx.compose.ui.unit.Density,
+): ChartGeometry {
+    with(density) {
         val padL = 30.dp.toPx()
         val padR = 34.dp.toPx()
         val padT = 8.dp.toPx()
         val padB = 22.dp.toPx()
-        val w = size.width - padL - padR
-        val h = size.height - padT - padB
+        val w = widthPx - padL - padR
+        val h = heightPx - padT - padB
+
+        val consumptions = trend.mapNotNull { it.oilConsumption }
+        val costs = trend.mapNotNull { it.costPerKm }
 
         // 左轴（油耗 2.0~8.0 对齐 Web，自动兜底）
         val leftMin = consumptions.minOrNull()?.let { it * 0.75 } ?: 2.0
@@ -1270,71 +1329,87 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
         val rightRange = (rightMax - rightMin).coerceAtLeast(0.05)
 
         // 横向网格线 + 左/右轴刻度标签
-        val gridLines = 4
-        for (i in 0..gridLines) {
-            val frac = i.toFloat() / gridLines
+        val gridLines = ArrayList<Pair<Offset, Offset>>(5)
+        val axisLabels = ArrayList<ChartLabel>(10)
+        val gridLinesCount = 4
+        for (i in 0..gridLinesCount) {
+            val frac = i.toFloat() / gridLinesCount
             val y = padT + h * frac
-            drawLine(
-                color = gridColor,
-                start = Offset(padL, y),
-                end = Offset(padL + w, y),
-                strokeWidth = 1.dp.toPx(),
-            )
-            // 左轴标签
+            gridLines.add(Offset(padL, y) to Offset(padL + w, y))
             val lv = leftMax - leftRange * frac
-            drawContext.canvas.nativeCanvas.apply {
-                drawText(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), axisLabelPaint)
-                // 右轴标签
-                val rv = rightMin + rightRange * (1 - frac)
-                drawText(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), axisLabelPaint)
-            }
+            axisLabels.add(ChartLabel(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx()))
+            val rv = rightMin + rightRange * (1 - frac)
+            axisLabels.add(
+                ChartLabel(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx())
+            )
         }
 
         fun xAt(i: Int): Float = padL + (i.toFloat() / (trend.size - 1).coerceAtLeast(1)) * w
 
         // 平均油耗线（蓝，主色）
-        val consPath = Path()
+        var consPath: Path? = null
         var consStarted = false
-        val consPts = mutableListOf<Offset>()
+        val consPts = ArrayList<Offset>(trend.size)
         for ((i, p) in trend.withIndex()) {
-            if (p.oilConsumption == null) { consStarted = false; continue }
+            val v = p.oilConsumption
+            if (v == null) {
+                consStarted = false
+                continue
+            }
             val x = xAt(i)
-            val y = padT + h - (((p.oilConsumption - leftMin) / leftRange).toFloat() * h)
+            val y = padT + h - (((v - leftMin) / leftRange).toFloat() * h)
             consPts.add(Offset(x, y))
-            if (!consStarted) { consPath.moveTo(x, y); consStarted = true }
-            else consPath.lineTo(x, y)
-        }
-        if (consPts.size >= 2) {
-            drawPath(path = consPath, color = KOiLColors.Primary, style = Stroke(width = 2.dp.toPx()))
-            consPts.forEach { drawCircle(color = KOiLColors.Primary, radius = 2.5.dp.toPx(), center = it) }
+            if (!consStarted) {
+                consPath = Path().also { it.moveTo(x, y) }
+                consStarted = true
+            } else {
+                consPath?.lineTo(x, y)
+            }
         }
 
         // 每公里成本线（橙）
-        val costPath = Path()
+        var costPath: Path? = null
         var costStarted = false
-        val costPts = mutableListOf<Offset>()
+        val costPts = ArrayList<Offset>(trend.size)
         for ((i, p) in trend.withIndex()) {
-            if (p.costPerKm == null) { costStarted = false; continue }
+            val v = p.costPerKm
+            if (v == null) {
+                costStarted = false
+                continue
+            }
             val x = xAt(i)
-            val y = padT + h - (((p.costPerKm - rightMin) / rightRange).toFloat() * h)
+            val y = padT + h - (((v - rightMin) / rightRange).toFloat() * h)
             costPts.add(Offset(x, y))
-            if (!costStarted) { costPath.moveTo(x, y); costStarted = true }
-            else costPath.lineTo(x, y)
-        }
-        if (costPts.size >= 2) {
-            drawPath(path = costPath, color = Color(0xFFF97316), style = Stroke(width = 2.dp.toPx()))
-            costPts.forEach { drawCircle(color = Color(0xFFF97316), radius = 2.5.dp.toPx(), center = it) }
+            if (!costStarted) {
+                costPath = Path().also { it.moveTo(x, y) }
+                costStarted = true
+            } else {
+                costPath?.lineTo(x, y)
+            }
         }
 
-        // 横轴日期标签（每2个显示一个避免拥挤）
+        // 横轴日期标签（每 2 个显示一个避免拥挤）
+        val dateLabels = ArrayList<ChartLabel>((trend.size + 1) / 2)
         for (i in trend.indices) {
             if (i % 2 == 1 && trend.size > 4) continue
-            val x = xAt(i)
-            val label = trend[i].date
-            drawContext.canvas.nativeCanvas.drawText(
-                label, x - 12.dp.toPx(), padT + h + 14.dp.toPx(), dateLabelPaint
+            dateLabels.add(
+                ChartLabel(trend[i].date, xAt(i) - 12.dp.toPx(), padT + h + 14.dp.toPx())
             )
         }
+
+        return ChartGeometry(
+            gridLines = gridLines,
+            gridStroke = 1.dp.toPx(),
+            lineStroke = Stroke(width = 2.dp.toPx()),
+            dotRadius = 2.5.dp.toPx(),
+            axisLabels = axisLabels,
+            dateLabels = dateLabels,
+            // 单点画不出线（与原实现 consPts.size >= 2 才画一致）
+            consumptionPath = consPath.takeIf { consPts.size >= 2 },
+            consumptionPoints = consPts,
+            costPath = costPath.takeIf { costPts.size >= 2 },
+            costPoints = costPts,
+        )
     }
 }
 

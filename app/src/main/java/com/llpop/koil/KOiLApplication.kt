@@ -36,9 +36,12 @@ class KOiLApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // v1.5.16：全局崩溃捕获统一在 Application 最早安装（覆盖启动期崩溃），写私有目录 + Download/KOiL-crash.txt；
+        // v1.5.16：全局崩溃捕获统一在 Application 最早安装（覆盖启动期崩溃）；
         // 原 MainActivity 的重复安装已移除（原先两套 handler 各写一份文件）。
         CrashReporter.install(this)
+        // v1.6.3：上次崩溃的日志在崩溃线程里只落到私有目录，这里在 IO 线程补写到「下载」目录，
+        // 避免崩溃现场被 MediaStore 的 4 次跨进程 IPC 拖住、进程先死导致日志丢失
+        appScope.launch { runCatching { CrashReporter.flushPendingCrashLog(this@KOiLApplication) } }
 
         startKoin {
             androidContext(this@KOiLApplication)

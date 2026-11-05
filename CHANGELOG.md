@@ -1,5 +1,42 @@
 # KOiL CHANGELOG
 
+## 未发布（基于 1.6.1，两轮深度审计修复：v1.6.2 十九项 + v1.6.3 九项）
+
+> 说明：本轮只改源码与资源，`versionName` 未动（仍在 1.6.1，发版时由你拍板再跳）；DB schema 不变（version 1），覆盖升级安全。
+
+> **v1.6.2（崩溃面 / 数据正确性 / 交互，19 项）**
+> ① `NumberFormat` 遇 `NaN`/`±Infinity` 抛 `NumberFormatException`（调用点全在 UI 绘制与 CSV 导出，脏数据即闪退）；
+>    `BigDecimal(Double)` 二进制近似导致 2.675→2.67；`-0.0001` 显示 `"-0.00"`。改 `BigDecimal.valueOf` + 非有限值占位 + 正零归一。
+> ② 编辑/补录预检开头拍快照、结尾整体回写，吞掉预检期间的用户输入 → 改 `_uiState.update`。
+> ③ 备份恢复在主线程 `readText`+JSON+逐条 `insert`（ANR）→ 切 IO + 单事务 + 数值白名单。
+> ④ 录入成功提示永不显示（`addSuccess` 同协程内立即归零 + 被 `runPrecheck` 冲掉）。
+> ⑤ 全项目 0 处 `imePadding`（edge-to-edge 下键盘压住"实付/添加/保存"）；弹窗高度写死屏高 85% → `BoxWithConstraints`。
+> ⑥ IP 定位走 http 明文，`targetSdk 37` 下必然抛 `UnknownServiceException`，降级链从未生效。
+> ⑦ 定位结果不校验省份合法性；31 省列表 4 份重复字面量（是 DB 主键一部分）→ `Provinces.ALL`。
+> ⑧ 编辑框回填 `"12345.0"`；WebDAV「连接测试」非 401/403 即算成功；油价库清理全表载入；窗口日推算 `while(true)` 无上界；
+>    云端快照 JSON 解析两遍无校验；负里程被标"短距"；`saveBackfill` 解析失败按钮永久置灰；导出失败遗留 0 字节文件；
+>    WorkManager 主线程初始化；详情页硬编码繁体；英文/繁中少一个 `%3$s`；20 处 `collectAsState` 改生命周期感知。
+>
+> **v1.6.3（报告第四节 A~I，9 项）**
+> ⑨ **A 云同步"假开启"**：Keystore 密钥不进备份，换机/重装后密文解不开 → `isConfigured()=false`，推送与恢复全部静默跳过，
+>    而开关仍是"已开启"、`lastStatus` 还留着上次成功。新增 `SyncUiState.passwordInvalid`（Default 线程解密校验），
+>    设置页密码行与状态行改为"应用密码已失效，请重新输入 / 同步已暂停"（三语）。
+> ⑩ **B 图表零分配**：`DualAxisCanvas` 的 2 个 `Path`、2 个 `Offset` 列表、10 次 `NumberFormat.measure`、每个标签的字符串与
+>    基线坐标全部移进 `remember(trend, 尺寸, density)`，`onDraw` 只做 `drawLine/drawPath/drawText`。
+> ⑪ **C 总览重算移出主线程**：`recompute()` 的 3 次 filter + `average` + `sortedByDescending` 改走 `Dispatchers.Default`，
+>    由 CONFLATED Channel 单消费者串行触发（连续切换范围自动合并为一次，不会交叉写状态）。
+> ⑫ **D 触控目标**：录入页定位/省份按钮原约 30×24dp，外层撑到 48×48dp 承担点击、内层保持原视觉。
+> ⑬ **E 清理死资源**：删除 37 个未使用字符串（三语同步）+ 未使用的 `@color/ic_launcher_background`。
+> ⑭ **F 主题图标**：新增 `ic_launcher_monochrome.xml`（取 K 字路径纯白单色），两张 adaptive-icon 声明 `<monochrome>`，
+>    Android 13+ 开启主题图标后不再显示成实心方块。
+> ⑮ **G 崩溃日志不再丢**：崩溃线程只写私有文件（毫秒级），下载目录的 `KOiL-crash.txt` 改到下次启动由 IO 线程补写，
+>    成功才删除私有副本——原先在崩溃现场做 4 次 MediaStore IPC，进程先死就整份丢。
+> ⑯ **H 去掉明文 HTTP**：IP 归属地改用 HTTPS 的 `whois.pconline.com.cn`（按 GBK 解码，直接返回"广东省"），
+>    `network_security_config` 重新全局 `cleartextTrafficPermitted=false`，不再有任何域名例外。
+> ⑰ **I 删死代码**：`KOiLRecordDao.getPage/getFirstPage`（列表页早已改 Flow + LazyColumn，无调用方）。
+>
+> 验证：`testDebugUnitTest` 12 项全绿；`lintDebug` 0 error；Release（R8 + 资源压缩）构建通过。
+
 ## v1.6.1（versionCode 由 CI 注入）— 2026-11-05（应用图标重设计 + 启动屏跟随系统深浅色 + CI 依赖现代化）
 
 > 用户诉求：换上重新设计的应用图标；启动屏底色跟随系统深色/浅色模式变化。

@@ -36,16 +36,8 @@ interface KOiLRecordDao {
     @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC")
     fun observeAll(): Flow<List<KOiLRecordEntity>>
 
-    /** 游标分页：reoilDate DESC, id DESC，每页 20（返回 limit+1 判断是否有下一页） */
-    @Query(
-        "SELECT * FROM koil_record WHERE reoilDate < :cursorDate OR " +
-            "(reoilDate = :cursorDate AND id < :cursorId) " +
-            "ORDER BY reoilDate DESC, id DESC LIMIT :limit"
-    )
-    suspend fun getPage(cursorDate: String, cursorId: Long, limit: Int): List<KOiLRecordEntity>
-
-    @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC LIMIT :limit")
-    suspend fun getFirstPage(limit: Int): List<KOiLRecordEntity>
+    // v1.6.2：删除 getPage / getFirstPage——列表页已改为全量 Flow + LazyColumn，游标分页无调用方。
+    // Room 仍会为它们生成 Dao 实现与查询校验，属于纯死代码。
 
     /** 最新一条记录（用于"上次加油"等） */
     @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC LIMIT 1")

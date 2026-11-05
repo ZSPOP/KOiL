@@ -1182,17 +1182,21 @@ fun SettingsScreen(
                             }
                         },
                     )
-                    // 密码状态行 + 明文存储警示
+                    // 密码状态行 + 明文存储/失效警示
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val passwordWarn = syncUi.passwordInvalid || (syncUi.passwordSet && !syncUi.passwordEncrypted)
                         Text(
                             text = when {
                                 !syncUi.passwordSet -> stringResource(R.string.koil_sync_app_password_unset)
+                                // v1.6.3：密文解不开（换机/重装）排在明文存储之前——不然只提示"未加密存储"，
+                                // 用户会以为同步正常，实际推送与恢复都已被 isConfigured() 挡掉
+                                syncUi.passwordInvalid -> stringResource(R.string.koil_sync_password_invalid)
                                 !syncUi.passwordEncrypted -> stringResource(R.string.koil_sync_password_plain_warn)
                                 else -> stringResource(R.string.koil_sync_app_password_set)
                             },
                             fontSize = 11.sp,
                             lineHeight = 14.sp,
-                            color = if (syncUi.passwordSet && !syncUi.passwordEncrypted) KOiLColors.Warning
+                            color = if (passwordWarn && syncUi.passwordSet) KOiLColors.Warning
                             else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                             modifier = Modifier.weight(1f).padding(top = 4.dp),
                         )
@@ -1303,9 +1307,11 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    // —— 状态行（未配置 / 已备份时间 / 失败待重试）——
+                    // —— 状态行（未配置 / 密码失效 / 已备份时间 / 失败待重试）——
                     val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
                     val statusText = when {
+                        // v1.6.3：最高优先级——密码解不开时其余状态都是假的（lastStatus 可能还是上次成功备份）
+                        syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)
                         !configured -> stringResource(R.string.koil_sync_status_not_configured)
                         syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
                         syncUi.lastStatus.startsWith("ok@") ->
@@ -1318,7 +1324,7 @@ fun SettingsScreen(
                         text = statusText,
                         fontSize = 12.sp,
                         lineHeight = 15.sp,
-                        color = if (!configured || syncUi.lastStatus.startsWith("fail:")) KOiLColors.Warning
+                        color = if (syncUi.passwordInvalid || !configured || syncUi.lastStatus.startsWith("fail:")) KOiLColors.Warning
                         else MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                         Spacer(Modifier.height(1.dp))
