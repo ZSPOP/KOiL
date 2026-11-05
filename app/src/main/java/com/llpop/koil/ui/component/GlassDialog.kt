@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -43,7 +44,14 @@ fun KOiLGlassDialog(
 ) {
     if (!show) return
     val hostState = remember { AnchoredPopupHostState() }
-    val props = if (widthFraction != null) DialogProperties(usePlatformDefaultWidth = false) else DialogProperties()
+    // v1.6.5：Dialog 是独立窗口，**不继承** Activity 的 softInputMode/adjustResize。
+    // 默认 decorFitsSystemWindows=true 时靠在系统收缩 dialog 窗口来避让键盘，实测 MIUI/HyperOS 上不收缩：
+    // 弹窗高度不变、底部「保存」被键盘压住且滚不到（真机反馈）。
+    // 改为 false —— 窗口铺到 IME 之下，由内容自己的 imePadding() 消费 IME inset（见下方 Box）。
+    val props = DialogProperties(
+        usePlatformDefaultWidth = widthFraction != null,
+        decorFitsSystemWindows = false,
+    )
     androidx.compose.ui.window.Dialog(
         // 系统关闭（返回键/点击窗口外）直接关闭卡片；"点弹窗内容外的卡片外区域"由
         // overlay 遮罩处理逐层关闭（有下拉先收起、无下拉才关卡片）
@@ -68,31 +76,36 @@ fun KOiLGlassDialog(
             // v1.6.2：高度上限不再只看屏幕高度——弹窗窗口在键盘弹出时会被系统压缩，
             // 若仍按 screenHeight*0.85 定高，超出窗口的部分（通常是底部"保存"按钮）会被裁掉且滚不到。
             // 这里用窗口实际可用高度做二次收敛，键盘弹起时弹窗自动变矮并保持内部可滚动。
-            BoxWithConstraints {
-                // 注意：BoxWithConstraints 作用域自带 maxHeight，先取出参数值避免同名遮蔽
-                val requestedMax = maxHeight
-                val cap = if (requestedMax != null) minOf(requestedMax, this.maxHeight) else this.maxHeight
-                Box(
-                    modifier = Modifier
-                        .then(widthMod)
-                        .heightIn(max = cap)
-                        .clip(RoundedCornerShape(24.dp))
-                        // v1.5.32：背景完全不透明，确保盖住弹窗背后内容（原 0.94 alpha 在矮弹窗时透出下层文字造成"叠加"观感）
-                        .background(MiuixTheme.colorScheme.surface)
-                        .padding(contentPadding)
-                        // v1.5.32：点击弹窗内空白处取消输入框选中/失焦（子输入框消费点击，不误触）
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = { focusManager.clearFocus() })
-                        },
-                ) {
-                    if (scrollable) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(rememberScrollState()),
-                        ) { content() }
-                    } else {
-                        content()
+            // v1.6.5：弹窗自己消费 IME inset（配合上面的 decorFitsSystemWindows=false）。
+            // 注意放的位置：必须在 BoxWithConstraints **外层**——它下面的 maxHeight 会因此变矮，
+            // 卡片 heightIn(max=cap) 自动收敛、内部 verticalScroll 可滚到「保存」按钮。
+            Box(modifier = Modifier.imePadding()) {
+                BoxWithConstraints {
+                    // 注意：BoxWithConstraints 作用域自带 maxHeight，先取出参数值避免同名遮蔽
+                    val requestedMax = maxHeight
+                    val cap = if (requestedMax != null) minOf(requestedMax, this.maxHeight) else this.maxHeight
+                    Box(
+                        modifier = Modifier
+                            .then(widthMod)
+                            .heightIn(max = cap)
+                            .clip(RoundedCornerShape(24.dp))
+                            // v1.5.32：背景完全不透明，确保盖住弹窗背后内容（原 0.94 alpha 在矮弹窗时透出下层文字造成"叠加"观感）
+                            .background(MiuixTheme.colorScheme.surface)
+                            .padding(contentPadding)
+                            // v1.5.32：点击弹窗内空白处取消输入框选中/失焦（子输入框消费点击，不误触）
+                            .pointerInput(Unit) {
+                                detectTapGestures(onTap = { focusManager.clearFocus() })
+                            },
+                    ) {
+                        if (scrollable) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                            ) { content() }
+                        } else {
+                            content()
+                        }
                     }
                 }
             }

@@ -72,6 +72,15 @@
 >    `getString`，任何 key 抛异常即失败；三语各跑一遍，另加年份 chip 的直连断言。
 >    Robolectric 固定 `sdk=34` + 空 `Application`：SDK 35+ 会走 `ApplicationSharedMemory` 撞 JDK 21 的
 >    `FileDescriptor` 反射限制，用真实 `KOiLApplication` 则会多测试间重复 `startKoin`。
+> ㉗ **键盘遮挡（v1.6.2 ⑮ 的修法无效）**：`AndroidManifest` 从未声明 `windowSoftInputMode`，
+>    默认 `adjustUnspecified` 被系统选成 **adjustPan** —— 键盘弹起时窗口整体平移、底部露出空白，
+>    而 Compose 的 IME inset 不更新，`imePadding()` 形同虚设。真机表现：录入页「添加记录」下方一大块空白、
+>    弹窗「保存」被键盘压住（补录/编辑同病）。改为 `adjustResize`（edge-to-edge 下由 IME inset 分发驱动重排）。
+> ㉘ **Dialog 不继承 Activity 的软键盘模式**：`DialogProperties(decorFitsSystemWindows = false)` + 内容根
+>    `imePadding()`，且 `imePadding` 必须放在 `BoxWithConstraints` **外层**，否则 `maxHeight` 仍是整屏、
+>    卡片不会被收敛。8 处 `KOiLGlassDialog`（编辑/补录/删除确认/异常明细/导入预览/省份…）统一受益。
+> ㉙ **键盘弹起时不再保留悬浮底栏留白**：`Spacer(bottomPadding + 12dp)` 在 IME 可见时收敛为 12dp，
+>    否则按钮下方固定留 84dp 空白，观感像"内容没渲染出来"。
 
 ## v1.6.1（versionCode 由 CI 注入）— 2026-11-05（应用图标重设计 + 启动屏跟随系统深浅色 + CI 依赖现代化）
 

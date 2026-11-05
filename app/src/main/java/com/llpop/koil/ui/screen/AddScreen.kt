@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -46,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -275,7 +278,10 @@ fun AddScreen(
                 fontWeight = FontWeight.Medium,
             )
         }
-        Spacer(Modifier.height(bottomPadding + 12.dp))
+        // v1.6.5：键盘弹起时不保留底部悬浮导航条的留白。
+        // 底部导航条（84dp）此时已被键盘盖住，再留 84dp 会让「添加记录」下方出现一大块空白，
+        // 观感像"内容没渲染出来"（真机反馈原话：只见空白、没有内容）。
+        Spacer(Modifier.height(if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 12.dp else bottomPadding + 12.dp))
         }
     }
 
