@@ -2,7 +2,10 @@ package com.llpop.koil
 
 import android.app.Application
 import android.util.Log
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.llpop.koil.data.local.AppDatabase
@@ -100,9 +103,11 @@ class KOiLApplication : Application() {
                 // v1.5.26：全国补灌重试循环——窗口日历未就绪（锚点链启动瞬间失败、重装后缓存为空）时
                 // 30 秒轮询重试，最多 6 次（约 3 分钟内自愈）；就绪即灌全国，无需手动点「立即更新」
                 val syncer = GlobalContext.get().get<OilPriceDbSyncer>()
-                repeat(6) { attempt ->
+                // v1.6.2 修复：原 return@repeat 只跳过本轮、不终止循环，成功后仍会再等 30s 重跑，
+                // 冷启动最多白跑 6 轮（每轮 31 省多轮 DB 查询 + 缺省网络灌库，最长拖 3 分钟）。改用 break 真正退出。
+                for (attempt in 0 until 6) {
                     kotlinx.coroutines.delay(if (attempt == 0) 3000 else 30_000) // 首轮等当前省先就绪
-                    if (syncer.fillRemainingProvincesIfCalendarReady()) return@repeat
+                    if (syncer.fillRemainingProvincesIfCalendarReady()) break
                 }
             } catch (t: Throwable) {
                 Log.e("KOiL", "PriceDb fill remaining failed", t)
@@ -118,9 +123,17 @@ class KOiLApplication : Application() {
         }
 
         // 油价库每 8 小时自动检测（对齐 Web koil_price_auto_sync；受开关+节流约束）
+        // v1.6.2：补网络约束 + 指数退避——无网时不再被唤醒空跑（Worker 内部 Result.retry 也会无限重试）
         val syncRequest = PeriodicWorkRequestBuilder<OilPriceSyncWorker>(
             OilPriceDbSyncer.CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS
-        ).build()
+        )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
         // 历史任务名（迁移专用）：v1.4.50 及更早为小写 koil_price_auto_sync，注销后启用新名
         runCatching { WorkManager.getInstance(this).cancelUniqueWork("koil_price_auto_sync") }
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
