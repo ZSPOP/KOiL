@@ -120,6 +120,10 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     check(registryOwner != null) { "KOiL: 无法从 baseContext 解析 ActivityResultRegistryOwner" }
 
     androidx.compose.runtime.CompositionLocalProvider(
+        // v1.6.7：把"应用语言"显式注入组合。Dialog/Popup 是独立组合根，会用窗口自己的
+        // configuration 覆盖 LocalConfiguration/LocalContext（MainScreen 的覆盖到不了），
+        // 而自定义 CompositionLocal 会随父组合继承 —— 弹窗据此把语言重新盖回去。
+        com.llpop.koil.ui.component.LocalAppLocale provides locale,
         androidx.compose.ui.platform.LocalConfiguration provides overrideConfig,
         androidx.compose.ui.platform.LocalContext provides localizedContext,
         androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,

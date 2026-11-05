@@ -65,6 +65,10 @@ fun KOiLGlassDialog(
         onDismissRequest = { onDismissRequest() },
         properties = props,
     ) {
+        // v1.6.7：弹窗是独立窗口/组合根，Compose 会用窗口自己的 context+configuration
+        // 重新提供 LocalContext/LocalConfiguration，把 MainScreen 的应用语言覆盖冲掉 ——
+        // 表现为"主界面英文、补录窗/编辑窗整屏中文"。这里按应用语言重新覆盖一次。
+        ProvideAppLocale(LocalAppLocale.current) {
         // 弹窗根包裹：内容 + 锚定下拉 overlay（同一窗口坐标系，位置自洽且不被卡片遮挡）
         AnchoredPopupDialogWrapper(
             hostState = hostState,
@@ -118,6 +122,7 @@ fun KOiLGlassDialog(
                     }
                 }
             }
+        }
         }
     }
 }

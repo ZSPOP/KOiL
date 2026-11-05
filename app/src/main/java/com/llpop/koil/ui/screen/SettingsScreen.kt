@@ -361,12 +361,14 @@ fun SettingsScreen(
                 val provinces = PROVINCES
                 val provinceIdx = provinces.indexOf(uiState.defaultProvince).coerceAtLeast(0)
                 OverlayDropdownPreference(
-                    items = provinces,
+                    // v1.6.7：省份是数据库主键（中文），列表与摘要都走显示名映射，否则英文界面下
+                    // 这一栏恒为中文，且选完显示的还是中文（真机反馈）
+                    items = provinces.map { provinceLabel(it) },
                     selectedIndex = provinceIdx,
                     title = stringResource(R.string.koil_set_default_province),
                     summary = stringResource(
                         R.string.koil_set_default_province_sum,
-                        provinces.getOrElse(provinceIdx) { provinces.first() },
+                        provinceLabel(provinces.getOrElse(provinceIdx) { provinces.first() }),
                     ),
                     onSelectedIndexChange = { index ->
                         viewModel.setDefaultProvince(provinces[index])
@@ -944,15 +946,12 @@ fun SettingsScreen(
                 //    默认值预填：账号/应用密码为作者自用默认（未设置过才预填，已设置显示存储值）——
                 var urlDraft by remember { mutableStateOf(syncUi.url) }
                 var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
-                // v1.6.6：密码草稿**恒从空开始**，绝不按 passwordSet 预填。
-                // 原写法 `if (passwordSet) "" else DEFAULT_SYNC_APP_PASSWORD` 有两个问题：
-                // ① passwordSet 来自异步 DataStore（首帧恒为 false），remember 只取一次，
-                //    于是"有时预填默认口令（显示一排点）、有时为空"——取决于这段首次组合的时机；
-                // ② 更糟的是草稿非空会被 when 失焦/锁开关里的 `setPassword(pwdDraft)` 真的写进去，
-                //    等于用默认口令覆盖用户已存的应用密码。
-                // 现在：输入框只承载用户本次真实输入；为空 = 不修改。首次使用时才回退到默认口令，
-                // 且只出现在落盘/同步那一步（effectivePwd），不进输入框。
-                var pwdDraft by remember { mutableStateOf("") }
+                // v1.6.7：密码草稿 = 存储里的**真实密码**（异步到达后自动回填一次）。
+                // 设计口径：眼睛关闭 → 掩码（一排点）；点亮眼睛 → 显示真实字符。
+                // 前一版为了"不覆盖已存密码"把草稿做成恒空，结果掩码永远没有内容可掩，
+                // 真机看到的就是"有时候一排点、有时候完全空白"（取决于异步加载时机）。
+                // 现在直接回显：password 变化（启动加载 / 刚保存）才重置草稿，用户输入期间不受影响。
+                var pwdDraft by remember(syncUi.password) { mutableStateOf(syncUi.password) }
                 val effectivePwd: String? = when {
                     pwdDraft.isNotBlank() -> pwdDraft
                     syncUi.passwordSet -> null            // 已存密码 + 本次没输入 → 不覆盖
@@ -1124,7 +1123,8 @@ fun SettingsScreen(
                         Switch(
                             checked = pwdLocked,
                             onCheckedChange = { locked ->
-                                if (locked && pwdDraft.isNotBlank()) {
+                                // 只在真的改了才落盘（草稿现在会回显存储值，避免每次锁开关都重加密一次）
+                                if (locked && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
                                 pwdLocked = locked
@@ -1140,7 +1140,7 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .onFocusChanged { state ->
                                 tappedOnField.value = state.isFocused
-                                if (!state.isFocused && pwdDraft.isNotBlank()) {
+                                if (!state.isFocused && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
                             },
@@ -1166,7 +1166,7 @@ fun SettingsScreen(
                         ),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                             onDone = {
-                                if (pwdDraft.isNotBlank()) {
+                                if (pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
                                 focusManager.clearFocus()

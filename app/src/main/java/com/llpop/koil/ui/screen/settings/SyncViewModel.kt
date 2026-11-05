@@ -27,6 +27,9 @@ data class SyncUiState(
     // v1.6.3：密文存着但解不开（换机/重装后 Keystore 主密钥丢失）——此时 isConfigured() 为 false，
     // 推送/恢复全部静默跳过，开关却仍是"已开启"。UI 必须把这件事说出来，否则用户以为同步在跑。
     val passwordInvalid: Boolean = false,
+    // v1.6.7：明文密码（Keystore 密文在这里解一次）。输入框按"眼睛"状态决定掩码/明文，
+    // 需要真实字符才能回显，否则打开眼睛也是空的。只在本机内存里的 StateFlow 中存在。
+    val password: String = "",
     val lastStatus: String = "",          // 原始状态（ok@时间 / fail:原因 / 空）
     val busy: Boolean = false,
     // v1.5.47：云同步配置异步加载完成标志（首值到达前不渲染开关，杜绝"关→开"闪烁）
@@ -54,16 +57,28 @@ class SyncViewModel(
     val message: StateFlow<String?> = _message.asStateFlow()
     val restorePreview: StateFlow<SyncRestorePreview?> = _restorePreview.asStateFlow()
 
+    /** 解密后的密码 + 是否解不开（Keystore 主密钥丢失） */
+    private data class PasswordInfo(val plain: String, val broken: Boolean)
+
     /**
      * v1.6.3：密文能否解开。Keystore 解密涉及 Cipher 初始化（有 IPC 成本），
      * 放 Default 且只在「密文/加密标志」变化时算一次——不能放在组合用的 combine 里，
      * 否则 busy 之类的开关抖动都会触发一次解密码。
+     * v1.6.7：顺带把明文带出来给输入框回显，解密仍然只做一次。
      */
-    private val passwordBrokenFlow: Flow<Boolean> = combine(
+    private val passwordInfoFlow: Flow<PasswordInfo> = combine(
         settings.syncAppPassword,
         settings.syncPasswordEncrypted,
     ) { stored, encrypted ->
-        stored.isNotBlank() && encrypted && CryptoHelper.decrypt(stored).isNullOrBlank()
+        when {
+            stored.isBlank() -> PasswordInfo("", false)
+            // 明文回退存储（Keystore 不可用时的降级路径）
+            !encrypted -> PasswordInfo(stored, false)
+            else -> {
+                val plain = CryptoHelper.decrypt(stored).orEmpty()
+                PasswordInfo(plain, plain.isBlank())
+            }
+        }
     }.flowOn(Dispatchers.Default)
 
     val uiState: StateFlow<SyncUiState> = combine<Any, SyncUiState>(
@@ -74,16 +89,18 @@ class SyncViewModel(
         settings.syncPasswordEncrypted,
         settings.syncLastStatus,
         _busy,
-        passwordBrokenFlow,
+        passwordInfoFlow,
     ) { args ->
         val stored = args[3] as String
+        val pwd = args[7] as PasswordInfo
         SyncUiState(
             enabled = args[0] as Boolean,
             url = args[1] as String,
             username = args[2] as String,
             passwordSet = stored.isNotBlank(),
             passwordEncrypted = args[4] as Boolean,
-            passwordInvalid = args[7] as Boolean,
+            passwordInvalid = pwd.broken,
+            password = pwd.plain,
             lastStatus = args[5] as String,
             busy = args[6] as Boolean,
             loaded = true,

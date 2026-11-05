@@ -33,14 +33,14 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.KOiL.Starting"
-        tools:targetApi="33"
-        android:enableOnBackInvokedCallback="false">
+        tools:targetApi="33">
         <!--
-          v1.6.6：显式关闭「预测性返回」回调。
-          targetSdk 37 时系统默认走 OnBackInvokedCallback 链路，实测二级页（油价明细页）的
-          返回手势没被 Compose 的 BackHandler 接住，手势直接把 Activity 收掉（真机反馈）。
-          关掉后返回统一走传统 onBackPressed → OnBackPressedDispatcher → BackHandler，
-          与页内自绘的返回按钮行为一致，不会再越过页面直接退出应用。
+          v1.6.7：移除 v1.6.6 的 android:enableOnBackInvokedCallback="false"。
+          那条是误诊——当时以为"预测性返回链路接不住 BackHandler"，实际上是 MainActivity
+          自建了一个与平台隔离的 NavigationEventDispatcher，BackHandler 注册在那上面，
+          永远收不到系统返回事件。现在改为直接提供 Activity 自身的 dispatcher
+          （它就是 OnBackPressedDispatcher 的事件管道，已在 onCreate 与 window.onBackInvokedDispatcher 对接），
+          返回回归平台默认的预测性返回链路。
         -->
 
         <activity

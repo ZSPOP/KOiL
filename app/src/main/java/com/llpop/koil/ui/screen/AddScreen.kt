@@ -504,7 +504,8 @@ private fun OilPriceCard(
                         // v1.5.34：省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
                         // v1.5.35：文字→箭头加 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
                         Text(
-                            text = uiState.viewProvince,
+                            // v1.6.7：省份是数据库主键（中文），显示层换本地化名
+                            text = provinceLabel(uiState.viewProvince),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = containerText,

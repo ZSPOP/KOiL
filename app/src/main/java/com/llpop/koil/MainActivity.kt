@@ -12,7 +12,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
-import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.MainScreen
 import kotlinx.coroutines.flow.first
@@ -38,11 +37,17 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         setContent {
-            // navigationevent：miuix Overlay Dropdown 弹窗的返回手势（NavigationBackHandler）
-            // 依赖 LocalNavigationEventDispatcherOwner；Mishka 由根组合自举提供，
-            // KOiL 在此显式提供根 dispatcher（对齐 navigationevent 1.2.0）
-            val navOwner = rememberNavigationEventDispatcherOwner(true, null)
-            CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides navOwner) {
+            // v1.6.7：**不能**自己造根 dispatcher。
+            // 旧写法 rememberNavigationEventDispatcherOwner(true, null) 会 new 一个与平台返回链路
+            // 完全隔离的 NavigationEventDispatcher；而 activity-compose 1.12 的 BackHandler 优先注册在
+            // LocalNavigationEventDispatcherOwner 上，于是页面里的 BackHandler 永远收不到返回事件，
+            // 手势一路下到 Activity 直接 finish —— 这就是明细页「侧滑直接退出应用，而不是返回上一级」。
+            // ComponentActivity 自己就实现 NavigationEventDispatcherOwner，且
+            // getNavigationEventDispatcher() 返回的正是 OnBackPressedDispatcher 的事件管道
+            // （已在 onCreate 里与 window.onBackInvokedDispatcher 对接），直接把它交给组合即可。
+            CompositionLocalProvider(
+                LocalNavigationEventDispatcherOwner provides this@MainActivity,
+            ) {
                 MainScreen()
             }
         }

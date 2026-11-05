@@ -1,5 +1,30 @@
 # KOiL CHANGELOG
 
+## 未发布（v1.6.7 多语言作用域 / 返回链路 / 密码回显）
+
+> **v1.6.7（真机反馈三项）**
+> ⑨ 补录窗、编辑窗、设置页省份选择不跟随应用语言、选完仍显示中文：
+>    - 根因一：**Dialog 是独立组合根**。Compose 的 `ProvideCompositionLocals` 会用窗口自己的
+>      `context`/`configuration` 重新提供 `LocalContext` / `LocalConfiguration`，把 MainScreen 的应用语言
+>      覆盖冲掉，于是弹窗整屏回落到系统语言（中文）。新增 `LocalAppLocale`（自定义 CompositionLocal 会随父组合
+>      继承进 Dialog 子组合）+ `ProvideAppLocale`，在 `KOiLGlassDialog` 内按应用语言重新覆盖一次；
+>      `provinceLabel/gradeLabel` 也改为优先读 `LocalAppLocale`。
+>    - 根因二：设置页「默认省份」下拉直接传了 `PROVINCES`（数据库主键，中文），列表与摘要都没做显示名映射。
+>      改为 `items = provinces.map { provinceLabel(it) }`、摘要同映射；录入页省份按钮也补上映射。
+>    - 新增 `ProvinceLocalizationTest`（6 项）：31 个省份英文名全覆盖、英文名不含中文、繁中不落英文、
+>      油号四键全覆盖、未知键原样返回。
+> ⑩ 明细页返回手势仍直接退出应用：v1.6.6 的 `enableOnBackInvokedCallback=false` 是误诊。真正原因是
+>    MainActivity 用 `rememberNavigationEventDispatcherOwner(true, null)` 自建了一个**与平台隔离**的
+>    `NavigationEventDispatcher`；而 activity-compose 1.12 的 `BackHandler` 优先注册在
+>    `LocalNavigationEventDispatcherOwner` 上 —— 页面里的 BackHandler 永远收不到返回事件，手势一路下到
+>    Activity 直接 finish。改为直接提供 `this@MainActivity`（`ComponentActivity` 自身实现该接口，
+>    其 dispatcher 就是 `OnBackPressedDispatcher` 的事件管道，且已与 `window.onBackInvokedDispatcher` 对接），
+>    并移除清单里的 `enableOnBackInvokedCallback=false`，回到平台默认的预测性返回链路。
+> ⑪ 设置页「应用密码」有时一排点、有时全空：上一版为「不覆盖已存密码」把草稿做成恒空，掩码没有内容可掩，
+>    显示取决于异步加载时机。现按设计口径还原：`SyncUiState.password` 暴露解密后的明文（Keystore 解密仍在
+>    `Dispatchers.Default` 且只做一次），输入框草稿随其回填 —— 眼睛关闭显示掩码，点亮显示真实字符；
+>    仅在草稿与存储值不同时才落盘，避免锁开关反复重加密。
+
 ## 未发布（v1.6.5 真机回归修复 + v1.6.6 弹窗/多语言）
 
 > **v1.6.5（闪退 / 键盘）**

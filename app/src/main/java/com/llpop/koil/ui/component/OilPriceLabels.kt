@@ -55,27 +55,39 @@ private val GRADE_TW = mapOf(
 )
 
 /**
- * MainScreen 会按用户所选语言覆盖 Configuration，所以这里读到的是**生效语言**
- * （而不是系统语言），与界面其它文案一致。
+ * 语言来源优先级：LocalAppLocale（MainScreen 注入的应用语言，能穿透到 Dialog 子组合）
+ * → LocalConfiguration（主界面内的覆盖值）。
+ *
+ * v1.6.7：原来只读 LocalConfiguration。Dialog 是独立组合根，Compose 会用窗口自己的
+ * configuration 重新提供 LocalConfiguration，把 MainScreen 的语言覆盖冲掉 ——
+ * 于是补录窗/编辑窗里的省份仍是中文（真机反馈）。改用 LocalAppLocale 后不再受窗口影响。
  */
 @Composable
 @ReadOnlyComposable
-fun provinceLabel(name: String): String {
-    val locale = LocalConfiguration.current.locales[0]
-    return when {
-        locale.language == "en" -> PROVINCE_EN[name] ?: name
-        locale.language == "zh" && locale.country == "TW" -> PROVINCE_TW[name] ?: name
-        else -> name
-    }
-}
+private fun currentAppLocale(): java.util.Locale =
+    LocalAppLocale.current ?: LocalConfiguration.current.locales[0]
 
 @Composable
 @ReadOnlyComposable
-fun gradeLabel(name: String): String {
-    val locale = LocalConfiguration.current.locales[0]
-    return when {
-        locale.language == "en" -> GRADE_EN[name] ?: name
-        locale.language == "zh" && locale.country == "TW" -> GRADE_TW[name] ?: name
-        else -> GRADE_LABEL[name] ?: name
-    }
+fun provinceLabel(name: String): String = provinceLabelFor(currentAppLocale(), name)
+
+@Composable
+@ReadOnlyComposable
+fun gradeLabel(name: String): String = gradeLabelFor(currentAppLocale(), name)
+
+/** 纯函数版本（可单测）：不在组合里也能验证映射覆盖是否完整 */
+internal fun provinceLabelFor(locale: java.util.Locale, name: String): String = when {
+    locale.language == "en" -> PROVINCE_EN[name] ?: name
+    locale.language == "zh" && locale.country == "TW" -> PROVINCE_TW[name] ?: name
+    else -> name
 }
+
+internal fun gradeLabelFor(locale: java.util.Locale, name: String): String = when {
+    locale.language == "en" -> GRADE_EN[name] ?: name
+    locale.language == "zh" && locale.country == "TW" -> GRADE_TW[name] ?: name
+    else -> GRADE_LABEL[name] ?: name
+}
+
+/** 仅供测试：英文映射是否覆盖全部省份（漏一个就会出现"英文界面里冒中文"） */
+internal val provinceEnMapping: Map<String, String> get() = PROVINCE_EN
+internal val gradeEnMapping: Map<String, String> get() = GRADE_EN
