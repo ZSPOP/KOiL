@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,7 +83,7 @@ fun OilPriceDetailScreen(
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     viewModel: OilPriceDetailViewModel = koinViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
     val surfaceColor = MiuixTheme.colorScheme.surface
 
@@ -195,7 +195,7 @@ fun OilPriceDetailScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.years.forEach { y ->
                         GradeChip(
-                            label = "$y 年",
+                            label = stringResource(R.string.koil_detail_year, y),
                             selected = y == state.year,
                             onClick = { viewModel.selectYear(y) },
                         )
@@ -671,7 +671,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "擱淺",
+                        text = stringResource(R.string.koil_detail_stranded),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -685,7 +685,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             //       搁浅 → 「維持 09-25 價格」说明（无幅度条）
             if (item.isStranded) {
                 Text(
-                    text = "維持 ${item.keptFrom ?: "上年"} 價格",
+                    text = stringResource(R.string.koil_detail_held_price, item.keptFrom ?: stringResource(R.string.koil_detail_last_year)),
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),

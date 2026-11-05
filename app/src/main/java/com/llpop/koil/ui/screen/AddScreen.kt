@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,7 +38,7 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
@@ -95,20 +97,21 @@ fun AddScreen(
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     viewModel: AddViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val locationHelper = org.koin.compose.koinInject<com.llpop.koil.data.location.LocationHelper>()
 
     // 定位权限提醒弹窗显隐
     val showPermissionDialog = remember { mutableStateOf(false) }
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
-    LaunchedEffect(uiState.locateMessage) {
-        uiState.locateMessage?.let {
-            Toast.makeText(
-                context,
-                context.getString(R.string.koil_add_locate_switched, it),
-                Toast.LENGTH_SHORT,
-            ).show()
+    // v1.6.2：文案在组合期解析（stringResource 跟随 Configuration 变化），
+    // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
+    val locateToast = uiState.locateMessage?.let {
+        stringResource(R.string.koil_add_locate_switched, it)
+    }
+    LaunchedEffect(uiState.locateMessage, locateToast) {
+        if (locateToast != null) {
+            Toast.makeText(context, locateToast, Toast.LENGTH_SHORT).show()
             viewModel.clearLocateMessage()
         }
     }
@@ -119,6 +122,14 @@ fun AddScreen(
         if (!locationHelper.hasPermission() && !settings.hasPromptedLocation.first()) {
             settings.setHasPromptedLocation(true)
             showPermissionDialog.value = true
+        }
+    }
+
+    // v1.6.2：录入成功的一次性反馈（清除状态，避免下次进入页面重复提示）
+    LaunchedEffect(uiState.addSuccess) {
+        if (uiState.addSuccess) {
+            Toast.makeText(context, R.string.koil_precheck_added, Toast.LENGTH_SHORT).show()
+            viewModel.consumeAddSuccess()
         }
     }
 
@@ -137,6 +148,8 @@ fun AddScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
+                // v1.6.2：edge-to-edge 下键盘不 resize 窗口，补 imePadding 让表单底部（实付/提交按钮）不被键盘遮挡
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp),
         ) {
@@ -282,12 +295,7 @@ fun AddScreen(
 }
 
 // ===== 省份选择弹窗 =====
-private val PROVINCES = listOf(
-    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-    "新疆", "海南", "宁夏", "青海", "西藏",
-)
+private val PROVINCES = Provinces.ALL
 
 @Composable
 private fun ProvincePickerDialog(
@@ -736,8 +744,10 @@ private fun LastRecordBar(
                 )
                 if (last != null) {
                     Text(
-                        text = "${last.reoilDate.takeLast(5)} · ${last.mileage.toInt()} km · " +
-                            "${last.oilAmount} L · ¥${last.actualAmount.toInt()}",
+                        // v1.6.2：原实现直接拼 Double（"45.0 L"/"油量 38.0"）且金额 toInt() 截断分位，
+                        // 与全站金额口径（两位小数）不一致。统一走 NumberFormat。
+                        text = "${last.reoilDate.takeLast(5)} · ${NumberFormat.measure(last.mileage)} km · " +
+                            "${NumberFormat.measure(last.oilAmount)} L · ¥${NumberFormat.money(last.actualAmount)}",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
@@ -954,7 +964,8 @@ private fun PrecheckBanner(uiState: AddUiState) {
             Color(0x1AFF3B30) to Color(0xFFFF3B30)
         precheck.priceDeviationExceeded ->
             Color(0x1AFF9500) to Color(0xFFFF9500)
-        precheck.isReady ->
+        // v1.6.2："已添加"与"可提交"同用绿色成功态（原实现落在灰色默认态，像提示又像报错）
+        precheck.isReady || precheck.messageKey == "added" ->
             Color(0x1A34C759) to Color(0xFF34C759)
         else ->
             MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) to MiuixTheme.colorScheme.onBackgroundVariant

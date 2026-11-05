@@ -90,6 +90,10 @@ class WebDavClient {
      * 连接测试（设置页「保存并测试连接」）：
      * 对目录根发 PROPFIND（Depth: 0），认证通过返回 207（或 404=目录尚不存在但认证 OK，备份时会自动建），
      * 401/403 = 账号或应用密码错误；其余异常抛给调用方。
+     *
+     * v1.6.2：判定收紧。原实现是「非 401/403 就算成功」，于是一个普通网页地址（405/500/502）
+     * 也会显示「连接成功」，用户要到真正备份失败才发现配错了 URL。
+     * 现在只认：2xx（含 207）、3xx（地址可达且未拒绝认证）、404/409（目录不存在/已存在）。
      */
     suspend fun checkConnection(dirUrl: String, username: String, password: String): Boolean {
         val auth = authHeader(username, password)
@@ -98,6 +102,7 @@ class WebDavClient {
             header(HttpHeaders.Authorization, auth)
             header("Depth", "0")
         }
-        return resp.status.value !in 401..403
+        val code = resp.status.value
+        return code in 200..399 || code == 404 || code == 409
     }
 }

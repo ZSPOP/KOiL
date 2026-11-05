@@ -426,7 +426,7 @@ fun KOiLDatePickerDialog(
                     // 回到今天快捷按钮：切到今天所在月并选中今天
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text(
-                            text = "今天",
+                            text = stringResource(R.string.koil_cal_today),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.primary,

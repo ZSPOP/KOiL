@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,7 +44,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +79,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
@@ -105,12 +107,7 @@ import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 
-private val PROVINCES = listOf(
-    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-    "新疆", "海南", "宁夏", "青海", "西藏",
-)
+private val PROVINCES = Provinces.ALL
 private val GRADES = listOf("92", "95", "98", "0")
 
 /** 云同步自用默认值（作者私有账号；应用密码泄露可去坚果云官网单独撤销重新生成） */
@@ -127,7 +124,7 @@ fun SettingsScreen(
     onOpenPriceDetail: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // 全局焦点管理 + 偏差输入框点击标志（用于"点击输入框外部即收起提交"，无需坐标计算）
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -200,6 +197,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
+                // v1.6.2：edge-to-edge 下键盘不再自动 resize 窗口，缺了 imePadding 时
+                // 底部输入项（EIA Key / 阈值）会被键盘盖住且滚不到
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp)
                 // 点击输入框外部任意位置 = 收起焦点并提交（requireUnconsumed=false 确保子按钮消费后仍触发）
@@ -485,14 +485,17 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
         ) {
-            val priceDbStatus by viewModel.priceDbStatus.collectAsState()
-            val pendingItems by viewModel.pendingItems.collectAsState()
-            val priceDbUpdating by viewModel.priceDbUpdating.collectAsState()
+            val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
+            val pendingItems by viewModel.pendingItems.collectAsStateWithLifecycle()
+            val priceDbUpdating by viewModel.priceDbUpdating.collectAsStateWithLifecycle()
             val latestShort = (priceDbStatus.lastPriceChangeDate ?: priceDbStatus.latestDate).takeLast(5)
             val versionShort = (priceDbStatus.versionDate ?: priceDbStatus.latestDate).takeLast(5)
             // 最近检查时间格式化（MM/dd HH:mm），未检查过显示 "--"
+            // v1.6.2：语言用可观察的 Configuration locale（原 Locale.getDefault() 在组合内不可观察，
+            // 切换语言后时间格式不会跟着变）
+            val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
             val lastCheckedText = if (priceDbStatus.lastCheckedAt > 0) {
-                java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+                java.text.SimpleDateFormat("MM-dd HH:mm", uiLocale)
                     .format(java.util.Date(priceDbStatus.lastCheckedAt))
             } else "--"
 
@@ -791,9 +794,9 @@ fun SettingsScreen(
 
                 // —— EIA API Key（原油估算数据源；v1.5.1：数据源开关——开=用 EIA 隐藏输入框；
                 //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
-                val eiaKey by viewModel.eiaApiKey.collectAsState()
-                val eiaEnabled by viewModel.eiaEnabled.collectAsState()
-                val eiaLoaded by viewModel.eiaLoaded.collectAsState()
+                val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
+                val eiaEnabled by viewModel.eiaEnabled.collectAsStateWithLifecycle()
+                val eiaLoaded by viewModel.eiaLoaded.collectAsStateWithLifecycle()
                 // v1.5.47：EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
                 if (eiaLoaded) {
                 Box(
@@ -927,7 +930,7 @@ fun SettingsScreen(
 
         // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复，docs/KOiL云同步设计.md） =====
         val syncVm: SyncViewModel = koinViewModel()
-        val syncUi by syncVm.uiState.collectAsState()
+        val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
         SectionTitle(stringResource(R.string.koil_sync_section))
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
@@ -1325,7 +1328,7 @@ fun SettingsScreen(
         }
 
         // 云同步 Toast（备份/恢复结果）
-        val syncMessage by syncVm.message.collectAsState()
+        val syncMessage by syncVm.message.collectAsStateWithLifecycle()
         val syncToastContext = LocalContext.current
         val syncText = syncMessage?.let { formatSyncNotice(it) }
         LaunchedEffect(syncMessage) {
@@ -1340,7 +1343,7 @@ fun SettingsScreen(
         }
 
         // 云同步恢复确认弹窗（预览 valid/dup/errors，确认后不删本地）
-        val syncRestorePreview by syncVm.restorePreview.collectAsState()
+        val syncRestorePreview by syncVm.restorePreview.collectAsStateWithLifecycle()
         syncRestorePreview?.let { preview ->
             KOiLGlassDialog(show = true, onDismissRequest = syncVm::dismissRestorePreview) {
                 Column {
@@ -1385,7 +1388,7 @@ fun SettingsScreen(
         }
 
         // 导出/备份/更新结果提示：Toast 短暂提醒（自动消失，替代常驻卡片）
-        val exportNotice by viewModel.exportMessage.collectAsState()
+        val exportNotice by viewModel.exportMessage.collectAsStateWithLifecycle()
         val toastContext = LocalContext.current
         val exportText = exportNotice.key?.let { formatNotice(it, exportNotice.args) }
         LaunchedEffect(exportNotice) {
@@ -1428,7 +1431,7 @@ fun SettingsScreen(
     // 省份选择弹窗
 
     // CSV 导入预览弹窗
-    val importPreview by viewModel.importPreview.collectAsState()
+    val importPreview by viewModel.importPreview.collectAsStateWithLifecycle()
     importPreview?.let { preview ->
         val activeTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
         val tabs = listOf(

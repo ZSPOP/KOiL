@@ -399,6 +399,13 @@ class AddViewModel(
         _uiState.value = _uiState.value.copy(locateMessage = null)
     }
 
+    /** 清除"已添加"一次性状态（UI 消费成功后调用，避免重复提示） */
+    fun consumeAddSuccess() {
+        if (_uiState.value.addSuccess) {
+            _uiState.value = _uiState.value.copy(addSuccess = false)
+        }
+    }
+
     fun setMileage(mileage: String) {
         _uiState.value = _uiState.value.copy(mileage = mileage)
         runPrecheck()
@@ -440,13 +447,18 @@ class AddViewModel(
             it.copy(
                 oilGrade = last.oilGrade ?: "92",
                 mileage = "",
-                oilAmount = last.oilAmount.toString(),
-                actualAmount = last.actualAmount.toString(),
+                // v1.6.2：Double.toString 会写成 "45.0"，输入框里带个多余的小数点，改为整数/小数自适应
+                oilAmount = last.oilAmount.editText(),
+                actualAmount = last.actualAmount.editText(),
             )
         }
         updatePayable()
         runPrecheck()
     }
+
+    /** 数值回填输入框：整数不带 ".0"（与编辑卡同口径） */
+    private fun Double.editText(): String =
+        if (isFinite() && this % 1.0 == 0.0) toLong().toString() else toString()
 
     /** 实时预检入口：去抖信号（实际执行见 doRunPrecheck） */
     private fun runPrecheck() {
@@ -587,19 +599,23 @@ class AddViewModel(
                     source = "entry_page",
                 )
                 recordDao.insert(record)
-                _uiState.value = _uiState.value.copy(
-                    isAdding = false,
-                    addSuccess = true,
-                    mileage = "",
-                    oilAmount = "",
-                    payableAmount = "",
-                    actualAmount = "",
-                    precheck = PrecheckResult(messageKey = "added"),
-                )
-                // 刷新上次记录
+                // v1.6.2：原实现在同一个协程里先 addSuccess=true 再立刻 false，StateFlow 会合并成一次发射，
+                // UI 永远看不到成功态；且紧接着的 runPrecheck() 把 "已添加" 横幅冲成 "default"。
+                // 现在：成功态与提示都由 UI 消费后显式清除，输入区清空但不再重跑预检。
+                _uiState.update {
+                    it.copy(
+                        isAdding = false,
+                        addSuccess = true,
+                        mileage = "",
+                        oilAmount = "",
+                        payableAmount = "",
+                        actualAmount = "",
+                        precheck = PrecheckResult(messageKey = "added"),
+                    )
+                }
+                // 刷新上次记录（成功后 lastRecord 必须是最新一条，供「沿用上次」使用）
                 val last = recordDao.getLatest()
-                _uiState.value = _uiState.value.copy(lastRecord = last, addSuccess = false)
-                runPrecheck()
+                _uiState.update { it.copy(lastRecord = last) }
             } catch (_: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isAdding = false,

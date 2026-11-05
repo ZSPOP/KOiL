@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -268,9 +269,11 @@ class OverviewViewModel(
         _uiState.value = _uiState.value.copy(
             editingRecord = record,
             editDate = record.reoilDate,
-            editMileage = record.mileage.toString(),
-            editOilAmount = record.oilAmount.toString(),
-            editActualAmount = record.actualAmount.toString(),
+            // v1.6.2：Double.toString 会带出 "12345.0"/"40.0"，编辑框里出现无意义的小数点，
+            // 用户追加输入时容易变成 "12345.05"。整数按整数显示，小数保留原值。
+            editMileage = record.mileage.editText(),
+            editOilAmount = record.oilAmount.editText(),
+            editActualAmount = record.actualAmount.editText(),
             // v1.5.14：应付由参考价自动算，打开瞬间未算出 → 空（显示"待计算"），precheck 完成后即时刷新
             editPayableAmount = "",
             editGrade = record.oilGrade ?: "92",
@@ -432,23 +435,27 @@ class OverviewViewModel(
             mileageConflictType.isEmpty() &&
             !devExceeded && !overPayable && !overTank
 
-        _uiState.value = s.copy(
-            editReferencePrice = refPrice,
-            editDeviationPct = devPct,
-            editDeviationExceeded = devExceeded,
-            editBeforeFirst = beforeFirst,
-            editSameDayExists = sameDayExists,
-            editMileageConflictType = mileageConflictType,
-            editMileageConflictDate = mileageConflictDate,
-            editMileageConflictValue = mileageConflictValue,
-            editOverPayable = overPayable,
-            editOverTank = overTank,
-            editTankCapacity = tankCapacity,
-            editRangeMin = rangeMin,
-            editRangeMax = rangeMax,
-            editReady = ready,
-            saveError = false,
-        )
+        // v1.6.2 修复：原实现用开头捕获的 `s.copy(...)` 整体回写，预检期间用户继续输入的内容
+        // 会被这份旧快照覆盖（输入被"吞"）。改为 update 合并，只写预检结果字段。
+        _uiState.update {
+            it.copy(
+                editReferencePrice = refPrice,
+                editDeviationPct = devPct,
+                editDeviationExceeded = devExceeded,
+                editBeforeFirst = beforeFirst,
+                editSameDayExists = sameDayExists,
+                editMileageConflictType = mileageConflictType,
+                editMileageConflictDate = mileageConflictDate,
+                editMileageConflictValue = mileageConflictValue,
+                editOverPayable = overPayable,
+                editOverTank = overTank,
+                editTankCapacity = tankCapacity,
+                editRangeMin = rangeMin,
+                editRangeMax = rangeMax,
+                editReady = ready,
+                saveError = false,
+            )
+        }
         // v1.5.14：参考价就绪后立即刷新应付自动算（避免打开弹窗停留在"待计算"）
         updateEditPayable()
     }
@@ -664,23 +671,26 @@ class OverviewViewModel(
             mileageConflictType.isEmpty() &&
             !devExceeded && !overPayable && !overTank
 
-        _uiState.value = s.copy(
-            backfillReferencePrice = refPrice,
-            backfillBeforeFirst = beforeFirst,
-            backfillSameDayExists = sameDayExists,
-            backfillMileageConflictType = mileageConflictType,
-            backfillMileageConflictDate = mileageConflictDate,
-            backfillMileageConflictValue = mileageConflictValue,
-            backfillDeviationPct = devPct,
-            backfillDeviationExceeded = devExceeded,
-            backfillOverPayable = overPayable,
-            backfillOverTank = overTank,
-            backfillRangeMin = rangeMin,
-            backfillRangeMax = rangeMax,
-            backfillTankCapacity = tankCapacity,
-            backfillReady = ready,
-            saveError = false,
-        )
+        // v1.6.2 修复：同编辑卡——不再整体回写旧快照，避免覆盖预检期间的新输入
+        _uiState.update {
+            it.copy(
+                backfillReferencePrice = refPrice,
+                backfillBeforeFirst = beforeFirst,
+                backfillSameDayExists = sameDayExists,
+                backfillMileageConflictType = mileageConflictType,
+                backfillMileageConflictDate = mileageConflictDate,
+                backfillMileageConflictValue = mileageConflictValue,
+                backfillDeviationPct = devPct,
+                backfillDeviationExceeded = devExceeded,
+                backfillOverPayable = overPayable,
+                backfillOverTank = overTank,
+                backfillRangeMin = rangeMin,
+                backfillRangeMax = rangeMax,
+                backfillTankCapacity = tankCapacity,
+                backfillReady = ready,
+                saveError = false,
+            )
+        }
         // v1.5.14：参考价就绪后立即刷新应付自动算（避免打开弹窗停留在"待计算"）
         updateBackfillPayable()
     }
@@ -697,9 +707,14 @@ class OverviewViewModel(
             val cur = _uiState.value
             if (cur.isSavingBackfill) return@launch
             _uiState.value = cur.copy(isSavingBackfill = true, saveError = false)
-            val curMileage = cur.backfillMileage.toDoubleOrNull() ?: return@launch
-            val curOil = cur.backfillOilAmount.toDoubleOrNull() ?: return@launch
-            val curActual = cur.backfillActualAmount.toDoubleOrNull() ?: return@launch
+            // v1.6.2：解析失败必须把防重入标志复位，否则保存按钮会永久置灰
+            val curMileage = cur.backfillMileage.toDoubleOrNull()
+            val curOil = cur.backfillOilAmount.toDoubleOrNull()
+            val curActual = cur.backfillActualAmount.toDoubleOrNull()
+            if (curMileage == null || curOil == null || curActual == null) {
+                _uiState.update { it.copy(isSavingBackfill = false, saveError = true) }
+                return@launch
+            }
             val payable = cur.backfillPayableAmount.toDoubleOrNull() ?: curActual
             val province = cur.backfillProvince.ifBlank { settings.defaultProvince.first() }
             try {
@@ -779,4 +794,8 @@ class OverviewViewModel(
             )
         }
     }
+
+    /** 数值回填输入框：整数不带 ".0"，小数保留原值（v1.6.2） */
+    private fun Double.editText(): String =
+        if (isFinite() && this % 1.0 == 0.0) toLong().toString() else toString()
 }

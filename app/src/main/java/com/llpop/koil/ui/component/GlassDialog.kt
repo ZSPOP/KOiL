@@ -3,6 +3,7 @@ package com.llpop.koil.ui.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -58,27 +59,35 @@ fun KOiLGlassDialog(
             else Modifier.fillMaxWidth()
             // v1.5.32：弹窗内点击空白失焦（composable 上下文取 focusManager 供 pointerInput 使用）
             val focusManager = LocalFocusManager.current
-            Box(
-                modifier = Modifier
-                    .then(widthMod)
-                    .then(if (maxHeight != null) Modifier.heightIn(max = maxHeight) else Modifier)
-                    .clip(RoundedCornerShape(24.dp))
-                    // v1.5.32：背景完全不透明，确保盖住弹窗背后内容（原 0.94 alpha 在矮弹窗时透出下层文字造成"叠加"观感）
-                    .background(MiuixTheme.colorScheme.surface)
-                    .padding(contentPadding)
-                    // v1.5.32：点击弹窗内空白处取消输入框选中/失焦（子输入框消费点击，不误触）
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { focusManager.clearFocus() })
-                    },
-            ) {
-                if (scrollable) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState()),
-                    ) { content() }
-                } else {
-                    content()
+            // v1.6.2：高度上限不再只看屏幕高度——弹窗窗口在键盘弹出时会被系统压缩，
+            // 若仍按 screenHeight*0.85 定高，超出窗口的部分（通常是底部"保存"按钮）会被裁掉且滚不到。
+            // 这里用窗口实际可用高度做二次收敛，键盘弹起时弹窗自动变矮并保持内部可滚动。
+            BoxWithConstraints {
+                // 注意：BoxWithConstraints 作用域自带 maxHeight，先取出参数值避免同名遮蔽
+                val requestedMax = maxHeight
+                val cap = if (requestedMax != null) minOf(requestedMax, this.maxHeight) else this.maxHeight
+                Box(
+                    modifier = Modifier
+                        .then(widthMod)
+                        .heightIn(max = cap)
+                        .clip(RoundedCornerShape(24.dp))
+                        // v1.5.32：背景完全不透明，确保盖住弹窗背后内容（原 0.94 alpha 在矮弹窗时透出下层文字造成"叠加"观感）
+                        .background(MiuixTheme.colorScheme.surface)
+                        .padding(contentPadding)
+                        // v1.5.32：点击弹窗内空白处取消输入框选中/失焦（子输入框消费点击，不误触）
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = { focusManager.clearFocus() })
+                        },
+                ) {
+                    if (scrollable) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                        ) { content() }
+                    } else {
+                        content()
+                    }
                 }
             }
         }

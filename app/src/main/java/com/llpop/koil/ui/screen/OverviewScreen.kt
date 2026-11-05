@@ -52,7 +52,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +98,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
@@ -148,7 +149,7 @@ fun OverviewScreen(
     onNavigateToAdd: (() -> Unit)? = null,
     viewModel: OverviewViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // v1.5.20：全页改 LazyColumn 惰性渲染，历史记录只组合可见项；不再需要按月手动分页（visibleMonths）
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -2077,12 +2078,7 @@ private fun MileageRangeHint(rangeMin: Double?, rangeMax: Double?) {
 }
 
 // ===== 全国 31 省（与 AddScreen 一致） =====
-private val PROVINCES = listOf(
-    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-    "新疆", "海南", "宁夏", "青海", "西藏",
-)
+private val PROVINCES = Provinces.ALL
 
 /** 加油省份选择字段（锚定下拉列表：紧贴字段下方弹出、空间不足自动上翻、底色与首页下拉一致，联动参考价/应付/偏差预检） */
 @Composable

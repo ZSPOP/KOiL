@@ -7,6 +7,7 @@ import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
+import com.llpop.koil.data.oil.Provinces
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
@@ -48,27 +49,30 @@ class LocationHelper(private val context: Context) {
                 val location = getLastKnownLocation()
                 if (location != null) {
                     val province = geocodeProvince(location.latitude, location.longitude)
-                    if (!province.isNullOrBlank()) return@withContext province
+                    if (Provinces.isValid(province)) return@withContext province
                 }
             } catch (_: Exception) { }
         }
         // 第二级：IP 归属地
         try {
             val province = getProvinceByIp()
-            if (!province.isNullOrBlank()) return@withContext province
+            if (Provinces.isValid(province)) return@withContext province
         } catch (_: Exception) { }
         // 第三级：null（调用方回退默认）
         null
     }
 
     /** IP 归属地：请求 ip-api.com 获取省份（免费版仅 http 明文可用，https 需付费 Key；
-     *  明文只含省份信息、敏感度低，配合 30 分钟节流缓解限流与暴露面） */
+     *  明文只含省份信息、敏感度低，配合 30 分钟节流缓解限流与暴露面）。
+     *  v1.6.2：① 该域名已在 network_security_config 中单独放行明文（否则 targetSdk 28+ 直接抛
+     *  UnknownServiceException，整条 IP 降级链静默失效）；② 加 lang=zh-CN，让 regionName 直接返回
+     *  "广东省"而不是"Guangdong"，否则拿到的英文省名不在省份白名单里，四宫格会全部空白。 */
     private suspend fun getProvinceByIp(): String? {
         val now = System.currentTimeMillis()
         if (now - lastIpLookupAt < 30 * 60 * 1000L) return null
         lastIpLookupAt = now
         return try {
-            val response = httpClient.get("http://ip-api.com/json/?fields=status,regionName,country")
+            val response = httpClient.get("http://ip-api.com/json/?fields=status,regionName,country&lang=zh-CN")
             val json = JSONObject(response.bodyAsText())
             if (json.optString("status") == "success") {
                 val region = json.optString("regionName")

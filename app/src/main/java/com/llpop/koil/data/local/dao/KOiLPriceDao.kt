@@ -82,6 +82,14 @@ interface KOiLPriceDao {
     @Query("DELETE FROM koil_prices WHERE province = :province AND grade = :grade AND effectiveDate = :date")
     suspend fun deleteByKey(province: String, grade: String, date: String)
 
+    /**
+     * v1.6.2：批量删除指定生效日的全部行。
+     * 替代「getAll() 全表载入内存 + 逐条 deleteByKey」——31 省 × 4 油号 × 多年窗口是万级行，
+     * 原实现在每次窗口日历刷新时把整张表读进内存再逐条删，是补灌期间最主要的一次性卡顿源。
+     */
+    @Query("DELETE FROM koil_prices WHERE effectiveDate IN (:dates)")
+    suspend fun deleteByEffectiveDates(dates: List<String>): Int
+
     /** 指定生效日期任一记录（窗口 W1 是否已调价的全国判定） */
     @Query("SELECT * FROM koil_prices WHERE effectiveDate = :date LIMIT 1")
     suspend fun getByDate(date: String): KOiLPriceEntity?

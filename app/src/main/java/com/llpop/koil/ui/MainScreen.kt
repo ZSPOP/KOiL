@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,11 +82,11 @@ import top.yukonga.miuix.kmp.utils.springAnimateToPage
  */
 @Composable
 fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
-    val themeMode by viewModel.themeMode.collectAsState()
-    val language by viewModel.language.collectAsState()
-    val floatingBottomBar by viewModel.floatingBottomBar.collectAsState()
-    val floatingStyle by viewModel.floatingBottomBarStyle.collectAsState()
-    val barMode by viewModel.bottomBarMode.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val language by viewModel.language.collectAsStateWithLifecycle()
+    val floatingBottomBar by viewModel.floatingBottomBar.collectAsStateWithLifecycle()
+    val floatingStyle by viewModel.floatingBottomBarStyle.collectAsStateWithLifecycle()
+    val barMode by viewModel.bottomBarMode.collectAsStateWithLifecycle()
 
     val darkTheme = when (themeMode) {
         AppSettings.ThemeMode.SYSTEM -> isSystemInDarkTheme()

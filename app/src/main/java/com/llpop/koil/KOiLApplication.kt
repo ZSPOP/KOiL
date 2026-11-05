@@ -124,22 +124,28 @@ class KOiLApplication : Application() {
 
         // 油价库每 8 小时自动检测（对齐 Web koil_price_auto_sync；受开关+节流约束）
         // v1.6.2：补网络约束 + 指数退避——无网时不再被唤醒空跑（Worker 内部 Result.retry 也会无限重试）
-        val syncRequest = PeriodicWorkRequestBuilder<OilPriceSyncWorker>(
-            OilPriceDbSyncer.CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS
-        )
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
+        // v1.6.2：整段移到 IO——WorkManager.getInstance() 首次调用要初始化单例、打开自己的 Room 库，
+        // 放在 onCreate 主线程等于给冷启动首帧平白加几毫秒到十几毫秒。
+        appScope.launch {
+            val syncRequest = PeriodicWorkRequestBuilder<OilPriceSyncWorker>(
+                OilPriceDbSyncer.CHECK_INTERVAL_MS, TimeUnit.MILLISECONDS
             )
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
-        // 历史任务名（迁移专用）：v1.4.50 及更早为小写 koil_price_auto_sync，注销后启用新名
-        runCatching { WorkManager.getInstance(this).cancelUniqueWork("koil_price_auto_sync") }
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "KOiL_price_auto_sync",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            syncRequest,
-        )
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                .build()
+            // 历史任务名（迁移专用）：v1.4.50 及更早为小写 koil_price_auto_sync，注销后启用新名
+            runCatching { WorkManager.getInstance(this@KOiLApplication).cancelUniqueWork("koil_price_auto_sync") }
+            runCatching {
+                WorkManager.getInstance(this@KOiLApplication).enqueueUniquePeriodicWork(
+                    "KOiL_price_auto_sync",
+                    ExistingPeriodicWorkPolicy.UPDATE,
+                    syncRequest,
+                )
+            }
+        }
     }
 }

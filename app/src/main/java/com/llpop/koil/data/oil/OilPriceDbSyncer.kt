@@ -55,12 +55,7 @@ class OilPriceDbSyncer(
         const val CHECK_INTERVAL_MS = 8L * 60 * 60 * 1000
         const val STRANDED_EPSILON = 0.005
         private val DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val PROVINCES = listOf(
-            "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-            "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-            "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-            "新疆", "海南", "宁夏", "青海", "西藏",
-        )
+        val PROVINCES = Provinces.ALL
     }
 
     private val checking = AtomicBoolean(false)
@@ -181,13 +176,18 @@ class OilPriceDbSyncer(
             if (d.dayOfWeek.value >= 6) return false
             return s !in holidaySet
         }
+        // v1.6.2：两个推进函数都加上界。节假日集合来自网络，若上游把连续区间误标成假期
+        // （或 workdaySet 为空且假期覆盖整年），原实现会在此死循环——协程永远不返回，
+        // 补灌与启动同步全部挂住，表现为"油价库一直不更新"。
         fun add10(from: LocalDate): LocalDate {
-            var d = from.plusDays(1); var n = 0
-            while (true) { if (isWorkday(d)) n++; if (n == 10) return d; d = d.plusDays(1) }
+            var d = from.plusDays(1); var n = 0; var guard = 0
+            while (guard++ < 400) { if (isWorkday(d)) n++; if (n == 10) return d; d = d.plusDays(1) }
+            return from.plusDays(14)
         }
         fun sub10(from: LocalDate): LocalDate {
-            var d = from.minusDays(1); var n = 0
-            while (true) { if (isWorkday(d)) n++; if (n == 10) return d; d = d.minusDays(1) }
+            var d = from.minusDays(1); var n = 0; var guard = 0
+            while (guard++ < 400) { if (isWorkday(d)) n++; if (n == 10) return d; d = d.minusDays(1) }
+            return from.minusDays(14)
         }
         val result = sortedSetOf<String>()
         // 向后顺推（含锚点本身若在本年）
@@ -231,8 +231,9 @@ class OilPriceDbSyncer(
             it in yearStart..yearEnd && it !in legal
         }
         if (badDates.isNotEmpty()) {
-            priceDao.getAll().filter { it.effectiveDate in badDates }
-                .forEach { priceDao.deleteByKey(it.province, it.grade, it.effectiveDate) }
+            // v1.6.2：单条 SQL 批量删（原实现 getAll() 把整表读进内存再逐条 deleteByKey，
+            // 万级行时是补灌期间最大的一次性内存峰值与耗时来源）
+            priceDao.deleteByEffectiveDates(badDates)
         }
     }
 

@@ -1,6 +1,7 @@
 package com.llpop.koil.data.sync
 
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
+import com.llpop.koil.domain.logic.DerivedCalculator
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -67,10 +68,10 @@ object BackupCodec {
                 java.time.temporal.ChronoUnit.DAYS.between(d0, d1)
             }
             // 派生口径与 §7.10 手动备份一致：仅里程段 ≥100km 时计算油耗/每公里成本
-            val consumption = if (distance != null && distance >= 100)
-                Math.round(r.oilAmount / distance * 100 * 100) / 100.0 else null
-            val costPerKm = if (distance != null && distance >= 100)
-                Math.round(r.actualAmount / distance * 100) / 100.0 else null
+            // v1.6.2：阈值统一取 DerivedCalculator.MIN_DISTANCE（原硬编码 100，与总览口径可能漂移）
+            val valid = distance != null && distance >= DerivedCalculator.MIN_DISTANCE
+            val consumption = if (valid) Math.round(r.oilAmount / distance!! * 100 * 100) / 100.0 else null
+            val costPerKm = if (valid) Math.round(r.actualAmount / distance!! * 100) / 100.0 else null
 
             recordsArr.put(
                 JSONObject()
@@ -106,6 +107,9 @@ object BackupCodec {
 
     // ===== 解析 =====
 
+    /** 解析结果：云端条数（含脏行）+ 通过校验的记录。v1.6.2：一次解析产出两者，避免大 JSON 解析两遍。 */
+    data class ParseResult(val total: Int, val records: List<RecordData>)
+
     /** 解析备份 JSON 的 records 数组长度（云端条数，用于统计 errors = total - parsed） */
     fun countRecords(jsonText: String): Int {
         val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: return 0
@@ -113,33 +117,56 @@ object BackupCodec {
     }
 
     /** 解析备份 JSON 的 records 数组；解析失败返回空列表（调用方按空库/格式错误处理） */
-    fun parseRecords(jsonText: String): List<RecordData> {
-        val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: return emptyList()
-        val arr = root.optJSONArray("records") ?: return emptyList()
-        val out = mutableListOf<RecordData>()
+    fun parseRecords(jsonText: String): List<RecordData> = parse(jsonText).records
+
+    /**
+     * 单次解析：返回总条数与通过校验的记录。
+     * 校验口径（v1.6.2 加严）：日期必须是真实存在的 yyyy-MM-dd、里程/油量为正、金额非负且有限，
+     * 并设合理上界——云端文件可能被手工改坏或来自旧版本，脏值一旦入库会污染整条派生链
+     * （油耗、每公里成本、异常判定全部基于相邻记录差值）。
+     */
+    fun parse(jsonText: String): ParseResult {
+        val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: return ParseResult(0, emptyList())
+        val arr = root.optJSONArray("records") ?: return ParseResult(0, emptyList())
+        val out = ArrayList<RecordData>(arr.length())
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
             val date = o.optString("date")
-            // 格式闸：非法日期整条跳过（进 error 组由调用方统计）
-            if (!date.matches(Regex("""\d{4}-\d{2}-\d{2}"""))) continue
+            if (!DATE_REGEX.matches(date) || !isRealDate(date)) continue
             val mileage = o.optDouble("mileage", Double.NaN)
             val oilAmount = o.optDouble("oilAmount", Double.NaN)
             val actual = o.optDouble("actualAmount", Double.NaN)
-            if (!mileage.isFinite() || !oilAmount.isFinite() || !actual.isFinite()) continue
+            val payable = o.optDouble("payableAmount", actual)
+            if (!mileage.inRange(1.0, MAX_MILEAGE)) continue
+            if (!oilAmount.inRange(0.01, MAX_OIL_AMOUNT)) continue
+            if (!actual.inRange(0.0, MAX_MONEY)) continue
+            if (!payable.inRange(0.0, MAX_MONEY)) continue
             out.add(
                 RecordData(
                     reoilDate = date,
                     mileage = mileage,
                     oilAmount = oilAmount,
-                    payableAmount = o.optDouble("payableAmount", actual),
+                    payableAmount = payable,
                     actualAmount = actual,
-                    oilPrice = if (o.isNull("oilPrice")) null else o.optDouble("oilPrice", Double.NaN).takeIf { it.isFinite() },
+                    oilPrice = if (o.isNull("oilPrice")) null else o.optDouble("oilPrice", Double.NaN).takeIf { it.isFinite() && it > 0 },
                     oilGrade = o.optString("oilGrade").takeIf { it.isNotEmpty() },
                     province = o.optString("province").takeIf { it.isNotEmpty() },
                     source = o.optString("source", "cloud_sync").takeIf { it.isNotEmpty() },
                 )
             )
         }
-        return out
+        return ParseResult(arr.length(), out)
     }
+
+    private fun Double.inRange(min: Double, max: Double): Boolean = isFinite() && this >= min && this <= max
+
+    private fun isRealDate(date: String): Boolean =
+        runCatching { LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE) }.isSuccess
+
+    private val DATE_REGEX = Regex("""\d{4}-\d{2}-\d{2}""")
+
+    // 合理上界：超出即视为脏数据（真实车辆里程 < 1000 万 km，单次加油 < 1000 L，单次金额 < 10 万元）
+    private const val MAX_MILEAGE = 10_000_000.0
+    private const val MAX_OIL_AMOUNT = 1_000.0
+    private const val MAX_MONEY = 100_000.0
 }

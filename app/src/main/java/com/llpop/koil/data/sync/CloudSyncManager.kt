@@ -150,22 +150,23 @@ class CloudSyncManager(
         val password = getAppPassword()
 
         val json = client.download(url, BackupCodec.CLOUD_FILE_NAME, username, password) ?: return null
-        val total = BackupCodec.countRecords(json)
-        val parsed = BackupCodec.parseRecords(json)
+        // v1.6.2：一次解析同时拿到总条数与有效记录（原先 countRecords + parseRecords 把大 JSON 解析两遍）
+        val parsed = BackupCodec.parse(json)
+        val total = parsed.total
 
         // 与本地比对：同日同里程视为重复（沿用 CSV 导入的复合键口径，Double 精确比较）
         val existing = recordDao.getRange("1970-01-01", "2999-12-31")
         val keys = existing.map { it.reoilDate to it.mileage }.toSet()
         val valid = mutableListOf<KOiLRecordEntity>()
         var duplicates = 0
-        for (r in parsed) {
+        for (r in parsed.records) {
             if (r.reoilDate to r.mileage in keys) duplicates++
             else valid.add(r.toEntity())
         }
         return RestoreResult(
             valid = valid,
             duplicates = duplicates,
-            errors = (total - parsed.size).coerceAtLeast(0),
+            errors = (total - parsed.records.size).coerceAtLeast(0),
             cloudRecordCount = total,
         )
     }

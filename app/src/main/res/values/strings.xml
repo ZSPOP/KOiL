@@ -362,4 +362,8 @@
     <string name="koil_sync_config_saved">配置已保存，连接正常</string>
     <string name="koil_sync_config_test_failed">连接失败：请检查账号与应用密码</string>
 
+    <string name="koil_detail_year">%1$d 年</string>
+    <string name="koil_detail_stranded">搁浅</string>
+    <string name="koil_detail_held_price">维持 %1$s 价格</string>
+    <string name="koil_detail_last_year">上年</string>
 </resources>
