@@ -359,7 +359,7 @@
     <string name="koil_sync_config_saved">Saved, connection OK</string>
     <string name="koil_sync_config_test_failed">Connection failed — check account &amp; app password</string>
 
-    <string name="koil_detail_year">%1$d</string>
+    <string name="koil_detail_year">%1$s</string>
     <string name="koil_detail_stranded">Stranded</string>
     <string name="koil_detail_held_price">Held at %1$s</string>
     <string name="koil_detail_last_year">last year</string>

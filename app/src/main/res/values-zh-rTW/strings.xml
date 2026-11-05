@@ -348,7 +348,7 @@
     <string name="koil_sync_config_saved">設定已儲存，連線正常</string>
     <string name="koil_sync_config_test_failed">連線失敗：請檢查帳號與應用程式密碼</string>
 
-    <string name="koil_detail_year">%1$d 年</string>
+    <string name="koil_detail_year">%1$s 年</string>
     <string name="koil_detail_stranded">擱淺</string>
     <string name="koil_detail_held_price">維持 %1$s 價格</string>
     <string name="koil_detail_last_year">上年</string>
