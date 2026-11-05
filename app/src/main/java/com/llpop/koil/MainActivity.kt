@@ -27,9 +27,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         // 调价推送通知权限（API 33+ 运行时申请；仅首次安装请求一次，拒绝后标记记忆，
         // 不再每次启动重复无效请求——Android 13+ 拒绝后系统静默不弹框；用户想开启时经设置页开关跳系统通知设置）
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+        // minSdk 33 起 POST_NOTIFICATIONS 恒存在，无需 SDK_INT 判断（v1.6.3 清理死分支）
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             lifecycleScope.launch {
                 val requested = GlobalContext.get().get<AppSettings>().notificationPermissionRequested.first()
                 if (!requested) {

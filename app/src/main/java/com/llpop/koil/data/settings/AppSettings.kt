@@ -15,7 +15,6 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -24,6 +23,16 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 private val Context.KOiLDataStore by preferencesDataStore(name = "KOiL_settings")
+
+/**
+ * v1.6.3：**云同步应用密码单独存一个文件**，理由是可备份性——
+ * 系统的自动备份（cloud-backup / device-transfer）按文件粒度排除，Preferences DataStore 无法只排掉其中几个 key。
+ * 密码与其余设置同文件时，要么"为保住设置而把密码也备份走"，要么"为排掉密码而把全部设置一起丢掉"。
+ * 拆出来之后 res/xml/data_extraction_rules.xml 可以精确排除本文件：备份里绝不含凭据，其余设置照常恢复。
+ * 副作用（可接受）：换机恢复后同步密码必然缺失，由 SyncViewModel.passwordInvalid 提示重新输入
+ * （Keystore 主密钥本来就不进备份，旧路径下密文同样解不开）。
+ */
+private val Context.KOiLSecretStore by preferencesDataStore(name = "KOiL_secret")
 
 /**
  * v1.6.2：DataStore 的 `data` 在**任意** key 变化时都会重发整份 Preferences，`map` 本身不过滤重复值，
@@ -45,36 +54,40 @@ private const val LEGACY_SETTINGS_FILE = "koil_settings.preferences_pb"
  */
 class AppSettings(private val context: Context) {
 
-    /** 一次性迁移：历史 koil_settings 文件 → KOiL_settings，键前缀 koil- → KOiL-（幂等，保留全部设置） */
-    fun migrateLegacyIfNeeded() {
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            runCatching {
-                val legacy: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-                    scope = CoroutineScope(Dispatchers.IO),
-                    produceFile = { File(context.filesDir, "datastore/$LEGACY_SETTINGS_FILE") },
-                )
-                val oldData = legacy.data.first()
-                if (oldData.asMap().isEmpty()) return@runCatching
-                // 新 store 已有 KOiL- 键 → 已迁移过，跳过
-                val newData = context.KOiLDataStore.data.first()
-                if (newData.asMap().any { it.key.name.startsWith("KOiL-") }) return@runCatching
+    /**
+     * 一次性迁移：历史 koil_settings 文件 → KOiL_settings，键前缀 koil- → KOiL-（幂等，保留全部设置）。
+     *
+     * v1.6.3：改为 suspend。原先内部自建 CoroutineScope 并 launch，调用方无法 await——
+     * 而紧接着的密码迁移依赖它先跑完（老文件里可能还带着 koil-sync-app-password），
+     * 顺序只能靠调度器，属于碰运气。现在由调用方（appScope）串行 await，顺序确定。
+     */
+    suspend fun migrateLegacyIfNeeded() {
+        runCatching {
+            val legacy: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+                scope = CoroutineScope(Dispatchers.IO),
+                produceFile = { File(context.filesDir, "datastore/$LEGACY_SETTINGS_FILE") },
+            )
+            val oldData = legacy.data.first()
+            if (oldData.asMap().isEmpty()) return@runCatching
+            // 新 store 已有 KOiL- 键 → 已迁移过，跳过
+            val newData = context.KOiLDataStore.data.first()
+            if (newData.asMap().any { it.key.name.startsWith("KOiL-") }) return@runCatching
 
-                context.KOiLDataStore.edit { new ->
-                    oldData.asMap().forEach { (k, v) ->
-                        val newName = k.name.replace("koil-", "KOiL-")
-                        when (v) {
-                            is String -> new[stringPreferencesKey(newName)] = v
-                            is Set<*> -> new[stringSetPreferencesKey(newName)] = @Suppress("UNCHECKED_CAST") (v as Set<String>)
-                            is Int -> new[intPreferencesKey(newName)] = v
-                            is Long -> new[longPreferencesKey(newName)] = v
-                            is Float -> new[floatPreferencesKey(newName)] = v
-                            is Double -> new[doublePreferencesKey(newName)] = v
-                            is Boolean -> new[booleanPreferencesKey(newName)] = v
-                        }
+            context.KOiLDataStore.edit { new ->
+                oldData.asMap().forEach { (k, v) ->
+                    val newName = k.name.replace("koil-", "KOiL-")
+                    when (v) {
+                        is String -> new[stringPreferencesKey(newName)] = v
+                        is Set<*> -> new[stringSetPreferencesKey(newName)] = @Suppress("UNCHECKED_CAST") (v as Set<String>)
+                        is Int -> new[intPreferencesKey(newName)] = v
+                        is Long -> new[longPreferencesKey(newName)] = v
+                        is Float -> new[floatPreferencesKey(newName)] = v
+                        is Double -> new[doublePreferencesKey(newName)] = v
+                        is Boolean -> new[booleanPreferencesKey(newName)] = v
                     }
                 }
-                legacy.edit { it.clear() }
             }
+            legacy.edit { it.clear() }
         }
     }
 
@@ -466,17 +479,40 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_SYNC_USERNAME] = username.trim() }
     }
 
-    /** 应用密码存储值（密文或明文回退，原样返回；是否密文看 syncPasswordEncrypted） */
+    /** 应用密码存储值（密文或明文回退，原样返回；是否密文看 syncPasswordEncrypted）。
+     *  v1.6.3：改读独立文件 KOiL_secret（该文件不进系统备份，见 KOiLSecretStore 注释） */
     val syncAppPassword: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_SYNC_APP_PASSWORD] ?: "" }
+        context.KOiLSecretStore.data.distinctValue { it[KEY_SYNC_APP_PASSWORD] ?: "" }
     suspend fun setSyncAppPassword(encryptedOrPlain: String) {
-        context.KOiLDataStore.edit { it[KEY_SYNC_APP_PASSWORD] = encryptedOrPlain }
+        context.KOiLSecretStore.edit { it[KEY_SYNC_APP_PASSWORD] = encryptedOrPlain }
     }
 
     val syncPasswordEncrypted: Flow<Boolean> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_SYNC_PASSWORD_ENCRYPTED] ?: false }
+        context.KOiLSecretStore.data.distinctValue { it[KEY_SYNC_PASSWORD_ENCRYPTED] ?: false }
     suspend fun setSyncPasswordEncrypted(encrypted: Boolean) {
-        context.KOiLDataStore.edit { it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted }
+        context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted }
+    }
+
+    /**
+     * v1.6.3：把密码从 KOiL_settings 搬到 KOiL_secret（幂等）。
+     * 必须把旧键从 KOiL_settings 里删掉——否则"密码不进备份"这个目标没有达成：
+     * 老文件仍会被系统备份带走，等于换了个地方留后门。
+     */
+    suspend fun migrateSyncSecretIfNeeded() {
+        val legacy = context.KOiLDataStore.data.first()
+        val pwd = legacy[KEY_SYNC_APP_PASSWORD]
+        val encrypted = legacy[KEY_SYNC_PASSWORD_ENCRYPTED]
+        if (pwd.isNullOrEmpty() && encrypted == null) return
+        if (!pwd.isNullOrEmpty() && context.KOiLSecretStore.data.first()[KEY_SYNC_APP_PASSWORD].isNullOrEmpty()) {
+            context.KOiLSecretStore.edit {
+                it[KEY_SYNC_APP_PASSWORD] = pwd
+                it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted ?: false
+            }
+        }
+        context.KOiLDataStore.edit {
+            it.remove(KEY_SYNC_APP_PASSWORD)
+            it.remove(KEY_SYNC_PASSWORD_ENCRYPTED)
+        }
     }
 
     val syncLastPushAt: Flow<Long> =

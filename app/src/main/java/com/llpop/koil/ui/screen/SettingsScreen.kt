@@ -60,6 +60,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -157,8 +158,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     var pushPermissionGranted by remember {
         mutableStateOf(
-            Build.VERSION.SDK_INT < 33 ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED,
         )
     }
@@ -169,7 +169,7 @@ fun SettingsScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                pushPermissionGranted = Build.VERSION.SDK_INT < 33 ||
+                pushPermissionGranted =
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
                 locationPermissionGranted = viewModel.hasLocationPermission()
@@ -548,7 +548,7 @@ fun SettingsScreen(
                 if (priceDbStatus.incompleteProvinceCount > 0) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = stringResource(R.string.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount),
+                        text = pluralStringResource(R.plurals.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount, priceDbStatus.incompleteProvinceCount),
                         fontSize = 12.sp,
                         color = Color(0xFFE53935),
                     )
@@ -1361,8 +1361,9 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = stringResource(
-                            R.string.koil_sync_restore_confirm_msg,
+                        text = pluralStringResource(
+                            R.plurals.koil_sync_restore_confirm_msg,
+                            preview.total,
                             preview.total, preview.valid, preview.duplicates, preview.errors,
                         ),
                         fontSize = 13.sp,
@@ -1892,6 +1893,9 @@ private fun modeLabel(mode: BottomBarMode) = when (mode) {
     BottomBarMode.IconOnly -> stringResource(R.string.koil_mode_icon_only)
 }
 
+/** 通知参数里的第 n 个整数（plurals 的 count 必须是 Int，而 args 是 List<Any>） */
+private fun List<Any>.intAt(index: Int): Int = (getOrNull(index) as? Int) ?: (getOrNull(index) as? Number)?.toInt() ?: 0
+
 /** 把 ViewModel 给出的结果通知 key 翻译为当前语言文案 */
 @Composable
 private fun formatNotice(key: String, args: List<Any>): String = when (key) {
@@ -1900,20 +1904,28 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "adopt_failed" -> stringResource(R.string.koil_msg_adopt_failed)
     "pdb_update_failed" -> stringResource(R.string.koil_msg_pdb_update_failed, args.getOrElse(0) { "" })
     "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
-    "price_exported" -> stringResource(R.string.koil_msg_price_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "price_exported" -> pluralStringResource(
+        R.plurals.koil_msg_price_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
+    )
     "export_failed" -> stringResource(R.string.koil_msg_export_failed, args.getOrElse(0) { "" })
     "no_records" -> stringResource(R.string.koil_msg_no_records)
-    "records_exported" -> stringResource(R.string.koil_msg_records_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "records_exported" -> pluralStringResource(
+        R.plurals.koil_msg_records_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
+    )
     "cannot_read" -> stringResource(R.string.koil_msg_cannot_read)
     "file_empty" -> stringResource(R.string.koil_msg_file_empty)
     "missing_columns" -> stringResource(R.string.koil_msg_missing_columns)
     "parse_failed" -> stringResource(R.string.koil_msg_parse_failed, args.getOrElse(0) { "" })
     "import_done" -> stringResource(R.string.koil_msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
     "backup_no_records" -> stringResource(R.string.koil_msg_backup_no_records)
-    "restore_done" -> stringResource(R.string.koil_msg_restore_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
+    "restore_done" -> pluralStringResource(
+        R.plurals.koil_msg_restore_done, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 },
+    )
     "restore_failed" -> stringResource(R.string.koil_msg_restore_failed, args.getOrElse(0) { "" })
     "no_records_backup" -> stringResource(R.string.koil_msg_no_records_backup)
-    "backup_done" -> stringResource(R.string.koil_msg_backup_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "backup_done" -> pluralStringResource(
+        R.plurals.koil_msg_backup_done, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
+    )
     "backup_failed" -> stringResource(R.string.koil_msg_backup_failed, args.getOrElse(0) { "" })
     else -> key
 }

@@ -1,5 +1,6 @@
 package com.llpop.koil.di
 
+import android.app.Application
 import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLPricePendingDao
@@ -23,6 +24,11 @@ import org.koin.core.module.dsl.singleOf
 import org.koin.dsl.module
 
 val appModule = module {
+    // v1.6.3：androidContext() 注册的是 Context 类型；显式再注册一次 Application，
+    // 让"构造参数要 Application"的 ViewModel 能被 viewModelOf 解析（类型收紧以防 Context 泄漏）
+    // 用 applicationContext 转 Application：这层转换恒成立（applicationContext 必为 Application），
+    // 直接 `androidContext() as Application` 依赖 startKoin 传的实例类型，写法上更脆
+    single<Application> { androidContext().applicationContext as Application }
     single { AppDatabase.getInstance(androidContext()) }
     singleOf(::AppSettings)
     singleOf(::OilPriceNetwork)

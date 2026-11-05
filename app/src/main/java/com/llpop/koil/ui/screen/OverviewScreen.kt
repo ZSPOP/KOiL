@@ -82,9 +82,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -313,7 +314,7 @@ fun OverviewScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.koil_ov_total_count_in_list, uiState.records.size),
+                        text = pluralStringResource(R.plurals.koil_ov_total_count_in_list, uiState.records.size, uiState.records.size),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -610,7 +611,10 @@ fun OverviewScreen(
 
     // 补录弹窗（source=backfill_modal）
     if (uiState.showBackfillDialog) {
-        val maxH = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+        // v1.6.4：按窗口可用高度算（分屏/键盘弹出时 Configuration 仍是整屏）
+        val maxH = with(LocalDensity.current) {
+            (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
+        }
         com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
             onDismissRequest = viewModel::cancelBackfill,
@@ -1036,7 +1040,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = stringResource(R.string.koil_ov_total_count, stats.totalCount),
+                    text = pluralStringResource(R.plurals.koil_ov_total_count, stats.totalCount, stats.totalCount),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -1462,7 +1466,7 @@ private fun AbnormalAlertCard(
             Column(Modifier.weight(1f)) {
                 if (count > 0) {
                     Text(
-                        text = stringResource(R.string.koil_ov_abnormal_count, count),
+                        text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
@@ -1493,7 +1497,7 @@ private fun AbnormalAlertCard(
                     color = KOiLColors.Primary,
                 )
                 Text(
-                    text = stringResource(R.string.koil_ov_record_count, recordCount),
+                    text = pluralStringResource(R.plurals.koil_ov_record_count, recordCount, recordCount),
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -1510,8 +1514,9 @@ private fun RecordCard(
     isInitial: Boolean,
     showMoreMenu: Boolean,
     onMoreMenu: (RecordWithDerived) -> Unit,
-    onRect: (Rect) -> Unit = {},
+    // v1.6.4：Modifier 放第一个可选参数位（Compose 约定，调用方全用命名参数，无兼容问题）
     modifier: Modifier = Modifier,
+    onRect: (Rect) -> Unit = {},
 ) {
     val r = record.record
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
@@ -1925,7 +1930,9 @@ private fun EditRecordDialog(
         onDismissRequest = onDismiss,
         contentPadding = 16.dp,
         scrollable = true,
-        maxHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp,
+        maxHeight = with(LocalDensity.current) {
+            (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
+        },
         widthFraction = 0.90f,
     ) {
         Column {
@@ -2208,7 +2215,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
     }
     if (showPicker.value) {
         // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位，与 miuix 同款视觉）
-        com.llpop.koil.ui.component.rememberAnchoredPopupRegistration(
+        com.llpop.koil.ui.component.AnchoredPopupAnchor(
             show = true,
             id = "ov-province-picker",
             anchorBounds = anchorBounds.value,
@@ -2330,11 +2337,12 @@ private fun EditField(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
     onValueChange: (String) -> Unit,
+    // v1.6.4：Modifier 放第一个可选参数位（Compose 约定）
+    modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     readOnly: Boolean = false,
     error: Boolean = false,
     placeholder: String? = null,
-    modifier: Modifier = Modifier,
 ) {
     val errorColor = Color(0xFFFF3B30)
     val tfColors = TextFieldDefaults.textFieldColors(
@@ -2439,7 +2447,7 @@ private fun GradePriceSelect(
     }
     if (showMenu.value) {
         // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位，与 miuix 同款视觉）
-        com.llpop.koil.ui.component.rememberAnchoredPopupRegistration(
+        com.llpop.koil.ui.component.AnchoredPopupAnchor(
             show = true,
             id = "ov-grade-picker",
             anchorBounds = anchorBounds.value,

@@ -50,7 +50,14 @@ class KOiLApplication : Application() {
 
         // 设置一次性迁移：历史 koil_settings → KOiL_settings（键前缀 koil- → KOiL-），保留全部设置。
         // 移入 IO 后台执行，避免冷启动主线程阻塞（首次迁移含文件读写）
-        appScope.launch { runCatching { GlobalContext.get().get<AppSettings>().migrateLegacyIfNeeded() } }
+        appScope.launch {
+            runCatching {
+                val settings = GlobalContext.get().get<AppSettings>()
+                // 顺序不可换：先把老文件整体迁到 KOiL_settings，再把密码单独挪进 KOiL_secret
+                settings.migrateLegacyIfNeeded()
+                settings.migrateSyncSecretIfNeeded()
+            }
+        }
 
         // 首次启动一次性清理（油价库已改为联网灌库，见下两段；种子预置机制已移除）
         appScope.launch {

@@ -17,7 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
@@ -54,8 +55,13 @@ fun KOiLGlassDialog(
             hostState = hostState,
             onOutsideTap = onDismissRequest,
         ) {
+            // v1.6.4：弹窗宽度按"窗口可用宽度"算，而不是整屏宽度——分屏/自由窗口下 Configuration
+            // 给出的 screenWidthDp 可能是整块屏幕，弹窗会溢出窗口。
+            val windowWidthDp = with(LocalDensity.current) {
+                LocalWindowInfo.current.containerSize.width.toDp()
+            }
             val widthMod = if (widthFraction != null)
-                Modifier.width((LocalConfiguration.current.screenWidthDp * widthFraction).dp)
+                Modifier.width(windowWidthDp * widthFraction)
             else Modifier.fillMaxWidth()
             // v1.5.32：弹窗内点击空白失焦（composable 上下文取 focusManager 供 pointerInput 使用）
             val focusManager = LocalFocusManager.current

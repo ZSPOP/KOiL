@@ -169,7 +169,7 @@ fun KOiLDatePickerDialog(
     }
 
     // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位）
-    rememberAnchoredPopupRegistration(
+    AnchoredPopupAnchor(
         show = true,
         id = "koil-date-picker",
         anchorBounds = anchorBounds,

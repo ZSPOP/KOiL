@@ -79,6 +79,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    // v1.6.3：App 内置运行时语言切换（MainScreen 覆盖 Configuration）。若按语言拆分 AAB，
+    // 用户切到的语言包可能根本不在设备上，切了等于没切 —— 关掉语言拆分，全部语言随包下发。
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -114,7 +121,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation("androidx.compose.material3:material3:1.3.1")
+    implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Miuix（含柔光玻璃模糊库）
@@ -158,7 +165,7 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
 
     // Tests
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("androidx.test:core:1.6.1")
-    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(libs.junit)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.robolectric)
 }

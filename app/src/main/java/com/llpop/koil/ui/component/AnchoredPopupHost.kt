@@ -230,7 +230,7 @@ private fun AnchoredPopupPanel(
  * 字段组件便捷注册：组合内调用，show 时注册、关闭时注销（锚点变化自动重建）。
  */
 @Composable
-fun rememberAnchoredPopupRegistration(
+fun AnchoredPopupAnchor(
     show: Boolean,
     id: Any,
     anchorBounds: IntRect?,

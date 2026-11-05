@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -606,7 +607,7 @@ private fun OilPriceCard(
                             Text(
                                 text = buildString {
                                     append(stringResource(R.string.koil_add_window_prefix, nextDate.let { if (it.length >= 5) it.substring(5) else it }))
-                                    if (days >= 0) append(stringResource(R.string.koil_add_window_days, days))
+                                    if (days >= 0) append(pluralStringResource(R.plurals.koil_add_window_days, days, days))
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,

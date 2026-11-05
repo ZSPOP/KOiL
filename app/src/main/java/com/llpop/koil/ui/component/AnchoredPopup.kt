@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -139,7 +138,8 @@ fun AnchoredPopup(
 ) {
     if (!expanded) return
     val density = LocalDensity.current
-    val cfg = LocalConfiguration.current
+    // v1.6.4：窗口可用尺寸取 LocalWindowInfo（多窗口/折叠屏/分屏下 Configuration 仍是整屏）
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
     val view = LocalView.current
     var windowOffset by remember { mutableStateOf(IntOffset.Zero) }
     var winSize by remember { mutableStateOf(IntSize.Zero) }
@@ -149,8 +149,8 @@ fun AnchoredPopup(
         windowOffset = IntOffset(loc[0], loc[1])
         winSize = IntSize(view.width, view.height)
     }
-    val fallbackW = with(density) { cfg.screenWidthDp.dp.roundToPx() }
-    val fallbackH = with(density) { cfg.screenHeightDp.dp.roundToPx() }
+    val fallbackW = windowInfo.containerSize.width
+    val fallbackH = windowInfo.containerSize.height
     val positionProvider = remember(anchorBounds, endAligned, windowOffset, winSize) {
         FlipBelowPositionProvider(
             anchorOverride = anchorBounds,

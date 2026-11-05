@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.screen.settings
 
+import android.app.Application
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -101,7 +102,9 @@ class SettingsViewModel(
     private val pendingDao: KOiLPricePendingDao,
     private val syncer: OilPriceDbSyncer,
     private val locationHelper: LocationHelper,
-    private val context: Context,
+    // v1.6.3：类型收紧为 Application。ViewModel 比 Activity 长寿，持有 Activity Context 会泄漏；
+    // 这里本来拿到的就是 application（Koin androidContext），只是声明成 Context 让 lint 无从判断。
+    private val context: Application,
 ) : ViewModel() {
 
     init {

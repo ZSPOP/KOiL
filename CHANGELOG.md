@@ -1,6 +1,6 @@
 # KOiL CHANGELOG
 
-## 未发布（基于 1.6.1，两轮深度审计修复：v1.6.2 十九项 + v1.6.3 九项）
+## 未发布（基于 1.6.1，四轮审计/清理：v1.6.2 十九项 + v1.6.3 九项 + v1.6.4 lint 清零与依赖升级）
 
 > 说明：本轮只改源码与资源，`versionName` 未动（仍在 1.6.1，发版时由你拍板再跳）；DB schema 不变（version 1），覆盖升级安全。
 
@@ -36,6 +36,31 @@
 > ⑰ **I 删死代码**：`KOiLRecordDao.getPage/getFirstPage`（列表页早已改 Flow + LazyColumn，无调用方）。
 >
 > 验证：`testDebugUnitTest` 12 项全绿；`lintDebug` 0 error；Release（R8 + 资源压缩）构建通过。
+>
+> **v1.6.4（把 lint 从 58 warning 压到 3，全部依赖升级到当前可解析的最新）**
+> ⑱ **依赖升级**：core-ktx 1.15.0→1.16.0、lifecycle 2.8.7→2.10.0、activity-compose 1.9.3→1.12.4、
+>    Compose 1.11.1→1.12.0、ktor 3.0.3→3.6.1、koin 4.0.0→4.2.2、coroutines 1.9.0→1.11.0、
+>    kotlinx-serialization 1.7.3→1.12.0、robolectric 4.14.1→4.17。**Kotlin 2.3.21→2.4.21 无法升**：
+>    KSP 最新只到 2.3.13（对应 Kotlin 2.3.x），Room 编译器强依赖 KSP 同版本，升 Kotlin 会直接编译失败。
+> ⑲ **英文复数语法**：11 处 `%d records/fill-ups/days…` 改 `plurals`（en 分 one/other，中/繁只填 other），
+>    调用点改 `pluralStringResource`——原来英文界面恒显示 "1 records"。另 1 处无实义名词的改写文案。
+> ⑳ **同步密码移出可备份文件**：新增 `KOiL_secret` DataStore，密码与加密标志搬过去，新增
+>    `res/xml/data_extraction_rules.xml` 在 cloud-backup / device-transfer 里精确排除该文件。
+>    此前密码与全部设置同文件，系统备份要么把凭据一起带走、要么为排掉凭据丢掉全部设置。
+> ㉑ **死分支清理**：`minSdk 33` 后 `Build.VERSION.SDK_INT >= 33`（通知权限判断）恒真，4 处删除；
+>    `res/mipmap-anydpi-v26` 目录并入 `mipmap-anydpi`。
+> ㉒ **Context 泄漏面收紧**：`SettingsViewModel` 的 `Context` 参数改 `Application`（Koin 显式注册 Application），
+>    lint `StaticFieldLeak` 消除——ViewModel 比 Activity 长寿，原来只是"实际上传的是 application"。
+> ㉓ **分屏/键盘下的尺寸口径**：4 处 `Configuration.screenWidthDp/screenHeightDp` 改
+>    `LocalWindowInfo.containerSize`（弹窗宽度比例、弹窗高度上限）。分屏与自由窗口下 Configuration 仍是整屏尺寸，
+>    原来弹窗会溢出窗口、高度上限失真。
+> ㉔ **其他**：`<queries>` 声明 `APP_NOTIFICATION_SETTINGS`（否则 resolveActivity 预检恒 null）；
+>    `bundle.language.enableSplit=false`（App 有运行时切语言，拆包会让切到的语言包不在设备上）；
+>    省略号 `...`→`…`；`Modifier` 参数归位到第一个可选参数；返回 Unit 的 `@Composable`
+>    `rememberAnchoredPopupRegistration` → `AnchoredPopupAnchor`（Compose 命名约定）；4 处依赖声明进 `libs.versions.toml`。
+>
+> 验证：`testDebugUnitTest` 13 项全绿；`lintDebug` **0 error / 3 warning**（3 条全是 Kotlin 2.4.21 的版本提示，
+> 受 KSP 约束无法升，见 ⑱）。
 
 ## v1.6.1（versionCode 由 CI 注入）— 2026-11-05（应用图标重设计 + 启动屏跟随系统深浅色 + CI 依赖现代化）
 

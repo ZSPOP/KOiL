@@ -20,7 +20,7 @@
     <string name="koil_add_field_oil_amount">加油量 (L)</string>
     <string name="koil_add_field_payable">應付金額 (元)</string>
     <string name="koil_add_field_actual">實付金額 (元)</string>
-    <string name="koil_add_adding">新增中...</string>
+    <string name="koil_add_adding">新增中…</string>
     <string name="koil_add_add_record">+ 新增記錄</string>
     <string name="koil_add_pick_province">選擇省份</string>
     <string name="koil_add_province_price">%1$s油價</string>
@@ -30,7 +30,9 @@
     <string name="koil_add_suggest_early">建議提前加油</string>
     <string name="koil_add_suggest_wait">建議等降價後再加</string>
     <string name="koil_add_window_prefix">下個調價窗口日 %1$s 24:00</string>
-    <string name="koil_add_window_days"> · 還有 %1$d 天</string>
+    <plurals name="koil_add_window_days">
+    <item quantity="other"> · 還有 %1$d 天</item>
+    </plurals>
     <string name="koil_add_forecast_up">預計%1$s上調</string>
     <string name="koil_add_forecast_down">預計%1$s下調</string>
     <string name="koil_add_forecast_per_ton">元/噸</string>
@@ -72,7 +74,9 @@
     <string name="koil_ov_empty_title">暫無加油記錄</string>
     <string name="koil_ov_empty_hint">前往「錄入」頁新增第一筆加油記錄</string>
     <string name="koil_ov_empty_action">去錄入</string>
-    <string name="koil_ov_total_count_in_list">共%1$d筆</string>
+    <plurals name="koil_ov_total_count_in_list">
+    <item quantity="other">共%1$d筆</item>
+    </plurals>
     <string name="koil_ov_backfill">補錄</string>
     <string name="koil_ov_month_count">%1$d筆</string>
     <string name="koil_ov_backfill_title">補錄加油記錄</string>
@@ -97,21 +101,27 @@
     <string name="koil_stat_avg_price">平均油價</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">平均每次</string>
-    <string name="koil_ov_total_count">共 %1$d 次加油</string>
+    <plurals name="koil_ov_total_count">
+    <item quantity="other">共 %1$d 次加油</item>
+    </plurals>
     <string name="koil_ov_vs_prev">較上期</string>
     <string name="koil_ov_trend">趨勢分析</string>
     <string name="koil_ov_legend_consumption">平均油耗</string>
     <string name="koil_ov_legend_cost">每公里成本</string>
     <string name="koil_ov_trend_insufficient">資料不足，無法繪製趨勢圖</string>
     <string name="koil_ov_trend_all">全部</string>
-    <string name="koil_ov_abnormal_count">%1$d 筆異常油耗記錄</string>
+    <plurals name="koil_ov_abnormal_count">
+    <item quantity="other">%1$d 筆異常油耗記錄</item>
+    </plurals>
     <string name="koil_ov_abnormal_avg">偏離均值 · 平均油耗 %1$.2f L/100km</string>
     <string name="koil_ov_abnormal_empty">暫無異常油耗記錄</string>
     <string name="koil_ov_abnormal_stable">本範圍油耗表現平穩</string>
     <string name="koil_ov_abnormal_detail_title">油耗異常明細（%1$d 筆）</string>
     <string name="koil_ov_abnormal_high">偏高</string>
     <string name="koil_ov_abnormal_low">偏低</string>
-    <string name="koil_ov_record_count">%1$d次加油</string>
+    <plurals name="koil_ov_record_count">
+    <item quantity="other">%1$d次加油</item>
+    </plurals>
     <string name="koil_ov_oil_days">%1$d天</string>
     <string name="koil_ov_high">偏高</string>
     <string name="koil_ov_low">偏低</string>
@@ -254,7 +264,9 @@
     <string name="koil_pdb_flat">維持不變</string>
     <string name="koil_pdb_first_base">基準價</string>
     <string name="koil_pdb_view_detail">查看</string>
-    <string name="koil_pdb_incomplete">%1$d 省數據未拉取完整</string>
+    <plurals name="koil_pdb_incomplete">
+    <item quantity="other">%1$d 省數據未拉取完整</item>
+    </plurals>
     <string name="koil_pdb_seeding">後台補灌中，完成後自動刷新</string>
     <string name="koil_set_price_push">調價推送通知</string>
     <string name="koil_set_price_push_sub">調價生效與窗口日前推送系統通知</string>
@@ -270,10 +282,14 @@
     <string name="koil_noti_msg_window_today">今天（%1$s）是調價窗口日，24 時後新價生效，今晚加油可稍留意</string>
     <string name="koil_pdb_updating">更新中…</string>
     <string name="koil_msg_price_db_empty">油價庫為空</string>
-    <string name="koil_msg_price_exported">已匯出 %1$d 筆油價 → %2$s</string>
+    <plurals name="koil_msg_price_exported">
+    <item quantity="other">已匯出 %1$d 筆油價 → %2$s</item>
+    </plurals>
     <string name="koil_msg_export_failed">匯出失敗：%1$s</string>
     <string name="koil_msg_no_records">暫無記錄可匯出</string>
-    <string name="koil_msg_records_exported">已匯出 %1$d 筆 → %2$s</string>
+    <plurals name="koil_msg_records_exported">
+    <item quantity="other">已匯出 %1$d 筆 → %2$s</item>
+    </plurals>
     <string name="koil_msg_cannot_read">無法讀取檔案</string>
     <string name="koil_msg_file_empty">檔案為空或無資料列</string>
     <string name="koil_msg_missing_columns">缺少必填欄位（日期/里程/加油量/實付金額）</string>
@@ -284,10 +300,14 @@
     <string name="koil_msg_parse_failed">解析失敗：%1$s</string>
     <string name="koil_msg_import_done">匯入完成：成功 %1$d 筆（跳過重複/衝突/錯誤 %2$d 筆）</string>
     <string name="koil_msg_backup_no_records">備份檔案無記錄</string>
-    <string name="koil_msg_restore_done">還原完成：%1$d 筆記錄，跳過 %2$d 筆，設定已還原</string>
+    <plurals name="koil_msg_restore_done">
+    <item quantity="other">還原完成：%1$d 筆記錄，跳過 %2$d 筆，設定已還原</item>
+    </plurals>
     <string name="koil_msg_restore_failed">還原失敗：%1$s</string>
     <string name="koil_msg_no_records_backup">暫無記錄可備份</string>
-    <string name="koil_msg_backup_done">備份完成：%1$d 筆記錄 → %2$s</string>
+    <plurals name="koil_msg_backup_done">
+    <item quantity="other">備份完成：%1$d 筆記錄 → %2$s</item>
+    </plurals>
     <string name="koil_msg_backup_failed">備份失敗：%1$s</string>
     <!-- 自研日曆 -->
     <string-array name="koil_cal_week">
@@ -315,7 +335,9 @@
     <string name="koil_sync_status_fail">同步失敗：%1$s（下次自動重試）</string>
     <string name="koil_sync_status_never">尚未備份</string>
     <string name="koil_sync_restore_confirm_title">從雲端復原</string>
-    <string name="koil_sync_restore_confirm_msg">雲端共 %1$d 筆記錄：新增 %2$d 筆、重複 %3$d 筆、無效 %4$d 筆。確認後不會刪除本地記錄。</string>
+    <plurals name="koil_sync_restore_confirm_msg">
+    <item quantity="other">雲端共 %1$d 筆記錄：新增 %2$d 筆、重複 %3$d 筆、無效 %4$d 筆。確認後不會刪除本地記錄。</item>
+    </plurals>
     <string name="koil_sync_restore_confirm">復原 %1$d 筆</string>
     <string name="koil_sync_backup_done">已備份</string>
     <string name="koil_sync_backup_failed">備份失敗，請檢查帳號與網路</string>
