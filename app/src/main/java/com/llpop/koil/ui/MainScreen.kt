@@ -150,11 +150,18 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             // 脱离 Pager 的手势拦截器，页面内横向组件可自由滑动）
             var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
 
-            val navigationItems = listOf(
-                NavigationItem(label = stringResource(R.string.koil_nav_add), icon = Icons.Filled.Home),
-                NavigationItem(label = stringResource(R.string.koil_nav_overview), icon = Icons.Filled.Storage),
-                NavigationItem(label = stringResource(R.string.koil_nav_settings), icon = Icons.Filled.Settings),
-            )
+            // v1.6.2：导航项列表按标签缓存。原实现每次重组都重新 listOf 三个 NavigationItem
+            // （含 stringResource 解析），Pager 滑动引发的高频重组下属于纯浪费。
+            val navAddLabel = stringResource(R.string.koil_nav_add)
+            val navOverviewLabel = stringResource(R.string.koil_nav_overview)
+            val navSettingsLabel = stringResource(R.string.koil_nav_settings)
+            val navigationItems = remember(navAddLabel, navOverviewLabel, navSettingsLabel) {
+                listOf(
+                    NavigationItem(label = navAddLabel, icon = Icons.Filled.Home),
+                    NavigationItem(label = navOverviewLabel, icon = Icons.Filled.Storage),
+                    NavigationItem(label = navSettingsLabel, icon = Icons.Filled.Settings),
+                )
+            }
             val showLabels = barMode == BottomBarMode.IconAndText.storageValue
             val isFloatingStyleIos = floatingStyle == FloatingBottomBarStyle.IosLike.storageValue
             val isDark = darkTheme

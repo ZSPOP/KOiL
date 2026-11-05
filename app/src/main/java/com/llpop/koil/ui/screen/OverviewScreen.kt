@@ -1234,6 +1234,18 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
     val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
     val consumptions = trend.mapNotNull { it.oilConsumption }
     val costs = trend.mapNotNull { it.costPerKm }
+    // v1.6.2：Paint 提到绘制回调之外缓存。原实现在 Canvas 的 onDraw 里每画一个标签就 new 一个
+    // android.graphics.Paint（单帧最多 4 组轴标签 + N 个日期标签，共 ~35 个对象），
+    // 滑动/刷新时每帧都产生垃圾并触发文本重测量。这里按 (颜色, 字号) 记住，density 变化才重建。
+    val density = LocalDensity.current
+    val axisTextSizePx = with(density) { 9.dp.toPx() }
+    val dateTextSizePx = with(density) { 8.dp.toPx() }
+    val axisLabelPaint = remember(labelColor, axisTextSizePx) {
+        labelPaint(labelColor, alpha = 153, textSizePx = axisTextSizePx)
+    }
+    val dateLabelPaint = remember(labelColor, dateTextSizePx) {
+        labelPaint(labelColor, alpha = 102, textSizePx = dateTextSizePx)
+    }
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
@@ -1270,19 +1282,10 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
             // 左轴标签
             val lv = leftMax - leftRange * frac
             drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        153,
-                        (labelColor.red * 255).toInt(),
-                        (labelColor.green * 255).toInt(),
-                        (labelColor.blue * 255).toInt(),
-                    )
-                    textSize = 9.dp.toPx()
-                }
-                drawText(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), axisLabelPaint)
                 // 右轴标签
                 val rv = rightMin + rightRange * (1 - frac)
-                drawText(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), paint)
+                drawText(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), axisLabelPaint)
             }
         }
 
@@ -1327,21 +1330,24 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
             if (i % 2 == 1 && trend.size > 4) continue
             val x = xAt(i)
             val label = trend[i].date
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        102,
-                        (labelColor.red * 255).toInt(),
-                        (labelColor.green * 255).toInt(),
-                        (labelColor.blue * 255).toInt(),
-                    )
-                    textSize = 8.dp.toPx()
-                }
-                drawText(label, x - 12.dp.toPx(), padT + h + 14.dp.toPx(), paint)
-            }
+            drawContext.canvas.nativeCanvas.drawText(
+                label, x - 12.dp.toPx(), padT + h + 14.dp.toPx(), dateLabelPaint
+            )
         }
     }
 }
+
+/** v1.6.2：图表标签画笔工厂（供 DualAxisCanvas 的 remember 缓存，避免每帧 new Paint） */
+private fun labelPaint(color: Color, alpha: Int, textSizePx: Float): android.graphics.Paint =
+    android.graphics.Paint().apply {
+        this.color = android.graphics.Color.argb(
+            alpha,
+            (color.red * 255).toInt(),
+            (color.green * 255).toInt(),
+            (color.blue * 255).toInt(),
+        )
+        this.textSize = textSizePx
+    }
 
 // ===== 异常卡（对齐 Web：空态 + 右上"N 次加油"）；v1.5.31：有异常时可点击查看明细 =====
 @Composable
