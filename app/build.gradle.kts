@@ -53,7 +53,13 @@ android {
         release {
             // 正式签名（keystore.properties 存在时）；否则回退 debug 签名
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-            isMinifyEnabled = false
+            // v1.6.2：开启 R8 代码压缩 + 资源压缩。此前 isMinifyEnabled=false，dex 未压缩 58MB（4 个 dex），
+            // 绝大多数体积是未被引用到的 material-icons-extended（2000+ 图标，实际只用 28 个）与调试符号。
+            // 混淆在 proguard-rules.pro 里用 -dontobfuscate 关闭（只做 shrink/optimize）：
+            // ① CrashReporter 会把堆栈写进文件给用户看，保留原类名才看得懂；
+            // ② 枚举名（ThemeMode/Language 的 name()）已持久化进 DataStore，不做混淆规避改名风险。
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -102,7 +108,9 @@ dependencies {
     // Compose
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
+    // v1.6.2：tooling.preview 只含 @Preview 等 IDE 预览注解，主源码零引用（已全量核对），
+    // 移到 debugImplementation，release 不再打进包
+    debugImplementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.material.icons.extended)
