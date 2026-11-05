@@ -40,6 +40,17 @@ interface KOiLPriceDao {
     @Query("SELECT * FROM koil_prices ORDER BY effectiveDate ASC")
     fun observeAll(): Flow<List<KOiLPriceEntity>>
 
+    /**
+     * v1.6.2：指定省份的非搁浅价格（按生效日升序）。
+     * 用于补灌前的"同价假记录"清理——原实现每省都 `getAll()` 全表加载再内存过滤，
+     * 31 省补灌时等于把 2000+ 行表反复读 31 遍；改 SQL 过滤后每省只取本省行。
+     */
+    @Query(
+        "SELECT * FROM koil_prices WHERE province = :province AND isStranded = 0 " +
+            "ORDER BY effectiveDate ASC"
+    )
+    suspend fun getNonStrandedByProvince(province: String): List<KOiLPriceEntity>
+
     @Query("SELECT COUNT(*) FROM koil_prices")
     suspend fun count(): Int
 

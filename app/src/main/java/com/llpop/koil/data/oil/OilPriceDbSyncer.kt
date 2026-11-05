@@ -469,8 +469,7 @@ class OilPriceDbSyncer(
         // 09-25 相同——真实调价必然变价，同价且非搁浅 = 假变化点）→ 删除，让补搁浅幂等键放行。
         // 幂等：假记录删一次后不再存在，重复补灌不重复删。
         try {
-            priceDao.getAll().filter { it.province == province && !it.isStranded }
-                .sortedBy { it.effectiveDate }
+            priceDao.getNonStrandedByProvince(province)
                 .groupBy { it.grade }
                 .forEach { (_, list) ->
                     list.zipWithNext().forEach { (a, b) ->
