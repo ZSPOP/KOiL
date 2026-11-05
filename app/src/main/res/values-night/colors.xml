@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式启动屏底色：对齐 Miuix darkColorScheme 的 surface（纯黑），
+         让 Splash 淡出到 Compose 首帧时没有色差跳变 -->
+    <color name="KOiL_splash_background">#000000</color>
+</resources>
