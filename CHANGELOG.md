@@ -61,6 +61,17 @@
 >
 > 验证：`testDebugUnitTest` 13 项全绿；`lintDebug` **0 error / 3 warning**（3 条全是 Kotlin 2.4.21 的版本提示，
 > 受 KSP 约束无法升，见 ⑱）。
+>
+> **v1.6.5（线上反馈：油价数据库「查看」闪退）**
+> ㉕ **明细页必现闪退**：`koil_detail_year` 资源是 `%1$d 年`，调用点传的却是年份字符串
+>    （`OilPriceDetailViewModel` 用 `effectiveDate.take(4)` 切出 `List<String>`），
+>    `String.format` 抛 `IllegalFormatConversionException: d != java.lang.String`。
+>    该 chip 在 `years` 非空时必定渲染 → 库里有数据就 100% 复现。三语统一改 `%1$s`（en 原来只有裸 `%1$d`）。
+>    这是 v1.6.2 ⑭「详情页硬编码繁体改三语」引入的新缺陷：`stringResource` 的 vararg 是 `Any`，编译期查不出类型错配。
+> ㉖ **新增 `StringFormatTest`**：反射遍历全部 `R.string`，按资源自己声明的占位符类型喂对应类型假值调用
+>    `getString`，任何 key 抛异常即失败；三语各跑一遍，另加年份 chip 的直连断言。
+>    Robolectric 固定 `sdk=34` + 空 `Application`：SDK 35+ 会走 `ApplicationSharedMemory` 撞 JDK 21 的
+>    `FileDescriptor` 反射限制，用真实 `KOiLApplication` 则会多测试间重复 `startKoin`。
 
 ## v1.6.1（versionCode 由 CI 注入）— 2026-11-05（应用图标重设计 + 启动屏跟随系统深浅色 + CI 依赖现代化）
 
