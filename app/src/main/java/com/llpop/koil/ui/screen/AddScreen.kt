@@ -71,6 +71,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.ui.screen.add.AddUiState
 import com.llpop.koil.ui.screen.add.AddViewModel
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.ui.component.provinceLabel
 import kotlinx.coroutines.flow.first
 import org.koin.androidx.compose.koinViewModel
 import android.widget.Toast
@@ -340,7 +341,7 @@ private fun ProvincePickerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = province,
+                                text = provinceLabel(province),
                                 fontSize = 14.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackground,
@@ -451,7 +452,7 @@ private fun OilPriceCard(
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.koil_add_province_price, uiState.viewProvince),
+                        text = stringResource(R.string.koil_add_province_price, provinceLabel(uiState.viewProvince)),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
@@ -519,7 +520,7 @@ private fun OilPriceCard(
                         entry = DropdownEntry(
                             items = PROVINCES.map { p ->
                                 DropdownItem(
-                                    text = p,
+                                    text = provinceLabel(p),
                                     selected = p == uiState.viewProvince,
                                     onClick = {
                                         onProvinceSelect(p)

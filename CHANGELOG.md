@@ -1,6 +1,35 @@
 # KOiL CHANGELOG
 
-## 未发布（基于 1.6.1，四轮审计/清理：v1.6.2 十九项 + v1.6.3 九项 + v1.6.4 lint 清零与依赖升级）
+## 未发布（v1.6.5 真机回归修复 + v1.6.6 弹窗/多语言）
+
+> **v1.6.5（闪退 / 键盘）**
+> ① 油价数据库「查看」进明细页必现闪退：`koil_detail_year` 是 `%1$d 年`，实参却是年份 **字符串**（`take(4)` 得到 `List<String>`），
+>    `String.format` 抛 `IllegalFormatConversionException`。三语资源统一改 `%1$s`；新增 `StringFormatTest`（反射遍历全部 `R.string`，
+>    按资源自己声明的占位符类型喂假值格式化，三语各跑一遍）防复发。
+> ② 键盘遮挡「添加记录」「保存」：根因是清单从未声明 `windowSoftInputMode`（默认 `adjustUnspecified` → 系统选 `adjustPan`，
+>    整窗上移、底部留空且 IME inset 不上报）。改 `adjustResize`；`KOiLGlassDialog` 加
+>    `decorFitsSystemWindows=false` + 内容根 `imePadding()`（必须在 `BoxWithConstraints` 外层）；录入页底部留白 IME 可见时 84dp→12dp。
+
+> **v1.6.6（弹窗一致性 / 多语言 / 返回手势）**
+> ③ 编辑窗、补录窗宽度变窄：`usePlatformDefaultWidth = widthFraction != null` 写反了——指定比例的弹窗反而落到
+>    「系统默认宽度」（该值为 true 时 Compose 把窗口宽度设为 `WRAP_CONTENT`），再叠加按 `containerSize` 算比例宽度，
+>    形成「窗口宽取决于卡片宽、卡片宽又取决于窗口宽」的循环，停在一个偏小的值上。改回 `widthFraction == null`，
+>    宽度基准也改成 `BoxWithConstraints.maxWidth`（父约束），彻底去掉这个循环。
+> ④ 点一下「全部一起关闭」：`DialogProperties.dismissOnClickOutside` 默认 true，点击落在 Dialog 窗口之外时系统直接
+>    `onDismissRequest` 关整个弹窗，绕过卡片外遮罩的逐级逻辑（有下拉先收下拉、再点才关卡片）。置 false，统一由遮罩处理；
+>    另外同一弹窗内只允许一个下拉展开（`register` 时先收起其它条目），避免一次点掉多个。
+> ⑤ 设置页「应用密码」有时一排点、有时空白：草稿用 `remember { if (passwordSet) "" else 默认口令 }` 初始化，而
+>    `passwordSet` 来自异步 DataStore（首帧恒 false），记住的是哪一次看组合时机；更糟的是草稿非空会被失焦/锁开关
+>    直接 `setPassword()` 写回，等于用默认口令覆盖真实密码。改为草稿恒空 + 占位提示，首次使用时才在落盘那一步回退默认口令。
+> ⑥ 语言下拉中「简体中文」显示为 "Simplified Chinese" 而「繁體中文」是中文：统一成各语言自称（English / 简体中文 / 繁體中文）。
+> ⑦ 英文界面下油价明细页仍见中文：省份、油号是**数据库主键**（"广东" / "92号汽油"），被直接渲染。新增 `OilPriceLabels`
+>    做「显示名」映射（Guangdong / 92# 汽油 / 92# Gasoline / 廣東），键不动、只换显示；覆盖明细页 chip、补录/编辑窗省份字段、
+>    记录行省份徽标、导入预览列表。油号按真机反馈统一成 "92# 汽油" 写法。
+> ⑧ 明细页返回手势直接退出应用：targetSdk 37 默认走预测性返回（`OnBackInvokedCallback`），Compose 的 `BackHandler`
+>    没接住，手势越过页面把 Activity 收掉。清单显式 `android:enableOnBackInvokedCallback="false"`，返回统一回落到
+>    `onBackPressed → OnBackPressedDispatcher → BackHandler`。
+
+## v1.6.1
 
 > 说明：本轮只改源码与资源，`versionName` 未动（仍在 1.6.1，发版时由你拍板再跳）；DB schema 不变（version 1），覆盖升级安全。
 

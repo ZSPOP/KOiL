@@ -113,6 +113,7 @@ import com.llpop.koil.ui.screen.overview.OverviewViewModel
 import com.llpop.koil.domain.logic.RecordWithDerived
 import com.llpop.koil.ui.screen.overview.TrendPoint
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.ui.component.provinceLabel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -1612,7 +1613,7 @@ private fun RecordCard(
                     if (!r.province.isNullOrBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Pill(
-                            text = r.province,
+                            text = provinceLabel(r.province),
                             color = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
                             textColor = MiuixTheme.colorScheme.onSecondaryContainer,
                             border = MiuixTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f),
@@ -2202,7 +2203,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else province,
+                    text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else provinceLabel(province),
                     fontSize = 14.sp,
                     fontWeight = if (province.isBlank()) FontWeight.Normal else FontWeight.Bold,
                     color = if (province.isBlank()) MiuixTheme.colorScheme.onBackgroundVariant else MiuixTheme.colorScheme.onBackground,
@@ -2225,7 +2226,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
             com.llpop.koil.ui.component.AnchoredDropdownColumn {
                 PROVINCES.forEachIndexed { index, p ->
                     com.llpop.koil.ui.component.AnchoredDropdownItemRow(
-                        text = p,
+                        text = provinceLabel(p),
                         selected = p == province,
                         isFirst = index == 0,
                         isLast = index == PROVINCES.lastIndex,

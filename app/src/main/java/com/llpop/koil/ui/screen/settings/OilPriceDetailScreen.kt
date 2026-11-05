@@ -59,6 +59,8 @@ import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.gradeLabel
+import com.llpop.koil.ui.component.provinceLabel
 import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
@@ -160,7 +162,8 @@ fun OilPriceDetailScreen(
                 ) {
                     state.provinces.forEach { p ->
                         ProvinceChip(
-                            label = p,
+                            // 数据键是中文省名（DB 主键），这里只换显示名
+                            label = provinceLabel(p),
                             selected = p == state.province,
                             onClick = { viewModel.selectProvince(p) },
                         )
@@ -182,7 +185,7 @@ fun OilPriceDetailScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 state.grades.forEach { g ->
                     GradeChip(
-                        label = g,
+                        label = gradeLabel(g),
                         selected = g == state.grade,
                         onClick = { viewModel.selectGrade(g) },
                     )

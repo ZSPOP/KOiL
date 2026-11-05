@@ -32,7 +32,16 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.KOiL.Starting">
+        android:theme="@style/Theme.KOiL.Starting"
+        tools:targetApi="33"
+        android:enableOnBackInvokedCallback="false">
+        <!--
+          v1.6.6：显式关闭「预测性返回」回调。
+          targetSdk 37 时系统默认走 OnBackInvokedCallback 链路，实测二级页（油价明细页）的
+          返回手势没被 Compose 的 BackHandler 接住，手势直接把 Activity 收掉（真机反馈）。
+          关掉后返回统一走传统 onBackPressed → OnBackPressedDispatcher → BackHandler，
+          与页内自绘的返回按钮行为一致，不会再越过页面直接退出应用。
+        -->
 
         <activity
             android:name=".MainActivity"

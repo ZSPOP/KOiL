@@ -95,6 +95,8 @@ import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.ui.component.gradeLabel
+import com.llpop.koil.ui.component.provinceLabel
 import org.koin.androidx.compose.koinViewModel
 import kotlinx.coroutines.delay
 import kotlin.ranges.ClosedFloatingPointRange
@@ -714,7 +716,7 @@ fun SettingsScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    text = "${item.province} · ${item.grade} · ${item.effectiveDate}",
+                                    text = "${provinceLabel(item.province)} · ${gradeLabel(item.grade)} · ${item.effectiveDate}",
                                     fontSize = 12.sp,
                                     color = MiuixTheme.colorScheme.onBackground,
                                 )
@@ -942,7 +944,20 @@ fun SettingsScreen(
                 //    默认值预填：账号/应用密码为作者自用默认（未设置过才预填，已设置显示存储值）——
                 var urlDraft by remember { mutableStateOf(syncUi.url) }
                 var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
-                var pwdDraft by remember { mutableStateOf(if (syncUi.passwordSet) "" else DEFAULT_SYNC_APP_PASSWORD) }
+                // v1.6.6：密码草稿**恒从空开始**，绝不按 passwordSet 预填。
+                // 原写法 `if (passwordSet) "" else DEFAULT_SYNC_APP_PASSWORD` 有两个问题：
+                // ① passwordSet 来自异步 DataStore（首帧恒为 false），remember 只取一次，
+                //    于是"有时预填默认口令（显示一排点）、有时为空"——取决于这段首次组合的时机；
+                // ② 更糟的是草稿非空会被 when 失焦/锁开关里的 `setPassword(pwdDraft)` 真的写进去，
+                //    等于用默认口令覆盖用户已存的应用密码。
+                // 现在：输入框只承载用户本次真实输入；为空 = 不修改。首次使用时才回退到默认口令，
+                // 且只出现在落盘/同步那一步（effectivePwd），不进输入框。
+                var pwdDraft by remember { mutableStateOf("") }
+                val effectivePwd: String? = when {
+                    pwdDraft.isNotBlank() -> pwdDraft
+                    syncUi.passwordSet -> null            // 已存密码 + 本次没输入 → 不覆盖
+                    else -> DEFAULT_SYNC_APP_PASSWORD     // 首次使用 → 沿用默认口令
+                }
                 LaunchedEffect(syncUi.url) { if (urlDraft != syncUi.url) urlDraft = syncUi.url }
                 LaunchedEffect(syncUi.username) {
                     // 仅外部真实写入（如云端恢复）才同步；空值不覆盖预填默认账号
@@ -963,7 +978,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.koil_sync_switch_sub),
                     checked = syncUi.enabled,
                     onCheckedChange = { on ->
-                        syncVm.setEnabled(on, urlDraft, usernameDraft, pwdDraft)
+                        syncVm.setEnabled(on, urlDraft, usernameDraft, effectivePwd)
                     },
                 )
                 }
@@ -1130,6 +1145,12 @@ fun SettingsScreen(
                                 }
                             },
                         readOnly = pwdLocked,
+                        // v1.6.6：草稿恒为空（密文不回显），必须给占位提示，否则看起来像"密码丢了"
+                        label = stringResource(
+                            if (syncUi.passwordSet) R.string.koil_sync_app_password_set
+                            else R.string.koil_sync_app_password_unset,
+                        ),
+                        useLabelAsPlaceholder = true,
                         // v1.5.44 补丁：锁定态用 textStyle 强制暗色文字（labelColor 不作用于输入文字）
                         textStyle = TextStyle(
                             color = if (pwdLocked) {
@@ -1223,7 +1244,7 @@ fun SettingsScreen(
                             .clip(RoundedCornerShape(18.dp))
                             .background(MiuixTheme.colorScheme.secondaryContainer)
                             .clickable(enabled = !syncUi.busy) {
-                                syncVm.saveAndTest(urlDraft, usernameDraft, pwdDraft)
+                                syncVm.saveAndTest(urlDraft, usernameDraft, effectivePwd)
                             }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -1254,7 +1275,7 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(KOiLColors.Primary)
                                 .clickable(enabled = !syncUi.busy) {
-                                    syncVm.backupNow(urlDraft, usernameDraft, pwdDraft)
+                                    syncVm.backupNow(urlDraft, usernameDraft, effectivePwd)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
@@ -1283,7 +1304,7 @@ fun SettingsScreen(
                                 .background(KOiLColors.Primary)
                                 .clickable(enabled = !syncUi.busy) {
                                     // 恢复后保留密码草稿（不再清空，避免误以为未填）
-                                    syncVm.restoreNow(urlDraft, usernameDraft, pwdDraft)
+                                    syncVm.restoreNow(urlDraft, usernameDraft, effectivePwd)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
