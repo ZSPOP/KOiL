@@ -3,21 +3,34 @@
 > 用途：跨会话/跨轮次状态存档，每次迭代交付后更新。
 > 版本提交见 git log；变更明细见 CHANGELOG.md。
 
-## 当前版本：v1.6.0（versionCode 252）— 2026-11-02 已构建
+## 当前版本：v1.6.1（versionCode 由 CI 注入）— 2026-11-05 已构建
 
+- 定位：应用图标重设计（矢量自适应图标，适配 OEM 前景放大）+ 启动屏跟随系统深浅色 + CI 依赖现代化
+- 版本链：… → v1.5.51(83ea34e) → v1.6.0(acfa1a2) → **v1.6.1（本轮）**
+- v1.6.1 变更：
+  ① **应用图标**：前景/背景换新版矢量（108dp 画布，前景主圆直径 61.4dp，可容忍约 1.17 倍放大不裁边）；
+     背景由 `@color/ic_launcher_background` 改为 `@drawable/...`（#181618 深底 + 径向渐变）；
+     两张 adaptive icon（方形/圆形）同步改引用；修正导出工具非法属性（startAngle / group clipPathData）
+  ② **启动屏深浅色**：新增 `values-night/colors.xml`，深色 `#000000`（对齐 Miuix 深色 surface，无淡出色差），浅色 `#F9F9F6`
+  ③ **CI 现代化**：checkout v4→v7、setup-java v4→v6、Gradle 9.3.1→9.8.2，4 条弃用警告清零（run#11/#12 均 success）
+- 版本号纪律（不变）：versionName = 人工里程碑（本轮 1.6.0→1.6.1）；versionCode = CI 的 run_number+251，源码 fallback 252 未动
+- 影响面：图标资源 3 个 + values-night/colors.xml（新增）+ workflow + gradle-wrapper + build.gradle.kts（仅 versionName）；
+  Kotlin 源码零改动
+- APK：`KOiL-V1.6.1-release.apk`（GitHub Release 附件，release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
+- commit：见 git log（v1.6.1 release commit）
+- 不涉及 DB schema（version 1，覆盖升级安全）
+
+---
+## 历史版本（归档）
+
+### v1.6.0（versionCode 252）— 2026-11-02 已交付
 - 定位：引入 CI（GitHub Actions 双轨）+ 版本号策略切换——versionName 语义化跳 1.6.0（用户拍板），前端显示附带 (versionCode)
-- 版本链：… → v1.5.49(8e56528) → v1.5.50(5e85dad) → v1.5.51(83ea34e) → **v1.6.0（本轮）**
-- v1.6.0 变更：
-  ① **CI（GitHub Actions）**：新增 `.github/workflows/build.yml`——推送 v173-bold / 手动触发自动构建 release APK 并上传产物；
-     versionCode 由 CI 注入 `run_number + 251`（与本地 252 基准衔接、单调递增）
-  ② **versionCode 自动化**：gradle 读 `KOIL_CI_VERSION_CODE` 环境变量，无则 fallback 252（本地手动 +1）
-  ③ **前端显示 versionCode**：设置页「关于」`V1.6.0 (252)`
-- 版本号纪律（v1.6.0 起）：versionName = 人工决定的里程碑标签（语义化）；versionCode = 单调递增流水号（CI 自动/本地手动）
-- 影响面：app/build.gradle.kts + SettingsScreen.kt + 新增 workflow；compileReleaseKotlin 零错误零警告
-- 设计文档：无网络层/油价库机制变更
-- commit：`待 git commit`（v1.6.0 实际提交见 git log，交付说明给出）
-- APK：`KOiL-v1.6.0-release.apk`（release 正式签名，证书 SHA-256 恒定 `cc962f1e...`）
-- 源码 zip（完整工程源码 + .git 历史 + keystore 补件）：`KOiL-src-v160.zip`
+- 变更：① 新增 `.github/workflows/build.yml`（推送 main / V 标签 / 手动触发构建 release APK 并上传产物，
+  versionCode = run_number + 251）；② gradle 读 `KOIL_CI_VERSION_CODE` 环境变量，无则 fallback 252；
+  ③ 设置页「关于」显示 `V1.6.0 (252)`
+- 版本号纪律：versionName = 人工里程碑标签；versionCode = 单调递增流水号
+- commit：`acfa1a2`
+- APK：`KOiL-v1.6.0-release.apk`（证书 SHA-256 恒定 `cc962f1e...`）
 - 不涉及 DB schema（覆盖升级安全）
 
 ---

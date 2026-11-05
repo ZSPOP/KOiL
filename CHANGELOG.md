@@ -1,5 +1,27 @@
 # KOiL CHANGELOG
 
+## v1.6.1（versionCode 由 CI 注入）— 2026-11-05（应用图标重设计 + 启动屏跟随系统深浅色 + CI 依赖现代化）
+
+> 用户诉求：换上重新设计的应用图标；启动屏底色跟随系统深色/浅色模式变化。
+> 本轮同时清理了 CI 构建的 4 条弃用警告（v1.6.0 引入 CI 后 GitHub 提示）。
+> ① **应用图标重设计**：前景/背景换用新版矢量（108dp 画布）。背景由纯色 `@color/ic_launcher_background`
+>    改为矢量 `@drawable/ic_launcher_background`（深底 #181618 + 径向渐变）；`mipmap-anydpi-v26` 两张
+>    adaptive icon（方形/圆形遮罩）同步改引用。前景主圆直径收至 61.4dp（安全区 66dp 内），
+>    可容忍约 1.17 倍图标放大不裁边，适配 HyperOS 等 OEM 启动器的前景层放大。
+>    附带修正设计工具导出的非法属性：移除 `android:startAngle`（Android sweep 渐变无此属性，默认即从 0° 起）、
+>    `group` 的 `android:clipPathData` 改标准 `<clip-path android:pathData=.../>`，视觉零影响。
+> ② **启动屏跟随系统深浅色**：新增 `values-night/colors.xml`，`KOiL_splash_background` 深色取 `#000000`
+>    （对齐 Miuix 深色 `surface`，Splash 淡出到 Compose 首帧无色差跳变），浅色维持 `#F9F9F6`。
+>    状态栏图标明暗由 `enableEdgeToEdge()` 自动跟随系统，未额外改动。
+> ③ **CI 依赖现代化**：`actions/checkout` v4→v7、`actions/setup-java` v4→v6（规避 Node 20 弃用强制升级）、
+>    Gradle wrapper 9.3.1→9.8.2（9.3.1 已 EOL）；`gradle/actions/setup-gradle@v6` 已是最新未动；
+>    ubuntu 26.04 迁移为平台例行通知，已在迁移后镜像跑通。分支验证（workflow_dispatch run#11）与 main 构建（run#12）
+>    均 success，警告注释归零。
+> 影响面：res/drawable/{ic_launcher_foreground,ic_launcher_background}.xml、res/mipmap-anydpi-v26/{ic_launcher,ic_launcher_round}.xml、
+> 新增 res/values-night/colors.xml、.github/workflows/build.yml、gradle/wrapper/gradle-wrapper.properties、
+> app/build.gradle.kts（仅 versionName 1.6.0→1.6.1）；Kotlin 源码零改动。
+> DB schema 不变（version 1），覆盖升级安全。
+
 ## v1.6.0（versionCode 252）— 2026-11-02（引入 CI + 版本号策略切换，versionName 语义化跳 1.6.0）
 
 > 用户拍板：下个版本开始为 1.6.0（versionCode 继续递增），并在前端版本号显示处附带 (versionCode)。
