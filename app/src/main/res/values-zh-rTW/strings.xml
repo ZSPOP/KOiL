@@ -132,6 +132,12 @@
     <string name="koil_ov_metric_cost">每公里成本</string>
     <string name="koil_ov_metric_distance">行駛里程</string>
     <string name="koil_ov_first_record">首次記錄，油耗與里程將在下次加油後計算</string>
+    <string name="koil_ov_range_line">%1$d → %2$d km</string>
+    <string name="koil_ov_distance_pill">%1$d km</string>
+    <string name="koil_ov_grade_actual">%1$s# ¥%2$s · %3$s L</string>
+    <string name="koil_ov_payable_price">應付單價 ¥%1$s</string>
+    <string name="koil_ov_short_skip">短途行駛，不計入油耗統計</string>
+    <string name="koil_ov_distance_anomaly">里程數據異常，無法計算油耗</string>
     <string name="koil_col_oil_amount">加油量</string>
     <string name="koil_col_actual">實付金額</string>
     <string name="koil_col_unit_price">實付單價</string>
