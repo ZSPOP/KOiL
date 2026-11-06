@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -451,24 +452,35 @@ private fun OilPriceCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
+                    // v1.6.8：标题自动缩字不换行——原先宽度不够（英文 "Guangdong fuel prices" 较长，
+                    // 加上定位/省份按钮占位）就硬折成两行，真机反馈不美观。溢出时按 0.92 缩字号直到放下。
+                    var titleScale by remember { mutableFloatStateOf(1f) }
                     Text(
                         text = stringResource(R.string.koil_add_province_price, provinceLabel(uiState.viewProvince)),
-                        fontSize = 16.sp,
+                        fontSize = 16.sp * titleScale,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
+                        onTextLayout = { if (it.hasVisualOverflow && titleScale > 0.6f) titleScale *= 0.92f },
                     )
                     Text(
                         text = stringResource(R.string.koil_add_price_db_version, uiState.versionLabel),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
                 // 定位按钮
                 // v1.6.3：命中区补到 48×48dp（视觉仍是小胶囊）。原来只有 30×24dp，远低于 Material 的 48dp 建议，
                 // 手指点偏就落到省份按钮上。做法是外层撑开 48dp 承担点击，内层保持原样只管外观。
+                // v1.6.8：clip 必须放在 clickable 之前——否则按下波纹是 48dp 外层的矩形色块
+                //（真机反馈"点击出现矩形色块"）。裁成圆角后波纹跟随圆角轮廓。
                 Box(
                     modifier = Modifier
                         .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable(onClick = onLocateClick),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -488,9 +500,11 @@ private fun OilPriceCard(
                 }
                 Spacer(Modifier.width(2.dp))
                 // 省份选择按钮（点击弹设置页同款 OverlayDropdownPopup 下拉，锚定按钮下方、跟随位置）
+                // v1.6.8：同定位按钮——clip 在 clickable 之前，波纹圆角不再出现矩形色块
                 Box(
                     modifier = Modifier
                         .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { showProvincePicker.value = true },
                     contentAlignment = Alignment.Center,
                 ) {

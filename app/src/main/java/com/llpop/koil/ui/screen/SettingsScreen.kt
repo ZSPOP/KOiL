@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -630,9 +632,12 @@ fun SettingsScreen(
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                         Spacer(Modifier.height(4.dp))
-                        // 行2：下個窗口 ｜ 最近更新（紧凑同行，竖线分隔）
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        // 行2：下個窗口 ｜ 最近更新。v1.6.8 改 FlowRow：原先裸 Row 在空间不足时
+                        // 会把 "Last update: 11-06 01:58" 从中间折断，"01:58" 孤零零挂到下一行
+                        //（真机截图反馈）；FlowRow 放不下时整段换行，文案永远完整。
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             if (w2Short != null) {

@@ -181,8 +181,14 @@ fun OilPriceDetailScreen(
             }
             Spacer(Modifier.height(10.dp))
 
-            // —— 油号选择 ——
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // —— 油号选择（v1.6.8：与省份行同款横向滚动——原先是裸 Row，4 个 chip 放不下时
+            // 文字被压缩宽度硬折行，"0# Diesel" 变成 3 行；真机截图反馈）——
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 state.grades.forEach { g ->
                     GradeChip(
                         label = gradeLabel(g),
@@ -349,7 +355,16 @@ private fun ProvinceChip(label: String, selected: Boolean, onClick: () -> Unit) 
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        Text(text = label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+        // v1.6.8：chip 文字禁止折行——上一版 "0# Diesel" 在空间不足时被压成 3 行（真机反馈）；
+        // 容器已可横向滚动，宽度不够整体滚而不是把字拆开
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = fg,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -365,7 +380,16 @@ private fun GradeChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        Text(text = label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+        // v1.6.8：chip 文字禁止折行——上一版 "0# Diesel" 在空间不足时被压成 3 行（真机反馈）；
+        // 容器已可横向滚动，宽度不够整体滚而不是把字拆开
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = fg,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
