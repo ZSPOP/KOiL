@@ -7,10 +7,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -18,15 +16,12 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +56,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
@@ -989,13 +985,14 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
 }
 
 /**
- * 调价时间线单条（v1.6.3 二次调整：时间轴轨道 + 贯穿幅度导轨）。
- * 上一版只有「价格/日期」两行文字，轨道右侧中段完全没有别的东西，看着空；本版把原表格里
- * 那条「幅度条」请回来，改成贯穿整行宽度的导轨：
- * - 行 1：日期（左）—— 价格 · 涨跌额 · 百分比（右），两端对齐；
- * - 行 2：一条铺满整行宽度的浅灰导轨 + 彩色段（长度 = |幅度| / 区间最大幅度）+ 端点圆点。
- *   导轨始终被完整填满，行内不再有没人管的空白；搁浅/基准价只有灰轨 + 起点灰点（表达「没动」）。
- * 左轨道保留：节点按 涨红/跌绿/搁浅空心灰 着色，淡色竖线串起相邻节点，连续涨跌的节奏一眼可见。
+ * 调价时间线单条（v1.6.3 三轮：对齐设计稿 A——0 中轴双向幅度条，**去掉左轨道**）。
+ * vc273 真机反馈：保留了上一版的左轨道后，每行变成「左节点 + 满宽底轨 + 端点」三层线，
+ * 视觉过乱、也不符合选定的设计稿。本版严格对齐设计稿 A：
+ * - 日期独占最左一列（与设计稿同宽语义），价格行与幅度条都在右侧列；
+ * - 行 1：最新标签（如有）—— 价格 · 涨跌额 · 百分比，右对齐；
+ * - 行 2：浅灰底轨 + 0 轴竖线；涨 = 从中轴向右伸红段，跌 = 向左伸绿段，
+ *   段长 = 半宽 × (|幅度| / 区间最大幅度)，末端小圆点；搁浅/基准只有中轴 + 灰点。
+ * 没有任何节点/竖线装饰，线的数量回到设计稿的水平。
  */
 @Composable
 private fun AdjustTimelineItem(
@@ -1012,7 +1009,7 @@ private fun AdjustTimelineItem(
         diff != null && diff < -0.001 -> DownColor
         else -> MiuixTheme.colorScheme.onBackgroundVariant
     }
-    val trackColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.15f)
+    val trackColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
     // 彩段占比：以当前筛选区间的最大幅度为满格 → 任何数据量级下条长都有可比性（不再固定 1 元满格
     // 那样全是很短的条）；非零幅度保底 3%，保证 0.01 元这种小调价也看得见。
     val absDiff = diff?.let { kotlin.math.abs(it) } ?: 0.0
@@ -1020,58 +1017,28 @@ private fun AdjustTimelineItem(
     val barFrac = if (hasBar) (absDiff / maxAbsDiff).toFloat().coerceIn(0.03f, 1f) else 0f
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(IntrinsicSize.Min),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        // —— 轨道：竖线（最后一条不画）+ 节点 ——
-        Box(
+        // —— 日期列：独占最左（设计稿 A 的 46px 列），价格与幅度条都在右侧列 ——
+        Text(
+            text = item.label,
+            fontSize = 11.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.85f),
             modifier = Modifier
-                .width(16.dp)
-                .fillMaxHeight(),
-        ) {
-            if (!isLast) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .width(1.5.dp)
-                        .fillMaxHeight()
-                        .background(accent.copy(alpha = 0.2f)),
-                )
-            }
-            val dotSize = if (isLatest) 10.dp else 8.dp
-            val hollow = stranded || diff == null || kotlin.math.abs(diff) <= 0.001
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = if (isLatest) 9.dp else 6.dp)
-                    .size(dotSize)
-                    .then(
-                        if (hollow) {
-                            Modifier.border(BorderStroke(1.5.dp, accent.copy(alpha = 0.75f)), CircleShape)
-                        } else {
-                            Modifier.background(accent, CircleShape)
-                        }
-                    ),
-            )
-        }
+                .width(46.dp)
+                .padding(top = 3.dp),
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 16.dp),
+                .padding(bottom = if (isLast) 0.dp else 16.dp),
         ) {
-            // —— 行 1：日期（左） / 价格 · 涨跌 · 百分比（右）——
+            // —— 行 1：最新标签（如有） / 价格 · 涨跌 · 百分比（右对齐）——
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = item.label,
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.85f),
-                )
                 if (isLatest) {
-                    Spacer(Modifier.width(5.dp))
                     Text(
                         text = stringResource(R.string.koil_detail_latest),
                         fontSize = 10.sp,
@@ -1083,7 +1050,8 @@ private fun AdjustTimelineItem(
                             .padding(horizontal = 4.dp, vertical = 1.dp),
                     )
                 }
-                Spacer(Modifier.weight(1f))
+                // 设计稿 A：价格 + 涨跌额靠左（紧跟日期列），百分比顶到最右
+                Spacer(Modifier.width(6.dp))
                 Text(
                     text = "¥${NumberFormat.measure(item.price)}",
                     fontSize = if (isLatest) 17.sp else 15.sp,
@@ -1130,8 +1098,9 @@ private fun AdjustTimelineItem(
                     )
                 }
                 val pct = item.pctChange
+                // 百分比顶到行最右（设计稿 A）；没有百分比时这格空着，保持价格行的右端干净
+                Spacer(Modifier.weight(1f))
                 if (pct != null) {
-                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = if (pct >= 0) {
                             stringResource(R.string.koil_detail_pct_up, NumberFormat.measure(pct * 100))
@@ -1148,57 +1117,34 @@ private fun AdjustTimelineItem(
             // 上一版是「整行灰轨 + 彩段从左往右长」：方向靠颜色区分，涨跌都朝同一边长，读起来像进度条。
             // 本版以中轴为 0：涨从中轴向右伸红段、跌向左伸绿段，幅度 = 半宽 × (|幅度| / 区间最大幅度)。
             // 方向与大小同时可见，左右两侧都被利用；搁浅/基准价只有中轴 + 一个灰点，不会与「小幅涨跌」混淆。
-            val axisColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.3f)
-            val barHalfFrac = (barFrac / 2f).coerceIn(0.01f, 0.5f)
+            val axisColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.2f)
+            val barFracHalf = (barFrac / 2f).coerceIn(0.01f, 0.5f)
             val isRise = diff != null && diff > 0.001
-            Box(
+            // 用 Canvas 按中轴算绝对坐标，而不是 Box + fillMaxWidth(frac)：
+            // 后者的 frac 是相对**整行**宽度的，再靠 align(CenterEnd) 贴边 → 彩段实际是
+            // 「从右边缘往左长」，和设计稿的「从中轴往外伸」完全相反（vc273 真机就是这个毛病）。
+            Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(10.dp),
-                contentAlignment = Alignment.CenterStart,
             ) {
-                // 全宽底轨（刻度感：任何一条都能读出「满格有多长」）
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.5.dp)
-                        .clip(RoundedCornerShape(1.5.dp))
-                        .background(trackColor),
-                )
-                // 0 轴竖线
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .width(1.dp)
-                        .fillMaxHeight()
-                        .background(axisColor),
-                )
+                val cy = size.height / 2f
+                val cx = size.width / 2f
+                val stroke = 2.5.dp.toPx()
+                // 底轨：全宽，浅到只提供「满格多长」的刻度感
+                drawLine(trackColor, Offset(0f, cy), Offset(size.width, cy), stroke, StrokeCap.Round)
+                // 0 轴：中轴竖线（涨跌的分界）
+                drawLine(axisColor, Offset(cx, 0f), Offset(cx, size.height), 1.dp.toPx())
                 if (hasBar) {
-                    // 彩段：从中轴向两侧之一伸出
-                    Box(
-                        modifier = Modifier
-                            .align(if (isRise) Alignment.CenterEnd else Alignment.CenterStart)
-                            .fillMaxWidth(barHalfFrac)
-                            .height(2.5.dp)
-                            .clip(RoundedCornerShape(1.5.dp))
-                            .background(accent),
-                    )
-                    // 端点：压在彩段末端（半个点探出轨道，作为"这次调了这么多"的收尾）
-                    Box(
-                        modifier = Modifier
-                            .align(if (isRise) Alignment.CenterEnd else Alignment.CenterStart)
-                            .offset(x = if (isRise) 3.5.dp else (-3.5).dp)
-                            .size(7.dp)
-                            .background(accent, CircleShape),
-                    )
+                    // 彩段：严格从中轴出发，涨向右、跌向左，长度 = 半宽 × 幅度占比
+                    val len = barFracHalf * size.width
+                    val endX = if (isRise) cx + len else cx - len
+                    drawLine(accent, Offset(cx, cy), Offset(endX, cy), stroke, StrokeCap.Round)
+                    // 端点：落在彩段末端（这次就调了这么多）
+                    drawCircle(accent, 3.dp.toPx(), Offset(endX, cy))
                 } else {
-                    // 搁浅 / 基准价：中轴上一个小灰点，表示「价格没动」
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.Center)
-                            .size(6.dp)
-                            .background(trackColor, CircleShape),
-                    )
+                    // 搁浅 / 基准价：中轴上一个灰点——价格没动
+                    drawCircle(trackColor.copy(alpha = 0.7f), 3.dp.toPx(), Offset(cx, cy))
                 }
             }
         }
