@@ -41,7 +41,7 @@ class KOiLApplication : Application() {
         CrashReporter.install(this)
         // v1.6.3：上次崩溃的日志在崩溃线程里只落到私有目录，这里在 IO 线程补写到「下载」目录，
         // 避免崩溃现场被 MediaStore 的 4 次跨进程 IPC 拖住、进程先死导致日志丢失
-        appScope.launch { runCatching { CrashReporter.flushPendingCrashLog(this@KOiLApplication) } }
+        appScope.launch { runCatching { CrashReporter.migrateAndTrim(this@KOiLApplication) } }
 
         startKoin {
             androidContext(this@KOiLApplication)

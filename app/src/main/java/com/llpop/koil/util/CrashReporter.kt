@@ -13,29 +13,37 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 全局未捕获异常捕获器（静默诊断兜底）。
+ * 全局未捕获异常捕获器（本地崩溃日志）。
  *
- * v1.6.3 改造（原实现在崩溃线程里做整套 MediaStore 读写）：
- * 崩溃线程只剩「拼字符串 + 写一个私有文件」——毫秒级，且不依赖 ContentResolver。
- * 原实现要在崩溃线程里 query → 逐条 delete → insert → openOutputStream 写下载目录（4 次跨进程 IPC），
- * 任一环节被系统拖住，进程先被回收，日志就整份丢了；而且在崩溃现场做磁盘清理本身就不该发生。
- * 现在下载目录那份（KOiL-crash.txt，用户可直接打开/转发）由**下次启动**在 IO 线程补写，成功才删私有副本。
+ * v1.6.8 形态：**本地累积 + 设置页查看/导出**。
+ * - 崩溃线程只做一件事：把本次报告**追加**到私有目录的 crashes.log（一次小文件写，毫秒级），
+ *   不做任何清理/跨进程操作——那些在崩溃现场都可能被进程回收打断；
+ * - 下次启动在 IO 线程做两件维护事：把 v1.6.3 时代的旧 crash.txt 合并进来、把日志裁剪到
+ *   最近 [MAX_ENTRIES] 条（旧的自动挤掉）；
+ * - 不再自动写下载目录（那是 v1.6.3 的过渡行为，用户不可见还占地方）；改为设置页
+ *   「崩溃日志」入口主动查看 / 一键导出到下载目录 / 清空。
+ * - 日志只存手机私有目录，不上传任何远端。
  */
 object CrashReporter {
-    private const val PRIVATE_FILE_NAME = "crash.txt"
-    private const val PUBLIC_FILE_NAME = "KOiL-crash.txt"
+    private const val LOG_FILE_NAME = "crashes.log"
+    private const val LEGACY_FILE_NAME = "crash.txt"
+    private const val EXPORT_FILE_NAME = "KOiL-crash.txt"
+
+    /** 本地保留的最大条数，超过后最早的被挤掉 */
+    const val MAX_ENTRIES = 10
+
+    private fun logFile(context: Context) = File(context.applicationContext.filesDir, LOG_FILE_NAME)
 
     /**
      * 安装全局 handler（放在 Application.onCreate 最早处，覆盖启动期崩溃）。
-     * 注意：不再在这里删除上次的私有文件——那份是待导出队列，删了就丢日志。
+     * 崩溃现场只允许一次 appendText：堆栈通常几十 KB，毫秒级完成。
      */
     fun install(context: Context) {
-        val crashFile = File(context.applicationContext.filesDir, PRIVATE_FILE_NAME)
+        val file = logFile(context)
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             runCatching {
-                // 只做这一件事：一次小文件写。堆栈通常几十 KB，耗时在毫秒级
-                crashFile.writeText(buildReport(thread, throwable))
+                file.appendText(buildReport(thread, throwable))
             }
             prev?.uncaughtException(thread, throwable) ?: run {
                 throwable.printStackTrace()
@@ -44,24 +52,61 @@ object CrashReporter {
     }
 
     /**
-     * 启动时调用（必须在后台线程/IO 协程里）：把上次崩溃留下的私有记录补写到公共「下载」目录。
-     * 导出成功才删除私有副本；失败则保留，下次启动再试（下载目录只保留最新一份）。
+     * 启动维护（必须在后台线程/IO 协程里）：
+     * 1) v1.6.3 旧单文件 crash.txt 若还在（可能未被消费过），合并进累积日志后删除；
+     * 2) 把累积日志裁剪到最近 MAX_ENTRIES 条。
      */
-    fun flushPendingCrashLog(context: Context) {
-        val crashFile = File(context.filesDir, PRIVATE_FILE_NAME)
-        if (!crashFile.exists()) return
-        val text = runCatching { crashFile.readText() }.getOrNull()?.takeIf { it.isNotBlank() }
-        if (text == null) {
-            crashFile.delete()
-            return
+    fun migrateAndTrim(context: Context) {
+        val filesDir = context.applicationContext.filesDir
+        val legacy = File(filesDir, LEGACY_FILE_NAME)
+        val log = logFile(context)
+        if (legacy.exists()) {
+            runCatching {
+                val text = legacy.readText()
+                if (text.isNotBlank()) log.appendText(text)
+                legacy.delete()
+            }
         }
-        if (writeToDownloads(context, text)) crashFile.delete()
+        runCatching {
+            if (!log.exists()) return
+            val entries = splitEntries(log.readText())
+            if (entries.size > MAX_ENTRIES) {
+                log.writeText(entries.takeLast(MAX_ENTRIES).joinToString(""))
+            }
+        }
     }
+
+    /** 读全部日志（可能为空串）。设置页查看用 */
+    fun readLogs(context: Context): String =
+        runCatching { logFile(context).takeIf { it.exists() }?.readText().orEmpty() }.getOrDefault("")
+
+    /** 清空日志。设置页「清空」用 */
+    fun clear(context: Context) {
+        runCatching { logFile(context).delete() }
+    }
+
+    /** 统计日志条数（按 "=== 时间 ===" 头计） */
+    fun countEntries(text: String): Int =
+        if (text.isBlank()) 0 else splitEntries(text).size
+
+    /**
+     * 导出全部日志到公共「下载」目录（Android 10+ MediaStore 免权限），文件名 KOiL-crash.txt。
+     * 返回是否写入成功；失败不动本地日志，用户可重试。
+     */
+    fun exportToDownloads(context: Context): Boolean {
+        val text = readLogs(context)
+        if (text.isBlank()) return false
+        return writeToDownloads(context, text)
+    }
+
+    private fun splitEntries(text: String): List<String> =
+        text.split(Regex("(?m)^=== ")).filter { it.isNotBlank() }.map { if (it.startsWith("=== ")) it else "=== $it" }
 
     private fun buildReport(thread: Thread, throwable: Throwable): String {
         val sw = StringWriter()
         throwable.printStackTrace(PrintWriter(sw))
         return buildString {
+            appendLine()
             appendLine("=== ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())} ===")
             appendLine("thread=${thread.name}")
             append(sw.toString())
@@ -72,13 +117,13 @@ object CrashReporter {
     private fun writeToDownloads(context: Context, text: String): Boolean {
         val resolver = context.contentResolver
         val downloadsUri = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-        // 先清理历史同名崩溃文件（系统对同名 insert 会生成 (1)(2)… 堆积），只保留最新一份
+        // 先清理历史同名导出文件（系统对同名 insert 会生成 (1)(2)… 堆积），只保留最新一份
         runCatching {
             resolver.query(
                 downloadsUri,
                 arrayOf(MediaStore.MediaColumns._ID),
                 "${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
-                arrayOf(PUBLIC_FILE_NAME),
+                arrayOf(EXPORT_FILE_NAME),
                 null,
             )?.use { c ->
                 while (c.moveToNext()) {
@@ -88,7 +133,7 @@ object CrashReporter {
             }
         }
         val values = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, PUBLIC_FILE_NAME)
+            put(MediaStore.MediaColumns.DISPLAY_NAME, EXPORT_FILE_NAME)
             put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
             put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }

@@ -219,6 +219,15 @@
     <string name="koil_act_backup">Backup</string>
     <string name="koil_set_export_price_history">Export price history</string>
     <string name="koil_set_export_price_history_sub">CSV · full price DB</string>
+    <string name="koil_set_crash_log">Crash log</string>
+    <string name="koil_set_crash_log_sub">Recorded automatically on crash (stored locally only, never uploaded) · keeps last 10</string>
+    <string name="koil_set_crash_count">%1$d entries</string>
+    <string name="koil_set_crash_none">No crash records</string>
+    <string name="koil_set_crash_export">Export</string>
+    <string name="koil_set_crash_export_ok">Exported to Downloads: KOiL-crash.txt</string>
+    <string name="koil_set_crash_export_fail">Export failed, please retry</string>
+    <string name="koil_set_crash_clear">Clear</string>
+    <string name="koil_set_crash_cleared">Cleared</string>
     <string name="koil_set_restore">Restore backup</string>
     <string name="koil_set_restore_sub">Restore records + settings from JSON</string>
     <string name="koil_act_restore">Restore</string>

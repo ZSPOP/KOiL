@@ -109,6 +109,7 @@ import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.overview.OverviewUiState
+import com.llpop.koil.ui.screen.overview.DialogUiState
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
 import com.llpop.koil.domain.logic.RecordWithDerived
 import com.llpop.koil.ui.screen.overview.TrendPoint
@@ -153,6 +154,8 @@ fun OverviewScreen(
     viewModel: OverviewViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // v1.6.8 P2-4：弹窗独立状态流——弹窗输入只重组弹窗，不牵动列表/四宫格/趋势图
+    val dlg by viewModel.dialogState.collectAsStateWithLifecycle()
     // v1.5.20：全页改 LazyColumn 惰性渲染，历史记录只组合可见项；不再需要按月手动分页（visibleMonths）
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -596,9 +599,9 @@ fun OverviewScreen(
     }
 
     // 编辑弹窗（v1.5.13 复刻补录卡：日期只读 + 全量校验 + 保存置灰/变蓝）
-    if (uiState.showEditDialog) {
+    if (dlg.showEditDialog) {
         EditRecordDialog(
-            uiState = uiState,
+            uiState = dlg,
             onMileageChange = viewModel::setEditMileage,
             onOilAmountChange = viewModel::setEditOilAmount,
             onActualAmountChange = viewModel::setEditActualAmount,
@@ -611,7 +614,7 @@ fun OverviewScreen(
     }
 
     // 补录弹窗（source=backfill_modal）
-    if (uiState.showBackfillDialog) {
+    if (dlg.showBackfillDialog) {
         // v1.6.4：按窗口可用高度算（分屏/键盘弹出时 Configuration 仍是整屏）
         val maxH = with(LocalDensity.current) {
             (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
@@ -628,25 +631,25 @@ fun OverviewScreen(
                 Text(stringResource(R.string.koil_ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 // 加油省份（与设置页同款下拉列表）
-                ProvinceSelectField(province = uiState.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
+                ProvinceSelectField(province = dlg.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
                 Spacer(Modifier.height(14.dp))
                 // 第一行：日期（日历可改）+ 油号（联动当日参考单价）
                 Row(verticalAlignment = Alignment.Top) {
-                    com.llpop.koil.ui.component.KOiLDateField(modifier = Modifier.weight(1f), date = uiState.backfillDate, recordDates = uiState.backfillRecordDates, onDateSelected = viewModel::setBackfillDate)
+                    com.llpop.koil.ui.component.KOiLDateField(modifier = Modifier.weight(1f), date = dlg.backfillDate, recordDates = dlg.backfillRecordDates, onDateSelected = viewModel::setBackfillDate)
                     Spacer(Modifier.width(14.dp))
                     GradePriceSelect(
-                        grade = uiState.backfillGrade,
-                        price = uiState.backfillReferencePrice,
+                        grade = dlg.backfillGrade,
+                        price = dlg.backfillReferencePrice,
                         onGradeSelected = viewModel::setBackfillGrade,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(14.dp))
                 // v1.5.12：选日期后该区间可输入里程范围提示（日期行与里程行之间）
-                if (uiState.backfillRangeMin != null || uiState.backfillRangeMax != null) {
+                if (dlg.backfillRangeMin != null || dlg.backfillRangeMax != null) {
                     MileageRangeHint(
-                        rangeMin = uiState.backfillRangeMin,
-                        rangeMax = uiState.backfillRangeMax,
+                        rangeMin = dlg.backfillRangeMin,
+                        rangeMax = dlg.backfillRangeMax,
                     )
                     Spacer(Modifier.height(14.dp))
                 }
@@ -655,20 +658,20 @@ fun OverviewScreen(
                     EditField(
                         label = stringResource(R.string.koil_add_field_mileage),
                         icon = Icons.Filled.Speed,
-                        value = uiState.backfillMileage,
+                        value = dlg.backfillMileage,
                         onValueChange = viewModel::setBackfillMileage,
                         keyboardType = KeyboardType.Number,
-                        error = uiState.backfillMileageConflictType.isNotBlank() || uiState.backfillSameDayExists,
+                        error = dlg.backfillMileageConflictType.isNotBlank() || dlg.backfillSameDayExists,
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(14.dp))
                     EditField(
                         label = stringResource(R.string.koil_add_field_oil_amount),
                         icon = Icons.Filled.WaterDrop,
-                        value = uiState.backfillOilAmount,
+                        value = dlg.backfillOilAmount,
                         onValueChange = viewModel::setBackfillOilAmount,
                         keyboardType = KeyboardType.Decimal,
-                        error = uiState.backfillOverTank,
+                        error = dlg.backfillOverTank,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -678,7 +681,7 @@ fun OverviewScreen(
                     EditField(
                         label = stringResource(R.string.koil_add_field_payable),
                         icon = Icons.Filled.Money,
-                        value = uiState.backfillPayableAmount,
+                        value = dlg.backfillPayableAmount,
                         onValueChange = viewModel::setBackfillPayableAmount,
                         keyboardType = KeyboardType.Decimal,
                         readOnly = true,
@@ -690,39 +693,39 @@ fun OverviewScreen(
                     EditField(
                         label = stringResource(R.string.koil_add_field_actual),
                         icon = Icons.Filled.Money,
-                        value = uiState.backfillActualAmount,
+                        value = dlg.backfillActualAmount,
                         onValueChange = viewModel::setBackfillActualAmount,
                         keyboardType = KeyboardType.Decimal,
-                        error = uiState.backfillDeviationExceeded || uiState.backfillOverPayable,
+                        error = dlg.backfillDeviationExceeded || dlg.backfillOverPayable,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(10.dp))
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
                 PaymentSummaryCard(
-                    payable = uiState.backfillPayableAmount.toDoubleOrNull(),
-                    actual = uiState.backfillActualAmount.toDoubleOrNull(),
-                    fuelAmount = uiState.backfillOilAmount.toDoubleOrNull(),
-                    referencePrice = uiState.backfillReferencePrice,
+                    payable = dlg.backfillPayableAmount.toDoubleOrNull(),
+                    actual = dlg.backfillActualAmount.toDoubleOrNull(),
+                    fuelAmount = dlg.backfillOilAmount.toDoubleOrNull(),
+                    referencePrice = dlg.backfillReferencePrice,
                 )
                 Spacer(Modifier.height(8.dp))
                 // v1.5.11：补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
                 BackfillPrecheckHint(
-                    beforeFirst = uiState.backfillBeforeFirst,
-                    sameDayExists = uiState.backfillSameDayExists,
-                    mileageConflictType = uiState.backfillMileageConflictType,
-                    mileageConflictDate = uiState.backfillMileageConflictDate,
-                    mileageConflictValue = uiState.backfillMileageConflictValue,
-                    deviationPct = uiState.backfillDeviationPct,
-                    deviationExceeded = uiState.backfillDeviationExceeded,
-                    overPayable = uiState.backfillOverPayable,
-                    overTank = uiState.backfillOverTank,
-                    tankCapacity = uiState.backfillTankCapacity,
-                    ready = uiState.backfillReady,
+                    beforeFirst = dlg.backfillBeforeFirst,
+                    sameDayExists = dlg.backfillSameDayExists,
+                    mileageConflictType = dlg.backfillMileageConflictType,
+                    mileageConflictDate = dlg.backfillMileageConflictDate,
+                    mileageConflictValue = dlg.backfillMileageConflictValue,
+                    deviationPct = dlg.backfillDeviationPct,
+                    deviationExceeded = dlg.backfillDeviationExceeded,
+                    overPayable = dlg.backfillOverPayable,
+                    overTank = dlg.backfillOverTank,
+                    tankCapacity = dlg.backfillTankCapacity,
+                    ready = dlg.backfillReady,
                     readyText = stringResource(R.string.koil_ov_bf_ready),
                 )
                 // v1.5.16：保存失败提示（如唯一约束冲突等）
-                if (uiState.saveError) {
+                if (dlg.saveError) {
                     Spacer(Modifier.height(8.dp))
                     SaveErrorHint()
                 }
@@ -733,7 +736,7 @@ fun OverviewScreen(
                     Button(
                         onClick = viewModel::saveBackfill,
                         modifier = Modifier.weight(1f).height(44.dp),
-                        enabled = uiState.backfillReady && !uiState.isSavingBackfill,
+                        enabled = dlg.backfillReady && !dlg.isSavingBackfill,
                         // v1.5.13：全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
                         colors = ButtonDefaults.buttonColors(
                             color = KOiLColors.Primary,
@@ -1916,7 +1919,7 @@ private fun RecordDetail(
 // ===== 编辑记录弹窗（v1.5.13 复刻补录卡：字段结构/图标/红色错误态/里程区间提示/校验提示条/应付只读自动算/保存置灰变蓝；唯一差异：日期只读） =====
 @Composable
 private fun EditRecordDialog(
-    uiState: OverviewUiState,
+    uiState: DialogUiState,
     onMileageChange: (String) -> Unit,
     onOilAmountChange: (String) -> Unit,
     onActualAmountChange: (String) -> Unit,

@@ -111,6 +111,12 @@ import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
+import com.llpop.koil.util.CrashReporter
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 
 private val PROVINCES = Provinces.ALL
 private val GRADES = listOf("92", "95", "98", "0")
@@ -897,6 +903,18 @@ fun SettingsScreen(
         }
         Spacer(Modifier.height(16.dp))
 
+        // ===== 崩溃日志（v1.6.8：本地累积 + 查看/导出，仅存本机不上传）=====
+        val crashContext = LocalContext.current
+        val crashScope = rememberCoroutineScope()
+        var showCrashDialog by remember { mutableStateOf(false) }
+        var crashLogText by remember { mutableStateOf("") }
+        var crashCount by remember { mutableIntStateOf(0) }
+        // 首帧与每次打开弹窗都刷新（导出/清空后重新打开也拿到最新值）
+        LaunchedEffect(showCrashDialog) {
+            crashLogText = withContext(Dispatchers.IO) { CrashReporter.readLogs(crashContext) }
+            crashCount = CrashReporter.countEntries(crashLogText)
+        }
+
         // ===== 数据 =====
         SectionTitle(stringResource(R.string.koil_set_section_data))
         SettingsCard {
@@ -934,8 +952,119 @@ fun SettingsScreen(
                 value = stringResource(R.string.koil_act_restore),
                 onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
             )
+            SettingDivider()
+            SettingRow(
+                title = stringResource(R.string.koil_set_crash_log),
+                subtitle = stringResource(R.string.koil_set_crash_log_sub),
+                value = if (crashCount > 0) stringResource(R.string.koil_set_crash_count, crashCount) else "",
+                onClick = { showCrashDialog = true },
+            )
         }
         Spacer(Modifier.height(16.dp))
+
+        if (showCrashDialog) {
+            KOiLGlassDialog(
+                show = true,
+                onDismissRequest = { showCrashDialog = false },
+                contentPadding = 16.dp,
+                scrollable = true,
+                widthFraction = 0.90f,
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.koil_set_crash_log),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (crashCount > 0) {
+                            Text(
+                                text = stringResource(R.string.koil_set_crash_count, crashCount),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (crashLogText.isBlank()) {
+                        Text(
+                            text = stringResource(R.string.koil_set_crash_none),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    } else {
+                        // 日志原文（等宽观感：小号字 + 按行呈现；GlassDialog 的 scrollable 负责滚动）
+                        Text(
+                            text = crashLogText,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        if (crashLogText.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .clickable {
+                                        crashScope.launch {
+                                            CrashReporter.clear(crashContext)
+                                            crashLogText = ""
+                                            crashCount = 0
+                                            android.widget.Toast.makeText(
+                                                crashContext,
+                                                crashContext.getString(R.string.koil_set_crash_cleared),
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    }
+                                    .padding(vertical = 11.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.koil_set_crash_clear),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onBackground,
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (crashLogText.isNotBlank()) KOiLColors.Primary else KOiLColors.Primary.copy(alpha = 0.4f))
+                                .clickable(enabled = crashLogText.isNotBlank()) {
+                                    crashScope.launch {
+                                        val ok = withContext(Dispatchers.IO) { CrashReporter.exportToDownloads(crashContext) }
+                                        android.widget.Toast.makeText(
+                                            crashContext,
+                                            crashContext.getString(
+                                                if (ok) R.string.koil_set_crash_export_ok else R.string.koil_set_crash_export_fail
+                                            ),
+                                            android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.koil_set_crash_export),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复，docs/KOiL云同步设计.md） =====
         val syncVm: SyncViewModel = koinViewModel()

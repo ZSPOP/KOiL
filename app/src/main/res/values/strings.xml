@@ -213,6 +213,15 @@
     <string name="koil_act_backup">备份</string>
     <string name="koil_set_export_price_history">导出油价历史</string>
     <string name="koil_set_export_price_history_sub">CSV 格式 · 全部油价库</string>
+    <string name="koil_set_crash_log">崩溃日志</string>
+    <string name="koil_set_crash_log_sub">应用闪退时自动记录（仅存本机，不上传）· 保留最近 10 条</string>
+    <string name="koil_set_crash_count">%1$d 条记录</string>
+    <string name="koil_set_crash_none">暂无崩溃记录</string>
+    <string name="koil_set_crash_export">导出</string>
+    <string name="koil_set_crash_export_ok">已导出到下载目录：KOiL-crash.txt</string>
+    <string name="koil_set_crash_export_fail">导出失败，请重试</string>
+    <string name="koil_set_crash_clear">清空</string>
+    <string name="koil_set_crash_cleared">已清空</string>
     <string name="koil_set_restore">恢复备份</string>
     <string name="koil_set_restore_sub">从 JSON 备份恢复记录+设置</string>
     <string name="koil_act_restore">恢复</string>

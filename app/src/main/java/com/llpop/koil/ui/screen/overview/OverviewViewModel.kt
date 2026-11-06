@@ -66,6 +66,16 @@ data class OverviewUiState(
     val range: String = "all",
     /** 趋势图油号筛选："all"=全部油号合并，否则为 92/95/98/0（v1.5.46 新增，仅作用于趋势图） */
     val trendGrade: String = "all",
+)
+
+/**
+ * v1.6.8 P2-4 中改：编辑/补录弹窗的全部输入态、预检结果与保存标志，独立成第二条状态流。
+ * 原先全部塞在 OverviewUiState 里：弹窗每敲一个字符 → copy 出全新 state 实例 →
+ * 其中 List/Set 是 Compose 不稳定类型 → "值未变即跳过重组"全失效 → 读取任意字段的
+ * 可见内容（记录列表可见项、四宫格、趋势图）整页进重组判定。
+ * 拆出后弹窗输入只使 DialogUiState 变化，页面级状态纹丝不动，重组范围缩到弹窗自身。
+ */
+data class DialogUiState(
     val editingRecord: KOiLRecordEntity? = null,
     val editDate: String = "",
     val editMileage: String = "",
@@ -139,6 +149,10 @@ class OverviewViewModel(
 
     private val _uiState = MutableStateFlow(OverviewUiState())
     val uiState: StateFlow<OverviewUiState> = _uiState.asStateFlow()
+
+    // v1.6.8 P2-4：弹窗独立状态流（见 DialogUiState 注释）
+    private val _dialogState = MutableStateFlow(DialogUiState())
+    val dialogState: StateFlow<DialogUiState> = _dialogState.asStateFlow()
 
     private var allDerived: List<RecordWithDerived> = emptyList()
     private var lastRawRecords: List<KOiLRecordEntity> = emptyList()
@@ -312,7 +326,7 @@ class OverviewViewModel(
     // ===== 编辑 =====
     fun startEdit(record: KOiLRecordEntity) {
         val province = record.province ?: ""
-        _uiState.value = _uiState.value.copy(
+        _dialogState.value = _dialogState.value.copy(
             editingRecord = record,
             editDate = record.reoilDate,
             // v1.6.2：Double.toString 会带出 "12345.0"/"40.0"，编辑框里出现无意义的小数点，
@@ -344,32 +358,32 @@ class OverviewViewModel(
         runEditPrecheck()
     }
 
-    fun setEditDate(v: String) { _uiState.value = _uiState.value.copy(editDate = v); runEditPrecheck() }
-    fun setEditMileage(v: String) { _uiState.value = _uiState.value.copy(editMileage = v); runEditPrecheck() }
+    fun setEditDate(v: String) { _dialogState.value = _dialogState.value.copy(editDate = v); runEditPrecheck() }
+    fun setEditMileage(v: String) { _dialogState.value = _dialogState.value.copy(editMileage = v); runEditPrecheck() }
     fun setEditOilAmount(v: String) {
-        _uiState.value = _uiState.value.copy(editOilAmount = v)
+        _dialogState.value = _dialogState.value.copy(editOilAmount = v)
         // v1.5.13：应付自动计算（对齐补录卡/首页 updatePayable：油量 × 参考单价）
         updateEditPayable()
         runEditPrecheck()
     }
-    fun setEditActualAmount(v: String) { _uiState.value = _uiState.value.copy(editActualAmount = v); runEditPrecheck() }
-    fun setEditGrade(v: String) { _uiState.value = _uiState.value.copy(editGrade = v); updateEditPayable(); runEditPrecheck() }
+    fun setEditActualAmount(v: String) { _dialogState.value = _dialogState.value.copy(editActualAmount = v); runEditPrecheck() }
+    fun setEditGrade(v: String) { _dialogState.value = _dialogState.value.copy(editGrade = v); updateEditPayable(); runEditPrecheck() }
     fun setEditProvince(v: String) {
-        _uiState.value = _uiState.value.copy(editProvince = v, editRecordDates = reoilDatesFor(v))
+        _dialogState.value = _dialogState.value.copy(editProvince = v, editRecordDates = reoilDatesFor(v))
         runEditPrecheck()
     }
     /** v1.5.13：编辑卡应付只读自动计算（对齐补录卡），setter 保留兼容，UI 不再可编辑 */
-    fun setEditPayableAmount(v: String) { _uiState.value = _uiState.value.copy(editPayableAmount = v) }
+    fun setEditPayableAmount(v: String) { _dialogState.value = _dialogState.value.copy(editPayableAmount = v) }
 
     /** v1.5.13：编辑卡应付金额自动计算（对齐补录卡 updateBackfillPayable），油量/油号/参考价变化时即时刷新；v1.5.14：无法计算时清空显示待计算 */
     private fun updateEditPayable() {
-        val s = _uiState.value
+        val s = _dialogState.value
         val amount = s.editOilAmount.toDoubleOrNull()
         val price = s.editReferencePrice
         val payable = if (amount != null && price != null && amount > 0 && price > 0)
             String.format(Locale.ROOT, "%.2f", amount * price)
         else ""
-        _uiState.value = s.copy(editPayableAmount = payable)
+        _dialogState.value = s.copy(editPayableAmount = payable)
     }
 
     /** 编辑偏差预检入口（去抖信号，实际执行见 doRunEditPrecheck） */
@@ -379,7 +393,7 @@ class OverviewViewModel(
 
     /** 编辑校验（v1.5.13 复刻补录卡：日期边界/同日重复/双向里程链 + 偏差A+B/实付>应付/油箱容量；唯一差异：日期只读、校验排除自身 id） */
     private suspend fun doRunEditPrecheck() {
-        val s = _uiState.value
+        val s = _dialogState.value
         val r = s.editingRecord ?: return
         val grade = s.editGrade
         val date = s.editDate
@@ -483,7 +497,7 @@ class OverviewViewModel(
 
         // v1.6.2 修复：原实现用开头捕获的 `s.copy(...)` 整体回写，预检期间用户继续输入的内容
         // 会被这份旧快照覆盖（输入被"吞"）。改为 update 合并，只写预检结果字段。
-        _uiState.update {
+        _dialogState.update {
             it.copy(
                 editReferencePrice = refPrice,
                 editDeviationPct = devPct,
@@ -507,15 +521,15 @@ class OverviewViewModel(
     }
 
     fun saveEdit() {
-        val s = _uiState.value
+        val s = _dialogState.value
         val r = s.editingRecord ?: return
         // v1.5.13：对齐补录卡——预检全通过（日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量）才允许保存
         // v1.5.16：增加 isSavingEdit 防重入（快速双击不再并发 update）+ 失败提示（不再静默吞异常）
         if (s.editDate.isBlank() || !s.editReady || s.isSavingEdit) return
         viewModelScope.launch {
-            val cur = _uiState.value
+            val cur = _dialogState.value
             if (cur.isSavingEdit) return@launch
-            _uiState.value = cur.copy(isSavingEdit = true, saveError = false)
+            _dialogState.value = cur.copy(isSavingEdit = true, saveError = false)
             val province = cur.editProvince.ifBlank { settings.defaultProvince.first() }
             try {
                 recordDao.update(
@@ -532,18 +546,18 @@ class OverviewViewModel(
                         province = province,
                     )
                 )
-                _uiState.value = _uiState.value.copy(
+                _dialogState.value = _dialogState.value.copy(
                     showEditDialog = false, editingRecord = null,
                     isSavingEdit = false, saveError = false,
                 )
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isSavingEdit = false, saveError = true)
+                _dialogState.value = _dialogState.value.copy(isSavingEdit = false, saveError = true)
             }
         }
     }
 
     fun cancelEdit() {
-        _uiState.value = _uiState.value.copy(
+        _dialogState.value = _dialogState.value.copy(
             showEditDialog = false, editingRecord = null,
             isSavingEdit = false, saveError = false,
         )
@@ -557,7 +571,7 @@ class OverviewViewModel(
     fun openBackfill() {
         viewModelScope.launch {
             val home = settings.defaultProvince.first()
-            _uiState.value = _uiState.value.copy(
+            _dialogState.value = _dialogState.value.copy(
                 showBackfillDialog = true,
                 backfillDate = LocalDate.now().format(dateFormatter),
                 backfillMileage = "",
@@ -574,35 +588,35 @@ class OverviewViewModel(
             runBackfillPrecheck()
         }
     }
-    fun setBackfillDate(v: String) { _uiState.value = _uiState.value.copy(backfillDate = v); runBackfillPrecheck() }
-    fun setBackfillMileage(v: String) { _uiState.value = _uiState.value.copy(backfillMileage = v); runBackfillPrecheck() }
+    fun setBackfillDate(v: String) { _dialogState.value = _dialogState.value.copy(backfillDate = v); runBackfillPrecheck() }
+    fun setBackfillMileage(v: String) { _dialogState.value = _dialogState.value.copy(backfillMileage = v); runBackfillPrecheck() }
     fun setBackfillOilAmount(v: String) {
-        _uiState.value = _uiState.value.copy(backfillOilAmount = v)
+        _dialogState.value = _dialogState.value.copy(backfillOilAmount = v)
         // v1.5.12：应付自动计算（对齐首页 updatePayable：油量 × 参考单价）
         updateBackfillPayable()
         runBackfillPrecheck()
     }
-    fun setBackfillActualAmount(v: String) { _uiState.value = _uiState.value.copy(backfillActualAmount = v); runBackfillPrecheck() }
-    fun setBackfillGrade(v: String) { _uiState.value = _uiState.value.copy(backfillGrade = v); runBackfillPrecheck() }
+    fun setBackfillActualAmount(v: String) { _dialogState.value = _dialogState.value.copy(backfillActualAmount = v); runBackfillPrecheck() }
+    fun setBackfillGrade(v: String) { _dialogState.value = _dialogState.value.copy(backfillGrade = v); runBackfillPrecheck() }
     fun setBackfillProvince(v: String) {
-        _uiState.value = _uiState.value.copy(backfillProvince = v, backfillRecordDates = reoilDatesFor(v))
+        _dialogState.value = _dialogState.value.copy(backfillProvince = v, backfillRecordDates = reoilDatesFor(v))
         runBackfillPrecheck()
     }
     /** 应付只读自动计算（对齐首页）：setter 保留兼容，UI 不再可编辑 */
-    fun setBackfillPayableAmount(v: String) { _uiState.value = _uiState.value.copy(backfillPayableAmount = v) }
+    fun setBackfillPayableAmount(v: String) { _dialogState.value = _dialogState.value.copy(backfillPayableAmount = v) }
 
     /** v1.5.12：补录应付金额自动计算（对齐首页 updatePayable），油量或参考价变化时即时刷新；v1.5.14：无法计算时清空显示待计算 */
     private fun updateBackfillPayable() {
-        val s = _uiState.value
+        val s = _dialogState.value
         val amount = s.backfillOilAmount.toDoubleOrNull()
         val price = s.backfillReferencePrice
         val payable = if (amount != null && price != null && amount > 0 && price > 0)
             String.format(Locale.ROOT, "%.2f", amount * price)
         else ""
-        _uiState.value = s.copy(backfillPayableAmount = payable)
+        _dialogState.value = s.copy(backfillPayableAmount = payable)
     }
     fun cancelBackfill() {
-        _uiState.value = _uiState.value.copy(
+        _dialogState.value = _dialogState.value.copy(
             showBackfillDialog = false,
             isSavingBackfill = false, saveError = false,
         )
@@ -615,7 +629,7 @@ class OverviewViewModel(
 
     /** 补录偏差预检（v1.5.11 用户确认规则：日期边界/同日重复/双向里程链 + 首页口径 A+B偏差/实付>应付/油箱容量） */
     private suspend fun doRunBackfillPrecheck() {
-        val s = _uiState.value
+        val s = _dialogState.value
         val grade = s.backfillGrade
         val date = s.backfillDate
         val mileage = s.backfillMileage.toDoubleOrNull()
@@ -718,7 +732,7 @@ class OverviewViewModel(
             !devExceeded && !overPayable && !overTank
 
         // v1.6.2 修复：同编辑卡——不再整体回写旧快照，避免覆盖预检期间的新输入
-        _uiState.update {
+        _dialogState.update {
             it.copy(
                 backfillReferencePrice = refPrice,
                 backfillBeforeFirst = beforeFirst,
@@ -742,7 +756,7 @@ class OverviewViewModel(
     }
 
     fun saveBackfill() {
-        val s = _uiState.value
+        val s = _dialogState.value
         val mileage = s.backfillMileage.toDoubleOrNull() ?: return
         val oilAmount = s.backfillOilAmount.toDoubleOrNull() ?: return
         val actual = s.backfillActualAmount.toDoubleOrNull() ?: return
@@ -750,15 +764,15 @@ class OverviewViewModel(
         // v1.5.16：增加 isSavingBackfill 防重入（快速双击不再并发 insert 撞唯一约束崩溃）+ try-catch 失败提示
         if (s.backfillDate.isBlank() || !s.backfillReady || s.isSavingBackfill) return
         viewModelScope.launch {
-            val cur = _uiState.value
+            val cur = _dialogState.value
             if (cur.isSavingBackfill) return@launch
-            _uiState.value = cur.copy(isSavingBackfill = true, saveError = false)
+            _dialogState.value = cur.copy(isSavingBackfill = true, saveError = false)
             // v1.6.2：解析失败必须把防重入标志复位，否则保存按钮会永久置灰
             val curMileage = cur.backfillMileage.toDoubleOrNull()
             val curOil = cur.backfillOilAmount.toDoubleOrNull()
             val curActual = cur.backfillActualAmount.toDoubleOrNull()
             if (curMileage == null || curOil == null || curActual == null) {
-                _uiState.update { it.copy(isSavingBackfill = false, saveError = true) }
+                _dialogState.update { it.copy(isSavingBackfill = false, saveError = true) }
                 return@launch
             }
             val payable = cur.backfillPayableAmount.toDoubleOrNull() ?: curActual
@@ -777,13 +791,13 @@ class OverviewViewModel(
                         source = "backfill_modal",
                     )
                 )
-                _uiState.value = _uiState.value.copy(
+                _dialogState.value = _dialogState.value.copy(
                     showBackfillDialog = false,
                     isSavingBackfill = false,
                     saveError = false,
                 )
             } catch (_: Exception) {
-                _uiState.value = _uiState.value.copy(isSavingBackfill = false, saveError = true)
+                _dialogState.value = _dialogState.value.copy(isSavingBackfill = false, saveError = true)
             }
         }
     }
