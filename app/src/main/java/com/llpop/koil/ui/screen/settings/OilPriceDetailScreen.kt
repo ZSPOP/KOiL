@@ -1163,10 +1163,13 @@ private fun AdjustTimelineItem(
             // 上一版是「整行灰轨 + 彩段从左往右长」：方向靠颜色区分，涨跌都朝同一边长，读起来像进度条。
             // 本版以中轴为 0：涨从中轴向右伸红段、跌向左伸绿段，幅度 = 半宽 × (|幅度| / 区间最大幅度)。
             // 方向与大小同时可见，左右两侧都被利用；搁浅/基准价只有中轴 + 一个灰点，不会与「小幅涨跌」混淆。
-            val axisColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.2f)
+            val axisColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.3f)
             // 灰色底带（用户反馈：裸细线浮在黑底上显得乱，坐在一条圆角灰带上更归置）
-            val bandColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.09f)
-            val flatDotColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f)
+            // vc277：底带再提一档（0.09→0.14）——上一版在黑色卡片上几乎看不出来
+            val bandColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.14f)
+            val flatDotColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
+            // 底带高度同时决定彩段高度：红/绿段的粗细与灰底一致（用户要求「跟灰底的差不多」）
+            val bandDp = 8.dp
             val barFracHalf = (barFrac / 2f).coerceIn(0.01f, 0.5f)
             val isRise = diff != null && diff > 0.001
             // 用 Canvas 按中轴算绝对坐标，而不是 Box + fillMaxWidth(frac)：
@@ -1175,20 +1178,19 @@ private fun AdjustTimelineItem(
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(10.dp),
+                    .height(12.dp),
             ) {
                 val cy = size.height / 2f
                 val cx = size.width / 2f
-                val stroke = 2.5.dp.toPx()
-                // 灰色底带：整行一条圆角浅灰「底」（高 8dp），幅度条坐在上面，行列感更强
-                val bandH = 8.dp.toPx()
+                val bandH = bandDp.toPx()
+                // 灰色底带：整行一条圆角浅灰「底」，幅度条坐在上面，行列感更强
                 drawRoundRect(
                     color = bandColor,
                     topLeft = Offset(0f, cy - bandH / 2f),
                     size = Size(size.width, bandH),
                     cornerRadius = CornerRadius(bandH / 2f, bandH / 2f),
                 )
-                // 0 轴：中轴竖线（涨跌的分界），画在底带高度内
+                // 0 轴：中轴竖线（涨跌的分界），画在底带高度内；彩段会盖住它的一半
                 drawLine(
                     color = axisColor,
                     start = Offset(cx, cy - bandH / 2f + 1.dp.toPx()),
@@ -1196,12 +1198,20 @@ private fun AdjustTimelineItem(
                     strokeWidth = 1.5.dp.toPx(),
                 )
                 if (hasBar) {
-                    // 彩段：严格从中轴出发，涨向右、跌向左，长度 = 半宽 × 幅度占比
+                    // 彩段：严格从中轴出发，涨向右、跌向左，长度 = 半宽 × 幅度占比。
+                    // 粗细 = 底带高度（8dp），Butt 端面让靠中轴那一端正好压在 0 轴上、不外溢；
+                    // 外侧端面由圆点收口，所以不需要 Round cap。
                     val len = barFracHalf * size.width
                     val endX = if (isRise) cx + len else cx - len
-                    drawLine(accent, Offset(cx, cy), Offset(endX, cy), stroke, StrokeCap.Round)
-                    // 端点：落在彩段末端（这次就调了这么多）
-                    drawCircle(accent, 3.dp.toPx(), Offset(endX, cy))
+                    drawLine(
+                        color = accent,
+                        start = Offset(cx, cy),
+                        end = Offset(endX, cy),
+                        strokeWidth = bandH,
+                        cap = StrokeCap.Butt,
+                    )
+                    // 端点：直径 11dp > 底带高 8dp，探出上下缘，明显标记「这次调到这里」
+                    drawCircle(accent, 5.5.dp.toPx(), Offset(endX, cy))
                 } else {
                     // 搁浅 / 基准价：中轴上一个灰点——价格没动
                     drawCircle(flatDotColor, 3.dp.toPx(), Offset(cx, cy))
