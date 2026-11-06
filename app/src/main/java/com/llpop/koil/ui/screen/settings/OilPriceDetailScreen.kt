@@ -7,8 +7,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -16,9 +18,11 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -1017,8 +1021,44 @@ private fun AdjustTimelineItem(
     val barFrac = if (hasBar) (absDiff / maxAbsDiff).toFloat().coerceIn(0.03f, 1f) else 0f
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
     ) {
+        // —— v1.6.3 四轮：时间左侧加回「导线」——
+        // 竖线把相邻节点串起来，节点按 涨红 / 跌绿 / 搁浅·基准（空心灰）着色：
+        // 连续涨跌的节奏、搁浅的位置都能一路扫下来，比只有孤立圆点更有时间感；
+        // 幅度信息仍由右侧中轴条承担，两者不重复（一条管「节奏」，一条管「大小」）。
+        Box(
+            modifier = Modifier
+                .width(16.dp)
+                .fillMaxHeight(),
+        ) {
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .width(1.5.dp)
+                        .fillMaxHeight()
+                        .background(accent.copy(alpha = 0.18f)),
+                )
+            }
+            val dotSize = if (isLatest) 9.dp else 7.dp
+            val hollow = stranded || diff == null || kotlin.math.abs(diff) <= 0.001
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = if (isLatest) 10.dp else 8.dp)
+                    .size(dotSize)
+                    .then(
+                        if (hollow) {
+                            Modifier.border(BorderStroke(1.5.dp, accent.copy(alpha = 0.7f)), CircleShape)
+                        } else {
+                            Modifier.background(accent, CircleShape)
+                        }
+                    ),
+            )
+        }
         // —— 日期列：独占最左（设计稿 A 的 46px 列），价格与幅度条都在右侧列 ——
         Text(
             text = item.label,
@@ -1033,24 +1073,14 @@ private fun AdjustTimelineItem(
                 .weight(1f)
                 .padding(bottom = if (isLast) 0.dp else 16.dp),
         ) {
-            // —— 行 1：最新标签（如有） / 价格 · 涨跌 · 百分比（右对齐）——
+            // —— 行 1：价格（左）· 最新标签（价格右侧）· 涨跌额 ····· 百分比（顶最右）——
+            // 字号规则（v1.6.3 四轮）：单条内 价格/涨跌额/百分比 统一 14sp，只有「最新」那条整体大一号
+            // （价格 17sp、涨跌额与百分比 16sp），层次只留给当前价，其余记录一律平权，不再大小错落。
+            val numSize = if (isLatest) 16.sp else 14.sp
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (isLatest) {
-                    Text(
-                        text = stringResource(R.string.koil_detail_latest),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = KOiLColors.Primary,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(5.dp))
-                            .background(KOiLColors.Primary.copy(alpha = 0.12f))
-                            .padding(horizontal = 4.dp, vertical = 1.dp),
-                    )
-                }
-                // 设计稿 A：价格 + 涨跌额靠左（紧跟日期列），百分比顶到最右
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = "¥${NumberFormat.measure(item.price)}",
@@ -1079,14 +1109,14 @@ private fun AdjustTimelineItem(
 
                     diff > 0.001 -> Text(
                         text = stringResource(R.string.koil_detail_delta_up, diff),
-                        fontSize = 12.sp,
+                        fontSize = numSize,
                         fontWeight = FontWeight.SemiBold,
                         color = UpColor,
                     )
 
                     diff < -0.001 -> Text(
                         text = stringResource(R.string.koil_detail_delta_down, -diff),
-                        fontSize = 12.sp,
+                        fontSize = numSize,
                         fontWeight = FontWeight.SemiBold,
                         color = DownColor,
                     )
@@ -1095,6 +1125,20 @@ private fun AdjustTimelineItem(
                         text = stringResource(R.string.koil_pdb_flat),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                    )
+                }
+                if (isLatest) {
+                    // 最新标签在「价格 ¥x + 涨跌额」的右侧（不在价格左侧，也不夹在两者之间）
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.koil_detail_latest),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = KOiLColors.Primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 4.dp, vertical = 1.dp),
                     )
                 }
                 val pct = item.pctChange
@@ -1107,7 +1151,7 @@ private fun AdjustTimelineItem(
                         } else {
                             stringResource(R.string.koil_detail_pct_down, NumberFormat.measure(-pct * 100))
                         },
-                        fontSize = 10.sp,
+                        fontSize = numSize,
                         color = accent.copy(alpha = 0.9f),
                     )
                 }
