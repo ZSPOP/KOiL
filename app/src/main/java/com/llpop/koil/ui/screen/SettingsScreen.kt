@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import top.yukonga.miuix.kmp.basic.IconButton
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
@@ -60,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -557,16 +560,18 @@ fun SettingsScreen(
                     )
                     if (priceDbStatus.versionLabel != "V——") {
                         Spacer(Modifier.width(8.dp))
+                        // 与云同步「已连接」徽章同款：主色字 + 12% 主色底（版本正常时恒为蓝）
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f))
-                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
                         ) {
                             Text(
                                 text = priceDbStatus.versionLabel,
                                 fontSize = 11.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                fontWeight = FontWeight.Medium,
+                                color = KOiLColors.Primary,
                             )
                         }
                     }
@@ -629,34 +634,36 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— 统计四宫格（灰底圆角块内，四个数字视觉成组）——
+                // —— 统计四宫格：每格独立灰底圆角块，格间 8dp ——
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val statBox = Modifier
+                        .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.05f))
-                        .padding(vertical = 12.dp),
-                ) {
+                        .padding(vertical = 12.dp)
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.Place,
                         value = priceDbStatus.provinceCount.toString(),
                         label = stringResource(R.string.koil_pdb_provinces),
                     )
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.LocalGasStation,
                         value = priceDbStatus.gradeCount.toString(),
                         label = stringResource(R.string.koil_pdb_grades),
                     )
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.CalendarMonth,
                         value = priceDbStatus.adjustmentCount.toString(),
                         label = stringResource(R.string.koil_pdb_adjustments),
                     )
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.Storage,
                         value = priceDbStatus.total.toString(),
                         label = stringResource(R.string.koil_pdb_records),
@@ -749,18 +756,18 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        MiniSwitch(
-                            checked = autoOn,
-                            trackOn = KOiLColors.Primary,
-                            trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
-                        )
-                        Spacer(Modifier.width(8.dp))
                         Text(
                             text = stringResource(R.string.koil_pdb_auto_short),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (autoOn) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MiniSwitch(
+                            checked = autoOn,
+                            trackOn = KOiLColors.Primary,
+                            trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
                         )
                     }
                     Row(
@@ -1102,7 +1109,16 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         // —— 状态行：备份状态在左，管理/收起贴着同一行右侧 ——
                         // 徽章已上移到开关标题旁，这一行只留「文本 + 管理」，少一行高度。
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        // v1.6.4：整行可点（原来只有「管理」两个字是约 44×24dp 的小命中区，
+                        // 且与左侧状态文字同色系、只差 1sp，视觉上像状态的一部分而不像按钮）。
+                        // 现在命中区铺满整行宽，右侧补一个「详细 ›」同族的折叠箭头承担可展开语义。
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { formExpanded = !formExpanded },
+                        ) {
                             Text(
                                 text = statusText,
                                 fontSize = 12.sp,
@@ -1120,10 +1136,21 @@ fun SettingsScreen(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                maxLines = 1,
+                                modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                            )
+                            val arrowRotation by animateFloatAsState(
+                                targetValue = if (formExpanded) 180f else 0f,
+                                label = "syncManageArrow",
+                            )
+                            Icon(
+                                imageVector = Icons.Filled.KeyboardArrowDown,
+                                contentDescription = null,
+                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .clickable { formExpanded = !formExpanded }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    .padding(start = 2.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
+                                    .size(16.dp)
+                                    .rotate(arrowRotation),
                             )
                         }
 

@@ -1090,10 +1090,10 @@ private fun AdjustTimelineItem(
                 Text(
                     text = "¥${NumberFormat.measure(item.price)}",
                     // 价格列定宽：涨跌额从固定 x 起排，纵向成一条列线。
-                    // 宽度按「17sp 粗体下最宽的 ¥10.15」定 64dp——按 15sp 算是 56dp 左右，
-                    // 那样最新那条（价格 17sp）仍会把涨跌额顶开，列线又断。
+                    // v1.6.4 真机反馈「价格与涨跌额间距太开」：64dp→56dp（仍覆盖 17sp 粗体 ¥10.15 ≈54dp），
+                    // 列后间距 6→4dp，普通行（15sp ¥7.89 ≈40dp）的空档从约 24dp 收到约 15dp，列线保持。
                     // 用 widthIn 而非 width：真出现三位数价格时让它自然撑开，不裁切。
-                    modifier = Modifier.widthIn(min = 64.dp),
+                    modifier = Modifier.widthIn(min = 56.dp),
                     fontSize = if (isLatest) 17.sp else 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (stranded) {
@@ -1102,7 +1102,7 @@ private fun AdjustTimelineItem(
                         MiuixTheme.colorScheme.onBackground
                     },
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
                 // 右端：涨跌额 / 搁浅 / 基准价 / 持平
                 when {
                     stranded -> Text(

@@ -262,12 +262,12 @@
     <string name="koil_pdb_line_adjusted">%1$s 已调价 · 92# ¥%2$s</string>
     <string name="koil_pdb_line_stranded">%1$s 搁浅 · %2$s 起维持 ¥%3$s</string>
     <string name="koil_pdb_line_stranded_short">%1$s 搁浅</string>
-    <string name="koil_pdb_countdown">距下次窗口 %1$s</string>
+    <string name="koil_pdb_countdown">距下轮调价日 %1$s</string>
     <string name="koil_pdb_countdown_today">今晚 24:00 调价窗口</string>
     <string name="koil_pdb_dur_dh">%1$d 天 %2$d 时</string>
     <string name="koil_pdb_dur_hm">%1$d 时 %2$d 分</string>
     <string name="koil_pdb_dur_m">%1$d 分</string>
-    <string name="koil_pdb_checked">上次检查 %1$s</string>
+    <string name="koil_pdb_checked">最近检查 %1$s</string>
     <string name="koil_pdb_yesterday">昨天 %1$s</string>
     <string name="koil_pdb_auto_short">自动更新</string>
     <string name="koil_pdb_detail_title">调价记录</string>
@@ -287,7 +287,7 @@
     <string name="koil_pdb_down">下调 ¥%1$.2f</string>
     <string name="koil_pdb_flat">维持不变</string>
     <string name="koil_pdb_first_base">基准价</string>
-    <string name="koil_pdb_view_detail">查看</string>
+    <string name="koil_pdb_view_detail">详细</string>
     <plurals name="koil_pdb_incomplete">
     <item quantity="other">%1$d 省数据未拉取完整</item>
     </plurals>
