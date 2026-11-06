@@ -6,8 +6,9 @@
 # versionCode：注入 KOIL_CI_RUN_NUMBER = github.run_number，+251 偏移在 app/build.gradle.kts 内完成
 #   （GitHub Actions 表达式不支持 +），与本地 252 基准衔接、全局单调递增。
 #
-# 注意：仓库内 keystore 为私有仓库简化做法；若仓库设公开，请迁移至 GitHub Secrets
-#   （如 SIGNING_KEY=base64(keystore)、KEY_STORE_PASSWORD），在下方签名步骤解码，勿随仓库分发。
+# 注意：v1.6.3 起仓库公开，keystore 与 keystore.properties 已从 git 历史抹除，
+#   签名材料改由 GitHub Secrets 提供：SIGNING_KEYSTORE_B64（keystore 的 base64）、
+#   SIGNING_PROPERTIES（keystore.properties 全文）。本地构建仍用工作区内的这两个文件（已 gitignore）。
 name: Build
 
 on:
@@ -55,6 +56,23 @@ jobs:
 
       - name: Grant execute permission
         run: chmod +x gradlew
+
+      # v1.6.3：仓库转为公开，keystore 与 keystore.properties 从历史中抹除，
+      # 改由 GitHub Secrets 注入（SIGNING_KEYSTORE_B64 / SIGNING_PROPERTIES）。
+      # 两者缺失时自动跳过，构建回落到 debug 签名（build.gradle.kts 的 hasReleaseSigning 判断）。
+      - name: Restore signing keystore from secrets
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          SIGNING_PROPERTIES: ${{ secrets.SIGNING_PROPERTIES }}
+        run: |
+          if [ -z "$SIGNING_KEYSTORE_B64" ]; then
+            echo "::warning::SIGNING_KEYSTORE_B64 未配置，本次构建使用 debug 签名"
+            exit 0
+          fi
+          mkdir -p keystore
+          printf '%s' "$SIGNING_KEYSTORE_B64" | base64 -d > keystore/koil-release.keystore
+          printf '%s' "$SIGNING_PROPERTIES" > keystore.properties
+          echo "keystore 已从 Secrets 恢复"
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --console=plain
