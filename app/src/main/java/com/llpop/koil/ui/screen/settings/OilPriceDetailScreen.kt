@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -1088,6 +1089,11 @@ private fun AdjustTimelineItem(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = "¥${NumberFormat.measure(item.price)}",
+                    // 价格列定宽：涨跌额从固定 x 起排，纵向成一条列线。
+                    // 宽度按「17sp 粗体下最宽的 ¥10.15」定 64dp——按 15sp 算是 56dp 左右，
+                    // 那样最新那条（价格 17sp）仍会把涨跌额顶开，列线又断。
+                    // 用 widthIn 而非 width：真出现三位数价格时让它自然撑开，不裁切。
+                    modifier = Modifier.widthIn(min = 64.dp),
                     fontSize = if (isLatest) 17.sp else 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (stranded) {

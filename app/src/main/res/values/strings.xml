@@ -257,6 +257,19 @@
     <!-- v1.5.27：多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">同步来源：%1$s</string>
     <string name="koil_pdb_not_checked">尚未检测</string>
+    <!-- v1.6.4 油价数据库卡重排：标题 / 两行摘要 / 底部按钮 -->
+    <string name="koil_pdb_db_title_short">数据库</string>
+    <string name="koil_pdb_line_adjusted">%1$s 已调价 · 92# ¥%2$s</string>
+    <string name="koil_pdb_line_stranded">%1$s 搁浅 · %2$s 起维持 ¥%3$s</string>
+    <string name="koil_pdb_line_stranded_short">%1$s 搁浅</string>
+    <string name="koil_pdb_countdown">距下次窗口 %1$s</string>
+    <string name="koil_pdb_countdown_today">今晚 24:00 调价窗口</string>
+    <string name="koil_pdb_dur_dh">%1$d 天 %2$d 时</string>
+    <string name="koil_pdb_dur_hm">%1$d 时 %2$d 分</string>
+    <string name="koil_pdb_dur_m">%1$d 分</string>
+    <string name="koil_pdb_checked">上次检查 %1$s</string>
+    <string name="koil_pdb_yesterday">昨天 %1$s</string>
+    <string name="koil_pdb_auto_short">自动更新</string>
     <string name="koil_pdb_detail_title">调价记录</string>
     <string name="koil_pdb_detail_empty">暂无调价记录</string>
     <string name="koil_pdb_latest_price">最新价格</string>
@@ -278,7 +291,9 @@
     <plurals name="koil_pdb_incomplete">
     <item quantity="other">%1$d 省数据未拉取完整</item>
     </plurals>
-    <string name="koil_pdb_seeding">后台补灌中，完成后自动刷新</string>
+    <string name="koil_pdb_seeding">补灌未完成 · 点「立即更新」重试</string>
+    <string name="koil_pdb_seeding_progress">正在补灌 %1$d/%2$d 省…</string>
+    <string name="koil_pdb_seeding_waiting">等待调价日历就绪，稍后自动重试</string>
     <string name="koil_set_price_push">调价推送通知</string>
     <string name="koil_set_price_push_sub">调价生效与窗口日前推送系统通知</string>
     <!-- v1.5.28：权限联动提示 -->
