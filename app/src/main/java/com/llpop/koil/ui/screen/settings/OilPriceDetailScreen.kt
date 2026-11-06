@@ -1,6 +1,12 @@
 package com.llpop.koil.ui.screen.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -20,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,28 +38,37 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +91,11 @@ import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -98,23 +119,38 @@ fun OilPriceDetailScreen(
     BackHandler(onBack = onBack)
     val surfaceColor = MiuixTheme.colorScheme.surface
 
-    // v1.6.3：筛选上下文进顶栏副标题——滚到历史记录区后仍能看到「省 · 油号 · 年份」。
-    // 用 TopAppBar 原生 subtitle：展开时在大标题下方、折叠后自动居中到小标题下方，
-    // 不额外占一行、不需要浮层，也不会和上方筛选控件形成两条并列的重复横条。
-    val filterSummary = buildList {
-        add(provinceLabel(state.province))
-        add(gradeLabel(state.grade))
-        // 年份 pill 无数据时不渲染（见筛选区），副标题同步省略，保持两处一致
-        if (state.years.isNotEmpty()) {
-            add(stringResource(R.string.koil_detail_year, state.year))
-        }
-    }.joinToString(" · ")
-
     val scrollState = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    // —— v1.6.3（吸顶做法 2）：筛选区滚出屏幕后，浮出一条可点的胶囊条 ——
+    // 阈值来源：filterBottomPx = 筛选区（pill 行 + 分段控件）底部在滚动内容坐标系里的 y；
+    // topBarPx = 顶栏折叠后的高度（content 回调的 topPadding 随滚动递减，取历史最小值即折叠值）。
+    // 筛选区被顶栏完全盖住 ⇔ scroll > filterBottomPx - topBarPx。
+    // 两者都由布局测量驱动，不写死高度 → 换字号/语言、有无年份 pill 都不用改阈值。
+    var filterBottomPx by remember { mutableFloatStateOf(0f) }
+    var topBarPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    val showStickyFilter by remember {
+        derivedStateOf {
+            filterBottomPx > 0f &&
+                topBarPx < Float.MAX_VALUE &&
+                scrollState.value > filterBottomPx - topBarPx
+        }
+    }
+
+    // 吸顶条上的下拉菜单状态（与页面内筛选区的菜单互不复用：两处锚点不同，同时只能开一个）
+    var stickyProvinceExpanded by remember { mutableStateOf(false) }
+    var stickyGradeExpanded by remember { mutableStateOf(false) }
+    var stickyYearExpanded by remember { mutableStateOf(false) }
+    // 同页面内 pill 的 350ms 去抖问题（Popup 因外部点击收起后，同一击又落到 pill 上 → 弹回）
+    var stickyDismissAt by remember { mutableStateOf(0L) }
+    fun toggleStickyMenu(expanded: Boolean, set: (Boolean) -> Unit) {
+        val justDismissed = stickyDismissAt > 0 && System.currentTimeMillis() - stickyDismissAt < 350
+        stickyDismissAt = 0L
+        if (!justDismissed) set(!expanded)
+    }
 
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
-        subtitle = filterSummary,
         navigationIcon = {
             Icon(
                 imageVector = MiuixIcons.Back,
@@ -131,7 +167,64 @@ fun OilPriceDetailScreen(
                     .size(24.dp),
             )
         },
+        overlay = { backdrop, _, topPadding ->
+            StickyFilterBar(
+                visible = showStickyFilter,
+                backdrop = backdrop,
+                topPadding = topPadding,
+                provinceText = provinceLabel(state.province),
+                gradeText = gradeLabel(state.grade),
+                yearText = if (state.years.isNotEmpty()) {
+                    stringResource(R.string.koil_detail_year, state.year)
+                } else {
+                    null
+                },
+                provinces = state.provinces,
+                selectedProvince = state.province,
+                grades = state.grades,
+                selectedGrade = state.grade,
+                years = state.years,
+                selectedYear = state.year,
+                provinceExpanded = stickyProvinceExpanded,
+                gradeExpanded = stickyGradeExpanded,
+                yearExpanded = stickyYearExpanded,
+                onToggleProvince = { toggleStickyMenu(stickyProvinceExpanded) { stickyProvinceExpanded = it } },
+                onToggleGrade = { toggleStickyMenu(stickyGradeExpanded) { stickyGradeExpanded = it } },
+                onToggleYear = { toggleStickyMenu(stickyYearExpanded) { stickyYearExpanded = it } },
+                onDismissProvince = {
+                    stickyProvinceExpanded = false
+                    stickyDismissAt = System.currentTimeMillis()
+                },
+                onDismissGrade = {
+                    stickyGradeExpanded = false
+                    stickyDismissAt = System.currentTimeMillis()
+                },
+                onDismissYear = {
+                    stickyYearExpanded = false
+                    stickyDismissAt = System.currentTimeMillis()
+                },
+                onSelectProvince = {
+                    stickyProvinceExpanded = false
+                    viewModel.selectProvince(it)
+                },
+                onSelectGrade = {
+                    stickyGradeExpanded = false
+                    viewModel.selectGrade(it)
+                },
+                onSelectYear = {
+                    stickyYearExpanded = false
+                    viewModel.selectYear(it)
+                },
+                onBackToTop = { scope.launch { scrollState.animateScrollTo(0) } },
+            )
+        },
     ) { _, topPadding, scrollBehavior, _ ->
+        // 记录顶栏当前高度（随滚动折叠递减，取历史最小值即折叠后的高度）——供吸顶阈值使用。
+        // 放在 SideEffect 里而不是组合体内直接赋值：避免「组合期间写状态、同帧又被 derivedStateOf 读到」
+        // 引起的重复组合警告/来回翻转。
+        SideEffect {
+            if (topPadding.value < topBarPx) topBarPx = topPadding.value
+        }
         // —— 明细页整体滚动容器（Column + verticalScroll，对齐一级页：整页滚动、顶栏随滚动折叠）——
         // 时间线仅 20 条左右一次性渲染，避开 LazyColumn 懒加载层在纹理卡片/手势下的兼容性风险
         Column(
@@ -156,6 +249,12 @@ fun OilPriceDetailScreen(
             // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不再展开。
             var provinceDismissAt by remember { mutableStateOf(0L) }
             var yearDismissAt by remember { mutableStateOf(0L) }
+            // 包一层只为测量筛选区底部位置（吸顶阈值），不改变布局层级/尺寸
+            Column(
+                modifier = Modifier.onGloballyPositioned { coords ->
+                    filterBottomPx = coords.positionInParent().y + coords.size.height
+                },
+            ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -272,6 +371,7 @@ fun OilPriceDetailScreen(
                         )
                     }
                 }
+            }
             }
             if (state.years.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
@@ -427,6 +527,204 @@ private fun DropdownPill(
             // 展开时箭头轻微上转，给出状态反馈
             modifier = Modifier
                 .size(18.dp)
+                .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
+        )
+    }
+}
+
+/**
+ * v1.6.3（吸顶做法 2）：筛选区滚出屏幕后浮出的**可点**胶囊条。
+ *
+ * 与「顶栏副标题」的区别：副标题只能看，这条能改。三个胶囊各自带锚定下拉（复用页面内同一套
+ * AnchoredPopup / AnchoredDropdownColumn），右侧圆形按钮回到顶部；滚回顶部、筛选区重新可见时
+ * 自动收起（由 visible 驱动 AnimatedVisibility）。
+ *
+ * 位置在 KOiLScreenScaffold 的 overlay 槽位——backdrop 录制树之外，所以可以安全
+ * textureBlur(backdrop) 采样整页内容，得到与顶栏一致的真毛玻璃（SDK<33 退化为 surface 0.82）。
+ */
+@Composable
+private fun StickyFilterBar(
+    visible: Boolean,
+    backdrop: LayerBackdrop?,
+    topPadding: Dp,
+    provinceText: String,
+    gradeText: String,
+    yearText: String?,
+    provinces: List<String>,
+    selectedProvince: String,
+    grades: List<String>,
+    selectedGrade: String,
+    years: List<String>,
+    selectedYear: String,
+    provinceExpanded: Boolean,
+    gradeExpanded: Boolean,
+    yearExpanded: Boolean,
+    onToggleProvince: () -> Unit,
+    onToggleGrade: () -> Unit,
+    onToggleYear: () -> Unit,
+    onDismissProvince: () -> Unit,
+    onDismissGrade: () -> Unit,
+    onDismissYear: () -> Unit,
+    onSelectProvince: (String) -> Unit,
+    onSelectGrade: (String) -> Unit,
+    onSelectYear: (String) -> Unit,
+    onBackToTop: () -> Unit,
+) {
+    val bd = backdrop
+    val canBlur = bd != null && isRuntimeShaderSupported()
+    val barSurface = MiuixTheme.colorScheme.surface.copy(alpha = 0.82f)
+    val lineColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(140)) + slideInVertically(tween(200)) { -it },
+        exit = fadeOut(tween(110)) + slideOutVertically(tween(150)) { -it },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = topPadding)
+                .then(
+                    if (canBlur) {
+                        Modifier.textureBlur(
+                            backdrop = bd,
+                            shape = RectangleShape,
+                            blurRadius = 25f,
+                            colors = BlurColors(
+                                blendColors = listOf(BlendColorEntry(color = barSurface)),
+                            ),
+                        )
+                    } else {
+                        Modifier.background(barSurface)
+                    },
+                )
+                .drawBehind {
+                    val y = size.height - 0.5.dp.toPx()
+                    drawLine(
+                        color = lineColor,
+                        start = Offset(0f, y),
+                        end = Offset(size.width, y),
+                        strokeWidth = 0.5.dp.toPx(),
+                    )
+                }
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box {
+                    StickyPill(provinceText, provinceExpanded, onToggleProvince)
+                    AnchoredPopup(
+                        expanded = provinceExpanded,
+                        onDismissRequest = onDismissProvince,
+                        maxHeight = 380.dp,
+                    ) {
+                        AnchoredDropdownColumn {
+                            provinces.forEachIndexed { idx, name ->
+                                AnchoredDropdownItemRow(
+                                    text = provinceLabel(name),
+                                    selected = name == selectedProvince,
+                                    isFirst = idx == 0,
+                                    isLast = idx == provinces.lastIndex,
+                                    onClick = { onSelectProvince(name) },
+                                )
+                            }
+                        }
+                    }
+                }
+                Box {
+                    StickyPill(gradeText, gradeExpanded, onToggleGrade)
+                    AnchoredPopup(
+                        expanded = gradeExpanded,
+                        onDismissRequest = onDismissGrade,
+                    ) {
+                        AnchoredDropdownColumn {
+                            grades.forEachIndexed { idx, g ->
+                                AnchoredDropdownItemRow(
+                                    text = gradeLabel(g),
+                                    selected = g == selectedGrade,
+                                    isFirst = idx == 0,
+                                    isLast = idx == grades.lastIndex,
+                                    onClick = { onSelectGrade(g) },
+                                )
+                            }
+                        }
+                    }
+                }
+                if (yearText != null) {
+                    Box {
+                        StickyPill(yearText, yearExpanded, onToggleYear)
+                        AnchoredPopup(
+                            expanded = yearExpanded,
+                            onDismissRequest = onDismissYear,
+                        ) {
+                            AnchoredDropdownColumn {
+                                years.forEachIndexed { idx, y ->
+                                    AnchoredDropdownItemRow(
+                                        text = stringResource(R.string.koil_detail_year, y),
+                                        selected = y == selectedYear,
+                                        isFirst = idx == 0,
+                                        isLast = idx == years.lastIndex,
+                                        onClick = { onSelectYear(y) },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.weight(1f))
+                // 回到顶部：与总览页一致的上箭头语义（列表本身不长，直接短动画回顶）
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.09f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onBackToTop,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.koil_back_to_top),
+                        tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 吸顶条上的紧凑胶囊（比页面内的 DropdownPill 更小一号，省高度） */
+@Composable
+private fun StickyPill(label: String, expanded: Boolean, onToggle: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.09f))
+            .clickable(onClick = onToggle)
+            .padding(start = 10.dp, end = 7.dp, top = 5.dp, bottom = 5.dp),
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onBackground,
+            maxLines = 1,
+            softWrap = false,
+        )
+        Spacer(Modifier.width(2.dp))
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onBackgroundVariant,
+            modifier = Modifier
+                .size(16.dp)
                 .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
         )
     }
@@ -760,7 +1058,7 @@ private fun AdjustTimelineItem(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 12.dp),
+                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 16.dp),
         ) {
             // —— 行 1：日期（左） / 价格 · 涨跌 · 百分比（右）——
             Row(
@@ -845,16 +1143,21 @@ private fun AdjustTimelineItem(
                     )
                 }
             }
-            Spacer(Modifier.height(5.dp))
-            // —— 行 2：贯穿导轨 ——
-            // 灰轨铺满整行（不随幅度变化），彩段按幅度占比向左延伸，末端一个圆点收尾。
-            // 搁浅/基准：只有灰轨 + 起点灰点，没有彩段——「这一轮没动」比文字更直观。
+            Spacer(Modifier.height(7.dp))
+            // —— 行 2：0 中轴双向幅度条（v1.6.3 三轮）——
+            // 上一版是「整行灰轨 + 彩段从左往右长」：方向靠颜色区分，涨跌都朝同一边长，读起来像进度条。
+            // 本版以中轴为 0：涨从中轴向右伸红段、跌向左伸绿段，幅度 = 半宽 × (|幅度| / 区间最大幅度)。
+            // 方向与大小同时可见，左右两侧都被利用；搁浅/基准价只有中轴 + 一个灰点，不会与「小幅涨跌」混淆。
+            val axisColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.3f)
+            val barHalfFrac = (barFrac / 2f).coerceIn(0.01f, 0.5f)
+            val isRise = diff != null && diff > 0.001
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(8.dp),
+                    .height(10.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
+                // 全宽底轨（刻度感：任何一条都能读出「满格有多长」）
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -862,31 +1165,37 @@ private fun AdjustTimelineItem(
                         .clip(RoundedCornerShape(1.5.dp))
                         .background(trackColor),
                 )
+                // 0 轴竖线
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(axisColor),
+                )
                 if (hasBar) {
+                    // 彩段：从中轴向两侧之一伸出
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(barFrac)
-                            .height(8.dp),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.5.dp)
-                                .clip(RoundedCornerShape(1.5.dp))
-                                .background(accent),
-                        )
-                        // 端点圆点（右缘对齐彩段末端；不裁剪，允许半个点压在轨道外沿）
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.CenterEnd)
-                                .size(7.dp)
-                                .background(accent, CircleShape),
-                        )
-                    }
+                            .align(if (isRise) Alignment.CenterEnd else Alignment.CenterStart)
+                            .fillMaxWidth(barHalfFrac)
+                            .height(2.5.dp)
+                            .clip(RoundedCornerShape(1.5.dp))
+                            .background(accent),
+                    )
+                    // 端点：压在彩段末端（半个点探出轨道，作为"这次调了这么多"的收尾）
+                    Box(
+                        modifier = Modifier
+                            .align(if (isRise) Alignment.CenterEnd else Alignment.CenterStart)
+                            .offset(x = if (isRise) 3.5.dp else (-3.5).dp)
+                            .size(7.dp)
+                            .background(accent, CircleShape),
+                    )
                 } else {
+                    // 搁浅 / 基准价：中轴上一个小灰点，表示「价格没动」
                     Box(
                         modifier = Modifier
+                            .align(Alignment.Center)
                             .size(6.dp)
                             .background(trackColor, CircleShape),
                     )
