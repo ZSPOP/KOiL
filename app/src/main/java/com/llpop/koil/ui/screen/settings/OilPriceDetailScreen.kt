@@ -1,8 +1,10 @@
 package com.llpop.koil.ui.screen.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -10,9 +12,11 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -348,35 +353,16 @@ fun OilPriceDetailScreen(
                 Spacer(Modifier.height(8.dp))
 
                 // —— 调价时间线（最新在上）——
-                // 表头：日期 价格 涨跌幅（三列左对齐，与数据行列对齐）
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_pdb_col_date),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.width(56.dp),
+                // v1.6.3 UX 方案 A：原「日期/价格/涨跌/幅度条」四列表格改为竖向时间轴——
+                // 左轨道节点按 涨红/跌绿/搁浅空心灰 着色、淡色竖线串起相邻节点，连续涨跌的节奏
+                // 一眼可见；最新一条价格放大作「当前价」。原幅度条与竖线语义重复，已去掉。
+                val timeline = state.items.asReversed()
+                timeline.forEachIndexed { idx, row ->
+                    AdjustTimelineItem(
+                        item = row,
+                        isLatest = idx == 0,
+                        isLast = idx == timeline.lastIndex,
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_col_price),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.width(70.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_col_change),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                    )
-                }
-                state.items.asReversed().forEach { row ->
-                    AdjustTimelineRow(row)
                 }
             }
             Spacer(Modifier.height(bottomPadding + 24.dp))
@@ -681,148 +667,147 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
     }
 }
 
-/** 调价时间线单行（三列紧凑 + 第4列幅度条）：
- *  日期(左) · 价格(左) · 涨跌幅(chip,左) · 幅度条(长度=调价幅度/1元基准，涨红跌绿)；
- *  搁浅行：日期/价格/标签全灰，chip 显示「擱淺」，尾部显示「維持 X 價格」（无幅度条） */
+/**
+ * 调价时间线单条（v1.6.3 UX 方案 A：四列表格改竖向时间轴）：
+ * 左轨道（淡色竖线 + 节点）+ 右侧两行（价格·涨跌 → 日期·说明）。
+ * - 节点：涨=实心红、跌=实心绿、搁浅/基准/持平=空心灰环
+ * - 竖线取该条目的方向色（20% 透明度），相邻节点间形成同色段，连续涨跌一眼可辨
+ * - 最新一条：价格放大 + 「最新」标签；搁浅行价格弱化，「维持 X 价格」并入日期副行
+ */
 @Composable
-private fun AdjustTimelineRow(item: PriceAdjustItem) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // 列1：日期（固定宽，左对齐；搁浅行加深灰）
-            Text(
-                text = item.label,
-                fontSize = 12.sp,
-                color = if (item.isStranded) {
-                    MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
-                } else {
-                    MiuixTheme.colorScheme.onBackgroundVariant
-                },
-                modifier = Modifier.width(56.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            // 列2：价格（固定宽，左对齐；搁浅行灰色显示维持价）
-            Text(
-                text = "¥${NumberFormat.measure(item.price)}",
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = if (item.isStranded) {
-                    MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f)
-                } else {
-                    MiuixTheme.colorScheme.onBackground
-                },
-                modifier = Modifier.width(70.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-            // 列3：涨跌幅 chip（箭头 + 文字）；搁浅 = 灰色「擱淺」chip
-            if (item.isStranded) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_detail_stranded),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
-            } else {
-                ActionChip(diff = item.diff)
-            }
-            Spacer(Modifier.width(8.dp))
-            // 列4：调价 → 幅度条（长度正比于调价幅度，1 元为满条，最短 6% 保证可见，涨红跌绿）；
-            //       搁浅 → 「維持 09-25 價格」说明（无幅度条）
-            if (item.isStranded) {
-                Text(
-                    text = stringResource(R.string.koil_detail_held_price, item.keptFrom ?: stringResource(R.string.koil_detail_last_year)),
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                    modifier = Modifier.weight(1f),
-                )
-            } else {
-                val diff = item.diff
-                val barColor = when {
-                    diff == null -> null
-                    diff > 0.001 -> UpColor
-                    diff < -0.001 -> DownColor
-                    else -> null
-                }
-                if (barColor != null) {
-                    val frac = (kotlin.math.abs(diff!!).toFloat() / 1f).coerceIn(0.06f, 1f)
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.CenterStart,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(frac)
-                                .height(4.dp)
-                                .clip(RoundedCornerShape(2.dp))
-                                .background(barColor.copy(alpha = 0.8f)),
-                        )
-                    }
-                } else {
-                    // 基準價/持平：无幅度条，占位列保持对齐
-                    Spacer(Modifier.weight(1f))
-                }
-            }
-        }
-        // 行间细分隔线
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(0.5.dp)
-                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.06f)),
-        )
-    }
-}
-
-/** 動作 chip：淡红/淡绿圆角底 + 方向箭头（↑红/↓绿）+ 文字；基準價/持平为灰色无箭头 */
-@Composable
-private fun ActionChip(diff: Double?) {
-    val neutralBg = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-    val neutralFg = MiuixTheme.colorScheme.onBackgroundVariant
-    val (bgColor, fgColor, arrow) = when {
-        diff == null -> Triple(neutralBg, neutralFg, null)
-        diff > 0.001 -> Triple(UpColor.copy(alpha = 0.12f), UpColor, "↑")
-        diff < -0.001 -> Triple(DownColor.copy(alpha = 0.12f), DownColor, "↓")
-        else -> Triple(neutralBg, neutralFg, null)
-    }
-    val actionText = when {
-        diff == null -> stringResource(R.string.koil_pdb_first_base)
-        diff > 0.001 -> stringResource(R.string.koil_pdb_up, diff)
-        diff < -0.001 -> stringResource(R.string.koil_pdb_down, -diff)
-        else -> stringResource(R.string.koil_pdb_flat)
+private fun AdjustTimelineItem(
+    item: PriceAdjustItem,
+    isLatest: Boolean,
+    isLast: Boolean,
+) {
+    val diff = item.diff
+    val stranded = item.isStranded
+    val accent: Color = when {
+        stranded -> MiuixTheme.colorScheme.onBackgroundVariant
+        diff != null && diff > 0.001 -> UpColor
+        diff != null && diff < -0.001 -> DownColor
+        else -> MiuixTheme.colorScheme.onBackgroundVariant
     }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min),
     ) {
-        if (arrow != null) {
-            Text(
-                text = arrow,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = fgColor,
+        // —— 轨道：竖线（最后一条不画）+ 节点 ——
+        Box(
+            modifier = Modifier
+                .width(16.dp)
+                .fillMaxHeight(),
+        ) {
+            if (!isLast) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .width(1.5.dp)
+                        .fillMaxHeight()
+                        .background(accent.copy(alpha = 0.2f)),
+                )
+            }
+            val dotSize = if (isLatest) 10.dp else 8.dp
+            val hollow = stranded || diff == null || kotlin.math.abs(diff) <= 0.001
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = if (isLatest) 9.dp else 6.dp)
+                    .size(dotSize)
+                    .then(
+                        if (hollow) {
+                            Modifier.border(BorderStroke(1.5.dp, accent.copy(alpha = 0.75f)), CircleShape)
+                        } else {
+                            Modifier.background(accent, CircleShape)
+                        }
+                    ),
             )
-            Spacer(Modifier.width(3.dp))
         }
-        Text(
-            text = actionText,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = fgColor,
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 16.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "¥${NumberFormat.measure(item.price)}",
+                    fontSize = if (isLatest) 20.sp else 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (stranded) {
+                        MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f)
+                    } else {
+                        MiuixTheme.colorScheme.onBackground
+                    },
+                )
+                if (isLatest) {
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = stringResource(R.string.koil_detail_latest),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = KOiLColors.Primary,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                            .padding(horizontal = 5.dp, vertical = 1.dp),
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+                // 右侧：涨跌值 / 搁浅 / 基准价 / 持平
+                when {
+                    stranded -> Text(
+                        text = stringResource(R.string.koil_detail_stranded),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+
+                    diff == null -> Text(
+                        text = stringResource(R.string.koil_pdb_first_base),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                    )
+
+                    diff > 0.001 -> Text(
+                        text = stringResource(R.string.koil_detail_delta_up, diff),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = UpColor,
+                    )
+
+                    diff < -0.001 -> Text(
+                        text = stringResource(R.string.koil_detail_delta_down, -diff),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = DownColor,
+                    )
+
+                    else -> Text(
+                        text = stringResource(R.string.koil_pdb_flat),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                    )
+                }
+            }
+            Spacer(Modifier.height(3.dp))
+            // 副行：日期（搁浅行追加「维持 X 价格」）
+            Text(
+                text = if (stranded) {
+                    item.label + " · " + stringResource(
+                        R.string.koil_detail_held_price,
+                        item.keptFrom ?: stringResource(R.string.koil_detail_last_year),
+                    )
+                } else {
+                    item.label
+                },
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.85f),
+            )
+        }
     }
 }
+

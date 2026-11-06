@@ -362,6 +362,9 @@
     <string name="koil_detail_stranded">擱淺</string>
     <string name="koil_detail_held_price">維持 %1$s 價格</string>
     <string name="koil_detail_last_year">上年</string>
+    <string name="koil_detail_latest">最新</string>
+    <string name="koil_detail_delta_up">↑ ¥%1$.2f</string>
+    <string name="koil_detail_delta_down">↓ ¥%1$.2f</string>
     <string name="koil_sync_password_invalid">應用程式密碼已失效（換機或重裝後加密金鑰遺失），請重新輸入</string>
     <string name="koil_sync_status_password_invalid">同步已暫停：應用程式密碼需重新輸入</string>
 </resources>

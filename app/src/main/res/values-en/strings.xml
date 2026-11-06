@@ -373,6 +373,9 @@
     <string name="koil_detail_stranded">Stranded</string>
     <string name="koil_detail_held_price">Held at %1$s</string>
     <string name="koil_detail_last_year">last year</string>
+    <string name="koil_detail_latest">Latest</string>
+    <string name="koil_detail_delta_up">↑ ¥%1$.2f</string>
+    <string name="koil_detail_delta_down">↓ ¥%1$.2f</string>
     <string name="koil_sync_password_invalid">App password is unreadable (key lost after device change) — please re-enter it</string>
     <string name="koil_sync_status_password_invalid">Sync paused: re-enter the app password</string>
 </resources>
