@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Payments
@@ -1617,10 +1617,11 @@ private fun RecordCard(
                     if (prevRecord != null) {
                         Spacer(Modifier.width(3.dp))
                         Icon(
-                            imageVector = Icons.Filled.KeyboardArrowLeft,
+                            // v1.6.5：带横杠的「←」，替换原来尖角的 KeyboardArrowLeft
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f),
-                            modifier = Modifier.size(15.dp),
+                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(16.dp),
                         )
                         Spacer(Modifier.width(2.dp))
                         Text(
@@ -1633,13 +1634,10 @@ private fun RecordCard(
                     }
                     if (record.oilDays != null && !isInitial) {
                         Spacer(Modifier.width(6.dp))
+                        // v1.6.5：设置页版本徽章同款——主色字 + 12% 主色底；字号与旧日期一致 12sp
                         Pill(
                             text = stringResource(R.string.koil_ov_oil_days, record.oilDays),
-                            // v1.6.5 细节：深色主题下 surfaceVariant 与卡片底色几乎同色，胶囊隐形；
-                            // 改用文字色 12% 做底——浅色显浅灰、深色显浅白，两个主题都有对比
-                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f),
-                            textColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                            border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.28f),
+                            fontSize = 12.sp,
                         )
                     }
                     Spacer(Modifier.weight(1f))
@@ -1652,13 +1650,18 @@ private fun RecordCard(
                     )
                 }
 
-                // —— 二行：里程区间 + 行驶胶囊 ····· 右侧 油号+实付单价+加油量 ——
+                // —— 二行：里程区间 + 行驶胶囊 + 油号·加油量胶囊 ····· 右侧 每公里成本 ——
                 Spacer(Modifier.height(7.dp))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Row(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        val gradePill = stringResource(
+                            R.string.koil_ov_grade_pill,
+                            r.oilGrade ?: "-",
+                            NumberFormat.fixed2(r.oilAmount),
+                        )
                         if (prevRecord != null && record.distance != null) {
                             Text(
                                 text = stringResource(
@@ -1671,14 +1674,12 @@ private fun RecordCard(
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Pill(
-                                text = stringResource(R.string.koil_ov_distance_pill, record.distance.toInt()),
-                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f),
-                                textColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                                border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.28f),
-                            )
+                            Spacer(Modifier.width(5.dp))
+                            Pill(text = stringResource(R.string.koil_ov_distance_pill, record.distance.toInt()))
+                            Spacer(Modifier.width(5.dp))
+                            Pill(text = gradePill)
                         } else {
                             Text(
                                 text = stringResource(R.string.koil_ov_current_mileage, r.mileage.toInt()),
@@ -1687,30 +1688,27 @@ private fun RecordCard(
                                 maxLines = 1,
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
                             )
+                            Spacer(Modifier.width(5.dp))
+                            Pill(text = gradePill)
                         }
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = if (record.unitPriceActual != null) {
-                            stringResource(
-                                R.string.koil_ov_grade_actual,
-                                r.oilGrade ?: "-",
-                                NumberFormat.fixed2(record.unitPriceActual),
-                                NumberFormat.fixed2(r.oilAmount),
-                            )
-                        } else {
-                            (r.oilGrade ?: "-") + "# · " + NumberFormat.measure(r.oilAmount) + " L"
-                        },
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    // v1.6.5：每公里成本放在「¥实付金额」正下方（第二行右侧），不再占灰块右列
+                    if (record.costPerKm != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "¥" + NumberFormat.money(record.costPerKm) + "/km",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
                 }
 
-                // —— 灰块：油耗大字（唯一主角）+ 竖排「环比 / 单位」 ····· 右侧 每公里成本 / 应付单价 ——
+                // —— 灰块：油耗大字 + 左侧「单位 / 环比」 ····· 右侧 实付单价 / 油站单价 ——
                 if (record.oilConsumption != null && record.distance != null) {
                     Spacer(Modifier.height(9.dp))
                     // v1.6.5 细节：深色主题下 2E7D32/E65100 对比度不足，按背景亮度切换亮色变体
@@ -1722,12 +1720,16 @@ private fun RecordCard(
                         goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32),
                         badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100),
                     )
+                    // v1.6.5：实付单价（实付金额/加油量）与油站单价（挂牌/应付单价）都固定两位小数
+                    val actualPrice = record.unitPriceActual ?: r.oilPrice
+                    val stationPrice = record.unitPricePayable ?: r.oilPrice
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                            // v1.6.5：灰块留在卡片内容区内、左右不撑满，圆角完整；内部左右各留 6dp
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f))
+                            .padding(horizontal = 6.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -1739,17 +1741,14 @@ private fun RecordCard(
                             maxLines = 1,
                             softWrap = false,
                         )
-                        if (isAbnormal) {
-                            Spacer(Modifier.width(5.dp))
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(accentColor)
-                            )
-                        }
+                        // v1.6.5：用户要求去掉数字右边的异常圆点（异常已由左竖条 + 数字着色表达）
                         Spacer(Modifier.width(8.dp))
-                        Column {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "L/100km",
+                                fontSize = 10.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
                             Text(
                                 text = delta?.text ?: "—",
                                 fontSize = 12.sp,
@@ -1758,33 +1757,32 @@ private fun RecordCard(
                                 maxLines = 1,
                                 softWrap = false,
                             )
-                            Text(
-                                text = "L/100km",
-                                fontSize = 10.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            )
                         }
                         Spacer(Modifier.weight(1f))
-                        Column(horizontalAlignment = Alignment.End) {
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
                             Text(
-                                text = "¥" + NumberFormat.money(record.costPerKm ?: 0.0) + "/km",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                text = stringResource(
+                                    R.string.koil_ov_unit_price_actual,
+                                    actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
+                                ),
+                                fontSize = 11.sp,
                                 color = MiuixTheme.colorScheme.onBackground,
                                 maxLines = 1,
                                 softWrap = false,
                             )
-                            // 应付单价（挂牌价）：用户选 A——一直显示，与第二行实付单价形成完整对比
-                            val payablePrice = record.unitPricePayable ?: r.oilPrice
-                            if (payablePrice != null) {
-                                Text(
-                                    text = stringResource(R.string.koil_ov_payable_price, NumberFormat.fixed2(payablePrice)),
-                                    fontSize = 11.sp,
-                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                    maxLines = 1,
-                                    softWrap = false,
-                                )
-                            }
+                            Text(
+                                text = stringResource(
+                                    R.string.koil_ov_unit_price_station,
+                                    stationPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
+                                ),
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
                         }
                     }
                 } else if (isInitial) {
@@ -1812,7 +1810,7 @@ private fun HintLine(text: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f))
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1884,25 +1882,28 @@ private fun deltaText(
     )
 }
 
+/**
+ * v1.6.5：设置页版本徽章同款胶囊——主色字 + 12% 主色底、圆角 20dp。
+ * 顶行天数用 12sp（与旧日期一致），第二行两颗用 11sp 以便三样连排进一行。
+ * 深浅主题都有对比（主色底不会像 surfaceVariant 那样与卡片同色而隐形）。
+ */
 @Composable
 private fun Pill(
     text: String,
-    color: Color,
-    textColor: Color,
-    border: Color,
     modifier: Modifier = Modifier,
+    fontSize: TextUnit = 11.sp,
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(color)
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(
             text = text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = textColor,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Medium,
+            color = KOiLColors.Primary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

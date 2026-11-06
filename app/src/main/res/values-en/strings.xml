@@ -137,10 +137,13 @@
     <string name="koil_ov_metric_cost">Cost/km</string>
     <string name="koil_ov_metric_distance">Distance</string>
     <string name="koil_ov_first_record">First record — consumption shows up after the next fill-up</string>
-    <string name="koil_ov_range_line">%1$d → %2$d km</string>
+    <string name="koil_ov_range_line">Mileage %1$d → %2$d km</string>
     <string name="koil_ov_distance_pill">%1$d km</string>
     <string name="koil_ov_grade_actual">%1$s# ¥%2$s · %3$s L</string>
     <string name="koil_ov_payable_price">Listed ¥%1$s</string>
+    <string name="koil_ov_grade_pill">%1$s# · %2$s L</string>
+    <string name="koil_ov_unit_price_actual">Paid ¥%1$s/L</string>
+    <string name="koil_ov_unit_price_station">Station ¥%1$s/L</string>
     <string name="koil_ov_short_skip">Short trip — excluded from consumption</string>
     <string name="koil_ov_distance_anomaly">Mileage anomaly — consumption unavailable</string>
     <string name="koil_col_oil_amount">Fuel</string>
