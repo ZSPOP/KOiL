@@ -199,9 +199,9 @@
     <string name="koil_pdb_pending_title">Pending updates</string>
     <string name="koil_pdb_update_now">Update now</string>
     <string name="koil_pdb_auto_sub">Check every 8h, apply on release</string>
+    <string name="koil_set_data_io_title">Export &amp; backup</string>
+    <string name="koil_set_data_io_sub">Fuel records, price history &amp; full backup</string>
     <string name="koil_set_section_data">Data &amp; backup</string>
-    <string name="koil_set_group_io">Import &amp; export</string>
-    <string name="koil_set_group_backup_restore">Backup &amp; restore</string>
     <string name="koil_set_location">Location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_price_db_auto">Auto-update price DB</string>

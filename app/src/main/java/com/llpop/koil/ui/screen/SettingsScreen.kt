@@ -757,6 +757,8 @@ fun SettingsScreen(
                             text = stringResource(R.string.koil_pdb_auto_sub),
                             fontSize = 14.sp,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Switch(
@@ -793,6 +795,8 @@ fun SettingsScreen(
                         text = stringResource(R.string.koil_set_eia_key_sub),
                         fontSize = 14.sp,
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (!eiaEnabled) {
                         Spacer(Modifier.height(8.dp))
@@ -830,18 +834,6 @@ fun SettingsScreen(
                         )
                     }
                 }
-            }
-
-            // —— 同步来源（最近一次同步的通道与额度）——
-            if (priceDbStatus.lastSyncSources.isNotBlank()) {
-                SettingDivider()
-                Text(
-                    text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                    fontSize = 12.sp,
-                    lineHeight = 15.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                )
             }
 
             SettingDivider()
@@ -887,6 +879,18 @@ fun SettingsScreen(
                         .clickable { openNotificationSettings(context) },
                 )
             }
+
+            // —— 同步来源（最近一次同步的通道与额度，卡底信息行）——
+            if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                SettingDivider()
+                Text(
+                    text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                    fontSize = 12.sp,
+                    lineHeight = 15.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -914,6 +918,7 @@ fun SettingsScreen(
         // 下面的导出/备份是「一次性动作」，先讲机制再讲出口。
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
+        var showDataIoDialog by remember { mutableStateOf(false) }
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
@@ -952,6 +957,14 @@ fun SettingsScreen(
                 val healthy = configured && !syncUi.passwordInvalid
                 val unhealthy = !healthy || syncUi.lastStatus.startsWith("fail:")
 
+            // —— 导出与备份入口（低频动作收进弹窗；不依赖云同步开关，关着也能导）——
+            SettingRow(
+                title = stringResource(R.string.koil_set_data_io_title),
+                subtitle = stringResource(R.string.koil_set_data_io_sub),
+                value = "",
+                onClick = { showDataIoDialog = true },
+            )
+            SettingDivider()
                 if (syncUi.loaded) {
                     SettingSwitchRow(
                         title = stringResource(R.string.koil_sync_switch),
@@ -1292,49 +1305,71 @@ fun SettingsScreen(
             }
         }
 
-        Spacer(Modifier.height(16.dp))
+        if (showDataIoDialog) {
+            KOiLGlassDialog(
+                show = true,
+                onDismissRequest = { showDataIoDialog = false },
+                contentPadding = 16.dp,
+                widthFraction = 0.90f,
+            ) {
+                Column {
+                    Text(
+                        text = stringResource(R.string.koil_set_data_io_title),
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(4.dp))
 
-        // vc282：分组维度由「数据对象」改为「文件形态/用途」——
-        // CSV 一段：人可读、Excel 能开，进出自如（加油记录双向 + 油价历史单向）；
-        // JSON 一段：整包、只有本 App 能恢复，用于迁移/兜底。
-        // 原先按对象分成三组，油价历史只有「出」没有「进」，只能孤零零挂在完整备份尾巴上。
-        SettingsCard {
-            SettingSubLabel(stringResource(R.string.koil_set_group_io))
-            SettingRow(
-                title = stringResource(R.string.koil_set_export_records),
-                subtitle = stringResource(R.string.koil_set_export_records_sub),
-                value = stringResource(R.string.koil_act_export),
-                onClick = viewModel::exportCsv,
-            )
-            SettingDivider()
-            SettingRow(
-                title = stringResource(R.string.koil_set_import_records),
-                subtitle = stringResource(R.string.koil_set_import_records_sub),
-                value = stringResource(R.string.koil_act_import),
-                onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
-            )
-            SettingDivider()
-            SettingRow(
-                title = stringResource(R.string.koil_set_export_price_history),
-                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
-                value = stringResource(R.string.koil_act_export),
-                onClick = viewModel::exportOilPriceHistory,
-            )
-            SettingDivider()
-            SettingSubLabel(stringResource(R.string.koil_set_group_backup_restore))
-            SettingRow(
-                title = stringResource(R.string.koil_set_backup),
-                subtitle = stringResource(R.string.koil_set_backup_sub),
-                value = stringResource(R.string.koil_act_backup),
-                onClick = viewModel::exportBackup,
-            )
-            SettingDivider()
-            SettingRow(
-                title = stringResource(R.string.koil_set_restore),
-                subtitle = stringResource(R.string.koil_set_restore_sub),
-                value = stringResource(R.string.koil_act_restore),
-                onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
-            )
+                    // —— CSV 段：人可读、Excel 能开 ——
+                    DataIoDialogItem(
+                        title = stringResource(R.string.koil_set_export_records),
+                        subtitle = stringResource(R.string.koil_set_export_records_sub),
+                        onClick = {
+                            showDataIoDialog = false
+                            viewModel.exportCsv()
+                        },
+                    )
+                    DataIoDialogItem(
+                dividerAbove = true,
+                        title = stringResource(R.string.koil_set_import_records),
+                        subtitle = stringResource(R.string.koil_set_import_records_sub),
+                        onClick = {
+                            showDataIoDialog = false
+                            importLauncher.launch(arrayOf("text/csv", "*/*"))
+                        },
+                    )
+                    DataIoDialogItem(
+                dividerAbove = true,
+                        title = stringResource(R.string.koil_set_export_price_history),
+                        subtitle = stringResource(R.string.koil_set_export_price_history_sub),
+                        onClick = {
+                            showDataIoDialog = false
+                            viewModel.exportOilPriceHistory()
+                        },
+                    )
+
+                    // —— JSON 段：整包、只有本 App 能恢复 ——
+                    DataIoDialogItem(
+                dividerAbove = true,
+                        title = stringResource(R.string.koil_set_backup),
+                        subtitle = stringResource(R.string.koil_set_backup_sub),
+                        onClick = {
+                            showDataIoDialog = false
+                            viewModel.exportBackup()
+                        },
+                    )
+                    DataIoDialogItem(
+                dividerAbove = true,
+                        title = stringResource(R.string.koil_set_restore),
+                        subtitle = stringResource(R.string.koil_set_restore_sub),
+                        onClick = {
+                            showDataIoDialog = false
+                            backupLauncher.launch(arrayOf("application/json", "*/*"))
+                        },
+                    )
+                }
+            }
         }
 
         if (showCrashDialog) {
@@ -1815,14 +1850,55 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
  * 卡内小节标题（v1.6.3）：同一条目族内的分组，比 SectionTitle 弱一档——
  * 只在「数据与备份」这种一卡多组里用，避免和分组标题抢层级。
  */
+/**
+ * 弹窗动作行（v1.6.3）：标题 + 说明小字，整行可点。「导出与备份」弹窗用。
+ */
 @Composable
-private fun SettingSubLabel(text: String) {
-    Text(
-        text = text,
-        fontSize = 11.sp,
-        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
-        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 3.dp),
-    )
+private fun DataIoDialogItem(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    dividerAbove: Boolean = false,
+) {
+    if (dividerAbove) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(0.5.dp)
+                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+        )
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(18.dp),
+        )
+    }
 }
 
 @Composable
@@ -1868,6 +1944,8 @@ private fun SettingRow(
                     text = subtitle,
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -2135,6 +2213,8 @@ private fun SettingSwitchRow(
                 text = subtitle,
                 fontSize = 14.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         Switch(

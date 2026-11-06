@@ -193,9 +193,9 @@
     <string name="koil_pdb_pending_title">待确认更新</string>
     <string name="koil_pdb_update_now">立即更新</string>
     <string name="koil_pdb_auto_sub">每 8 小时检测一次调价，发布后生效</string>
+    <string name="koil_set_data_io_title">导出与备份</string>
+    <string name="koil_set_data_io_sub">加油记录、油价历史与完整备份</string>
     <string name="koil_set_section_data">数据与备份</string>
-    <string name="koil_set_group_io">导入与导出</string>
-    <string name="koil_set_group_backup_restore">备份与恢复</string>
     <string name="koil_set_location">定位</string>
     <string name="koil_set_location_sub">自动识别省份</string>
     <string name="koil_set_price_db_auto">油价库自动更新</string>
