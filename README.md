@@ -38,6 +38,18 @@ export JAVA_HOME=/path/to/jdk21
 
 签名材料（`keystore/koil-release.keystore`、`keystore.properties`）**不入库**，需自行放置于仓库根目录；缺失时自动回落 debug 签名。
 
+### 本地出包时的 versionCode
+
+不带环境变量时 `versionCode` 会回落到 `app/build.gradle.kts` 里的固定基准值（252），**比线上版本低，系统会拒绝安装**。本地出测试包务必显式指定：
+
+```bash
+KOIL_CI_VERSION_CODE=<当前 CI 最大 run_number + 251> ./gradlew :app:assembleRelease
+```
+
+- 取「已产出的最大 CI 值」而不是「下一个值」：对已装版本是严格升级，对下次 CI 构建也是严格升级，两头都不依赖「同 versionCode 覆盖安装」这个边缘行为
+- 同一轮迭代里本地反复出包可以一直用同一个号（同签名、同 versionCode 允许覆盖安装）
+- **`versionName` 保持不动**：应用内检查更新只比 `versionName`，本地包先改成未发布的号会导致正式版发布后仍显示「已是最新版」
+
 ## 发版流程
 
 1. **改版本号**：`app/build.gradle.kts` 的 `versionName` 手动递增（如 `1.6.4`），`versionCode` **不要手改**
