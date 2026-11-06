@@ -150,7 +150,14 @@ class SettingsViewModel(
         val adjustWindowPrice: String? = null,      // 最近窗口有调价时的价格文本（元/升）
         val strandedKeptDate: String? = null,       // 搁浅时维持的上一条调价生效日（如 09-25）
         val strandedKeptPrice: String? = null,      // 搁浅时维持的价格（元/升）
+        // v1.6.4：本次窗口相对上一期调价记录的涨跌额（元/升，正=涨）。
+        // 与 adjustWindowPrice 同口径（默认省 + 92 号）；搁浅或无上期记录时为 null，UI 不显示。
+        val adjustWindowDelta: Double? = null,
         val incompleteProvinceCount: Int = 0,       // 窗口日覆盖不足的省份数（完整性提示）
+        // v1.6.4：补灌可观测状态——区分"正在补灌 N/31"与"已放弃，需手动重试"
+        val seedState: OilPriceDbSyncer.SeedState = OilPriceDbSyncer.SeedState.IDLE,
+        val seedDone: Int = 0,
+        val seedTotal: Int = 0,
         val versionLabel: String = "V——",           // 版本号（V+最新调价窗口日，不受搁浅影响）
         // v1.5.27：多源一致性（最近一次同步来源快照，如 "锚点:xxapi · 今日价:abapi"）
         val lastSyncSources: String = "",
@@ -239,14 +246,19 @@ class SettingsViewModel(
                     priceDao.getByDate(LocalDate.parse(w).plusDays(1).toString()) != null
                 }.getOrDefault(false)
             }
-            val incompleteProvinceCount = if (adjustedWindowCount > 0) {
-                val threshold = adjustedWindowCount - 2
-                OilPriceDbSyncer.PROVINCES.count { province ->
-                    runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0) < threshold
-                }
-            } else {
-                0
+            // v1.6.4：日历未就绪时原逻辑恒返回 0 —— 而"首装/弱网卡在取日历"恰恰是最需要提示的场景，
+            // 结果设置页一片正常，用户只能干等或杀进程。此时退化为「一条记录都没有的省份」：
+            // 不依赖窗口日历也能看出全国没铺开（只灌了本省 → 30 省为 0）。
+            suspend fun coverageOf(province: String): Int =
+                runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
+            // 日历就绪 → 阈值 = 已调价窗口数 − 2（容忍数据源偶发缺窗口）；
+            // 日历未就绪 → 阈值 1，即"零记录才算缺口"
+            val threshold = if (adjustedWindowCount > 0) adjustedWindowCount - 2 else 1
+            var gapCount = 0
+            for (province in OilPriceDbSyncer.PROVINCES) {
+                if (coverageOf(province) < threshold) gapCount++
             }
+            val incompleteProvinceCount = gapCount
 
             val lastCheckTs = settings.priceDbLastCheckAt.first()
             val lastUpdatedAt = settings.priceDbLastUpdateDate.first()
@@ -296,6 +308,7 @@ class SettingsViewModel(
             }
             var windowStranded = false
             var adjustWindowPrice: String? = null
+            var adjustWindowDelta: Double? = null
             var strandedKeptDate: String? = null
             var strandedKeptPrice: String? = null
             if (adjustWindowDate != null) {
@@ -308,6 +321,14 @@ class SettingsViewModel(
                 if (w1Row != null && !w1Row.isStranded) {
                     windowStranded = false
                     adjustWindowPrice = NumberFormat.measure(w1Row.price)
+                    // 涨跌额：同省同油号「本期生效日之前」最近一条非搁浅记录，相减即得
+                    val prev = runCatching {
+                        priceDao.getLatestNonStranded(
+                            home, "92号汽油",
+                            LocalDate.parse(w1Eff).minusDays(1).toString(),
+                        )
+                    }.getOrNull()
+                    if (prev != null) adjustWindowDelta = w1Row.price - prev.price
                 } else {
                     // 搁浅：维持「默认省 92# 上一条调价记录」的价格（如 10-15 窗口维持 09-25 的 ¥8.63），
                     // 而非生效日 10-16——上一版本误显示生效日导致歧义。
@@ -345,9 +366,13 @@ class SettingsViewModel(
                 nextAdjustWindowDate = nextAdjustWindowDate,
                 windowStranded = windowStranded,
                 adjustWindowPrice = adjustWindowPrice,
+                adjustWindowDelta = adjustWindowDelta,
                 strandedKeptDate = strandedKeptDate,
                 strandedKeptPrice = strandedKeptPrice,
                 incompleteProvinceCount = incompleteProvinceCount,
+                seedState = syncer.seedState,
+                seedDone = syncer.seedDone,
+                seedTotal = syncer.seedTotal,
                 versionLabel = versionLabel,
                 lastSyncSources = settings.priceDbLastSources.first(),
             )

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +33,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -41,6 +46,7 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import top.yukonga.miuix.kmp.basic.IconButton
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
@@ -56,6 +62,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -83,6 +90,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
@@ -456,43 +464,129 @@ fun SettingsScreen(
             val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
             val pendingItems by viewModel.pendingItems.collectAsStateWithLifecycle()
             val priceDbUpdating by viewModel.priceDbUpdating.collectAsStateWithLifecycle()
-            val latestShort = (priceDbStatus.lastPriceChangeDate ?: priceDbStatus.latestDate).takeLast(5)
-            val versionShort = (priceDbStatus.versionDate ?: priceDbStatus.latestDate).takeLast(5)
-            // 最近检查时间格式化（MM/dd HH:mm），未检查过显示 "--"
-            // v1.6.2：语言用可观察的 Configuration locale（原 Locale.getDefault() 在组合内不可观察，
-            // 切换语言后时间格式不会跟着变）
+            // v1.6.4：补灌进行中每秒刷一次进度。ViewModel 只在库行数变化时重算，
+            // 而"已覆盖直接跳过"的省份不写库 → 进度会停在某个数字不动，看起来像卡死。
+            LaunchedEffect(priceDbStatus.seedState) {
+                if (priceDbStatus.seedState == OilPriceDbSyncer.SeedState.RUNNING) {
+                    while (true) {
+                        delay(1000)
+                        viewModel.loadPriceDbStatus()
+                    }
+                }
+            }
+            // 上次检查时间：今天只给时刻、昨天加前缀、更早带日期
+            // （原实现恒为 MM-dd HH:mm，"今天刚查过"和"三天前查的"看起来一样）
             val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
-            val lastCheckedText = if (priceDbStatus.lastCheckedAt > 0) {
-                java.text.SimpleDateFormat("MM-dd HH:mm", uiLocale)
-                    .format(java.util.Date(priceDbStatus.lastCheckedAt))
-            } else "--"
+            val lastCheckedText: String? = if (priceDbStatus.lastCheckedAt > 0) {
+                val nowCal = java.util.Calendar.getInstance()
+                val atCal = java.util.Calendar.getInstance().apply { timeInMillis = priceDbStatus.lastCheckedAt }
+                val sameYear = nowCal.get(java.util.Calendar.YEAR) == atCal.get(java.util.Calendar.YEAR)
+                val dayDiff = nowCal.get(java.util.Calendar.DAY_OF_YEAR) - atCal.get(java.util.Calendar.DAY_OF_YEAR)
+                val hm = java.text.SimpleDateFormat("HH:mm", uiLocale).format(java.util.Date(priceDbStatus.lastCheckedAt))
+                when {
+                    sameYear && dayDiff == 0 -> hm
+                    sameYear && dayDiff == 1 -> stringResource(R.string.koil_pdb_yesterday, hm)
+                    else -> java.text.SimpleDateFormat("MM-dd HH:mm", uiLocale)
+                        .format(java.util.Date(priceDbStatus.lastCheckedAt))
+                }
+            } else null
+
+            // 距下次窗口：窗口日 24:00 生效 → 目标时刻取「窗口日次日 00:00」
+            val todayLocal = java.time.LocalDate.now()
+            val countdownText: String? = run {
+                val d = priceDbStatus.nextAdjustWindowDate ?: return@run null
+                val target = runCatching { java.time.LocalDate.parse(d) }.getOrNull() ?: return@run null
+                if (target == todayLocal) {
+                    stringResource(R.string.koil_pdb_countdown_today)
+                } else {
+                    val totalMin = java.time.Duration
+                        .between(java.time.LocalDateTime.now(), target.plusDays(1).atStartOfDay())
+                        .toMinutes().coerceAtLeast(0)
+                    val days = totalMin / (24 * 60)
+                    val hours = (totalMin % (24 * 60)) / 60
+                    val mins = totalMin % 60
+                    when {
+                        days > 0 -> stringResource(R.string.koil_pdb_dur_dh, days.toInt(), hours.toInt())
+                        hours > 0 -> stringResource(R.string.koil_pdb_dur_hm, hours.toInt(), mins.toInt())
+                        else -> stringResource(R.string.koil_pdb_dur_m, mins.toInt())
+                    }
+                }
+            }
+
+            // 行 1 = 结论（最近一次窗口发生了什么）；涨跌额紧随价格，涨红跌绿
+            val w1Short = priceDbStatus.adjustWindowDate?.takeLast(5)
+            val strandedKeptDate = priceDbStatus.strandedKeptDate
+            val strandedKeptPrice = priceDbStatus.strandedKeptPrice
+            val delta = priceDbStatus.adjustWindowDelta?.takeIf { kotlin.math.abs(it) >= 0.005 }
+            val line1Base = when {
+                w1Short != null && priceDbStatus.windowStranded && strandedKeptDate != null && strandedKeptPrice != null ->
+                    stringResource(R.string.koil_pdb_line_stranded, w1Short, strandedKeptDate, strandedKeptPrice)
+                w1Short != null && priceDbStatus.windowStranded ->
+                    stringResource(R.string.koil_pdb_line_stranded_short, w1Short)
+                w1Short != null && priceDbStatus.adjustWindowPrice != null ->
+                    stringResource(R.string.koil_pdb_line_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!)
+                w1Short != null -> stringResource(R.string.koil_pdb_line_stranded_short, w1Short)
+                else -> stringResource(R.string.koil_pdb_not_checked)
+            }
+            val line1 = buildAnnotatedString {
+                append(line1Base)
+                if (delta != null) {
+                    append("  ")
+                    withStyle(
+                        SpanStyle(
+                            color = if (delta > 0) PriceUpColor else PriceDownColor,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    ) {
+                        append(
+                            String.format(
+                                java.util.Locale.US,
+                                if (delta > 0) "↑%.2f" else "↓%.2f",
+                                kotlin.math.abs(delta),
+                            )
+                        )
+                    }
+                }
+            }
 
             Column(modifier = Modifier.padding(16.dp)) {
-                // —— 标题（油价数据库 + 版本号，有版本号时并入；v1.5.0：字号对齐下方开关行）——
+                // —— 标题行：数据库 + 版本徽章 + 明细入口 ——
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = if (priceDbStatus.versionLabel != "V——") {
-                            stringResource(R.string.koil_pdb_db_title, priceDbStatus.versionLabel)
-                        } else {
-                            stringResource(R.string.koil_pdb_db_title_plain)
-                        },
+                        text = stringResource(R.string.koil_pdb_db_title_short),
                         fontSize = 17.sp,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
+                    if (priceDbStatus.versionLabel != "V——") {
+                        Spacer(Modifier.width(8.dp))
+                        // 与云同步「已连接」徽章同款：主色字 + 12% 主色底（版本正常时恒为蓝）
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                        ) {
+                            Text(
+                                text = priceDbStatus.versionLabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = KOiLColors.Primary,
+                            )
+                        }
+                    }
                     Spacer(Modifier.weight(1f))
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .clickable { onOpenPriceDetail() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = stringResource(R.string.koil_pdb_view_detail),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            // v1.5.1：颜色与设置页右侧文案（匯出/匯入/備份等 SettingRow value）完全一致
                             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
                         )
                         Spacer(Modifier.width(2.dp))
@@ -504,7 +598,6 @@ fun SettingsScreen(
                         )
                     }
                 }
-                // v1.5.0：版本号标题行与下方数据隔断（同款 0.5dp 分割线）
                 Spacer(Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
@@ -513,45 +606,64 @@ fun SettingsScreen(
                         .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
                 )
                 // —— 完整性缺口提示（补灌未覆盖完的省，红色警示）——
-                if (priceDbStatus.incompleteProvinceCount > 0) {
+                // v1.6.4：需要 total > 0 —— 库完全为空时四宫格已是 0、"数据库(待检测)"，
+                // 再叠一句"31 省未拉取完整"会在首装头几秒闪屏，且此时信息量重复。
+                if (priceDbStatus.incompleteProvinceCount > 0 && priceDbStatus.total > 0) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = pluralStringResource(R.plurals.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount, priceDbStatus.incompleteProvinceCount),
                         fontSize = 12.sp,
                         color = Color(0xFFE53935),
                     )
-                    // v1.5.24：缺口存在即提示后台补灌中（补完缺口归零、文案自动消失）
+                    // v1.6.4：按真实补灌状态分文案——原实现恒定一句"后台补灌中，完成后自动刷新"，
+                    // 而重试预算用尽后其实没任何东西在跑，等于让用户对着假进度干等。
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = stringResource(R.string.koil_pdb_seeding),
+                        text = when (priceDbStatus.seedState) {
+                            OilPriceDbSyncer.SeedState.RUNNING -> stringResource(
+                                R.string.koil_pdb_seeding_progress,
+                                priceDbStatus.seedDone,
+                                priceDbStatus.seedTotal,
+                            )
+                            OilPriceDbSyncer.SeedState.WAITING -> stringResource(R.string.koil_pdb_seeding_waiting)
+                            else -> stringResource(R.string.koil_pdb_seeding)
+                        },
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                     )
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— 统计四宫格（蓝色图标 + 数值 + 标签，对齐截图样式）——
-                Row(modifier = Modifier.fillMaxWidth()) {
+                // —— 统计四宫格：每格独立灰底圆角块，格间 8dp ——
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    val statBox = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.05f))
+                        .padding(vertical = 12.dp)
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.Place,
                         value = priceDbStatus.provinceCount.toString(),
                         label = stringResource(R.string.koil_pdb_provinces),
                     )
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.LocalGasStation,
                         value = priceDbStatus.gradeCount.toString(),
                         label = stringResource(R.string.koil_pdb_grades),
                     )
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.CalendarMonth,
                         value = priceDbStatus.adjustmentCount.toString(),
                         label = stringResource(R.string.koil_pdb_adjustments),
                     )
                     StatQuadItem(
-                        modifier = Modifier.weight(1f),
+                        modifier = statBox,
                         icon = Icons.Filled.Storage,
                         value = priceDbStatus.total.toString(),
                         label = stringResource(R.string.koil_pdb_records),
@@ -559,103 +671,137 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— 分割线（四宫格与下方内容分隔）——
+                // —— 分割线（四宫格与摘要之间）——
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(0.5.dp)
                         .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
 
-                // —— 窗口链条 + 更新于（左两行） + 立即更新（右，垂直居中）——
+                // —— 行 1：结论（最近一次窗口调价 / 搁浅 / 尚未检测）——
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        val w1Short = priceDbStatus.adjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
-                        val w2Short = priceDbStatus.nextAdjustWindowDate?.let { if (it.length >= 5) it.substring(5) else it }
-                        // 行1：調整日（单独一行，含搁浅/调价状态；搁浅显示维持的上一条调价日+价格）
-                        val strandedKeptDate = priceDbStatus.strandedKeptDate
-                        val strandedKeptPrice = priceDbStatus.strandedKeptPrice
-                        Text(
-                            text = when {
-                                w1Short != null && priceDbStatus.windowStranded && strandedKeptDate != null && strandedKeptPrice != null ->
-                                    stringResource(R.string.koil_pdb_adjust_stranded, w1Short, strandedKeptDate, strandedKeptPrice)
-                                w1Short != null && priceDbStatus.windowStranded ->
-                                    stringResource(R.string.koil_pdb_adjust_stranded_short, w1Short)
-                                w1Short != null && priceDbStatus.adjustWindowPrice != null ->
-                                    stringResource(R.string.koil_pdb_adjust_adjusted, w1Short, priceDbStatus.adjustWindowPrice!!)
-                                w1Short != null ->
-                                    stringResource(R.string.koil_pdb_adjust_stranded_short, w1Short)
-                                else ->
-                                    stringResource(R.string.koil_pdb_not_checked)
-                            },
-                            fontSize = 12.sp,
-                            lineHeight = 15.sp,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    if (priceDbStatus.windowStranded && w1Short != null) {
+                        Box(
+                            Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(PriceUpColor)
                         )
-                        Spacer(Modifier.height(4.dp))
-                        // 行2：下個窗口 ｜ 最近更新。v1.6.8 改 FlowRow：原先裸 Row 在空间不足时
-                        // 会把 "Last update: 11-06 01:58" 从中间折断，"01:58" 孤零零挂到下一行
-                        //（真机截图反馈）；FlowRow 放不下时整段换行，文案永远完整。
-                        @OptIn(ExperimentalLayoutApi::class)
-                        FlowRow(
-                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            if (w2Short != null) {
-                                Text(
-                                    text = stringResource(R.string.koil_pdb_next_window, w2Short),
-                                    fontSize = 12.sp,
-                                    lineHeight = 15.sp,
-                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                )
-                                Box(
-                                    Modifier
-                                        .width(1.dp)
-                                        .height(12.dp)
-                                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f))
-                                )
-                            }
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        text = line1,
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
+                // —— 行 2：接下来（倒计时） + 数据新鲜度（上次检查）——
+                if (countdownText != null || lastCheckedText != null) {
+                    Spacer(Modifier.height(4.dp))
+                    // FlowRow：空间不足时整段换行，文案不会被从中间折断
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (countdownText != null) {
                             Text(
-                                text = stringResource(R.string.koil_pdb_last_update, lastCheckedText),
+                                text = stringResource(R.string.koil_pdb_countdown, countdownText),
                                 fontSize = 12.sp,
                                 lineHeight = 15.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
+                            )
+                        }
+                        if (countdownText != null && lastCheckedText != null) {
+                            Text(
+                                text = "·",
+                                fontSize = 12.sp,
+                                lineHeight = 15.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
+                            )
+                        }
+                        if (lastCheckedText != null) {
+                            Text(
+                                text = stringResource(R.string.koil_pdb_checked, lastCheckedText),
+                                fontSize = 12.sp,
+                                lineHeight = 15.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
                             )
                         }
                     }
-                    Spacer(Modifier.width(8.dp))
-                    Box(
+                }
+                Spacer(Modifier.height(14.dp))
+
+                // —— 底部双按钮：左「自动更新」（状态色，非实心）/ 右「立即更新」（卡内唯一实心主色）——
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    val autoOn = uiState.priceDbAutoUpdate
+                    Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(18.dp))
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (autoOn) KOiLColors.Primary.copy(alpha = 0.14f)
+                                else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
+                            )
+                            .clickable(enabled = uiState.loaded) {
+                                viewModel.setPriceDbAutoUpdate(!autoOn)
+                            }
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_pdb_auto_short),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (autoOn) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MiniSwitch(
+                            checked = autoOn,
+                            trackOn = KOiLColors.Primary,
+                            trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(KOiLColors.Primary)
                             .clickable(enabled = !priceDbUpdating) { viewModel.checkPriceDbNow() }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center,
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (priceDbUpdating) {
-                                androidx.compose.material3.CircularProgressIndicator(
-                                    modifier = Modifier.size(14.dp),
-                                    strokeWidth = 2.dp,
-                                    color = Color.White,
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Filled.Refresh,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                            }
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = stringResource(if (priceDbUpdating) R.string.koil_pdb_updating else R.string.koil_pdb_update_now),
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Medium,
+                        if (priceDbUpdating) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
                                 color = Color.White,
                             )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Refresh,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp),
+                            )
                         }
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = stringResource(if (priceDbUpdating) R.string.koil_pdb_updating else R.string.koil_pdb_update_now),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White,
+                            maxLines = 1,
+                        )
                     }
                 }
                 // —— 待确认更新（有数据需核实时才展开；间隔与横线一起隐藏）——
@@ -739,35 +885,6 @@ fun SettingsScreen(
         SettingsCard {
             val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
 
-            // —— 自动更新开关 ——
-            if (uiState.loaded) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.koil_set_price_db_auto),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackground,
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(R.string.koil_pdb_auto_sub),
-                            fontSize = 14.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Switch(
-                        checked = uiState.priceDbAutoUpdate,
-                        onCheckedChange = viewModel::setPriceDbAutoUpdate,
-                    )
-                }
-            }
-
             // —— EIA API Key（原油估算数据源；开关开=用 EIA 隐藏输入框，
             //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
             val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
@@ -775,29 +892,36 @@ fun SettingsScreen(
             val eiaLoaded by viewModel.eiaLoaded.collectAsStateWithLifecycle()
             // EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
             if (eiaLoaded) {
-                SettingDivider()
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_set_eia_key_title),
-                            modifier = Modifier.weight(1f),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackground,
-                        )
+                // 与 SettingSwitchRow 同构：开关对「标题 + 副标题」整块垂直居中，而不是只对标题行居中
+                // （原先开关被放在标题 Row 里，比其他开关高约 12dp）；输入框放在行下方，不参与居中计算
+                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 13.dp, bottom = if (eiaEnabled) 13.dp else 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.koil_set_eia_key_title),
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MiuixTheme.colorScheme.onBackground,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.koil_set_eia_key_sub),
+                                fontSize = 14.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                         Switch(
                             checked = eiaEnabled,
                             onCheckedChange = viewModel::setEiaEnabled,
                         )
                     }
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.koil_set_eia_key_sub),
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
                     if (!eiaEnabled) {
                         Spacer(Modifier.height(8.dp))
                         var showEiaKey by remember { mutableStateOf(false) }
@@ -832,11 +956,14 @@ fun SettingsScreen(
                                 }
                             },
                         )
+                        // 行底部内距在展开态只给了 8dp（副标题与输入框之间），这里补足卡片行底距
+                        Spacer(Modifier.height(13.dp))
                     }
                 }
             }
 
-            SettingDivider()
+            // EIA 未加载时不渲染该行，此时它才是卡片首行——不能留一条孤零零的顶部分割线
+            if (eiaLoaded) SettingDivider()
 
             // —— 调价窗口提醒 / 推送通知 ——
             SettingSwitchRow(
@@ -994,17 +1121,38 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
-                                else stringResource(R.string.koil_sync_manage),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            // v1.6.4：「管理 ⌄」与油价卡「详细 ›」同族——同字号 14sp、同图标 18dp、
+                            // 同一右侧内距 10dp（两处箭头在设置页里纵向对齐）。
+                            // 命中区只包住「文字 + 箭头」：整行可点会让点状态文字也展开，不自然。
+                            Row(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(RoundedCornerShape(12.dp))
                                     .clickable { formExpanded = !formExpanded }
-                                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                            )
+                                    .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
+                                    else stringResource(R.string.koil_sync_manage),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    maxLines = 1,
+                                )
+                                Spacer(Modifier.width(2.dp))
+                                val arrowRotation by animateFloatAsState(
+                                    targetValue = if (formExpanded) 180f else 0f,
+                                    label = "syncManageArrow",
+                                )
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .rotate(arrowRotation),
+                                )
+                            }
                         }
 
                         // —— 两个常用动作：常态可见 ——
@@ -1968,6 +2116,40 @@ private fun SettingRow(
 }
 
 /** 四宫格统计项（蓝色图标 + 数值 + 标签，对齐截图样式） */
+/** 油价涨跌色（与明细页口径一致：涨红 / 跌绿） */
+private val PriceUpColor = Color(0xFFE53935)
+private val PriceDownColor = Color(0xFF43A047)
+
+/**
+ * 迷你开关（34×20dp）：用于「自动更新」按钮内部。
+ * 不用 Material Switch 是因为它自带 52×32dp 尺寸与最小触摸区，塞进按钮要么撑高行高、
+ * 要么得靠 scale 缩放（缩放后点击区仍是原尺寸，位置会偏）。
+ */
+@Composable
+private fun MiniSwitch(
+    checked: Boolean,
+    trackOn: Color,
+    trackOff: Color,
+) {
+    val knobOffset by animateDpAsState(if (checked) 15.dp else 0.dp, label = "miniSwitchKnob")
+    Box(
+        modifier = Modifier
+            .size(width = 34.dp, height = 20.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (checked) trackOn else trackOff),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(start = 2.dp)
+                .offset(x = knobOffset)
+                .size(16.dp)
+                .clip(CircleShape)
+                .background(Color.White),
+        )
+    }
+}
+
 @Composable
 private fun StatQuadItem(
     modifier: Modifier = Modifier,

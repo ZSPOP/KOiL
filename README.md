@@ -38,6 +38,35 @@ export JAVA_HOME=/path/to/jdk21
 
 签名材料（`keystore/koil-release.keystore`、`keystore.properties`）**不入库**，需自行放置于仓库根目录；缺失时自动回落 debug 签名。
 
+### 本地出包时的 versionCode
+
+不带环境变量时 `versionCode` 会回落到 `app/build.gradle.kts` 里的固定基准值（252），**比线上版本低，系统会拒绝安装**。本地出测试包务必显式指定：
+
+```bash
+KOIL_CI_VERSION_CODE=<当前 CI 最大 run_number + 251> ./gradlew :app:assembleRelease
+```
+
+- 取「已产出的最大 CI 值」而不是「下一个值」：对已装版本是严格升级，对下次 CI 构建也是严格升级，两头都不依赖「同 versionCode 覆盖安装」这个边缘行为
+- 同一轮迭代里本地反复出包可以一直用同一个号（同签名、同 versionCode 允许覆盖安装），出多少个包都不用改号
+- **`versionName` 保持不动**：应用内检查更新只比 `versionName`，本地包先改成未发布的号会导致正式版发布后仍显示「已是最新版」
+
+#### 为什么本地包不会挡住正式版
+
+一次发版会消耗**两次** CI 运行（推 `main` 一次、打 tag 一次），所以正式版的 `versionCode` 永远比本地包高 2。以 V1.6.3 发布后的状态为例：
+
+| 环节 | versionCode |
+|---|---|
+| 已完成的最大 CI 运行（run 22） | 273 |
+| 本地出测试包（可反复出任意多个） | 273 |
+| 发版第 1 步：合 `main` → CI run 23 | 274（仅 artifact，不发布） |
+| 发版第 2 步：打 `V1.6.4` → CI run 24 | **275（Release）** |
+
+手机上装 273 → 收到 1.6.4 提示（比 `versionName`）→ 下载 275 安装（275 > 273，覆盖成功）。
+
+**发过一版之后要重算**：手机上换成正式版（275）后，本地包就不能再用旧的 273 了（低于已装版本会被拒装）。此时先看一眼 Actions 最新 run 号（run 24），本地取 275（与已装同号，可覆盖）或 276。
+
+唯一会踩的坑是**本地跳号**——手工填一个 CI 短期内到不了的数（如 280），此后所有正式版都会被它挡住。
+
 ## 发版流程
 
 1. **改版本号**：`app/build.gradle.kts` 的 `versionName` 手动递增（如 `1.6.4`），`versionCode` **不要手改**

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -1088,6 +1089,11 @@ private fun AdjustTimelineItem(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = "¥${NumberFormat.measure(item.price)}",
+                    // 价格列定宽：涨跌额从固定 x 起排，纵向成一条列线。
+                    // v1.6.4 真机反馈「价格与涨跌额间距太开」：64dp→56dp（仍覆盖 17sp 粗体 ¥10.15 ≈54dp），
+                    // 列后间距 6→4dp，普通行（15sp ¥7.89 ≈40dp）的空档从约 24dp 收到约 15dp，列线保持。
+                    // 用 widthIn 而非 width：真出现三位数价格时让它自然撑开，不裁切。
+                    modifier = Modifier.widthIn(min = 56.dp),
                     fontSize = if (isLatest) 17.sp else 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (stranded) {
@@ -1096,7 +1102,7 @@ private fun AdjustTimelineItem(
                         MiuixTheme.colorScheme.onBackground
                     },
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(4.dp))
                 // 右端：涨跌额 / 搁浅 / 基准价 / 持平
                 when {
                     stranded -> Text(

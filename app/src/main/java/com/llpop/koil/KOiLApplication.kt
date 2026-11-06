@@ -1,6 +1,8 @@
 package com.llpop.koil
 
+import android.app.Activity
 import android.app.Application
+import android.os.Bundle
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -110,19 +112,43 @@ class KOiLApplication : Application() {
         }
         appScope.launch {
             try {
-                // v1.5.26：全国补灌重试循环——窗口日历未就绪（锚点链启动瞬间失败、重装后缓存为空）时
-                // 30 秒轮询重试，最多 6 次（约 3 分钟内自愈）；就绪即灌全国，无需手动点「立即更新」
+                // 全国补灌重试（v1.6.4 重构）：
+                // 原实现固定 30s×6（约 3 分钟）且任一轮异常即终止后续全部重试——弱网首装常在拿到
+                // 窗口日历前就耗尽预算，之后没有任何触发点，表现为"杀进程冷启动才继续灌"。
+                // 改为退避递增（3s→10s→30s→60s→120s→180s）＋每轮独立容错，预算用尽转 GAVE_UP，
+                // 由设置页如实提示「点立即更新重试」，并由下方的回前台兜底接手。
                 val syncer = GlobalContext.get().get<OilPriceDbSyncer>()
-                // v1.6.2 修复：原 return@repeat 只跳过本轮、不终止循环，成功后仍会再等 30s 重跑，
-                // 冷启动最多白跑 6 轮（每轮 31 省多轮 DB 查询 + 缺省网络灌库，最长拖 3 分钟）。改用 break 真正退出。
-                for (attempt in 0 until 6) {
-                    kotlinx.coroutines.delay(if (attempt == 0) 3000 else 30_000) // 首轮等当前省先就绪
-                    if (syncer.fillRemainingProvincesIfCalendarReady()) break
-                }
+                syncer.runSeedRetryLoop()
             } catch (t: Throwable) {
                 Log.e("KOiL", "PriceDb fill remaining failed", t)
             }
         }
+
+        // v1.6.4：回前台兜底——补灌放弃后（GAVE_UP）或仍在等日历（WAITING）时，
+        // 用户切回 App 再试一轮，不再依赖"杀进程冷启动"才能恢复。
+        registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            private var startedActivities = 0
+
+            override fun onActivityStarted(activity: Activity) {
+                // 0→1 视为真正的前台切换（Activity 间跳转不会触发）
+                if (startedActivities++ != 0) return
+                appScope.launch {
+                    runCatching {
+                        GlobalContext.get().get<OilPriceDbSyncer>().resumeSeedingIfNeeded()
+                    }.onFailure { Log.w("KOiL", "Foreground seeding retry failed: ${it.message}") }
+                }
+            }
+
+            override fun onActivityStopped(activity: Activity) {
+                startedActivities = (startedActivities - 1).coerceAtLeast(0)
+            }
+
+            override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+            override fun onActivityResumed(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
 
         // 云同步（坚果云 WebDAV，docs/KOiL云同步设计.md）：启动接入——
         // 空库自动恢复 / 上次失败补推 / 记录与设置变更订阅推送（内部幂等，不影响主流程）

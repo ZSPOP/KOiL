@@ -263,6 +263,18 @@
     <!-- v1.5.27：多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">Sync sources: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>
+    <string name="koil_pdb_db_title_short">Database</string>
+    <string name="koil_pdb_line_adjusted">%1$s adjusted · 92# ¥%2$s</string>
+    <string name="koil_pdb_line_stranded">%1$s unchanged · ¥%3$s since %2$s</string>
+    <string name="koil_pdb_line_stranded_short">%1$s unchanged</string>
+    <string name="koil_pdb_countdown">Next price change in %1$s</string>
+    <string name="koil_pdb_countdown_today">Price change tonight at 24:00</string>
+    <string name="koil_pdb_dur_dh">%1$d d %2$d h</string>
+    <string name="koil_pdb_dur_hm">%1$d h %2$d m</string>
+    <string name="koil_pdb_dur_m">%1$d min</string>
+    <string name="koil_pdb_checked">last checked %1$s</string>
+    <string name="koil_pdb_yesterday">Yesterday %1$s</string>
+    <string name="koil_pdb_auto_short">Auto</string>
     <string name="koil_pdb_detail_title">Price Adjustments</string>
     <string name="koil_pdb_detail_empty">No adjustment records yet</string>
     <string name="koil_pdb_latest_price">Latest price</string>
@@ -280,12 +292,14 @@
     <string name="koil_pdb_down">Down ¥%1$.2f</string>
     <string name="koil_pdb_flat">Unchanged</string>
     <string name="koil_pdb_first_base">Baseline</string>
-    <string name="koil_pdb_view_detail">View</string>
+    <string name="koil_pdb_view_detail">Details</string>
     <plurals name="koil_pdb_incomplete">
     <item quantity="one">%1$d province incomplete</item>
     <item quantity="other">%1$d provinces incomplete</item>
     </plurals>
-    <string name="koil_pdb_seeding">Seeding in background, will refresh automatically</string>
+    <string name="koil_pdb_seeding">Incomplete · tap Update now to retry</string>
+    <string name="koil_pdb_seeding_progress">Seeding provinces %1$d/%2$d…</string>
+    <string name="koil_pdb_seeding_waiting">Waiting for the price calendar, retrying automatically</string>
     <string name="koil_set_price_push">Price change notifications</string>
     <string name="koil_set_price_push_sub">System notification on adjustment &amp; day before window</string>
     <!-- v1.5.28：权限联动提示 -->

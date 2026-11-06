@@ -1,6 +1,7 @@
 package com.llpop.koil.data.oil
 
 import android.content.Context
+import android.util.Log
 import androidx.room.withTransaction
 import com.llpop.koil.R
 import com.llpop.koil.data.local.AppDatabase
@@ -12,12 +13,14 @@ import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * 油价库同步服务（对齐 Web 端 oil-price-db.service.ts）：
@@ -56,10 +59,49 @@ class OilPriceDbSyncer(
         const val STRANDED_EPSILON = 0.005
         private val DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd")
         val PROVINCES = Provinces.ALL
+
+        /** 启动补灌重试退避（累计约 6.7 分钟）：原固定 30s×6≈3 分钟，弱网首装常在拿到日历前就耗尽预算 */
+        private val DEFAULT_SEED_RETRY_MS = listOf(3_000L, 10_000L, 30_000L, 60_000L, 120_000L, 180_000L)
+        /** 回前台兜底的短重试（切回 App 时用户在场，不必再等分钟级） */
+        private val FOREGROUND_SEED_RETRY_MS = listOf(5_000L, 20_000L, 60_000L)
     }
 
     private val checking = AtomicBoolean(false)
     private val seedLock = AtomicBoolean(false)
+    /** 重试循环互斥：启动兜底与回前台兜底可能同时触发，只允许一路在跑 */
+    private val seedLoopLock = AtomicBoolean(false)
+
+    /**
+     * 全国补灌状态（v1.6.4）。
+     * 设置页据此区分「真的在动」与「已经放弃」——原实现只有一句恒定的「后台补灌中，完成后自动刷新」，
+     * 而重试预算用尽后其实什么都没在跑，等于误导用户干等。
+     */
+    enum class SeedState {
+        /** 未在补灌：无缺口，或一次预算都没用完 */
+        IDLE,
+        /** 窗口日历未就绪，重试循环还在等（防假生效日，就绪前不能灌） */
+        WAITING,
+        /** 正在逐省补灌 */
+        RUNNING,
+        /** 重试预算用尽 / 手动触发失败，需「立即更新」或回前台兜底再试 */
+        GAVE_UP,
+    }
+
+    @Volatile
+    var seedState: SeedState = SeedState.IDLE
+        private set
+
+    /** 本轮已处理省份数（含"已覆盖直接跳过"的省），驱动设置页 N/31 进度 */
+    private val seedDoneCounter = AtomicInteger(0)
+    val seedDone: Int get() = seedDoneCounter.get()
+
+    @Volatile
+    var seedTotal: Int = 0
+        private set
+
+    /** 上次发起补灌的墙钟时间（回前台兜底用，防止频繁切前台反复打网络） */
+    @Volatile
+    private var lastSeedAttemptAt: Long = 0L
 
     /** 推算的当年权威窗口日缓存（锚点=次源 next_adjust_date + chinese-days 节假日推算；失败为空则降级） */
     @Volatile
@@ -390,7 +432,12 @@ class OilPriceDbSyncer(
         if (!seedLock.compareAndSet(false, true)) return
         try {
             val adjustDates = getAdjustDates()
-            if (adjustDates.isEmpty()) return
+            if (adjustDates.isEmpty()) {
+                // v1.6.4：日历未就绪不灌（防假生效日），但必须把状态说出来——
+                // 否则重试循环和用户都以为"补灌已完成"，而这正是首装/弱网最常见的卡点。
+                seedState = SeedState.WAITING
+                return
+            }
             // 期望覆盖已过窗口日数（含搁浅窗口，搁浅入库后各省应含维持记录）；
             // 每省独立拉取，失败不影响其他省
             // v1.5.21 B2：窗口日 24 点前不算已过 → 严格 < today（今天窗口日不计入期望覆盖）
@@ -400,23 +447,38 @@ class OilPriceDbSyncer(
             // 让「变化点覆盖搁浅」恢复调价记录；一次后恢复常规触发条件。
             val forceReseed = !settings.priceDbReseed189.first()
             if (forceReseed) settings.setPriceDbReseed189(true)
+            lastSeedAttemptAt = System.currentTimeMillis()
+            seedState = SeedState.RUNNING
+            seedTotal = PROVINCES.size
+            seedDoneCounter.set(0)
             // 并发补灌：4 路并行（避免 31 省串行等待；组间 200ms 缓解 abapi 限速）
             coroutineScope {
                 PROVINCES.chunked(4).forEach { chunk ->
                     chunk.map { province ->
                         async {
-                            val covered = runCatching { priceDao.countDatesForProvince(province) }.getOrDefault(0)
-                            // covered < threshold（窗口数不够）或存在搁浅缺口（窗口日+1 无记录/同价假记录占位）
-                            // 都触发补灌——防止 verifyProvince 抢插的同价假记录让 covered 达标后搁浅永远缺失
-                            if (covered < threshold || hasStrandedGap(province, adjustDates) || forceReseed) {
-                                seedProvince(province, adjustDates)
+                            // v1.6.4：单省整段包 runCatching。原实现只给 countDatesForProvince 包了，
+                            // 注释写着"单省失败只留缺口"，但 seedProvince 抛异常会让 awaitAll 连坐整轮、
+                            // 再把异常上抛终止启动重试循环——弱网首装时这里一炸，后面 30 个省全部跳过。
+                            runCatching {
+                                val covered = priceDao.countDatesForProvince(province)
+                                // covered < threshold（窗口数不够）或存在搁浅缺口（窗口日+1 无记录/同价假记录占位）
+                                // 都触发补灌——防止 verifyProvince 抢插的同价假记录让 covered 达标后搁浅永远缺失
+                                if (covered < threshold || hasStrandedGap(province, adjustDates) || forceReseed) {
+                                    seedProvince(province, adjustDates)
+                                }
+                            }.onFailure {
+                                Log.w("KOiL", "seedProvince($province) failed: ${it.javaClass.simpleName} ${it.message}")
                             }
+                            seedDoneCounter.incrementAndGet()
                         }
                     }.awaitAll()
-                    kotlinx.coroutines.delay(200)
+                    delay(200)
                 }
             }
+            seedState = SeedState.IDLE
         } finally {
+            // 异常路径别把状态永久卡在 RUNNING（否则设置页显示"正在补灌"却什么都没跑）
+            if (seedState == SeedState.RUNNING) seedState = SeedState.IDLE
             seedLock.set(false)
         }
     }
@@ -428,9 +490,52 @@ class OilPriceDbSyncer(
      * 本方法把"日历未就绪"变成可观测状态，让启动任务 30s 轮询重试直到就绪（保留防假日期纪律：就绪前不灌）。
      */
     suspend fun fillRemainingProvincesIfCalendarReady(): Boolean {
-        if (getAdjustDates().isEmpty()) return false
+        if (getAdjustDates().isEmpty()) {
+            seedState = SeedState.WAITING
+            return false
+        }
         seedRemainingProvinces()
         return true
+    }
+
+    /**
+     * v1.6.4：补灌重试循环（启动兜底 / 回前台兜底共用）。
+     * 退避递增而非固定 30s×6：原来总预算约 3 分钟太短，弱网首装经常还没拿到窗口日历就耗尽，
+     * 之后就再没有任何触发点，表现为"杀进程冷启动才继续灌"。
+     * 每轮独立 try/catch —— 任何一轮抛异常不再终止后面的重试。
+     */
+    suspend fun runSeedRetryLoop(scheduleMs: List<Long> = DEFAULT_SEED_RETRY_MS) {
+        if (!seedLoopLock.compareAndSet(false, true)) return
+        try {
+            for (wait in scheduleMs) {
+                delay(wait)
+                val done = runCatching { fillRemainingProvincesIfCalendarReady() }
+                    .onFailure { Log.w("KOiL", "seed retry round failed: ${it.message}") }
+                    .getOrDefault(false)
+                if (done) return
+            }
+            markSeedGaveUp()
+        } finally {
+            seedLoopLock.set(false)
+        }
+    }
+
+    /** 预算用尽：转 GAVE_UP，让设置页从"补灌中"改成"点立即更新重试" */
+    fun markSeedGaveUp() {
+        if (seedState != SeedState.RUNNING) seedState = SeedState.GAVE_UP
+    }
+
+    /**
+     * v1.6.4：回前台兜底——GAVE_UP / WAITING 时用户切回 App 再试一轮。
+     * 有节流（默认 60s），避免快速切前后台反复打网络；31 省 COUNT 查询是纯本地，开销可忽略。
+     */
+    suspend fun resumeSeedingIfNeeded(minIntervalMs: Long = 60_000L) {
+        if (seedState == SeedState.RUNNING) return
+        if (seedState != SeedState.GAVE_UP && seedState != SeedState.WAITING) return
+        val now = System.currentTimeMillis()
+        if (now - lastSeedAttemptAt < minIntervalMs) return
+        lastSeedAttemptAt = now
+        runSeedRetryLoop(FOREGROUND_SEED_RETRY_MS)
     }
 
     /**
