@@ -1168,8 +1168,10 @@ private fun AdjustTimelineItem(
             // vc277：底带再提一档（0.09→0.14）——上一版在黑色卡片上几乎看不出来
             val bandColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.14f)
             val flatDotColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
-            // 底带高度同时决定彩段高度：红/绿段的粗细与灰底一致（用户要求「跟灰底的差不多」）
+            // 底带 8dp，彩段收细到 5dp——上下各留 1.5dp 灰边，条「嵌」在带里而不是把带填满。
+            // vc277 让彩段与底带同高（8dp），真机看太粗壮，像进度条。
             val bandDp = 8.dp
+            val barDp = 5.dp
             val barFracHalf = (barFrac / 2f).coerceIn(0.01f, 0.5f)
             val isRise = diff != null && diff > 0.001
             // 用 Canvas 按中轴算绝对坐标，而不是 Box + fillMaxWidth(frac)：
@@ -1199,19 +1201,19 @@ private fun AdjustTimelineItem(
                 )
                 if (hasBar) {
                     // 彩段：严格从中轴出发，涨向右、跌向左，长度 = 半宽 × 幅度占比。
-                    // 粗细 = 底带高度（8dp），Butt 端面让靠中轴那一端正好压在 0 轴上、不外溢；
-                    // 外侧端面由圆点收口，所以不需要 Round cap。
+                    // 粗细 5dp（底带 8dp 内嵌、上下各留 1.5dp 灰边）；Round cap 让靠中轴那端
+                    // 收成圆头，和中轴竖线衔接自然，外侧端由圆点盖住。
                     val len = barFracHalf * size.width
                     val endX = if (isRise) cx + len else cx - len
                     drawLine(
                         color = accent,
                         start = Offset(cx, cy),
                         end = Offset(endX, cy),
-                        strokeWidth = bandH,
-                        cap = StrokeCap.Butt,
+                        strokeWidth = barDp.toPx(),
+                        cap = StrokeCap.Round,
                     )
-                    // 端点：直径 11dp > 底带高 8dp，探出上下缘，明显标记「这次调到这里」
-                    drawCircle(accent, 5.5.dp.toPx(), Offset(endX, cy))
+                    // 端点：直径 9dp > 底带高 8dp，仍略探出上下缘，但不再夸张
+                    drawCircle(accent, 4.5.dp.toPx(), Offset(endX, cy))
                 } else {
                     // 搁浅 / 基准价：中轴上一个灰点——价格没动
                     drawCircle(flatDotColor, 3.dp.toPx(), Offset(cx, cy))
