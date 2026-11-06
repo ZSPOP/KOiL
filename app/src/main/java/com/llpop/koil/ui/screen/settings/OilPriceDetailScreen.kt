@@ -128,6 +128,11 @@ fun OilPriceDetailScreen(
             // 行 2：油号分段控件——固定 4 项（92/95/98/0）整行等宽分段，不再横滑。
             var provinceMenuExpanded by remember { mutableStateOf(false) }
             var yearMenuExpanded by remember { mutableStateOf(false) }
+            // v1.6.3fix：点击已展开的 pill 时，Popup 先因「外部点击」触发 onDismissRequest 收起，
+            // 同一击又落到 pill 的 toggle 上 → 立刻重新展开，表现为「收起又弹开」闪烁。
+            // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不再展开。
+            var provinceDismissAt by remember { mutableStateOf(0L) }
+            var yearDismissAt by remember { mutableStateOf(0L) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -140,11 +145,19 @@ fun OilPriceDetailScreen(
                     DropdownPill(
                         label = provinceLabel(state.province),
                         expanded = provinceMenuExpanded,
-                        onToggle = { provinceMenuExpanded = !provinceMenuExpanded },
+                        onToggle = {
+                            val justDismissed = provinceDismissAt > 0 &&
+                                System.currentTimeMillis() - provinceDismissAt < 350
+                            provinceDismissAt = 0L
+                            if (!justDismissed) provinceMenuExpanded = !provinceMenuExpanded
+                        },
                     )
                     AnchoredPopup(
                         expanded = provinceMenuExpanded,
-                        onDismissRequest = { provinceMenuExpanded = false },
+                        onDismissRequest = {
+                            provinceMenuExpanded = false
+                            provinceDismissAt = System.currentTimeMillis()
+                        },
                         maxHeight = 380.dp,
                     ) {
                         AnchoredDropdownColumn {
@@ -170,11 +183,19 @@ fun OilPriceDetailScreen(
                         DropdownPill(
                             label = stringResource(R.string.koil_detail_year, state.year),
                             expanded = yearMenuExpanded,
-                            onToggle = { yearMenuExpanded = !yearMenuExpanded },
+                            onToggle = {
+                                val justDismissed = yearDismissAt > 0 &&
+                                    System.currentTimeMillis() - yearDismissAt < 350
+                                yearDismissAt = 0L
+                                if (!justDismissed) yearMenuExpanded = !yearMenuExpanded
+                            },
                         )
                         AnchoredPopup(
                             expanded = yearMenuExpanded,
-                            onDismissRequest = { yearMenuExpanded = false },
+                            onDismissRequest = {
+                                yearMenuExpanded = false
+                                yearDismissAt = System.currentTimeMillis()
+                            },
                         ) {
                             AnchoredDropdownColumn {
                                 state.years.forEachIndexed { idx, y ->

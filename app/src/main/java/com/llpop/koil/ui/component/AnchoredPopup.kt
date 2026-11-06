@@ -66,11 +66,13 @@ import top.yukonga.miuix.kmp.icon.basic.Check
  *
  * 定位规则：
  * - 垂直：优先贴锚点下方弹出（+8dp verticalMargin）；下方空间不足翻转到上方；两边不足锚点垂直居中
- * - 水平：默认 End 右对齐（面板右缘贴锚点右缘）；Start 时左对齐锚点左缘；均 coerceIn 到窗口
+ * - 水平：endAligned=true 面板右缘贴锚点右缘；false 左缘贴锚点左缘；**null=自动判向**——锚点在窗口
+ *   右半 → End 对齐、左半 → Start 对齐（v1.6.3fix：明细页省份 pill 贴屏幕左侧，固定 End 会把面板
+ *   推出屏幕左缘再被钳到 0，表现为面板贴死屏幕左边）
  */
 class FlipBelowPositionProvider(
     private val anchorOverride: IntRect? = null,
-    private val endAligned: Boolean = true,
+    private val endAligned: Boolean? = null,
     density: Density,
     winW: Int,
     winH: Int,
@@ -81,6 +83,9 @@ class FlipBelowPositionProvider(
     private val marginV = with(density) { 8.dp.roundToPx() }
     val direction = mutableIntStateOf(1)
 
+    /** 自动判向后的实际水平对齐（true=End/右对齐锚点右缘），供动画 TransformOrigin 读取 */
+    val endResolved = mutableStateOf(true)
+
     override fun calculatePosition(
         anchorBounds: IntRect,
         windowSize: IntSize,
@@ -88,7 +93,9 @@ class FlipBelowPositionProvider(
         popupContentSize: IntSize,
     ): IntOffset {
         val anchor = anchorOverride ?: anchorBounds
-        val x = (if (endAligned) {
+        val end = endAligned ?: ((anchor.left + anchor.right) / 2 >= winW / 2)
+        endResolved.value = end
+        val x = (if (end) {
             anchor.right - popupContentSize.width
         } else {
             anchor.left
@@ -120,7 +127,8 @@ class FlipBelowPositionProvider(
  * 锚定下拉浮层（自研，完整对齐 miuix Dropdown 视觉与动效）：
  * - 独立 Popup 窗口渲染，浮于系统 Dialog 内容之上，不会被弹窗卡片遮挡
  * - 色彩直接取 miuix DropdownDefaults.dropdownColors()（容器/文字/选中行/勾色，自动适配深浅色）
- * - 定位：End 右对齐锚点、下方弹出+8dp、不足上翻、居中；自动补偿 Dialog 窗口屏幕偏移（坐标系修正）
+ * - 定位：水平自动判向（锚点在窗口左半 → 左对齐展开、右半 → 右对齐展开，endAligned 可强制）、
+ *   下方弹出+8dp、不足上翻、居中；自动补偿 Dialog 窗口屏幕偏移（坐标系修正）
  * - 面板宽度 = 内容自适应（IntrinsicSize.Max，最宽行），最小 minWidth（默认 200dp，对齐 miuix ListPopupColumn）
  * - 动画：缩放 spring(0.15→1) + 淡入 tween(200)，transformOrigin 从锚点方向展开
  * - anchorBounds 传锚点区域（**window 坐标：boundsInWindow()**）则以其为准；否则用 Popup 默认锚点（调用处）
@@ -133,7 +141,7 @@ fun AnchoredPopup(
     minWidth: Dp = 200.dp,
     maxHeight: Dp? = null,
     anchorBounds: IntRect? = null,
-    endAligned: Boolean = true,
+    endAligned: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
     if (!expanded) return
@@ -177,9 +185,10 @@ fun AnchoredPopup(
         alpha.animateTo(1f, tween(durationMillis = 200))
     }
     val direction = positionProvider.direction.intValue
-    val origin = remember(direction, endAligned) {
+    val endResolved = positionProvider.endResolved.value
+    val origin = remember(direction, endResolved) {
         TransformOrigin(
-            pivotFractionX = if (endAligned) 1f else 0f,
+            pivotFractionX = if (endResolved) 1f else 0f,
             pivotFractionY = when (direction) {
                 -1 -> 1f
                 1 -> 0f
