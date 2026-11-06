@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -657,9 +658,10 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
-                // —— 待确认更新（有数据需核实时才展开；无数据整块连间距、横线一起隐藏）——
+                // —— 待确认更新（有数据需核实时才展开；间隔与横线一起隐藏）——
                 if (pendingItems.isNotEmpty()) {
+                    // vc282：间距移进条件内——拆卡后它是卡 A 的末块，隐藏时卡底不该留 12dp 空档
+                    Spacer(Modifier.height(12.dp))
                     // 展开时上边界横线（隐藏时此线不出现，下方仅保留一条）
                     Box(
                         modifier = Modifier
@@ -728,7 +730,26 @@ fun SettingsScreen(
                     Spacer(Modifier.height(12.dp))
                 }
 
-                // —— 分割线 ——
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 数据源与更新（vc282：从油价大卡拆出，状态与配置分离）=====
+        // 原来「自动更新 / EIA / 同步来源」压在油价大卡最底部，整卡近 2/3 屏，
+        // 想改 EIA 得先滚过全部统计与窗口信息。拆开后：上一张卡只看状态，这一张只管配置。
+        KOiLBlurBackground(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 20f,
+        ) {
+            val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.koil_set_price_sources),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -739,104 +760,101 @@ fun SettingsScreen(
 
                 // —— 自动更新开关 ——
                 if (uiState.loaded) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = stringResource(R.string.koil_set_price_db_auto),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackground,
-                        )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(R.string.koil_pdb_auto_sub),
-                            fontSize = 14.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = stringResource(R.string.koil_set_price_db_auto),
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MiuixTheme.colorScheme.onBackground,
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.koil_pdb_auto_sub),
+                                fontSize = 14.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
+                        Switch(
+                            checked = uiState.priceDbAutoUpdate,
+                            onCheckedChange = viewModel::setPriceDbAutoUpdate,
                         )
                     }
-                    Switch(
-                        checked = uiState.priceDbAutoUpdate,
-                        onCheckedChange = viewModel::setPriceDbAutoUpdate,
-                    )
-                }
                 }
                 Spacer(Modifier.height(12.dp))
 
-                // —— EIA API Key（原油估算数据源；v1.5.1：数据源开关——开=用 EIA 隐藏输入框；
+                // —— EIA API Key（原油估算数据源；开关开=用 EIA 隐藏输入框，
                 //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
                 val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
                 val eiaEnabled by viewModel.eiaEnabled.collectAsStateWithLifecycle()
                 val eiaLoaded by viewModel.eiaLoaded.collectAsStateWithLifecycle()
-                // v1.5.47：EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
+                // EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
                 if (eiaLoaded) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                )
-                Spacer(Modifier.height(12.dp))
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_set_eia_key_title),
-                            modifier = Modifier.weight(1f),
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackground,
-                        )
-                        Switch(
-                            checked = eiaEnabled,
-                            onCheckedChange = viewModel::setEiaEnabled,
-                        )
-                    }
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = stringResource(R.string.koil_set_eia_key_sub),
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(0.5.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
                     )
-                    // 开关开 = 用 EIA → 隐藏输入框（防误改）；开关关 = 用腾讯 → 显示输入框供修改
-                    if (!eiaEnabled) {
-                        Spacer(Modifier.height(8.dp))
-                        var showEiaKey by remember { mutableStateOf(false) }
-                        TextField(
-                            value = eiaKey,
-                            onValueChange = { viewModel.setEiaApiKey(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Ascii,
-                                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                            ),
-                            colors = TextFieldDefaults.textFieldColors(
-                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                                borderColor = Color.Transparent,
-                            ),
-                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                            visualTransformation = if (showEiaKey) {
-                                androidx.compose.ui.text.input.VisualTransformation.None
-                            } else {
-                                androidx.compose.ui.text.input.PasswordVisualTransformation()
-                            },
-                            trailingIcon = {
-                                IconButton(onClick = { showEiaKey = !showEiaKey }) {
-                                    Icon(
-                                        imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                        contentDescription = null,
-                                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            },
+                    Spacer(Modifier.height(12.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = stringResource(R.string.koil_set_eia_key_title),
+                                modifier = Modifier.weight(1f),
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MiuixTheme.colorScheme.onBackground,
+                            )
+                            Switch(
+                                checked = eiaEnabled,
+                                onCheckedChange = viewModel::setEiaEnabled,
+                            )
+                        }
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(R.string.koil_set_eia_key_sub),
+                            fontSize = 14.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
+                        if (!eiaEnabled) {
+                            Spacer(Modifier.height(8.dp))
+                            var showEiaKey by remember { mutableStateOf(false) }
+                            TextField(
+                                value = eiaKey,
+                                onValueChange = { viewModel.setEiaApiKey(it) },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Ascii,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                                ),
+                                colors = TextFieldDefaults.textFieldColors(
+                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                    labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                    borderColor = Color.Transparent,
+                                ),
+                                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                                visualTransformation = if (showEiaKey) {
+                                    androidx.compose.ui.text.input.VisualTransformation.None
+                                } else {
+                                    androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                },
+                                trailingIcon = {
+                                    IconButton(onClick = { showEiaKey = !showEiaKey }) {
+                                        Icon(
+                                            imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                            contentDescription = null,
+                                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                },
+                            )
+                        }
                     }
                 }
-                }
-                // v1.5.33：同步来源放油价库区块最底（EIA 项之后、区块闭合前）——用户指定位置；
-                // 上方分隔线与区块内其它分隔线同款（0.5dp / alpha 0.12 / 通栏）
-                // v1.5.34：文字行与卡片圆角边框底部间隔 12dp → 6dp（用户反馈偏高）
+                // —— 同步来源（本卡最底）——
                 if (priceDbStatus.lastSyncSources.isNotBlank()) {
                     Spacer(Modifier.height(12.dp))
                     Box(
@@ -856,7 +874,7 @@ fun SettingsScreen(
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+
 
         // ===== 崩溃日志（v1.6.8：本地累积 + 查看/导出，仅存本机不上传）=====
         val crashContext = LocalContext.current
@@ -919,156 +937,12 @@ fun SettingsScreen(
         // v1.6.3 重构：6 个出口按「加油记录 / 完整备份 / 油价历史」三组配对，
         // 之前 6 行长得一模一样，用户得逐个读副标题才知道谁跟谁是一对。
         SectionTitle(stringResource(R.string.koil_set_section_data))
-        SettingsCard {
-            SettingSubLabel(stringResource(R.string.koil_set_group_records))
-            SettingRow(
-                title = stringResource(R.string.koil_set_export_records),
-                subtitle = stringResource(R.string.koil_set_export_records_sub),
-                value = stringResource(R.string.koil_act_export),
-                onClick = viewModel::exportCsv,
-            )
-            SettingDivider()
-            SettingRow(
-                title = stringResource(R.string.koil_set_import_records),
-                subtitle = stringResource(R.string.koil_set_import_records_sub),
-                value = stringResource(R.string.koil_act_import),
-                onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
-            )
-            SettingDivider()
-            SettingSubLabel(stringResource(R.string.koil_set_group_backup))
-            SettingRow(
-                title = stringResource(R.string.koil_set_backup),
-                subtitle = stringResource(R.string.koil_set_backup_sub),
-                value = stringResource(R.string.koil_act_backup),
-                onClick = viewModel::exportBackup,
-            )
-            SettingDivider()
-            SettingRow(
-                title = stringResource(R.string.koil_set_restore),
-                subtitle = stringResource(R.string.koil_set_restore_sub),
-                value = stringResource(R.string.koil_act_restore),
-                onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
-            )
-            SettingDivider()
-            SettingRow(
-                title = stringResource(R.string.koil_set_export_price_history),
-                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
-                value = stringResource(R.string.koil_act_export),
-                onClick = viewModel::exportOilPriceHistory,
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-
-        if (showCrashDialog) {
-            KOiLGlassDialog(
-                show = true,
-                onDismissRequest = { showCrashDialog = false },
-                contentPadding = 16.dp,
-                scrollable = true,
-                widthFraction = 0.90f,
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_set_crash_log),
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MiuixTheme.colorScheme.onBackground,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (crashCount > 0) {
-                            Text(
-                                text = stringResource(R.string.koil_set_crash_count, crashCount),
-                                fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    if (crashLogText.isBlank()) {
-                        Text(
-                            text = stringResource(R.string.koil_set_crash_none),
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
-                        )
-                    } else {
-                        // 日志原文（等宽观感：小号字 + 按行呈现；GlassDialog 的 scrollable 负责滚动）
-                        Text(
-                            text = crashLogText,
-                            fontSize = 11.sp,
-                            lineHeight = 14.sp,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
-                        )
-                    }
-                    Spacer(Modifier.height(16.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        if (crashLogText.isNotBlank()) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    .clickable {
-                                        crashScope.launch {
-                                            CrashReporter.clear(crashContext)
-                                            crashLogText = ""
-                                            crashCount = 0
-                                            android.widget.Toast.makeText(
-                                                crashContext,
-                                                crashContext.getString(R.string.koil_set_crash_cleared),
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                    }
-                                    .padding(vertical = 11.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.koil_set_crash_clear),
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MiuixTheme.colorScheme.onBackground,
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (crashLogText.isNotBlank()) KOiLColors.Primary else KOiLColors.Primary.copy(alpha = 0.4f))
-                                .clickable(enabled = crashLogText.isNotBlank()) {
-                                    crashScope.launch {
-                                        val ok = withContext(Dispatchers.IO) { CrashReporter.exportToDownloads(crashContext) }
-                                        android.widget.Toast.makeText(
-                                            crashContext,
-                                            crashContext.getString(
-                                                if (ok) R.string.koil_set_crash_export_ok else R.string.koil_set_crash_export_fail
-                                            ),
-                                            android.widget.Toast.LENGTH_SHORT,
-                                        ).show()
-                                    }
-                                }
-                                .padding(vertical = 11.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = stringResource(R.string.koil_set_crash_export),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
 
         // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复） =====
         // v1.6.3 重构：表单默认收起，常态只显示「状态 + 立即备份/从云端恢复」。
         // 旧版三行输入各带一个锁定开关（改个账号要先解锁再上锁，共 6 次点击），是设置页最大的交互负担。
-        // 二、不再单独占一个分组标题——它就是「数据与备份」里的最后一张卡。
+        // vc282：不再作为本组最后一张卡，而是提到最前——云同步是「持续生效」的能力，
+        // 下面的导出/备份是「一次性动作」，先讲机制再讲出口。
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
         KOiLBlurBackground(
@@ -1093,6 +967,22 @@ fun SettingsScreen(
                 }
                 var formExpanded by remember { mutableStateOf(false) }
 
+                // 状态判定提到开关行之前：徽章现在挂在「云同步」标题右侧，与开关键同一行
+                val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
+                val statusText = when {
+                    // 密码解不开时其余状态都是假的（lastStatus 可能还停在上次成功备份）
+                    syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)
+                    !configured -> stringResource(R.string.koil_sync_status_not_configured)
+                    syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
+                    syncUi.lastStatus.startsWith("ok@") ->
+                        stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
+                    syncUi.lastStatus.startsWith("fail:") ->
+                        stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
+                    else -> stringResource(R.string.koil_sync_status_never)
+                }
+                val healthy = configured && !syncUi.passwordInvalid
+                val unhealthy = !healthy || syncUi.lastStatus.startsWith("fail:")
+
                 if (syncUi.loaded) {
                     SettingSwitchRow(
                         title = stringResource(R.string.koil_sync_switch),
@@ -1101,47 +991,27 @@ fun SettingsScreen(
                         onCheckedChange = { on ->
                             syncVm.setEnabled(on, urlDraft, usernameDraft, effectivePwd)
                         },
+                        // 徽章只在开启时出现（关闭状态说「未连接」没有意义）
+                        trailingContent = if (syncUi.enabled) ({ SyncStatusBadge(healthy) }) else null,
                     )
                 }
                 if (syncUi.enabled) {
                     SettingDivider()
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
-                        val statusText = when {
-                            // 密码解不开时其余状态都是假的（lastStatus 可能还停在上次成功备份）
-                            syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)
-                            !configured -> stringResource(R.string.koil_sync_status_not_configured)
-                            syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
-                            syncUi.lastStatus.startsWith("ok@") ->
-                                stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
-                            syncUi.lastStatus.startsWith("fail:") ->
-                                stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
-                            else -> stringResource(R.string.koil_sync_status_never)
-                        }
-                        val healthy = configured && !syncUi.passwordInvalid
-                        val unhealthy = !healthy || syncUi.lastStatus.startsWith("fail:")
-
-                        // —— 头部：状态徽章 + 管理/收起 ——
+                        // —— 状态行：备份状态在左，管理/收起贴着同一行右侧 ——
+                        // 徽章已上移到开关标题旁，这一行只留「文本 + 管理」，少一行高度。
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(
-                                        if (healthy) KOiLColors.Primary.copy(alpha = 0.12f)
-                                        else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
-                                    )
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                            ) {
-                                Text(
-                                    text = if (healthy) stringResource(R.string.koil_sync_badge_on)
-                                    else stringResource(R.string.koil_sync_badge_off),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = if (healthy) KOiLColors.Primary
-                                    else MiuixTheme.colorScheme.onBackgroundVariant,
-                                )
-                            }
-                            Spacer(Modifier.weight(1f))
+                            Text(
+                                text = statusText,
+                                fontSize = 12.sp,
+                                lineHeight = 15.sp,
+                                color = if (unhealthy) KOiLColors.Warning
+                                else MiuixTheme.colorScheme.onBackgroundVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(
                                 text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
                                 else stringResource(R.string.koil_sync_manage),
@@ -1154,14 +1024,6 @@ fun SettingsScreen(
                                     .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = statusText,
-                            fontSize = 12.sp,
-                            lineHeight = 15.sp,
-                            color = if (unhealthy) KOiLColors.Warning
-                            else MiuixTheme.colorScheme.onBackgroundVariant,
-                        )
 
                         // —— 两个常用动作：常态可见 ——
                         Spacer(Modifier.height(10.dp))
@@ -1361,30 +1223,36 @@ fun SettingsScreen(
                             }
                             Spacer(Modifier.height(10.dp))
                             // —— 保存并测试连接：配置草稿落盘 + PROPFIND 验证 ——
+                            // vc282：原本是 surfaceVariant 0.6 的淡底，和卡片底色几乎同色，
+                            // 真机上读起来像一行纯文字。改成主色实底按钮（busy 时降透明度），
+                            // 与上方「立即备份」同一套按钮语言，表单的提交动作才立得住。
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(18.dp))
-                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                    .background(
+                                        if (syncUi.busy) KOiLColors.Primary.copy(alpha = 0.45f)
+                                        else KOiLColors.Primary
+                                    )
                                     .clickable(enabled = !syncUi.busy) {
                                         syncVm.saveAndTest(urlDraft, usernameDraft, effectivePwd)
                                     }
-                                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Filled.Check,
                                         contentDescription = null,
-                                        tint = MiuixTheme.colorScheme.onBackground,
+                                        tint = Color.White,
                                         modifier = Modifier.size(14.dp),
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = stringResource(R.string.koil_sync_save_test),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MiuixTheme.colorScheme.onBackground,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
                                     )
                                 }
                             }
@@ -1454,6 +1322,157 @@ fun SettingsScreen(
                 }
             }
         }
+
+        Spacer(Modifier.height(16.dp))
+
+        // vc282：分组维度由「数据对象」改为「文件形态/用途」——
+        // CSV 一段：人可读、Excel 能开，进出自如（加油记录双向 + 油价历史单向）；
+        // JSON 一段：整包、只有本 App 能恢复，用于迁移/兜底。
+        // 原先按对象分成三组，油价历史只有「出」没有「进」，只能孤零零挂在完整备份尾巴上。
+        SettingsCard {
+            SettingSubLabel(stringResource(R.string.koil_set_group_io))
+            SettingRow(
+                title = stringResource(R.string.koil_set_export_records),
+                subtitle = stringResource(R.string.koil_set_export_records_sub),
+                value = stringResource(R.string.koil_act_export),
+                onClick = viewModel::exportCsv,
+            )
+            SettingDivider()
+            SettingRow(
+                title = stringResource(R.string.koil_set_import_records),
+                subtitle = stringResource(R.string.koil_set_import_records_sub),
+                value = stringResource(R.string.koil_act_import),
+                onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
+            )
+            SettingDivider()
+            SettingRow(
+                title = stringResource(R.string.koil_set_export_price_history),
+                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
+                value = stringResource(R.string.koil_act_export),
+                onClick = viewModel::exportOilPriceHistory,
+            )
+            SettingDivider()
+            SettingSubLabel(stringResource(R.string.koil_set_group_backup_restore))
+            SettingRow(
+                title = stringResource(R.string.koil_set_backup),
+                subtitle = stringResource(R.string.koil_set_backup_sub),
+                value = stringResource(R.string.koil_act_backup),
+                onClick = viewModel::exportBackup,
+            )
+            SettingDivider()
+            SettingRow(
+                title = stringResource(R.string.koil_set_restore),
+                subtitle = stringResource(R.string.koil_set_restore_sub),
+                value = stringResource(R.string.koil_act_restore),
+                onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+
+        if (showCrashDialog) {
+            KOiLGlassDialog(
+                show = true,
+                onDismissRequest = { showCrashDialog = false },
+                contentPadding = 16.dp,
+                scrollable = true,
+                widthFraction = 0.90f,
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.koil_set_crash_log),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (crashCount > 0) {
+                            Text(
+                                text = stringResource(R.string.koil_set_crash_count, crashCount),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (crashLogText.isBlank()) {
+                        Text(
+                            text = stringResource(R.string.koil_set_crash_none),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    } else {
+                        // 日志原文（等宽观感：小号字 + 按行呈现；GlassDialog 的 scrollable 负责滚动）
+                        Text(
+                            text = crashLogText,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        if (crashLogText.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .clickable {
+                                        crashScope.launch {
+                                            CrashReporter.clear(crashContext)
+                                            crashLogText = ""
+                                            crashCount = 0
+                                            android.widget.Toast.makeText(
+                                                crashContext,
+                                                crashContext.getString(R.string.koil_set_crash_cleared),
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    }
+                                    .padding(vertical = 11.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.koil_set_crash_clear),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onBackground,
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (crashLogText.isNotBlank()) KOiLColors.Primary else KOiLColors.Primary.copy(alpha = 0.4f))
+                                .clickable(enabled = crashLogText.isNotBlank()) {
+                                    crashScope.launch {
+                                        val ok = withContext(Dispatchers.IO) { CrashReporter.exportToDownloads(crashContext) }
+                                        android.widget.Toast.makeText(
+                                            crashContext,
+                                            crashContext.getString(
+                                                if (ok) R.string.koil_set_crash_export_ok else R.string.koil_set_crash_export_fail
+                                            ),
+                                            android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.koil_set_crash_export),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
 
         // 导出/备份/更新结果提示：Toast 短暂提醒（自动消失，替代常驻卡片）
         val exportNotice by viewModel.exportMessage.collectAsStateWithLifecycle()
@@ -1665,6 +1684,26 @@ private fun AboutSection(
     var update by remember { mutableStateOf<UpdateCheck>(UpdateCheck.Idle) }
     var sheet by remember { mutableStateOf("") }
 
+    // —— 诊断：崩溃日志/问题反馈。原先是「关于·诊断」排在关于之后，
+    // vc282 起独立成「诊断」组并前置，让「关于」成为整页最后一张卡（收尾位）。——
+    SectionTitle(stringResource(R.string.koil_set_about_diag))
+    SettingsCard {
+        SettingRow(
+            title = stringResource(R.string.koil_set_crash_log),
+            subtitle = stringResource(R.string.koil_set_crash_log_sub),
+            value = if (crashCount > 0) stringResource(R.string.koil_set_crash_count, crashCount) else "",
+            onClick = onOpenCrashLog,
+        )
+        SettingDivider()
+        SettingRow(
+            title = stringResource(R.string.koil_set_about_feedback),
+            subtitle = stringResource(R.string.koil_set_about_feedback_sub),
+            value = "",
+            onClick = { openExternalUrl(context, "$KOIL_REPO_URL/issues/new") },
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+
     SectionTitle(stringResource(R.string.koil_set_about))
     SettingsCard {
         // —— 品牌头：wordmark + 版本号（versionCode 与 CI 流水号对应）——
@@ -1736,25 +1775,6 @@ private fun AboutSection(
             subtitle = stringResource(R.string.koil_set_about_licenses_sub),
             value = "",
             onClick = { sheet = "licenses" },
-        )
-    }
-    Spacer(Modifier.height(16.dp))
-
-    // —— 诊断：崩溃日志从「数据」区搬到这里，它是排查项不是数据出入口 ——
-    SectionTitle(stringResource(R.string.koil_set_about_diag))
-    SettingsCard {
-        SettingRow(
-            title = stringResource(R.string.koil_set_crash_log),
-            subtitle = stringResource(R.string.koil_set_crash_log_sub),
-            value = if (crashCount > 0) stringResource(R.string.koil_set_crash_count, crashCount) else "",
-            onClick = onOpenCrashLog,
-        )
-        SettingDivider()
-        SettingRow(
-            title = stringResource(R.string.koil_set_about_feedback),
-            subtitle = stringResource(R.string.koil_set_about_feedback_sub),
-            value = "",
-            onClick = { openExternalUrl(context, "$KOIL_REPO_URL/issues/new") },
         )
     }
     Spacer(Modifier.height(bottomPadding + 12.dp))
@@ -2120,6 +2140,8 @@ private fun SettingSwitchRow(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    /** 标题右侧的附加内容（v1.6.3：云同步的「已连接/未配置」状态徽章挂这里） */
+    trailingContent: (@Composable () -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -2128,12 +2150,18 @@ private fun SettingSwitchRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = title,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                if (trailingContent != null) {
+                    Spacer(Modifier.width(8.dp))
+                    trailingContent()
+                }
+            }
             Spacer(Modifier.height(2.dp))
             Text(
                 text = subtitle,
@@ -2144,6 +2172,29 @@ private fun SettingSwitchRow(
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
+        )
+    }
+}
+
+/** 云同步状态徽章：已连接（主色）/ 未配置（灰） */
+@Composable
+private fun SyncStatusBadge(healthy: Boolean) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(
+                if (healthy) KOiLColors.Primary.copy(alpha = 0.12f)
+                else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
+            )
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = if (healthy) stringResource(R.string.koil_sync_badge_on)
+            else stringResource(R.string.koil_sync_badge_off),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (healthy) KOiLColors.Primary
+            else MiuixTheme.colorScheme.onBackgroundVariant,
         )
     }
 }

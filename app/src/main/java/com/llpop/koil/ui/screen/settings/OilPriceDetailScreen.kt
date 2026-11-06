@@ -1038,9 +1038,11 @@ private fun AdjustTimelineItem(
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .width(1.5.dp)
+                        .width(2.dp)
                         .fillMaxHeight()
-                        .background(accent.copy(alpha = 0.18f)),
+                        // vc282 真机反馈「日期左边的线不明显」：1.5dp/0.18 几乎融进卡片底，
+                        // 加粗到 2dp 并把不透明度提到 0.32，仍低于节点(0.7/1.0)保持从属关系。
+                        .background(accent.copy(alpha = 0.32f)),
                 )
             }
             val dotSize = if (isLatest) 9.dp else 7.dp
@@ -1168,10 +1170,11 @@ private fun AdjustTimelineItem(
             // vc277：底带再提一档（0.09→0.14）——上一版在黑色卡片上几乎看不出来
             val bandColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.14f)
             val flatDotColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f)
-            // 底带 8dp，彩段收细到 5dp——上下各留 1.5dp 灰边，条「嵌」在带里而不是把带填满。
-            // vc277 让彩段与底带同高（8dp），真机看太粗壮，像进度条。
-            val bandDp = 8.dp
-            val barDp = 5.dp
+            // 底带 6dp，彩段 4dp——上下各留 1dp 灰边，条「嵌」在带里而不是把带填满。
+            // vc277 让彩段与底带同高（8dp），真机看太粗壮，像进度条；
+            // vc278 收成「底带 8 + 彩段 5」，vc282 再收一档到 6/4（真机反馈灰底带仍偏粗）。
+            val bandDp = 6.dp
+            val barDp = 4.dp
             val barFracHalf = (barFrac / 2f).coerceIn(0.01f, 0.5f)
             val isRise = diff != null && diff > 0.001
             // 用 Canvas 按中轴算绝对坐标，而不是 Box + fillMaxWidth(frac)：
@@ -1212,8 +1215,8 @@ private fun AdjustTimelineItem(
                         strokeWidth = barDp.toPx(),
                         cap = StrokeCap.Round,
                     )
-                    // 端点：直径 9dp > 底带高 8dp，仍略探出上下缘，但不再夸张
-                    drawCircle(accent, 4.5.dp.toPx(), Offset(endX, cy))
+                    // 端点：直径 7dp > 底带高 6dp，上下各探出 0.5dp 仍能锁住位置
+                    drawCircle(accent, 3.5.dp.toPx(), Offset(endX, cy))
                 } else {
                     // 搁浅 / 基准价：中轴上一个灰点——价格没动
                     drawCircle(flatDotColor, 3.dp.toPx(), Offset(cx, cy))
