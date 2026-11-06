@@ -50,6 +50,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 独立包名：debug 构建不再覆盖真机上的正式版（签名不同本来也装不上）。
+            // 真机 instrumented 测试（androidTest）装的是 debug 变体，走独立包名互不干扰。
+            applicationIdSuffix = ".debug"
+        }
         release {
             // 正式签名（keystore.properties 存在时）；否则回退 debug 签名
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
@@ -168,4 +173,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
+
+    // Instrumented tests（真机性能基线等；androidTest 源集此前不存在，v1.6.2 基线首次引入）
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }

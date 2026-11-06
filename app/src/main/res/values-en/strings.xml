@@ -81,6 +81,7 @@
     </plurals>
     <string name="koil_ov_backfill">Backfill</string>
     <string name="koil_ov_month_count">%1$d</string>
+    <string name="koil_back_to_top">Back to top</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>
     <string name="koil_ov_grade">Grade</string>
     <string name="koil_ov_field_province">Province</string>
@@ -161,10 +162,10 @@
 
     <!-- ===== Settings screen ===== -->
     <string name="koil_set_title">Settings</string>
-    <string name="koil_set_section_general">General</string>
+    <string name="koil_set_section_general">General &amp; appearance</string>
     <string name="koil_set_appearance">Appearance</string>
     <string name="koil_set_language">Language</string>
-    <string name="koil_set_section_nav">Navigation bar</string>
+    <string name="koil_set_section_nav">Navigation &amp; display</string>
     <string name="koil_set_floating_bar">Floating bar</string>
     <string name="koil_set_floating_bar_sub">Bar floats above content</string>
     <string name="koil_set_floating_style">Floating style</string>
@@ -173,7 +174,7 @@
     <string name="koil_style_ios">iOS liquid glass</string>
     <string name="koil_mode_icon_text">Icon + text</string>
     <string name="koil_mode_icon_only">Icon only</string>
-    <string name="koil_set_section_entry">Entry</string>
+    <string name="koil_set_section_entry">Entry &amp; calculation</string>
     <string name="koil_set_default_province">Default province</string>
     <string name="koil_set_default_province_sum">Price query &amp; location · %1$s</string>
     <string name="koil_set_default_grade">Default grade</string>
@@ -189,7 +190,7 @@
     <string name="koil_set_deviation_sum">Paid unit price vs ref ±%1$d%%</string>
     <string name="koil_set_price_alert">Price adjustment window</string>
     <string name="koil_set_price_alert_sub">Show next window, forecast &amp; per-liter on home</string>
-    <string name="koil_set_section_price_db">Oil price database</string>
+    <string name="koil_set_section_price_db">Price data &amp; reminders</string>
     <string name="koil_pdb_provinces">Provinces</string>
     <string name="koil_pdb_grades">Grades</string>
     <string name="koil_pdb_adjustments">Adjustments</string>
@@ -198,7 +199,9 @@
     <string name="koil_pdb_pending_title">Pending updates</string>
     <string name="koil_pdb_update_now">Update now</string>
     <string name="koil_pdb_auto_sub">Check every 8h, apply on release</string>
-    <string name="koil_set_section_data">Data</string>
+    <string name="koil_set_data_io_title">Export &amp; backup</string>
+    <string name="koil_set_data_io_sub">Fuel records, price history &amp; full backup</string>
+    <string name="koil_set_section_data">Data &amp; backup</string>
     <string name="koil_set_location">Location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_price_db_auto">Auto-update price DB</string>
@@ -220,7 +223,7 @@
     <string name="koil_set_export_price_history">Export price history</string>
     <string name="koil_set_export_price_history_sub">CSV · full price DB</string>
     <string name="koil_set_crash_log">Crash log</string>
-    <string name="koil_set_crash_log_sub">Recorded automatically on crash (stored locally only, never uploaded) · keeps last 10</string>
+    <string name="koil_set_crash_log_sub">Auto-recorded on crash · local only · keeps 10</string>
     <string name="koil_set_crash_count">%1$d entries</string>
     <string name="koil_set_crash_none">No crash records</string>
     <string name="koil_set_crash_export">Export</string>
@@ -337,6 +340,30 @@
 
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_sync_section">Cloud Sync</string>
+    <string name="koil_set_about">About</string>
+    <string name="koil_set_about_version">Version %1$s (%2$d)</string>
+    <string name="koil_set_about_check_update">Check for updates</string>
+    <string name="koil_set_about_check_update_sub">Fetch the latest release from GitHub</string>
+    <string name="koil_set_about_checking">Checking...</string>
+    <string name="koil_set_about_latest">Up to date</string>
+    <string name="koil_set_about_newer">Update to %1$s</string>
+    <string name="koil_set_about_check_failed">Check failed, tap to retry</string>
+    <string name="koil_set_about_terms">Terms of use</string>
+    <string name="koil_set_about_privacy">Privacy policy</string>
+    <string name="koil_set_about_licenses">Open source licenses</string>
+    <string name="koil_set_about_licenses_sub">Main third-party libraries</string>
+    <string name="koil_set_about_feedback">Send feedback</string>
+    <string name="koil_set_about_feedback_sub">Includes version and device model</string>
+    <string name="koil_set_about_diag">Diagnostics</string>
+    <string name="koil_set_about_open_failed">No app can open this link</string>
+    <string name="koil_common_close">Close</string>
+    <string name="koil_set_about_terms_body">KOiL records your own fuel purchases and reads publicly announced fuel price adjustments.\n\nAccuracy: prices follow station postings and official announcements. Reference prices, forecasts and conversions are for reference only and are not purchasing or investment advice.\n\nRisk: deviations caused by entry mistakes, data delays or device faults are borne by the user.\n\nThis is an open source project provided as is, without warranty of uninterrupted or error-free operation.</string>
+    <string name="koil_set_about_privacy_body">Local first: fuel records, vehicle info and settings stay on your device. Nothing is uploaded to any server.\n\nLocation: used only when auto-detect province is on, solely to fill in the default province. No tracking, no upload.\n\nCloud sync (optional): data is backed up only to your own WebDAV server. Credentials are encrypted and stored locally; the developer has no access.\n\nCrash logs: kept on device only, exported manually, never reported automatically.</string>
+    <string name="koil_set_about_licenses_body">Kotlin, Coroutines, kotlinx.serialization - Apache-2.0\nJetpack Compose, Room, DataStore, WorkManager - Apache-2.0\nMiuix (top.yukonga.miuix.kmp) - Apache-2.0\nKtor, OkHttp - Apache-2.0\nKoin - Apache-2.0\n\nSee gradle/libs.versions.toml in the repository for the full dependency list.</string>
+    <string name="koil_sync_badge_on">Connected</string>
+    <string name="koil_sync_badge_off">Not set</string>
+    <string name="koil_sync_manage">Manage</string>
+    <string name="koil_sync_collapse">Collapse</string>
     <string name="koil_sync_switch">Cloud Sync</string>
     <string name="koil_sync_switch_sub">Auto-backup fuel records to your WebDAV drive</string>
     <string name="koil_sync_url">WebDAV URL</string>
@@ -372,6 +399,12 @@
     <string name="koil_detail_stranded">Stranded</string>
     <string name="koil_detail_held_price">Held at %1$s</string>
     <string name="koil_detail_last_year">last year</string>
+    <string name="koil_detail_latest">Latest</string>
+    <string name="koil_detail_delta_up">↑ ¥%1$.2f</string>
+    <string name="koil_detail_delta_down">↓ ¥%1$.2f</string>
+    <string name="koil_detail_pct_up">+%1$s%%</string>
+    <string name="koil_detail_pct_down">−%1$s%%</string>
+    <string name="koil_detail_gap_days">%1$d days apart</string>
     <string name="koil_sync_password_invalid">App password is unreadable (key lost after device change) — please re-enter it</string>
     <string name="koil_sync_status_password_invalid">Sync paused: re-enter the app password</string>
 </resources>

@@ -79,6 +79,7 @@
     </plurals>
     <string name="koil_ov_backfill">補錄</string>
     <string name="koil_ov_month_count">%1$d筆</string>
+    <string name="koil_back_to_top">返回頂部</string>
     <string name="koil_ov_backfill_title">補錄加油記錄</string>
     <string name="koil_ov_grade">油號</string>
     <string name="koil_ov_field_province">加油省份</string>
@@ -156,10 +157,10 @@
 
     <!-- ===== 設定頁 ===== -->
     <string name="koil_set_title">設定</string>
-    <string name="koil_set_section_general">一般</string>
+    <string name="koil_set_section_general">一般與外觀</string>
     <string name="koil_set_appearance">外觀設定</string>
     <string name="koil_set_language">語言設定</string>
-    <string name="koil_set_section_nav">導覽列</string>
+    <string name="koil_set_section_nav">導覽與顯示</string>
     <string name="koil_set_floating_bar">懸浮導覽列</string>
     <string name="koil_set_floating_bar_sub">底部導覽懸浮於內容之上</string>
     <string name="koil_set_floating_style">懸浮樣式</string>
@@ -168,7 +169,7 @@
     <string name="koil_style_ios">iOS 液態玻璃</string>
     <string name="koil_mode_icon_text">圖示 + 文字</string>
     <string name="koil_mode_icon_only">僅圖示</string>
-    <string name="koil_set_section_entry">錄入</string>
+    <string name="koil_set_section_entry">錄入與計算</string>
     <string name="koil_set_default_province">預設省份</string>
     <string name="koil_set_default_province_sum">油價查詢與定位 · %1$s</string>
     <string name="koil_set_default_grade">預設油號</string>
@@ -184,7 +185,7 @@
     <string name="koil_set_deviation_sum">實付單價偏離參考價±%1$d%%</string>
     <string name="koil_set_price_alert">油價調整窗口提醒</string>
     <string name="koil_set_price_alert_sub">首頁顯示下一個調價日、預測與折合</string>
-    <string name="koil_set_section_price_db">油價數據庫</string>
+    <string name="koil_set_section_price_db">油價數據與提醒</string>
     <string name="koil_pdb_provinces">省份</string>
     <string name="koil_pdb_grades">油號</string>
     <string name="koil_pdb_adjustments">調價</string>
@@ -193,7 +194,9 @@
     <string name="koil_pdb_pending_title">待確認更新</string>
     <string name="koil_pdb_update_now">立即更新</string>
     <string name="koil_pdb_auto_sub">每 8 小時檢測一次調價，發布後生效</string>
-    <string name="koil_set_section_data">資料</string>
+    <string name="koil_set_data_io_title">匯出與備份</string>
+    <string name="koil_set_data_io_sub">加油記錄、油價歷史與完整備份</string>
+    <string name="koil_set_section_data">資料與備份</string>
     <string name="koil_set_location">定位</string>
     <string name="koil_set_location_sub">自動識別省份</string>
     <string name="koil_set_price_db_auto">油價庫自動更新</string>
@@ -215,7 +218,7 @@
     <string name="koil_set_export_price_history">匯出油價歷史</string>
     <string name="koil_set_export_price_history_sub">CSV 格式 · 全部油價庫</string>
     <string name="koil_set_crash_log">崩潰日誌</string>
-    <string name="koil_set_crash_log_sub">應用閃退時自動記錄（僅存本機，不上傳）· 保留最近 10 條</string>
+    <string name="koil_set_crash_log_sub">閃退自動記錄 · 僅存本機 · 保留 10 條</string>
     <string name="koil_set_crash_count">%1$d 條記錄</string>
     <string name="koil_set_crash_none">暫無崩潰記錄</string>
     <string name="koil_set_crash_export">匯出</string>
@@ -327,6 +330,30 @@
 
     <!-- 雲端同步（堅果雲 WebDAV） -->
     <string name="koil_sync_section">雲端同步</string>
+    <string name="koil_set_about">關於</string>
+    <string name="koil_set_about_version">版本 %1$s（%2$d）</string>
+    <string name="koil_set_about_check_update">檢查更新</string>
+    <string name="koil_set_about_check_update_sub">從 GitHub Releases 取得最新版本</string>
+    <string name="koil_set_about_checking">檢查中…</string>
+    <string name="koil_set_about_latest">已是最新</string>
+    <string name="koil_set_about_newer">可更新 %1$s</string>
+    <string name="koil_set_about_check_failed">檢查失敗，點擊重試</string>
+    <string name="koil_set_about_terms">使用條款</string>
+    <string name="koil_set_about_privacy">隱私政策</string>
+    <string name="koil_set_about_licenses">開源許可</string>
+    <string name="koil_set_about_licenses_sub">主要第三方函式庫與許可證</string>
+    <string name="koil_set_about_feedback">問題回饋</string>
+    <string name="koil_set_about_feedback_sub">附帶版本號與機型，便於定位</string>
+    <string name="koil_set_about_diag">診斷</string>
+    <string name="koil_set_about_open_failed">沒有可開啟此連結的應用</string>
+    <string name="koil_common_close">關閉</string>
+    <string name="koil_set_about_terms_body">KOiL 用於記錄個人加油資料、查詢公開的成品油調價資訊。\n\n資料準確性：油價以加油站公示與官方調價公告為準，應用內的參考價、預測與折合僅供參考，不構成消費或投資建議。\n\n使用風險：因錄入錯誤、資料源延遲或裝置故障造成的記錄偏差，由使用者自行承擔。\n\n本應用為開源專案，依「現狀」提供，不承諾無中斷或無錯誤運行。</string>
+    <string name="koil_set_about_privacy_body">本機優先：加油記錄、車輛資訊與設定項全部保存在裝置本機，不上傳任何伺服器。\n\n定位權限：僅在開啟「自動定位省份」時使用，結果只用於填入預設省份，不記錄軌跡、不上傳。\n\n雲端同步（選用）：開啟後資料只備份到你自己的 WebDAV 伺服器，帳號與應用密碼加密後存於本機，開發者無法存取。\n\n崩潰日誌：只保存在本機，需手動匯出，不會自動上報。</string>
+    <string name="koil_set_about_licenses_body">Kotlin、Coroutines、kotlinx.serialization — Apache-2.0\nJetpack Compose、Room、DataStore、WorkManager — Apache-2.0\nMiuix（top.yukonga.miuix.kmp）— Apache-2.0\nKtor、OkHttp — Apache-2.0\nKoin — Apache-2.0\n\n完整相依清單見倉庫 gradle/libs.versions.toml，各函式庫授權原文見其發佈頁。</string>
+    <string name="koil_sync_badge_on">已連接</string>
+    <string name="koil_sync_badge_off">未設定</string>
+    <string name="koil_sync_manage">管理</string>
+    <string name="koil_sync_collapse">收起</string>
     <string name="koil_sync_switch">雲端同步</string>
     <string name="koil_sync_switch_sub">自動備份加油記錄到 WebDAV 雲端</string>
     <string name="koil_sync_url">WebDAV 位址</string>
@@ -361,6 +388,12 @@
     <string name="koil_detail_stranded">擱淺</string>
     <string name="koil_detail_held_price">維持 %1$s 價格</string>
     <string name="koil_detail_last_year">上年</string>
+    <string name="koil_detail_latest">最新</string>
+    <string name="koil_detail_delta_up">↑ ¥%1$.2f</string>
+    <string name="koil_detail_delta_down">↓ ¥%1$.2f</string>
+    <string name="koil_detail_pct_up">+%1$s%%</string>
+    <string name="koil_detail_pct_down">−%1$s%%</string>
+    <string name="koil_detail_gap_days">間隔 %1$d 天</string>
     <string name="koil_sync_password_invalid">應用程式密碼已失效（換機或重裝後加密金鑰遺失），請重新輸入</string>
     <string name="koil_sync_status_password_invalid">同步已暫停：應用程式密碼需重新輸入</string>
 </resources>

@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -34,6 +33,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Receipt
@@ -447,21 +447,38 @@ fun OverviewScreen(
             }
         }
 
-        // 右下角返回顶部按钮（对齐 Web；bottom 抬高避让悬浮导航条）
-        if (showBackToTop) {
+        // v1.6.3（UX 方案 A）：返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
+        // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
+        // 再短动画收尾到 0；近处保持平滑 animateScrollToItem。不再从深处慢速长飞。
+        AnimatedVisibility(
+            visible = showBackToTop,
+            enter = fadeIn() + scaleIn(initialScale = 0.6f),
+            exit = fadeOut() + scaleOut(targetScale = 0.6f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = bottomPadding + 16.dp)
                     .size(44.dp)
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
                     .clickable {
-                        scope.launch { listState.animateScrollToItem(0) }
+                        scope.launch {
+                            if (listState.firstVisibleItemIndex > 60) {
+                                listState.scrollToItem(60)
+                            }
+                            listState.animateScrollToItem(0)
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "↑", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowUp,
+                    contentDescription = stringResource(R.string.koil_back_to_top),
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
     }
@@ -803,6 +820,18 @@ private fun MonthHeaderRow(monthKey: String, count: Int) {
  *     （此时它必已处于吸顶位，即使视口外），实现回滚时顶栏标题连续切换、无空档；
  *     吸顶标题已滚出视口上方（上滚中）→ 保持吸顶。
  * 覆盖层据此渲染顶栏同款毛玻璃标题；列表内对应标题行由各自 pinned 判定透明占位。
+ *
+ * v1.6.3（P2-2）：重做信号源，判定树逐分支保留 v1.5.50fix 语义。
+ * 旧实现 snapshotFlow { visibleItemsInfo } 每帧发射一次完整可见项快照（60Hz 滚动下每秒
+ * 数十个 List + LazyListItemInfo 快照分配），collect 内再 mapNotNull 出中间列表。
+ * 现改为：
+ * - 流信号改为 `firstVisibleItemIndex to firstVisibleItemScrollOffset`——snapshotFlow 按结构
+ *   相等去重，静止时完全不发射；滚动时发射体只有两个装箱 int；
+ * - visibleItemsInfo 改在收集体内直读（它本身仍是每帧新对象，但只被消费、不再进流），
+ *   单趟循环同时得出 lastInTop / anyHeader / pinnedVisible，零中间列表分配；
+ * - 判定分支仍是有状态的（"回滚接替"依赖上一个 pinned 值，纯 derivedStateOf 表达不了，
+ *   强行无状态会改变回滚语义），所以保留 mutableStateOf + 写前比对：值不变不写入，
+ *   订阅覆盖层不重组。
  */
 @Composable
 private fun rememberTopPinnedMonth(
@@ -814,33 +843,38 @@ private fun rememberTopPinnedMonth(
     val topBarPx = with(density) { topPadding.toPx() }
     var pinned by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(listState, topBarPx, monthKeys) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo }
-            .collect { visibleItems: List<LazyListItemInfo> ->
-                // 收集可见月份标题：(monthKey, offset) —— key 剥掉 "header-" 前缀
-                val headers: List<Pair<String, Int>> = visibleItems.mapNotNull { info ->
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect {
+                val visibleItems = listState.layoutInfo.visibleItemsInfo
+                var lastInTopKey: String? = null
+                var pinnedVisible = false
+                var anyHeader = false
+                for (info in visibleItems) {
                     val key = info.key
                     if (key is String && key.startsWith("header-")) {
-                        key.removePrefix("header-") to info.offset
-                    } else {
-                        null
+                        anyHeader = true
+                        val month = key.removePrefix("header-")
+                        if (month == pinned) pinnedVisible = true
+                        if (info.offset.toFloat() <= topBarPx + 2f) lastInTopKey = month
                     }
                 }
-                val lastInTop = headers.lastOrNull { it.second.toFloat() <= topBarPx + 2f }
-                if (lastInTop != null) {
-                    pinned = lastInTop.first
-                    return@collect
-                }
-                if (headers.isEmpty()) {
-                    // 列表顶部（未进入历史区）或历史区已滚完 → 取消；否则保持吸顶（吸顶标题滚出视口上方）
-                    val atTop = listState.firstVisibleItemIndex == 0 &&
-                        listState.firstVisibleItemScrollOffset < topBarPx.toInt()
-                    if (atTop || !listState.canScrollForward) pinned = null
-                    return@collect
-                }
-                // 可见标题都在顶栏下方：回滚松开 → 上一个月份标题立即接替（吸顶中）；否则保持
-                if (headers.any { it.first == pinned }) {
-                    val idx = monthKeys.indexOf(pinned)
-                    pinned = if (idx > 0) monthKeys[idx - 1] else null
+                when {
+                    // ① 顶栏区内有标题：最后一个顶替（正向滚动换月）
+                    lastInTopKey != null -> if (pinned != lastInTopKey) pinned = lastInTopKey
+                    // ② 视口无任何标题：列表顶部（未进入历史区）或历史区已滚完 → 取消；
+                    //    否则保持吸顶（吸顶标题滚出视口上方、下一标题未到）
+                    !anyHeader -> {
+                        val atTop = listState.firstVisibleItemIndex == 0 &&
+                            listState.firstVisibleItemScrollOffset < topBarPx.toInt()
+                        if ((atTop || !listState.canScrollForward) && pinned != null) pinned = null
+                    }
+                    // ③ 标题都在顶栏下方且 pinned 可见：回滚松开 → 上一个月份标题立即接替
+                    pinnedVisible -> {
+                        val idx = pinned?.let { monthKeys.indexOf(it) } ?: -1
+                        val next = if (idx > 0) monthKeys[idx - 1] else null
+                        if (pinned != next) pinned = next
+                    }
+                    // ④ 其余（pinned 已滚出视口上方，上滚中）→ 保持吸顶
                 }
             }
     }
