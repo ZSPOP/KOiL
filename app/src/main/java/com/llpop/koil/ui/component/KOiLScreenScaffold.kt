@@ -40,6 +40,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun KOiLScreenScaffold(
     title: String,
     modifier: Modifier = Modifier,
+    // v1.6.3：可选副标题，走 TopAppBar 原生 subtitle 槽位——
+    // 展开态显示在大标题下方，折叠后自动居中到小标题下方，无需额外占一行。
+    subtitle: String = "",
     navigationIcon: (@Composable () -> Unit)? = null,
     overlay: @Composable (backdrop: LayerBackdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
     content: @Composable (
@@ -64,6 +67,7 @@ fun KOiLScreenScaffold(
             BlurredBar(backdrop = backdrop, blurActive = blurActive) {
                 TopAppBar(
                     title = title,
+                    subtitle = subtitle,
                     navigationIcon = navigationIcon ?: {},
                     color = barColor,
                     scrollBehavior = scrollBehavior,
