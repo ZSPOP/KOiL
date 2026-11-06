@@ -1109,16 +1109,7 @@ fun SettingsScreen(
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                         // —— 状态行：备份状态在左，管理/收起贴着同一行右侧 ——
                         // 徽章已上移到开关标题旁，这一行只留「文本 + 管理」，少一行高度。
-                        // v1.6.4：整行可点（原来只有「管理」两个字是约 44×24dp 的小命中区，
-                        // 且与左侧状态文字同色系、只差 1sp，视觉上像状态的一部分而不像按钮）。
-                        // 现在命中区铺满整行宽，右侧补一个「详细 ›」同族的折叠箭头承担可展开语义。
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .clickable { formExpanded = !formExpanded },
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = statusText,
                                 fontSize = 12.sp,
@@ -1130,28 +1121,38 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
-                                else stringResource(R.string.koil_sync_manage),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                                maxLines = 1,
-                                modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-                            )
-                            val arrowRotation by animateFloatAsState(
-                                targetValue = if (formExpanded) 180f else 0f,
-                                label = "syncManageArrow",
-                            )
-                            Icon(
-                                imageVector = Icons.Filled.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            // v1.6.4：「管理 ⌄」与油价卡「详细 ›」同族——同字号 14sp、同图标 18dp、
+                            // 同一右侧内距 10dp（两处箭头在设置页里纵向对齐）。
+                            // 命中区只包住「文字 + 箭头」：整行可点会让点状态文字也展开，不自然。
+                            Row(
                                 modifier = Modifier
-                                    .padding(start = 2.dp, end = 8.dp, top = 4.dp, bottom = 4.dp)
-                                    .size(16.dp)
-                                    .rotate(arrowRotation),
-                            )
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable { formExpanded = !formExpanded }
+                                    .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
+                                    else stringResource(R.string.koil_sync_manage),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    maxLines = 1,
+                                )
+                                Spacer(Modifier.width(2.dp))
+                                val arrowRotation by animateFloatAsState(
+                                    targetValue = if (formExpanded) 180f else 0f,
+                                    label = "syncManageArrow",
+                                )
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .rotate(arrowRotation),
+                                )
+                            }
                         }
 
                         // —— 两个常用动作：常态可见 ——
