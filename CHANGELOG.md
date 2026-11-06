@@ -1,64 +1,38 @@
 # KOiL CHANGELOG
 
-## 未发布（v1.6.7 多语言作用域 / 返回链路 / 密码回显）
+## v1.6.3 — 2026-11-06（versionCode 271）
 
-> **v1.6.7（真机反馈三项）**
-> ⑨ 补录窗、编辑窗、设置页省份选择不跟随应用语言、选完仍显示中文：
->    - 根因一：**Dialog 是独立组合根**。Compose 的 `ProvideCompositionLocals` 会用窗口自己的
->      `context`/`configuration` 重新提供 `LocalContext` / `LocalConfiguration`，把 MainScreen 的应用语言
->      覆盖冲掉，于是弹窗整屏回落到系统语言（中文）。新增 `LocalAppLocale`（自定义 CompositionLocal 会随父组合
->      继承进 Dialog 子组合）+ `ProvideAppLocale`，在 `KOiLGlassDialog` 内按应用语言重新覆盖一次；
->      `provinceLabel/gradeLabel` 也改为优先读 `LocalAppLocale`。
->    - 根因二：设置页「默认省份」下拉直接传了 `PROVINCES`（数据库主键，中文），列表与摘要都没做显示名映射。
->      改为 `items = provinces.map { provinceLabel(it) }`、摘要同映射；录入页省份按钮也补上映射。
->    - 新增 `ProvinceLocalizationTest`（6 项）：31 个省份英文名全覆盖、英文名不含中文、繁中不落英文、
->      油号四键全覆盖、未知键原样返回。
-> ⑩ 明细页返回手势仍直接退出应用：v1.6.6 的 `enableOnBackInvokedCallback=false` 是误诊。真正原因是
->    MainActivity 用 `rememberNavigationEventDispatcherOwner(true, null)` 自建了一个**与平台隔离**的
->    `NavigationEventDispatcher`；而 activity-compose 1.12 的 `BackHandler` 优先注册在
->    `LocalNavigationEventDispatcherOwner` 上 —— 页面里的 BackHandler 永远收不到返回事件，手势一路下到
->    Activity 直接 finish。改为直接提供 `this@MainActivity`（`ComponentActivity` 自身实现该接口，
->    其 dispatcher 就是 `OnBackPressedDispatcher` 的事件管道，且已与 `window.onBackInvokedDispatcher` 对接），
->    并移除清单里的 `enableOnBackInvokedCallback=false`，回到平台默认的预测性返回链路。
-> ⑪ 设置页「应用密码」有时一排点、有时全空：上一版为「不覆盖已存密码」把草稿做成恒空，掩码没有内容可掩，
->    显示取决于异步加载时机。现按设计口径还原：`SyncUiState.password` 暴露解密后的明文（Keystore 解密仍在
->    `Dispatchers.Default` 且只做一次），输入框草稿随其回填 —— 眼睛关闭显示掩码，点亮显示真实字符；
->    仅在草稿与存储值不同时才落盘，避免锁开关反复重加密。
+设置页重构 + 油价调价页时间轴重做 + 「导出与备份」弹窗化。
 
-## 未发布（v1.6.5 真机回归修复 + v1.6.6 弹窗/多语言）
+**设置页**
 
-> **v1.6.5（闪退 / 键盘）**
-> ① 油价数据库「查看」进明细页必现闪退：`koil_detail_year` 是 `%1$d 年`，实参却是年份 **字符串**（`take(4)` 得到 `List<String>`），
->    `String.format` 抛 `IllegalFormatConversionException`。三语资源统一改 `%1$s`；新增 `StringFormatTest`（反射遍历全部 `R.string`，
->    按资源自己声明的占位符类型喂假值格式化，三语各跑一遍）防复发。
-> ② 键盘遮挡「添加记录」「保存」：根因是清单从未声明 `windowSoftInputMode`（默认 `adjustUnspecified` → 系统选 `adjustPan`，
->    整窗上移、底部留空且 IME inset 不上报）。改 `adjustResize`；`KOiLGlassDialog` 加
->    `decorFitsSystemWindows=false` + 内容根 `imePadding()`（必须在 `BoxWithConstraints` 外层）；录入页底部留白 IME 可见时 84dp→12dp。
+- 分组重排：通用与外观 / 导航与显示 / 录入与计算 / 油价数据与提醒 / 数据与备份 / 诊断 / 关于（收尾）
+- 「导出与备份」5 项低频动作收进玻璃弹窗，入口行置于数据与备份卡顶（云同步之上，不依赖同步开关）
+- 数据与备份组重排：云同步提至组首；徽章并入标题行、状态与管理同行、「保存并测试连接」改实底主色按钮
+- 油价大卡先拆「历史油价数据库」+「数据源与更新」、后合并为单卡（去掉卡内标题，行内距统一 16dp/13dp）
+- 副标题统一不超 1 行（三语，超出省略号截断）；崩溃日志副标题精简为三段式
+- 关于区收尾：版本号 / 检查更新（GitHub Releases）/ 使用条款 / 隐私政策 / 开源许可 / 问题反馈
 
-> **v1.6.6（弹窗一致性 / 多语言 / 返回手势）**
-> ③ 编辑窗、补录窗宽度变窄：`usePlatformDefaultWidth = widthFraction != null` 写反了——指定比例的弹窗反而落到
->    「系统默认宽度」（该值为 true 时 Compose 把窗口宽度设为 `WRAP_CONTENT`），再叠加按 `containerSize` 算比例宽度，
->    形成「窗口宽取决于卡片宽、卡片宽又取决于窗口宽」的循环，停在一个偏小的值上。改回 `widthFraction == null`，
->    宽度基准也改成 `BoxWithConstraints.maxWidth`（父约束），彻底去掉这个循环。
-> ④ 点一下「全部一起关闭」：`DialogProperties.dismissOnClickOutside` 默认 true，点击落在 Dialog 窗口之外时系统直接
->    `onDismissRequest` 关整个弹窗，绕过卡片外遮罩的逐级逻辑（有下拉先收下拉、再点才关卡片）。置 false，统一由遮罩处理；
->    另外同一弹窗内只允许一个下拉展开（`register` 时先收起其它条目），避免一次点掉多个。
-> ⑤ 设置页「应用密码」有时一排点、有时空白：草稿用 `remember { if (passwordSet) "" else 默认口令 }` 初始化，而
->    `passwordSet` 来自异步 DataStore（首帧恒 false），记住的是哪一次看组合时机；更糟的是草稿非空会被失焦/锁开关
->    直接 `setPassword()` 写回，等于用默认口令覆盖真实密码。改为草稿恒空 + 占位提示，首次使用时才在落盘那一步回退默认口令。
-> ⑥ 语言下拉中「简体中文」显示为 "Simplified Chinese" 而「繁體中文」是中文：统一成各语言自称（English / 简体中文 / 繁體中文）。
-> ⑦ 英文界面下油价明细页仍见中文：省份、油号是**数据库主键**（"广东" / "92号汽油"），被直接渲染。新增 `OilPriceLabels`
->    做「显示名」映射（Guangdong / 92# 汽油 / 92# Gasoline / 廣東），键不动、只换显示；覆盖明细页 chip、补录/编辑窗省份字段、
->    记录行省份徽标、导入预览列表。油号按真机反馈统一成 "92# 汽油" 写法。
-> ⑧ 明细页返回手势直接退出应用：targetSdk 37 默认走预测性返回（`OnBackInvokedCallback`），Compose 的 `BackHandler`
->    没接住，手势越过页面把 Activity 收掉。清单显式 `android:enableOnBackInvokedCallback="false"`，返回统一回落到
->    `onBackPressed → OnBackPressedDispatcher → BackHandler`。
+**油价调价页**
 
-## v1.6.1
+- 调价历史改竖向时间轴：涨红 / 跌绿 / 搁浅灰节点，0 中轴双向幅度条（数轮迭代收敛到 2dp 导线 + 4dp 彩段 + 6dp 底带）
+- 筛选区重排：省份 / 年份收进下拉 pill、油号改整行分段控件；滚过筛选区后浮出毛玻璃吸顶胶囊条
+- 返回顶部图标化 + 智能回顶；下拉 pill 二次点击不再收起又弹开、面板水平自动判向
 
-> 说明：本轮只改源码与资源，`versionName` 未动（仍在 1.6.1，发版时由你拍板再跳）；DB schema 不变（version 1），覆盖升级安全。
+**工程**
 
-> **v1.6.2（崩溃面 / 数据正确性 / 交互，19 项）**
+- 吸顶月份判定信号源重做：snapshotFlow 改追 two-int 滚动位置，单趟零分配扫描（P2-2）
+- 新增 androidTest 源集与真机性能基线（PerfBenchmarkTest，debug 包名独立避免覆盖正式版）
+
+## v1.6.2 — 2026-11-06（versionCode 267）
+
+性能审计 + 深度审计修复（四轮）+ 真机回归修复 + 崩溃日志收集（本地累积 + 设置页查看 / 导出）。开启 R8 后 APK 59.3MB → 6.0MB。
+
+> **轮次一（性能基线）**
+> 导出切 IO 线程 + 冷启动补灌去重 + Worker 网络约束；派生计算改字符串比较 + 云同步失效流 + 设置流去重；
+> 图表画笔复用 + 导航项列表缓存；开启 R8 压缩。
+
+> **轮次二·深度审计 19 项（崩溃面 / 数据正确性 / 交互）**
 > ① `NumberFormat` 遇 `NaN`/`±Infinity` 抛 `NumberFormatException`（调用点全在 UI 绘制与 CSV 导出，脏数据即闪退）；
 >    `BigDecimal(Double)` 二进制近似导致 2.675→2.67；`-0.0001` 显示 `"-0.00"`。改 `BigDecimal.valueOf` + 非有限值占位 + 正零归一。
 > ② 编辑/补录预检开头拍快照、结尾整体回写，吞掉预检期间的用户输入 → 改 `_uiState.update`。
@@ -71,7 +45,7 @@
 >    云端快照 JSON 解析两遍无校验；负里程被标"短距"；`saveBackfill` 解析失败按钮永久置灰；导出失败遗留 0 字节文件；
 >    WorkManager 主线程初始化；详情页硬编码繁体；英文/繁中少一个 `%3$s`；20 处 `collectAsState` 改生命周期感知。
 >
-> **v1.6.3（报告第四节 A~I，9 项）**
+> **轮次三·审计报告第四节 A~I（9 项）**
 > ⑨ **A 云同步"假开启"**：Keystore 密钥不进备份，换机/重装后密文解不开 → `isConfigured()=false`，推送与恢复全部静默跳过，
 >    而开关仍是"已开启"、`lastStatus` 还留着上次成功。新增 `SyncUiState.passwordInvalid`（Default 线程解密校验），
 >    设置页密码行与状态行改为"应用密码已失效，请重新输入 / 同步已暂停"（三语）。
@@ -91,7 +65,7 @@
 >
 > 验证：`testDebugUnitTest` 12 项全绿；`lintDebug` 0 error；Release（R8 + 资源压缩）构建通过。
 >
-> **v1.6.4（把 lint 从 58 warning 压到 3，全部依赖升级到当前可解析的最新）**
+> **轮次四·lint 58 warning 清零 + 依赖全量升级**
 > ⑱ **依赖升级**：core-ktx 1.15.0→1.16.0、lifecycle 2.8.7→2.10.0、activity-compose 1.9.3→1.12.4、
 >    Compose 1.11.1→1.12.0、ktor 3.0.3→3.6.1、koin 4.0.0→4.2.2、coroutines 1.9.0→1.11.0、
 >    kotlinx-serialization 1.7.3→1.12.0、robolectric 4.14.1→4.17。**Kotlin 2.3.21→2.4.21 无法升**：
@@ -115,8 +89,8 @@
 >
 > 验证：`testDebugUnitTest` 13 项全绿；`lintDebug` **0 error / 3 warning**（3 条全是 Kotlin 2.4.21 的版本提示，
 > 受 KSP 约束无法升，见 ⑱）。
->
-> **v1.6.5（线上反馈：油价数据库「查看」闪退）**
+
+> **轮次五·真机回归修复（线上反馈：明细页闪退 / 键盘遮挡）**
 > ㉕ **明细页必现闪退**：`koil_detail_year` 资源是 `%1$d 年`，调用点传的却是年份字符串
 >    （`OilPriceDetailViewModel` 用 `effectiveDate.take(4)` 切出 `List<String>`），
 >    `String.format` 抛 `IllegalFormatConversionException: d != java.lang.String`。
@@ -135,6 +109,48 @@
 >    卡片不会被收敛。8 处 `KOiLGlassDialog`（编辑/补录/删除确认/异常明细/导入预览/省份…）统一受益。
 > ㉙ **键盘弹起时不再保留悬浮底栏留白**：`Spacer(bottomPadding + 12dp)` 在 IME 可见时收敛为 12dp，
 >    否则按钮下方固定留 84dp 空白，观感像"内容没渲染出来"。
+
+> **轮次六·真机回归修复（弹窗一致性 / 多语言 / 返回链路 / 密码回显）**
+
+> ③ 编辑窗、补录窗宽度变窄：`usePlatformDefaultWidth = widthFraction != null` 写反了——指定比例的弹窗反而落到
+>    「系统默认宽度」（该值为 true 时 Compose 把窗口宽度设为 `WRAP_CONTENT`），再叠加按 `containerSize` 算比例宽度，
+>    形成「窗口宽取决于卡片宽、卡片宽又取决于窗口宽」的循环，停在一个偏小的值上。改回 `widthFraction == null`，
+>    宽度基准也改成 `BoxWithConstraints.maxWidth`（父约束），彻底去掉这个循环。
+> ④ 点一下「全部一起关闭」：`DialogProperties.dismissOnClickOutside` 默认 true，点击落在 Dialog 窗口之外时系统直接
+>    `onDismissRequest` 关整个弹窗，绕过卡片外遮罩的逐级逻辑（有下拉先收下拉、再点才关卡片）。置 false，统一由遮罩处理；
+>    另外同一弹窗内只允许一个下拉展开（`register` 时先收起其它条目），避免一次点掉多个。
+> ⑤ 设置页「应用密码」有时一排点、有时空白：草稿用 `remember { if (passwordSet) "" else 默认口令 }` 初始化，而
+>    `passwordSet` 来自异步 DataStore（首帧恒 false），记住的是哪一次看组合时机；更糟的是草稿非空会被失焦/锁开关
+>    直接 `setPassword()` 写回，等于用默认口令覆盖真实密码。改为草稿恒空 + 占位提示，首次使用时才在落盘那一步回退默认口令。
+> ⑥ 语言下拉中「简体中文」显示为 "Simplified Chinese" 而「繁體中文」是中文：统一成各语言自称（English / 简体中文 / 繁體中文）。
+> ⑦ 英文界面下油价明细页仍见中文：省份、油号是**数据库主键**（"广东" / "92号汽油"），被直接渲染。新增 `OilPriceLabels`
+>    做「显示名」映射（Guangdong / 92# 汽油 / 92# Gasoline / 廣東），键不动、只换显示；覆盖明细页 chip、补录/编辑窗省份字段、
+>    记录行省份徽标、导入预览列表。油号按真机反馈统一成 "92# 汽油" 写法。
+> ⑧ 明细页返回手势直接退出应用：targetSdk 37 默认走预测性返回（`OnBackInvokedCallback`），Compose 的 `BackHandler`
+>    没接住，手势越过页面把 Activity 收掉。清单显式 `android:enableOnBackInvokedCallback="false"`，返回统一回落到
+>    `onBackPressed → OnBackPressedDispatcher → BackHandler`。
+
+> ⑨ 补录窗、编辑窗、设置页省份选择不跟随应用语言、选完仍显示中文：
+>    - 根因一：**Dialog 是独立组合根**。Compose 的 `ProvideCompositionLocals` 会用窗口自己的
+>      `context`/`configuration` 重新提供 `LocalContext` / `LocalConfiguration`，把 MainScreen 的应用语言
+>      覆盖冲掉，于是弹窗整屏回落到系统语言（中文）。新增 `LocalAppLocale`（自定义 CompositionLocal 会随父组合
+>      继承进 Dialog 子组合）+ `ProvideAppLocale`，在 `KOiLGlassDialog` 内按应用语言重新覆盖一次；
+>      `provinceLabel/gradeLabel` 也改为优先读 `LocalAppLocale`。
+>    - 根因二：设置页「默认省份」下拉直接传了 `PROVINCES`（数据库主键，中文），列表与摘要都没做显示名映射。
+>      改为 `items = provinces.map { provinceLabel(it) }`、摘要同映射；录入页省份按钮也补上映射。
+>    - 新增 `ProvinceLocalizationTest`（6 项）：31 个省份英文名全覆盖、英文名不含中文、繁中不落英文、
+>      油号四键全覆盖、未知键原样返回。
+> ⑩ 明细页返回手势仍直接退出应用：v1.6.6 的 `enableOnBackInvokedCallback=false` 是误诊。真正原因是
+>    MainActivity 用 `rememberNavigationEventDispatcherOwner(true, null)` 自建了一个**与平台隔离**的
+>    `NavigationEventDispatcher`；而 activity-compose 1.12 的 `BackHandler` 优先注册在
+>    `LocalNavigationEventDispatcherOwner` 上 —— 页面里的 BackHandler 永远收不到返回事件，手势一路下到
+>    Activity 直接 finish。改为直接提供 `this@MainActivity`（`ComponentActivity` 自身实现该接口，
+>    其 dispatcher 就是 `OnBackPressedDispatcher` 的事件管道，且已与 `window.onBackInvokedDispatcher` 对接），
+>    并移除清单里的 `enableOnBackInvokedCallback=false`，回到平台默认的预测性返回链路。
+> ⑪ 设置页「应用密码」有时一排点、有时全空：上一版为「不覆盖已存密码」把草稿做成恒空，掩码没有内容可掩，
+>    显示取决于异步加载时机。现按设计口径还原：`SyncUiState.password` 暴露解密后的明文（Keystore 解密仍在
+>    `Dispatchers.Default` 且只做一次），输入框草稿随其回填 —— 眼睛关闭显示掩码，点亮显示真实字符；
+>    仅在草稿与存储值不同时才落盘，避免锁开关反复重加密。
 
 ## v1.6.1（versionCode 由 CI 注入）— 2026-11-05（应用图标重设计 + 启动屏跟随系统深浅色 + CI 依赖现代化）
 
