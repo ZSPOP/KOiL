@@ -41,7 +41,7 @@ android {
         // 兼容旧变量名 KOIL_CI_VERSION_CODE（直接用其值）；本地构建无环境变量时 fallback 到下方基准值，每轮手动 +1。
         versionCode = System.getenv("KOIL_CI_RUN_NUMBER")?.toIntOrNull()?.let { it + 251 }
             ?: System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull() ?: 252
-        versionName = "1.6.1"
+        versionName = "1.6.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
