@@ -1466,14 +1466,8 @@ fun SettingsScreen(
                 widthFraction = 0.90f,
             ) {
                 Column {
-                    Text(
-                        text = stringResource(R.string.koil_set_data_io_title),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Spacer(Modifier.height(4.dp))
-
+                    // v1.6.5：去掉「数据与备份」标题——入口行本身就叫「导出与备份」，
+                    // 弹窗再顶一个近义大标题只是重复占高度，直接让选项当首屏内容。
                     // —— CSV 段：人可读、Excel 能开 ——
                     DataIoDialogItem(
                         title = stringResource(R.string.koil_set_export_records),
@@ -2103,10 +2097,12 @@ private fun SettingRow(
         )
         if (showArrow) {
             Spacer(Modifier.width(4.dp))
+            // v1.6.5：与油价卡「详细 ›」的箭头完全同款——同图标 18dp、同 action 色。
+            // 此前这里是 onBackgroundVariant 50% 灰，和「详细」的眼睛看起来不一套。
             Icon(
                 imageVector = arrowIcon,
                 contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
+                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                 modifier = Modifier.size(18.dp),
             )
         }
