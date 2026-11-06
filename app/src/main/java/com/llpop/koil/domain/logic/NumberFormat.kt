@@ -27,6 +27,9 @@ object NumberFormat {
     /** 度量值：最多 2 位小数，剪尾零，整数不带小数点（7.00 → 7，7.50 → 7.5，7.856 → 7.86） */
     fun measure(v: Double): String = trimmed(v, 2)
 
+    /** 固定 2 位小数（不剪尾零）：用于卡片内需要位数对齐的度量（油耗 5.80、油价 8.10） */
+    fun fixed2(v: Double): String = fixed(v, 2)
+
     /** 百分比：最多 1 位小数，剪尾零，整数不带小数点（20.0 → 20，20.55 → 20.6） */
     fun pct(v: Double): String = trimmed(v, 1)
 

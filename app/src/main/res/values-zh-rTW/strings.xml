@@ -123,7 +123,7 @@
     <plurals name="koil_ov_record_count">
     <item quantity="other">%1$d次加油</item>
     </plurals>
-    <string name="koil_ov_oil_days">%1$d天</string>
+    <string name="koil_ov_oil_days">%1$d 天</string>
     <string name="koil_ov_high">偏高</string>
     <string name="koil_ov_low">偏低</string>
     <string name="koil_ov_prev_line">上次 %1$s · 里程 %2$d → %3$d km</string>

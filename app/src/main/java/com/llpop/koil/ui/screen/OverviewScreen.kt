@@ -73,6 +73,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -389,7 +390,8 @@ fun OverviewScreen(
                     }
                 }
             }
-            item { Spacer(Modifier.height(bottomPadding + 12.dp)) }
+            // v1.6.5：底部留白加大——回顶按钮占 bottomPadding+16 起的高度，12dp 会被它盖住末卡内容
+            item { Spacer(Modifier.height(bottomPadding + 80.dp)) }
         }
 
         // v1.5.5：长按全屏操作层——点击任意处收起；圆按钮定位在长按卡片中央
@@ -1620,6 +1622,7 @@ private fun RecordCard(
                             tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.45f),
                             modifier = Modifier.size(15.dp),
                         )
+                        Spacer(Modifier.width(2.dp))
                         Text(
                             text = md(prevRecord.record.reoilDate),
                             fontSize = 12.sp,
@@ -1632,9 +1635,11 @@ private fun RecordCard(
                         Spacer(Modifier.width(6.dp))
                         Pill(
                             text = stringResource(R.string.koil_ov_oil_days, record.oilDays),
-                            color = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                            // v1.6.5 细节：深色主题下 surfaceVariant 与卡片底色几乎同色，胶囊隐形；
+                            // 改用文字色 12% 做底——浅色显浅灰、深色显浅白，两个主题都有对比
+                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f),
                             textColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                            border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.2f),
+                            border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.28f),
                         )
                     }
                     Spacer(Modifier.weight(1f))
@@ -1670,9 +1675,9 @@ private fun RecordCard(
                             Spacer(Modifier.width(6.dp))
                             Pill(
                                 text = stringResource(R.string.koil_ov_distance_pill, record.distance.toInt()),
-                                color = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f),
                                 textColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                                border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.2f),
+                                border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.28f),
                             )
                         } else {
                             Text(
@@ -1691,8 +1696,8 @@ private fun RecordCard(
                             stringResource(
                                 R.string.koil_ov_grade_actual,
                                 r.oilGrade ?: "-",
-                                NumberFormat.measure(record.unitPriceActual),
-                                NumberFormat.measure(r.oilAmount),
+                                NumberFormat.fixed2(record.unitPriceActual),
+                                NumberFormat.fixed2(r.oilAmount),
                             )
                         } else {
                             (r.oilGrade ?: "-") + "# · " + NumberFormat.measure(r.oilAmount) + " L"
@@ -1708,7 +1713,15 @@ private fun RecordCard(
                 // —— 灰块：油耗大字（唯一主角）+ 竖排「环比 / 单位」 ····· 右侧 每公里成本 / 应付单价 ——
                 if (record.oilConsumption != null && record.distance != null) {
                     Spacer(Modifier.height(9.dp))
-                    val delta = deltaText(record.oilConsumption, prevRecord?.oilConsumption, lowerBetter = true)
+                    // v1.6.5 细节：深色主题下 2E7D32/E65100 对比度不足，按背景亮度切换亮色变体
+                    val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+                    val delta = deltaText(
+                        record.oilConsumption,
+                        prevRecord?.oilConsumption,
+                        lowerBetter = true,
+                        goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32),
+                        badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100),
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1718,7 +1731,7 @@ private fun RecordCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = NumberFormat.measure(record.oilConsumption),
+                            text = NumberFormat.fixed2(record.oilConsumption),
                             fontSize = 27.sp,
                             fontWeight = FontWeight.Bold,
                             // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
@@ -1765,7 +1778,7 @@ private fun RecordCard(
                             val payablePrice = record.unitPricePayable ?: r.oilPrice
                             if (payablePrice != null) {
                                 Text(
-                                    text = stringResource(R.string.koil_ov_payable_price, NumberFormat.measure(payablePrice)),
+                                    text = stringResource(R.string.koil_ov_payable_price, NumberFormat.fixed2(payablePrice)),
                                     fontSize = 11.sp,
                                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                                     maxLines = 1,
@@ -1849,13 +1862,20 @@ private fun RecordWithDerived.isLow(): Boolean = consumptionStatus == Consumptio
 private data class DeltaText(val text: String, val color: Color)
 
 /** 环比 delta 文本（对齐 Web：↓0.26 (4.0%)；里程整数指标 digits=0 → ↓35 (5.7%)，不再显示 35.00） */
-private fun deltaText(cur: Double?, prev: Double?, lowerBetter: Boolean, digits: Int = 2): DeltaText? {
+private fun deltaText(
+    cur: Double?,
+    prev: Double?,
+    lowerBetter: Boolean,
+    goodColor: Color = Color(0xFF2E7D32),
+    badColor: Color = Color(0xFFE65100),
+    digits: Int = 2,
+): DeltaText? {
     if (cur == null || prev == null || prev <= 0) return null
     val diff = cur - prev
     val pct = diff / prev * 100
     val arrow = if (diff > 0) "↑" else "↓"
     val good = if (lowerBetter) diff < 0 else diff > 0
-    val color = if (good) Color(0xFF2E7D32) else Color(0xFFE65100)
+    val color = if (good) goodColor else badColor
     val fmt = if (digits <= 0) "%.0f" else "%.${digits}f"
     val diffTxt = if (digits <= 0) fmt.format(abs(diff)) else NumberFormat.measure(abs(diff))
     return DeltaText(
