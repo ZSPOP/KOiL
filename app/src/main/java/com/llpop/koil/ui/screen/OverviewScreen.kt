@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalGasStation
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Payments
@@ -1580,20 +1579,24 @@ private fun RecordCard(
         ) {
             // 异常左竖条（v1.6.5：异常卡唯一结构性信号，加宽到 4dp）
             if (isAbnormal) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(4.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B),
-                                    if (isHigh) Color(0xFFD84315) else Color(0xFFD97706),
+                // v1.6.5 fix：外层 Box 是 wrap-content（滚动列表里高度约束无穷），fillMaxHeight 解析为 0 高导致竖条隐身；
+                // 用 matchParentSize 跟随卡片实际尺寸（不参与测量），内部再取 4dp 宽
+                Box(modifier = Modifier.matchParentSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(4.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B),
+                                        if (isHigh) Color(0xFFD84315) else Color(0xFFD97706),
+                                    )
                                 )
                             )
-                        )
-                        .align(Alignment.CenterStart),
-                )
+                            .align(Alignment.CenterStart),
+                    )
+                }
             }
             Column(
                 modifier = Modifier
@@ -1615,15 +1618,14 @@ private fun RecordCard(
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     if (prevRecord != null) {
-                        Spacer(Modifier.width(3.dp))
-                        Icon(
-                            // v1.6.5：带横杠的「←」，替换原来尖角的 KeyboardArrowLeft
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.size(16.dp),
+                        Spacer(Modifier.width(4.dp))
+                        // v1.6.5：方案 A——改用文字字形「←」，与里程行的「→」、环比的「↑」同一套字体风格
+                        Text(
+                            text = "←",
+                            fontSize = 15.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                         )
-                        Spacer(Modifier.width(2.dp))
+                        Spacer(Modifier.width(3.dp))
                         Text(
                             text = md(prevRecord.record.reoilDate),
                             fontSize = 12.sp,
@@ -1699,7 +1701,7 @@ private fun RecordCard(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = "¥" + NumberFormat.money(record.costPerKm) + "/km",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onBackground,
                             maxLines = 1,
@@ -1735,7 +1737,7 @@ private fun RecordCard(
                         Text(
                             text = NumberFormat.fixed2(record.oilConsumption),
                             fontSize = 27.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontWeight = FontWeight.ExtraBold,
                             // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
                             color = if (isAbnormal) accentColor else MiuixTheme.colorScheme.onBackground,
                             maxLines = 1,
@@ -1768,7 +1770,8 @@ private fun RecordCard(
                                     R.string.koil_ov_unit_price_actual,
                                     actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
-                                fontSize = 11.sp,
+                                // v1.6.5：右列与中列严格同构——上 10sp（对应 L/100km）、下 12sp（对应环比），行线横向对齐
+                                fontSize = 10.sp,
                                 color = MiuixTheme.colorScheme.onBackground,
                                 maxLines = 1,
                                 softWrap = false,
@@ -1778,7 +1781,7 @@ private fun RecordCard(
                                     R.string.koil_ov_unit_price_station,
                                     stationPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 maxLines = 1,
                                 softWrap = false,
