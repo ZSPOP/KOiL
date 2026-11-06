@@ -1063,12 +1063,14 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(Modifier.height(16.dp))
+
         // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复） =====
         // v1.6.3 重构：表单默认收起，常态只显示「状态 + 立即备份/从云端恢复」。
         // 旧版三行输入各带一个锁定开关（改个账号要先解锁再上锁，共 6 次点击），是设置页最大的交互负担。
+        // 二、不再单独占一个分组标题——它就是「数据与备份」里的最后一张卡。
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
-        SectionTitle(stringResource(R.string.koil_sync_section))
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
@@ -1870,12 +1872,16 @@ private fun SettingRow(
                 fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onBackground,
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
+            // v1.6.3：副标题可空——关于区里「条款/隐私」这类行只有标题，
+            // 无条件渲染会白占一行高度（空 Text + 2dp），行高忽高忽低
+            if (subtitle.isNotEmpty()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
         }
         Text(
             text = value,
