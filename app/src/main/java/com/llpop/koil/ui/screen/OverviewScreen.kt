@@ -1646,7 +1646,8 @@ private fun RecordCard(
                     Text(
                         text = "¥" + NumberFormat.money(r.actualAmount),
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
+                        // v1.6.5：实付金额再粗一档
+                        fontWeight = FontWeight.ExtraBold,
                         color = MiuixTheme.colorScheme.onBackground,
                         maxLines = 1,
                     )
@@ -1701,7 +1702,7 @@ private fun RecordCard(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = "¥" + NumberFormat.money(record.costPerKm) + "/km",
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onBackground,
                             maxLines = 1,
@@ -1710,9 +1711,17 @@ private fun RecordCard(
                     }
                 }
 
-                // —— 灰块：油耗大字 + 左侧「单位 / 环比」 ····· 右侧 实付单价 / 油站单价 ——
+                // —— 油耗区（v1.6.5：去掉灰底，改淡分割线分组；数字左对齐、单价右对齐到内容线）——
                 if (record.oilConsumption != null && record.distance != null) {
-                    Spacer(Modifier.height(9.dp))
+                    // 14. 分割线：1dp、内容区全宽、文字色 10%
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
+                    )
+                    Spacer(Modifier.height(10.dp))
                     // v1.6.5 细节：深色主题下 2E7D32/E65100 对比度不足，按背景亮度切换亮色变体
                     val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
                     val delta = deltaText(
@@ -1726,17 +1735,13 @@ private fun RecordCard(
                     val actualPrice = record.unitPriceActual ?: r.oilPrice
                     val stationPrice = record.unitPricePayable ?: r.oilPrice
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            // v1.6.5：灰块留在卡片内容区内、左右不撑满，圆角完整；内部左右各留 6dp
-                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f))
-                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = NumberFormat.fixed2(record.oilConsumption),
-                            fontSize = 27.sp,
+                            // 8. 与右列两行（10sp+12sp+2dp）总高等高：27sp 收到 24sp
+                            fontSize = 24.sp,
                             fontWeight = FontWeight.ExtraBold,
                             // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
                             color = if (isAbnormal) accentColor else MiuixTheme.colorScheme.onBackground,
@@ -1765,24 +1770,24 @@ private fun RecordCard(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            Text(
-                                text = stringResource(
-                                    R.string.koil_ov_unit_price_actual,
-                                    actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
-                                ),
-                                // v1.6.5：右列与中列严格同构——上 10sp（对应 L/100km）、下 12sp（对应环比），行线横向对齐
-                                fontSize = 10.sp,
-                                color = MiuixTheme.colorScheme.onBackground,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
+                            // 6. 换位：油站单价 10sp 灰在上、实付单价 12sp 白在下（上小下大、上灰下白）
                             Text(
                                 text = stringResource(
                                     R.string.koil_ov_unit_price_station,
                                     stationPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
-                                fontSize = 12.sp,
+                                fontSize = 10.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                            Text(
+                                text = stringResource(
+                                    R.string.koil_ov_unit_price_actual,
+                                    actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
+                                ),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onBackground,
                                 maxLines = 1,
                                 softWrap = false,
                             )
@@ -1880,7 +1885,8 @@ private fun deltaText(
     val fmt = if (digits <= 0) "%.0f" else "%.${digits}f"
     val diffTxt = if (digits <= 0) fmt.format(abs(diff)) else NumberFormat.measure(abs(diff))
     return DeltaText(
-        text = "$arrow $diffTxt (${NumberFormat.pct(abs(pct))}%)",
+        // v1.6.5：箭头放数字后面
+        text = "$diffTxt (${NumberFormat.pct(abs(pct))}%) $arrow",
         color = color,
     )
 }
