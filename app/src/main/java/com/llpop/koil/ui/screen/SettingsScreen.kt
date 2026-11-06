@@ -385,47 +385,6 @@ fun SettingsScreen(
             }
             SettingDivider()
             SettingSwitchRow(
-                title = stringResource(R.string.koil_set_price_alert),
-                subtitle = stringResource(R.string.koil_set_price_alert_sub),
-                checked = uiState.priceAlert,
-                onCheckedChange = viewModel::setPriceAlert,
-            )
-            SettingDivider()
-            // 油价推送通知开关（v1.5.28：权限联动——未授权恒显示关；点开先请求系统权限，同意才开）
-            SettingSwitchRow(
-                title = stringResource(R.string.koil_set_price_push),
-                subtitle = stringResource(R.string.koil_set_price_push_sub),
-                checked = uiState.pricePush && pushPermissionGranted,
-                onCheckedChange = { on ->
-                    if (on) {
-                        if (pushPermissionGranted) {
-                            viewModel.setPricePush(true)
-                        } else {
-                            // v1.5.29：HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
-                            // 用户开启后返回 App（ON_RESUME）自动补开开关；v1.5.30：跳转加固（NEW_TASK + fallback）
-                            pendingOpenPush = true
-                            openNotificationSettings(context)
-                        }
-                    } else {
-                        viewModel.setPricePush(false)
-                    }
-                },
-            )
-            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）；v1.5.30：间距收紧 + 跳转加固
-            if (!pushPermissionGranted) {
-                Text(
-                    text = stringResource(R.string.koil_set_price_push_denied),
-                    fontSize = 11.sp,
-                    lineHeight = 14.sp,
-                    color = KOiLColors.Warning,
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-3).dp)
-                        .clickable { openNotificationSettings(context) },
-                )
-            }
-            SettingDivider()
-            SettingSwitchRow(
                 title = stringResource(R.string.koil_set_keep_grade),
                 subtitle = stringResource(R.string.koil_set_keep_grade_sub),
                 checked = uiState.keepLastGrade,
@@ -449,13 +408,8 @@ fun SettingsScreen(
                     },
                 )
             }
-            }
-        }
-        Spacer(Modifier.height(16.dp))
-
-        // ===== 提醒与校验 =====
-        SectionTitle(stringResource(R.string.koil_set_section_remind))
-        SettingsCard {
+            // 阈值与油箱容量：录入时的校验/估算参数，归到同一张卡
+            SettingDivider()
             StepperInputRow(
                 title = stringResource(R.string.koil_set_abnormal),
                 summary = stringResource(R.string.koil_set_abnormal_sum, uiState.abnormalThreshold.toInt()),
@@ -488,6 +442,7 @@ fun SettingsScreen(
                 onFieldTap = { tappedOnField.value = true },
                 onCommit = { viewModel.setTankCapacity(it.toFloat()) },
             )
+            }
         }
         Spacer(Modifier.height(16.dp))
 
@@ -915,49 +870,91 @@ fun SettingsScreen(
             crashCount = CrashReporter.countEntries(crashLogText)
         }
 
-        // ===== 数据 =====
+        // ===== 提醒：由数据更新触发，跟数据卡同组 =====
+        SettingsCard {
+            SettingSwitchRow(
+                title = stringResource(R.string.koil_set_price_alert),
+                subtitle = stringResource(R.string.koil_set_price_alert_sub),
+                checked = uiState.priceAlert,
+                onCheckedChange = viewModel::setPriceAlert,
+            )
+            SettingDivider()
+            // 油价推送通知开关（v1.5.28：权限联动——未授权恒显示关；点开先请求系统权限，同意才开）
+            SettingSwitchRow(
+                title = stringResource(R.string.koil_set_price_push),
+                subtitle = stringResource(R.string.koil_set_price_push_sub),
+                checked = uiState.pricePush && pushPermissionGranted,
+                onCheckedChange = { on ->
+                    if (on) {
+                        if (pushPermissionGranted) {
+                            viewModel.setPricePush(true)
+                        } else {
+                            // v1.5.29：HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
+                            // 用户开启后返回 App（ON_RESUME）自动补开开关；v1.5.30：跳转加固（NEW_TASK + fallback）
+                            pendingOpenPush = true
+                            openNotificationSettings(context)
+                        }
+                    } else {
+                        viewModel.setPricePush(false)
+                    }
+                },
+            )
+            // v1.5.28：系统通知权限未开启提示行（点击跳系统通知设置一键开启）；v1.5.30：间距收紧 + 跳转加固
+            if (!pushPermissionGranted) {
+                Text(
+                    text = stringResource(R.string.koil_set_price_push_denied),
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp,
+                    color = KOiLColors.Warning,
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .offset(y = (-3).dp)
+                        .clickable { openNotificationSettings(context) },
+                )
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+
+        // ===== 数据与备份 =====
+        // v1.6.3 重构：6 个出口按「加油记录 / 完整备份 / 油价历史」三组配对，
+        // 之前 6 行长得一模一样，用户得逐个读副标题才知道谁跟谁是一对。
         SectionTitle(stringResource(R.string.koil_set_section_data))
         SettingsCard {
+            SettingSubLabel(stringResource(R.string.koil_set_group_records))
             SettingRow(
-                            title = stringResource(R.string.koil_set_export_records),
+                title = stringResource(R.string.koil_set_export_records),
                 subtitle = stringResource(R.string.koil_set_export_records_sub),
                 value = stringResource(R.string.koil_act_export),
                 onClick = viewModel::exportCsv,
             )
             SettingDivider()
             SettingRow(
-                            title = stringResource(R.string.koil_set_import_records),
+                title = stringResource(R.string.koil_set_import_records),
                 subtitle = stringResource(R.string.koil_set_import_records_sub),
                 value = stringResource(R.string.koil_act_import),
                 onClick = { importLauncher.launch(arrayOf("text/csv", "*/*")) },
             )
             SettingDivider()
+            SettingSubLabel(stringResource(R.string.koil_set_group_backup))
             SettingRow(
-                            title = stringResource(R.string.koil_set_backup),
+                title = stringResource(R.string.koil_set_backup),
                 subtitle = stringResource(R.string.koil_set_backup_sub),
                 value = stringResource(R.string.koil_act_backup),
                 onClick = viewModel::exportBackup,
             )
             SettingDivider()
             SettingRow(
-                            title = stringResource(R.string.koil_set_export_price_history),
-                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
-                value = stringResource(R.string.koil_act_export),
-                onClick = viewModel::exportOilPriceHistory,
-            )
-            SettingDivider()
-            SettingRow(
-                            title = stringResource(R.string.koil_set_restore),
+                title = stringResource(R.string.koil_set_restore),
                 subtitle = stringResource(R.string.koil_set_restore_sub),
                 value = stringResource(R.string.koil_act_restore),
                 onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
             )
             SettingDivider()
             SettingRow(
-                title = stringResource(R.string.koil_set_crash_log),
-                subtitle = stringResource(R.string.koil_set_crash_log_sub),
-                value = if (crashCount > 0) stringResource(R.string.koil_set_crash_count, crashCount) else "",
-                onClick = { showCrashDialog = true },
+                title = stringResource(R.string.koil_set_export_price_history),
+                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
+                value = stringResource(R.string.koil_act_export),
+                onClick = viewModel::exportOilPriceHistory,
             )
         }
         Spacer(Modifier.height(16.dp))
@@ -1066,7 +1063,9 @@ fun SettingsScreen(
             }
         }
 
-        // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复，docs/KOiL云同步设计.md） =====
+        // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复） =====
+        // v1.6.3 重构：表单默认收起，常态只显示「状态 + 立即备份/从云端恢复」。
+        // 旧版三行输入各带一个锁定开关（改个账号要先解锁再上锁，共 6 次点击），是设置页最大的交互负担。
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
         SectionTitle(stringResource(R.string.koil_sync_section))
@@ -1075,414 +1074,319 @@ fun SettingsScreen(
             cornerRadius = 20f,
         ) {
             Column(modifier = Modifier.padding(0.dp)) {
-                // —— 配置草稿：URL/账号以本地草稿驱动输入（每键写 DataStore 会造成受控组件
-                //    光标错乱），失焦、重新锁定或执行备份/恢复时才落盘；外部变化（恢复/启动加载）同步回草稿。
-                //    默认值预填：账号/应用密码为作者自用默认（未设置过才预填，已设置显示存储值）——
                 var urlDraft by remember { mutableStateOf(syncUi.url) }
                 var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
-                // v1.6.7：密码草稿 = 存储里的**真实密码**（异步到达后自动回填一次）。
-                // 设计口径：眼睛关闭 → 掩码（一排点）；点亮眼睛 → 显示真实字符。
-                // 前一版为了"不覆盖已存密码"把草稿做成恒空，结果掩码永远没有内容可掩，
-                // 真机看到的就是"有时候一排点、有时候完全空白"（取决于异步加载时机）。
-                // 现在直接回显：password 变化（启动加载 / 刚保存）才重置草稿，用户输入期间不受影响。
+                // 密码草稿 = 存储里的真实密码（异步到达后回填一次），眼睛关闭时掩码、点亮显示明文
                 var pwdDraft by remember(syncUi.password) { mutableStateOf(syncUi.password) }
                 val effectivePwd: String? = when {
                     pwdDraft.isNotBlank() -> pwdDraft
-                    syncUi.passwordSet -> null            // 已存密码 + 本次没输入 → 不覆盖
-                    else -> DEFAULT_SYNC_APP_PASSWORD     // 首次使用 → 沿用默认口令
+                    syncUi.passwordSet -> null
+                    else -> DEFAULT_SYNC_APP_PASSWORD
                 }
                 LaunchedEffect(syncUi.url) { if (urlDraft != syncUi.url) urlDraft = syncUi.url }
                 LaunchedEffect(syncUi.username) {
-                    // 仅外部真实写入（如云端恢复）才同步；空值不覆盖预填默认账号
                     if (syncUi.username.isNotBlank() && usernameDraft != syncUi.username) {
                         usernameDraft = syncUi.username
                     }
                 }
-                // —— 锁定/编辑开关：默认锁定（只读防误改）；关=可编辑；重新开=自动存储 ——
-                var urlLocked by remember { mutableStateOf(true) }
-                var usernameLocked by remember { mutableStateOf(true) }
-                var pwdLocked by remember { mutableStateOf(true) }
-                // —— 开关行（复用工程规范组件：自带 16dp 内边距，与其他板块同基准）——
-                //    打开开关 = 立即同步：先落盘草稿（含默认值）→ 空库自动恢复 / 非空库立即推送
-                // v1.5.47：云同步配置加载完成前不渲染总开关（杜绝"关→开"闪烁）
+                var formExpanded by remember { mutableStateOf(false) }
+
                 if (syncUi.loaded) {
-                SettingSwitchRow(
-                    title = stringResource(R.string.koil_sync_switch),
-                    subtitle = stringResource(R.string.koil_sync_switch_sub),
-                    checked = syncUi.enabled,
-                    onCheckedChange = { on ->
-                        syncVm.setEnabled(on, urlDraft, usernameDraft, effectivePwd)
-                    },
-                )
+                    SettingSwitchRow(
+                        title = stringResource(R.string.koil_sync_switch),
+                        subtitle = stringResource(R.string.koil_sync_switch_sub),
+                        checked = syncUi.enabled,
+                        onCheckedChange = { on ->
+                            syncVm.setEnabled(on, urlDraft, usernameDraft, effectivePwd)
+                        },
+                    )
                 }
                 if (syncUi.enabled) {
                     SettingDivider()
                     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-
-                    // —— 配置表单：URL / 账号 / 应用密码（标签行右侧为锁定/编辑小开关）——
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_sync_url),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(
-                            checked = urlLocked,
-                            onCheckedChange = { locked ->
-                                if (locked && urlDraft != syncUi.url) {
-                                    syncVm.setUrl(urlDraft)
-                                }
-                                urlLocked = locked
-                            },
-                            modifier = Modifier.scale(0.8f),
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    TextField(
-                        value = urlDraft,
-                        onValueChange = { urlDraft = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                if (!state.isFocused && urlDraft != syncUi.url) {
-                                    syncVm.setUrl(urlDraft)
-                                }
-                            },
-                        readOnly = urlLocked,
-                        // v1.5.44 补丁：miuix 的 labelColor 不作用于输入文字，锁定态用 textStyle 强制暗色（整体禁用观感）
-                        textStyle = TextStyle(
-                            color = if (urlLocked) {
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-                            } else {
-                                MiuixTheme.colorScheme.onBackground
-                            },
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Uri,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = if (urlLocked) {
-                                MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-                            } else {
-                                MiuixTheme.colorScheme.secondaryContainer
-                            },
-                            labelColor = if (urlLocked) {
-                                // v1.5.44：锁定态文字用暗化禁用色（原 onBackgroundVariant 45% 仍偏白）
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-                            } else {
-                                MiuixTheme.colorScheme.onSecondaryContainer
-                            },
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_sync_username),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(
-                            checked = usernameLocked,
-                            onCheckedChange = { locked ->
-                                if (locked && usernameDraft != syncUi.username) {
-                                    syncVm.setUsername(usernameDraft)
-                                }
-                                usernameLocked = locked
-                            },
-                            modifier = Modifier.scale(0.8f),
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    TextField(
-                        value = usernameDraft,
-                        onValueChange = { usernameDraft = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                if (!state.isFocused && usernameDraft != syncUi.username) {
-                                    syncVm.setUsername(usernameDraft)
-                                }
-                            },
-                        readOnly = usernameLocked,
-                        // v1.5.44 补丁：锁定态用 textStyle 强制暗色文字（labelColor 不作用于输入文字）
-                        textStyle = TextStyle(
-                            color = if (usernameLocked) {
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-                            } else {
-                                MiuixTheme.colorScheme.onBackground
-                            },
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Ascii,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Next,
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = if (usernameLocked) {
-                                MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-                            } else {
-                                MiuixTheme.colorScheme.secondaryContainer
-                            },
-                            labelColor = if (usernameLocked) {
-                                // v1.5.44：锁定态文字用暗化禁用色（原 onBackgroundVariant 45% 仍偏白）
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-                            } else {
-                                MiuixTheme.colorScheme.onSecondaryContainer
-                            },
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    // —— 应用密码（不回显；输入新值即覆盖；辅助行展示设置状态；右侧眼睛可临时查看明文）——
-                    var showPwd by remember { mutableStateOf(false) }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_sync_app_password),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            modifier = Modifier.weight(1f),
-                        )
-                        Switch(
-                            checked = pwdLocked,
-                            onCheckedChange = { locked ->
-                                // 只在真的改了才落盘（草稿现在会回显存储值，避免每次锁开关都重加密一次）
-                                if (locked && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
-                                    syncVm.setPassword(pwdDraft)
-                                }
-                                pwdLocked = locked
-                            },
-                            modifier = Modifier.scale(0.8f),
-                        )
-                    }
-                    Spacer(Modifier.height(6.dp))
-                    TextField(
-                        value = pwdDraft,
-                        onValueChange = { pwdDraft = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                if (!state.isFocused && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
-                                    syncVm.setPassword(pwdDraft)
-                                }
-                            },
-                        readOnly = pwdLocked,
-                        // v1.6.6：草稿恒为空（密文不回显），必须给占位提示，否则看起来像"密码丢了"
-                        label = stringResource(
-                            if (syncUi.passwordSet) R.string.koil_sync_app_password_set
-                            else R.string.koil_sync_app_password_unset,
-                        ),
-                        useLabelAsPlaceholder = true,
-                        // v1.5.44 补丁：锁定态用 textStyle 强制暗色文字（labelColor 不作用于输入文字）
-                        textStyle = TextStyle(
-                            color = if (pwdLocked) {
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-                            } else {
-                                MiuixTheme.colorScheme.onBackground
-                            },
-                        ),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Password,
-                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                        ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onDone = {
-                                if (pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
-                                    syncVm.setPassword(pwdDraft)
-                                }
-                                focusManager.clearFocus()
-                            },
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = if (pwdLocked) {
-                                MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-                            } else {
-                                MiuixTheme.colorScheme.secondaryContainer
-                            },
-                            labelColor = if (pwdLocked) {
-                                // v1.5.44：锁定态文字用暗化禁用色（原 onBackgroundVariant 45% 仍偏白）
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.30f)
-                            } else {
-                                MiuixTheme.colorScheme.onSecondaryContainer
-                            },
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                        visualTransformation = if (showPwd) {
-                            androidx.compose.ui.text.input.VisualTransformation.None
-                        } else {
-                            androidx.compose.ui.text.input.PasswordVisualTransformation()
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { showPwd = !showPwd }) {
-                                Icon(
-                                    imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = null,
-                                    tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        },
-                    )
-                    // 密码状态行 + 明文存储/失效警示
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        val passwordWarn = syncUi.passwordInvalid || (syncUi.passwordSet && !syncUi.passwordEncrypted)
-                        Text(
-                            text = when {
-                                !syncUi.passwordSet -> stringResource(R.string.koil_sync_app_password_unset)
-                                // v1.6.3：密文解不开（换机/重装）排在明文存储之前——不然只提示"未加密存储"，
-                                // 用户会以为同步正常，实际推送与恢复都已被 isConfigured() 挡掉
-                                syncUi.passwordInvalid -> stringResource(R.string.koil_sync_password_invalid)
-                                !syncUi.passwordEncrypted -> stringResource(R.string.koil_sync_password_plain_warn)
-                                else -> stringResource(R.string.koil_sync_app_password_set)
-                            },
-                            fontSize = 11.sp,
-                            lineHeight = 14.sp,
-                            color = if (passwordWarn && syncUi.passwordSet) KOiLColors.Warning
-                            else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
-                            modifier = Modifier.weight(1f).padding(top = 4.dp),
-                        )
-                        if (syncUi.passwordSet) {
-                            Text(
-                                text = stringResource(R.string.koil_sync_password_clear),
-                                fontSize = 11.sp,
-                                color = KOiLColors.Primary,
-                                modifier = Modifier
-                                    .padding(top = 4.dp, start = 8.dp)
-                                    .clickable {
-                                        syncVm.clearPassword()
-                                        pwdDraft = ""
-                                    },
-                            )
+                        val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
+                        val statusText = when {
+                            // 密码解不开时其余状态都是假的（lastStatus 可能还停在上次成功备份）
+                            syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)
+                            !configured -> stringResource(R.string.koil_sync_status_not_configured)
+                            syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
+                            syncUi.lastStatus.startsWith("ok@") ->
+                                stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
+                            syncUi.lastStatus.startsWith("fail:") ->
+                                stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
+                            else -> stringResource(R.string.koil_sync_status_never)
                         }
-                    }
-                    Spacer(Modifier.height(12.dp))
+                        val healthy = configured && !syncUi.passwordInvalid
+                        val unhealthy = !healthy || syncUi.lastStatus.startsWith("fail:")
 
-                    // —— 保存并测试连接：配置草稿落盘 + PROPFIND 验证（明确"登入"反馈）——
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MiuixTheme.colorScheme.secondaryContainer)
-                            .clickable(enabled = !syncUi.busy) {
-                                syncVm.saveAndTest(urlDraft, usernameDraft, effectivePwd)
-                            }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
+                        // —— 头部：状态徽章 + 管理/收起 ——
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MiuixTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(14.dp),
-                            )
-                            Spacer(Modifier.width(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(
+                                        if (healthy) KOiLColors.Primary.copy(alpha = 0.12f)
+                                        else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
+                                    )
+                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = if (healthy) stringResource(R.string.koil_sync_badge_on)
+                                    else stringResource(R.string.koil_sync_badge_off),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (healthy) KOiLColors.Primary
+                                    else MiuixTheme.colorScheme.onBackgroundVariant,
+                                )
+                            }
+                            Spacer(Modifier.weight(1f))
                             Text(
-                                text = stringResource(R.string.koil_sync_save_test),
-                                fontSize = 12.sp,
+                                text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
+                                else stringResource(R.string.koil_sync_manage),
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onSecondaryContainer,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { formExpanded = !formExpanded }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
                             )
                         }
-                    }
-                    Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = statusText,
+                            fontSize = 12.sp,
+                            lineHeight = 15.sp,
+                            color = if (unhealthy) KOiLColors.Warning
+                            else MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
 
-                    // —— 操作按钮行：立即备份 / 从云端恢复 ——
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(KOiLColors.Primary)
-                                .clickable(enabled = !syncUi.busy) {
-                                    syncVm.backupNow(urlDraft, usernameDraft, effectivePwd)
+                        // —— 两个常用动作：常态可见 ——
+                        Spacer(Modifier.height(10.dp))
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(KOiLColors.Primary)
+                                    .clickable(enabled = !syncUi.busy) {
+                                        syncVm.backupNow(urlDraft, usernameDraft, effectivePwd)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Upload,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.koil_sync_backup_now),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White,
+                                    )
                                 }
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Filled.Upload,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = stringResource(R.string.koil_sync_backup_now),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White,
-                                )
+                            }
+                            Spacer(Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(MiuixTheme.colorScheme.secondaryContainer)
+                                    .clickable(enabled = !syncUi.busy) {
+                                        syncVm.restoreNow(urlDraft, usernameDraft, effectivePwd)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Download,
+                                        contentDescription = null,
+                                        tint = MiuixTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.koil_sync_restore),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MiuixTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                }
                             }
                         }
-                        Spacer(Modifier.width(10.dp))
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(KOiLColors.Primary)
-                                .clickable(enabled = !syncUi.busy) {
-                                    // 恢复后保留密码草稿（不再清空，避免误以为未填）
-                                    syncVm.restoreNow(urlDraft, usernameDraft, effectivePwd)
-                                }
-                                .padding(horizontal = 14.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
+
+                        // —— 表单：点「管理」才展开（改地址/账号/密码时用）——
+                        if (formExpanded) {
+                            Spacer(Modifier.height(14.dp))
+                            TextField(
+                                value = urlDraft,
+                                onValueChange = { urlDraft = it },
+                                label = stringResource(R.string.koil_sync_url),
+                                useLabelAsPlaceholder = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { state ->
+                                        tappedOnField.value = state.isFocused
+                                        if (!state.isFocused && urlDraft != syncUi.url) syncVm.setUrl(urlDraft)
+                                    },
+                                singleLine = true,
+                                textStyle = TextStyle(color = MiuixTheme.colorScheme.onBackground),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Uri,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                                ),
+                                colors = TextFieldDefaults.textFieldColors(
+                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                    labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                    borderColor = Color.Transparent,
+                                ),
+                                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            TextField(
+                                value = usernameDraft,
+                                onValueChange = { usernameDraft = it },
+                                label = stringResource(R.string.koil_sync_username),
+                                useLabelAsPlaceholder = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { state ->
+                                        tappedOnField.value = state.isFocused
+                                        if (!state.isFocused && usernameDraft != syncUi.username) syncVm.setUsername(usernameDraft)
+                                    },
+                                singleLine = true,
+                                textStyle = TextStyle(color = MiuixTheme.colorScheme.onBackground),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Ascii,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                                ),
+                                colors = TextFieldDefaults.textFieldColors(
+                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                    labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                    borderColor = Color.Transparent,
+                                ),
+                                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                            )
+                            Spacer(Modifier.height(10.dp))
+                            var showPwd by remember { mutableStateOf(false) }
+                            TextField(
+                                value = pwdDraft,
+                                onValueChange = { pwdDraft = it },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { state ->
+                                        tappedOnField.value = state.isFocused
+                                        if (!state.isFocused && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
+                                            syncVm.setPassword(pwdDraft)
+                                        }
+                                    },
+                                label = stringResource(
+                                    if (syncUi.passwordSet) R.string.koil_sync_app_password_set
+                                    else R.string.koil_sync_app_password_unset,
+                                ),
+                                useLabelAsPlaceholder = true,
+                                singleLine = true,
+                                textStyle = TextStyle(color = MiuixTheme.colorScheme.onBackground),
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                    onDone = {
+                                        if (pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
+                                            syncVm.setPassword(pwdDraft)
+                                        }
+                                        focusManager.clearFocus()
+                                    },
+                                ),
+                                colors = TextFieldDefaults.textFieldColors(
+                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                    labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                    borderColor = Color.Transparent,
+                                ),
+                                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                                visualTransformation = if (showPwd) {
+                                    androidx.compose.ui.text.input.VisualTransformation.None
+                                } else {
+                                    androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                },
+                                trailingIcon = {
+                                    IconButton(onClick = { showPwd = !showPwd }) {
+                                        Icon(
+                                            imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                            contentDescription = null,
+                                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                },
+                            )
+                            // 密码状态行 + 明文存储/失效警示
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Filled.Download,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Spacer(Modifier.width(4.dp))
+                                val passwordWarn = syncUi.passwordInvalid || (syncUi.passwordSet && !syncUi.passwordEncrypted)
                                 Text(
-                                    text = stringResource(R.string.koil_sync_restore),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White,
+                                    text = when {
+                                        !syncUi.passwordSet -> stringResource(R.string.koil_sync_app_password_unset)
+                                        syncUi.passwordInvalid -> stringResource(R.string.koil_sync_password_invalid)
+                                        !syncUi.passwordEncrypted -> stringResource(R.string.koil_sync_password_plain_warn)
+                                        else -> stringResource(R.string.koil_sync_app_password_set)
+                                    },
+                                    fontSize = 11.sp,
+                                    lineHeight = 14.sp,
+                                    color = if (passwordWarn && syncUi.passwordSet) KOiLColors.Warning
+                                    else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
+                                    modifier = Modifier.weight(1f).padding(top = 4.dp),
                                 )
+                                if (syncUi.passwordSet) {
+                                    Text(
+                                        text = stringResource(R.string.koil_sync_password_clear),
+                                        fontSize = 11.sp,
+                                        color = KOiLColors.Primary,
+                                        modifier = Modifier
+                                            .padding(top = 4.dp, start = 8.dp)
+                                            .clickable {
+                                                syncVm.clearPassword()
+                                                pwdDraft = ""
+                                            },
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(10.dp))
+                            // —— 保存并测试连接：配置草稿落盘 + PROPFIND 验证 ——
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                    .clickable(enabled = !syncUi.busy) {
+                                        syncVm.saveAndTest(urlDraft, usernameDraft, effectivePwd)
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = null,
+                                        tint = MiuixTheme.colorScheme.onBackground,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = stringResource(R.string.koil_sync_save_test),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MiuixTheme.colorScheme.onBackground,
+                                    )
+                                }
                             }
                         }
-                    }
-                    Spacer(Modifier.height(12.dp))
-
-                    // —— 状态行（未配置 / 密码失效 / 已备份时间 / 失败待重试）——
-                    val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
-                    val statusText = when {
-                        // v1.6.3：最高优先级——密码解不开时其余状态都是假的（lastStatus 可能还是上次成功备份）
-                        syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)
-                        !configured -> stringResource(R.string.koil_sync_status_not_configured)
-                        syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
-                        syncUi.lastStatus.startsWith("ok@") ->
-                            stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
-                        syncUi.lastStatus.startsWith("fail:") ->
-                            stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
-                        else -> stringResource(R.string.koil_sync_status_never)
-                    }
-                    Text(
-                        text = statusText,
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
-                        color = if (syncUi.passwordInvalid || !configured || syncUi.lastStatus.startsWith("fail:")) KOiLColors.Warning
-                        else MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                        Spacer(Modifier.height(1.dp))
                     }
                 }
             }
@@ -1563,30 +1467,16 @@ fun SettingsScreen(
                 viewModel.clearExportMessage()
             }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
-        // 关于：KOiL 品牌矢量 logo（v1.5.33：Unbounded Bold 字形轮廓转矢量 drawable，
-        // 不再引用字体——字体文件已随本版删除）+ 版本号（V 大写）
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.koil_logo),
-                contentDescription = null,
-                colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f)),
-                // v1.5.35：logo 放大 10%（58.52×20 → 64.4×22，保持比例）
-                modifier = Modifier.size(width = 64.4.dp, height = 22.dp),
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                // v1.6.0：版本号显示附带 (versionCode)，与 CI 注入的构建流水号对应
-                text = "V${com.llpop.koil.BuildConfig.VERSION_NAME} (${com.llpop.koil.BuildConfig.VERSION_CODE})",
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-            )
-        }
-        Spacer(Modifier.height(bottomPadding + 12.dp))
+        // ===== 关于（v1.6.3：从「页脚一行灰字」升级为完整分区）=====
+        // 之前没有关于区，版本号只是页脚一行；而油价数据库卡片里的 V2026.11 是**油价数据版本**，
+        // 很容易被当成 App 版本。这里把版本、更新检查、条款、许可、诊断集中到一处。
+        AboutSection(
+            crashCount = crashCount,
+            onOpenCrashLog = { showCrashDialog = true },
+            bottomPadding = bottomPadding,
+        )
         }
     }
 
@@ -1691,6 +1581,223 @@ fun SettingsScreen(
 }
 
 // ===== 组件 =====
+// ===== 关于区（v1.6.3 新增）=====
+
+private const val KOIL_REPO_URL = "https://github.com/ZSPOP/KOiL"
+private const val KOIL_RELEASE_API = "https://api.github.com/repos/ZSPOP/KOiL/releases/latest"
+
+private sealed interface UpdateCheck {
+    data object Idle : UpdateCheck
+    data object Checking : UpdateCheck
+    data object Latest : UpdateCheck
+    data class Newer(val version: String, val url: String) : UpdateCheck
+    data object Failed : UpdateCheck
+}
+
+private fun openExternalUrl(context: Context, url: String) {
+    val ok = runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.isSuccess
+    if (!ok) {
+        android.widget.Toast.makeText(
+            context,
+            R.string.koil_set_about_open_failed,
+            android.widget.Toast.LENGTH_SHORT,
+        ).show()
+    }
+}
+
+/** 语义版本比较：只比数字段，忽略 V/v 前缀与非数字后缀（如 -beta） */
+private fun compareVersionNames(a: String, b: String): Int {
+    val pa = a.split(".", "-").mapNotNull { it.toIntOrNull() }
+    val pb = b.split(".", "-").mapNotNull { it.toIntOrNull() }
+    for (i in 0 until maxOf(pa.size, pb.size)) {
+        val x = pa.getOrElse(i) { 0 }
+        val y = pb.getOrElse(i) { 0 }
+        if (x != y) return x.compareTo(y)
+    }
+    return 0
+}
+
+/**
+ * 查 GitHub 最新 release。不引第三方库：一次 GET + 两个正则足够。
+ * 失败一律回落 Failed（离线 / 限流 / 仓库不可达），UI 显示「检查失败，点击重试」，不留假状态。
+ */
+private fun fetchLatestRelease(): UpdateCheck {
+    var conn: java.net.HttpURLConnection? = null
+    return try {
+        conn = java.net.URL(KOIL_RELEASE_API).openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 6000
+        conn.readTimeout = 6000
+        conn.setRequestProperty("User-Agent", "KOiL-Android")
+        conn.setRequestProperty("Accept", "application/vnd.github+json")
+        if (conn.responseCode !in 200..299) return UpdateCheck.Failed
+        val json = conn.inputStream.bufferedReader().use { it.readText() }
+        val tag = Regex("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.getOrNull(1)
+            ?: return UpdateCheck.Failed
+        val htmlUrl = Regex("\"html_url\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.getOrNull(1).orEmpty()
+        val latest = tag.trim().trimStart('V', 'v')
+        if (compareVersionNames(latest, com.llpop.koil.BuildConfig.VERSION_NAME) > 0) {
+            UpdateCheck.Newer(latest, htmlUrl)
+        } else {
+            UpdateCheck.Latest
+        }
+    } catch (t: Throwable) {
+        UpdateCheck.Failed
+    } finally {
+        runCatching { conn?.disconnect() }
+    }
+}
+
+@Composable
+private fun AboutSection(
+    crashCount: Int,
+    onOpenCrashLog: () -> Unit,
+    bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var update by remember { mutableStateOf<UpdateCheck>(UpdateCheck.Idle) }
+    var sheet by remember { mutableStateOf("") }
+
+    SectionTitle(stringResource(R.string.koil_set_about))
+    SettingsCard {
+        // —— 品牌头：wordmark + 版本号（versionCode 与 CI 流水号对应）——
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 18.dp, bottom = 15.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.koil_logo),
+                contentDescription = null,
+                colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.65f)),
+                modifier = Modifier.size(width = 64.4.dp, height = 22.dp),
+            )
+            Spacer(Modifier.height(7.dp))
+            Text(
+                text = stringResource(
+                    R.string.koil_set_about_version,
+                    com.llpop.koil.BuildConfig.VERSION_NAME,
+                    com.llpop.koil.BuildConfig.VERSION_CODE,
+                ),
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+            )
+        }
+        SettingDivider()
+        // —— 检查更新：查到新版本后这一行直接变成「打开 Release 页」——
+        SettingRow(
+            title = stringResource(R.string.koil_set_about_check_update),
+            subtitle = stringResource(R.string.koil_set_about_check_update_sub),
+            value = when (val u = update) {
+                UpdateCheck.Idle -> ""
+                UpdateCheck.Checking -> stringResource(R.string.koil_set_about_checking)
+                UpdateCheck.Latest -> stringResource(R.string.koil_set_about_latest)
+                is UpdateCheck.Newer -> stringResource(R.string.koil_set_about_newer, u.version)
+                UpdateCheck.Failed -> stringResource(R.string.koil_set_about_check_failed)
+            },
+            onClick = {
+                when (val u = update) {
+                    is UpdateCheck.Newer -> if (u.url.isNotBlank()) openExternalUrl(context, u.url)
+                    UpdateCheck.Checking -> Unit
+                    else -> {
+                        update = UpdateCheck.Checking
+                        scope.launch {
+                            update = withContext(Dispatchers.IO) { fetchLatestRelease() }
+                        }
+                    }
+                }
+            },
+        )
+        SettingDivider()
+        SettingRow(
+            title = stringResource(R.string.koil_set_about_terms),
+            subtitle = "",
+            value = "",
+            onClick = { sheet = "terms" },
+        )
+        SettingDivider()
+        SettingRow(
+            title = stringResource(R.string.koil_set_about_privacy),
+            subtitle = "",
+            value = "",
+            onClick = { sheet = "privacy" },
+        )
+        SettingDivider()
+        SettingRow(
+            title = stringResource(R.string.koil_set_about_licenses),
+            subtitle = stringResource(R.string.koil_set_about_licenses_sub),
+            value = "",
+            onClick = { sheet = "licenses" },
+        )
+    }
+    Spacer(Modifier.height(16.dp))
+
+    // —— 诊断：崩溃日志从「数据」区搬到这里，它是排查项不是数据出入口 ——
+    SectionTitle(stringResource(R.string.koil_set_about_diag))
+    SettingsCard {
+        SettingRow(
+            title = stringResource(R.string.koil_set_crash_log),
+            subtitle = stringResource(R.string.koil_set_crash_log_sub),
+            value = if (crashCount > 0) stringResource(R.string.koil_set_crash_count, crashCount) else "",
+            onClick = onOpenCrashLog,
+        )
+        SettingDivider()
+        SettingRow(
+            title = stringResource(R.string.koil_set_about_feedback),
+            subtitle = stringResource(R.string.koil_set_about_feedback_sub),
+            value = "",
+            onClick = { openExternalUrl(context, "$KOIL_REPO_URL/issues/new") },
+        )
+    }
+    Spacer(Modifier.height(bottomPadding + 12.dp))
+
+    if (sheet.isNotEmpty()) {
+        val titleRes = when (sheet) {
+            "terms" -> R.string.koil_set_about_terms
+            "privacy" -> R.string.koil_set_about_privacy
+            else -> R.string.koil_set_about_licenses
+        }
+        val bodyRes = when (sheet) {
+            "terms" -> R.string.koil_set_about_terms_body
+            "privacy" -> R.string.koil_set_about_privacy_body
+            else -> R.string.koil_set_about_licenses_body
+        }
+        KOiLGlassDialog(
+            show = true,
+            onDismissRequest = { sheet = "" },
+            contentPadding = 16.dp,
+            scrollable = true,
+            widthFraction = 0.90f,
+        ) {
+            Column {
+                Text(
+                    text = stringResource(titleRes),
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = stringResource(bodyRes),
+                    fontSize = 12.sp,
+                    lineHeight = 19.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+                Spacer(Modifier.height(14.dp))
+                Button(onClick = { sheet = "" }, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.koil_common_close), fontSize = 13.sp)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun SectionTitle(text: String) {
     Text(
@@ -1712,6 +1819,20 @@ private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
             content()
         }
     }
+}
+
+/**
+ * 卡内小节标题（v1.6.3）：同一条目族内的分组，比 SectionTitle 弱一档——
+ * 只在「数据与备份」这种一卡多组里用，避免和分组标题抢层级。
+ */
+@Composable
+private fun SettingSubLabel(text: String) {
+    Text(
+        text = text,
+        fontSize = 11.sp,
+        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
+        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 3.dp),
+    )
 }
 
 @Composable

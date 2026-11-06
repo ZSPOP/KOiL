@@ -156,10 +156,10 @@
     <string name="koil_ov_md_date">%1$d月%2$d日</string>
 
     <string name="koil_set_title">设置</string>
-    <string name="koil_set_section_general">通用</string>
+    <string name="koil_set_section_general">通用与外观</string>
     <string name="koil_set_appearance">外观设置</string>
     <string name="koil_set_language">语言设置</string>
-    <string name="koil_set_section_nav">导航栏</string>
+    <string name="koil_set_section_nav">导航与显示</string>
     <string name="koil_set_floating_bar">悬浮导航条</string>
     <string name="koil_set_floating_bar_sub">底部导航悬浮于内容之上</string>
     <string name="koil_set_floating_style">悬浮样式</string>
@@ -168,7 +168,7 @@
     <string name="koil_style_ios">iOS 液态玻璃</string>
     <string name="koil_mode_icon_text">图标 + 文字</string>
     <string name="koil_mode_icon_only">仅图标</string>
-    <string name="koil_set_section_entry">录入</string>
+    <string name="koil_set_section_entry">录入与计算</string>
     <string name="koil_set_default_province">默认省份</string>
     <string name="koil_set_default_province_sum">油价查询与定位 · %1$s</string>
     <string name="koil_set_default_grade">默认油号</string>
@@ -184,7 +184,7 @@
     <string name="koil_set_deviation_sum">实付单价偏离参考价±%1$d%%</string>
     <string name="koil_set_price_alert">油价调整窗口提醒</string>
     <string name="koil_set_price_alert_sub">首页显示下一个调价日、预测与折合</string>
-    <string name="koil_set_section_price_db">油价数据库</string>
+    <string name="koil_set_section_price_db">油价数据与提醒</string>
     <string name="koil_pdb_provinces">省份</string>
     <string name="koil_pdb_grades">油号</string>
     <string name="koil_pdb_adjustments">调价</string>
@@ -193,7 +193,9 @@
     <string name="koil_pdb_pending_title">待确认更新</string>
     <string name="koil_pdb_update_now">立即更新</string>
     <string name="koil_pdb_auto_sub">每 8 小时检测一次调价，发布后生效</string>
-    <string name="koil_set_section_data">数据</string>
+    <string name="koil_set_section_data">数据与备份</string>
+    <string name="koil_set_group_records">加油记录</string>
+    <string name="koil_set_group_backup">完整备份</string>
     <string name="koil_set_location">定位</string>
     <string name="koil_set_location_sub">自动识别省份</string>
     <string name="koil_set_price_db_auto">油价库自动更新</string>
@@ -327,6 +329,30 @@
 
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_sync_section">云同步</string>
+    <string name="koil_set_about">关于</string>
+    <string name="koil_set_about_version">版本 %1$s（%2$d）</string>
+    <string name="koil_set_about_check_update">检查更新</string>
+    <string name="koil_set_about_check_update_sub">从 GitHub Releases 获取最新版本</string>
+    <string name="koil_set_about_checking">检查中…</string>
+    <string name="koil_set_about_latest">已是最新</string>
+    <string name="koil_set_about_newer">可更新 %1$s</string>
+    <string name="koil_set_about_check_failed">检查失败，点击重试</string>
+    <string name="koil_set_about_terms">使用条款</string>
+    <string name="koil_set_about_privacy">隐私政策</string>
+    <string name="koil_set_about_licenses">开源许可</string>
+    <string name="koil_set_about_licenses_sub">主要第三方库与许可证</string>
+    <string name="koil_set_about_feedback">问题反馈</string>
+    <string name="koil_set_about_feedback_sub">附带版本号与机型，便于定位</string>
+    <string name="koil_set_about_diag">诊断</string>
+    <string name="koil_set_about_open_failed">没有可打开该链接的应用</string>
+    <string name="koil_common_close">关闭</string>
+    <string name="koil_set_about_terms_body">KOiL 用于记录个人加油数据、查询公开的成品油调价信息。\n\n数据准确性：油价以加油站公示与官方调价公告为准，应用内的参考价、预测与折合仅作参考，不构成消费或投资建议。\n\n使用风险：因录入错误、数据源延迟或设备故障造成的记录偏差，由使用者自行承担。\n\n本应用为开源项目，按「现状」提供，不承诺无中断或无错误运行。</string>
+    <string name="koil_set_about_privacy_body">本地优先：加油记录、车辆信息与设置项全部保存在设备本地，不上传任何服务器。\n\n定位权限：仅在开启「自动定位省份」时使用，结果只用于填充默认省份，不记录轨迹、不上传。\n\n云同步（可选）：开启后数据只备份到你自己的 WebDAV 服务器（如坚果云），账号与应用密码加密后存于本机，开发者无法访问。\n\n崩溃日志：只保存在本机，需手动导出，不会自动上报。</string>
+    <string name="koil_set_about_licenses_body">Kotlin、Coroutines、kotlinx.serialization — Apache-2.0\nJetpack Compose、Room、DataStore、WorkManager — Apache-2.0\nMiuix（top.yukonga.miuix.kmp）— Apache-2.0\nKtor、OkHttp — Apache-2.0\nKoin — Apache-2.0\n\n完整依赖清单见仓库 gradle/libs.versions.toml，各库许可证原文见其发布页。</string>
+    <string name="koil_sync_badge_on">已连接</string>
+    <string name="koil_sync_badge_off">未配置</string>
+    <string name="koil_sync_manage">管理</string>
+    <string name="koil_sync_collapse">收起</string>
     <string name="koil_sync_switch">云同步</string>
     <string name="koil_sync_switch_sub">自动备份加油记录到 WebDAV 云端</string>
     <string name="koil_sync_url">WebDAV 地址</string>
