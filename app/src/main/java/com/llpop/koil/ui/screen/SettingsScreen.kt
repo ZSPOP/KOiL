@@ -577,11 +577,14 @@ fun SettingsScreen(
                         }
                     }
                     Spacer(Modifier.weight(1f))
+                    // 点击区只在左侧和纵向留内距：右侧不留，箭头右缘与下方
+                    // 「导出与备份 / 崩溃日志」等 SettingRow 行的箭头同在
+                    // 「卡片边 - 16dp」一条线上，纵向对齐。
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
                             .clickable { onOpenPriceDetail() }
-                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                            .padding(start = 10.dp, top = 8.dp, bottom = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
@@ -1122,14 +1125,15 @@ fun SettingsScreen(
                                 modifier = Modifier.weight(1f),
                             )
                             Spacer(Modifier.width(8.dp))
-                            // v1.6.4：「管理 ⌄」与油价卡「详细 ›」同族——同字号 14sp、同图标 18dp、
-                            // 同一右侧内距 10dp（两处箭头在设置页里纵向对齐）。
+                            // v1.6.4：「管理 ⌄」与油价卡「详细 ›」同族——同字号 14sp、同图标 18dp，
+                            // 且箭头右缘都贴到「卡片边 - 16dp」，与「导出与备份 / 崩溃日志」
+                            // 等 SettingRow 行的箭头同一条线、纵向对齐。
                             // 命中区只包住「文字 + 箭头」：整行可点会让点状态文字也展开，不自然。
                             Row(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { formExpanded = !formExpanded }
-                                    .padding(start = 8.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                                    .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
