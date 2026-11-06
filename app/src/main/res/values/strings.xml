@@ -217,7 +217,7 @@
     <string name="koil_set_export_price_history">导出油价历史</string>
     <string name="koil_set_export_price_history_sub">CSV 格式 · 全部油价库</string>
     <string name="koil_set_crash_log">崩溃日志</string>
-    <string name="koil_set_crash_log_sub">应用闪退时自动记录（仅存本机，不上传）· 保留最近 10 条</string>
+    <string name="koil_set_crash_log_sub">闪退自动记录 · 仅存本机 · 保留 10 条</string>
     <string name="koil_set_crash_count">%1$d 条记录</string>
     <string name="koil_set_crash_none">暂无崩溃记录</string>
     <string name="koil_set_crash_export">导出</string>
