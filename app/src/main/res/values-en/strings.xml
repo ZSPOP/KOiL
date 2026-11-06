@@ -376,6 +376,9 @@
     <string name="koil_detail_latest">Latest</string>
     <string name="koil_detail_delta_up">↑ ¥%1$.2f</string>
     <string name="koil_detail_delta_down">↓ ¥%1$.2f</string>
+    <string name="koil_detail_pct_up">+%1$s%%</string>
+    <string name="koil_detail_pct_down">−%1$s%%</string>
+    <string name="koil_detail_gap_days">%1$d days apart</string>
     <string name="koil_sync_password_invalid">App password is unreadable (key lost after device change) — please re-enter it</string>
     <string name="koil_sync_status_password_invalid">Sync paused: re-enter the app password</string>
 </resources>

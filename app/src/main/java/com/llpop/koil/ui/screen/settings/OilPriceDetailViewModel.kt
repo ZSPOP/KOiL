@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.stateIn
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 /** 一条调价记录（含相对上一条的涨跌）；搁浅条目为展示层补全（窗口已过但价格未变） */
 data class PriceAdjustItem(
@@ -25,6 +26,9 @@ data class PriceAdjustItem(
     val isUp: Boolean?, // true=上调 / false=下调 / null=首条或持平
     val isStranded: Boolean = false, // true=搁浅（窗口日已过、价格未变）
     val keptFrom: String? = null,    // 搁浅条目：维持自哪个生效日（MM-dd）
+    // v1.6.3 UX 方案 A：列表右列需要的两个派生值，在 ViewModel 里算好（避免 UI 层逐行解析日期）
+    val pctChange: Double? = null,   // 相对上一条的百分比变化，0.0195 = +1.95%；搁浅/首条为 null
+    val daysSincePrev: Int? = null,  // 距上一条的日历天数；首条为 null
 )
 
 /** 油价明细页状态：省份/油号/年份选择 + 调价时间线 + 汇总统计 */
@@ -122,7 +126,8 @@ class OilPriceDetailViewModel(
         yearRecords.forEachIndexed { i, r ->
             // v1.5.23：prev 用「全量记录」的上一条而非年过滤后的上一条——年初第一条调价
             // 相对上年末的涨跌不再丢失（此前 i==0 时 prev=null，当年累计涨跌漏计年初调价）
-            val prev = records.takeWhile { it.effectiveDate < r.effectiveDate }.lastOrNull()?.price
+            val prevRecord = records.takeWhile { it.effectiveDate < r.effectiveDate }.lastOrNull()
+            val prev = prevRecord?.price
             val diff = if (prev != null) r.price - prev else null
             // 涨跌统计只算非搁浅调价（搁浅 diff=0 天然不进，显式排除更清晰）
             if (diff != null && !r.isStranded) {
@@ -147,6 +152,21 @@ class OilPriceDetailViewModel(
                     isUp = if (r.isStranded) null else diff?.let { it > 0.001 },
                     isStranded = r.isStranded,
                     keptFrom = if (r.isStranded) lastAdjustLabel else null,
+                    // 搁浅行的涨跌由「搁浅」文案表达，不再叠加百分比
+                    pctChange = if (!r.isStranded && diff != null && prev != null && prev > 0.0) {
+                        diff / prev
+                    } else {
+                        null
+                    },
+                    // 与上一条记录的日历天数（搁浅行同样显示，即「这个价格维持了多少天」）
+                    daysSincePrev = prevRecord?.let { p ->
+                        runCatching {
+                            ChronoUnit.DAYS.between(
+                                LocalDate.parse(p.effectiveDate),
+                                LocalDate.parse(r.effectiveDate),
+                            ).toInt()
+                        }.getOrNull()
+                    },
                 )
             )
         }

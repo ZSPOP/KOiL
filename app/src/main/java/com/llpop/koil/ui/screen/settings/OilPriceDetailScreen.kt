@@ -1,6 +1,9 @@
 package com.llpop.koil.ui.screen.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -32,29 +35,36 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,10 +78,16 @@ import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
 import com.llpop.koil.ui.theme.KOiLColors
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -95,8 +111,38 @@ fun OilPriceDetailScreen(
     BackHandler(onBack = onBack)
     val surfaceColor = MiuixTheme.colorScheme.surface
 
+    // v1.6.3：筛选吸顶——滚过筛选区后，顶部收成一条「省 · 油号 · 年份」窄条，
+    // 解决「滚到历史记录区就看不到当前筛选、容易忘记在看哪个省哪一年」。
+    // 走 scaffold 的 overlay 槽（backdrop 录制树外），因此可安全 textureBlur 与顶栏同款毛玻璃。
+    val scrollState = rememberScrollState()
+    val scrollScope = rememberCoroutineScope()
+
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
+        overlay = { backdrop, _, topPadding ->
+            // 阈值 = 顶栏高度 + 完整筛选区高度（约 92dp）：必须等原筛选区真正滚出视野才出现，
+            // 否则顶部会同时挂两条一模一样的筛选（吸顶条 + 尚未滚走的原控件）。
+            val stickyAtPx = with(LocalDensity.current) { (topPadding + 92.dp).toPx() }
+            val showStickyFilter by remember(stickyAtPx) {
+                derivedStateOf { scrollState.value > stickyAtPx }
+            }
+            AnimatedVisibility(visible = showStickyFilter, enter = fadeIn(), exit = fadeOut()) {
+                StickyFilterBar(
+                    backdrop = backdrop,
+                    topPadding = topPadding,
+                    text = buildList {
+                        add(provinceLabel(state.province))
+                        add(gradeLabel(state.grade))
+                        // 年份 pill 无数据时不渲染（见筛选区），吸顶条同步省略，保持两处一致
+                        if (state.years.isNotEmpty()) {
+                            add(stringResource(R.string.koil_detail_year, state.year))
+                        }
+                    }.joinToString(" · "),
+                    // 整条点击 = 滚回顶部展开完整筛选区（箭头即暗示「回到上面」）
+                    onBackToFilters = { scrollScope.launch { scrollState.animateScrollTo(0) } },
+                )
+            }
+        },
         navigationIcon = {
             Icon(
                 imageVector = MiuixIcons.Back,
@@ -120,7 +166,7 @@ fun OilPriceDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 12.dp),
         ) {
             Spacer(Modifier.height(topPadding))
@@ -727,7 +773,7 @@ private fun AdjustTimelineItem(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 16.dp),
+                .padding(start = 10.dp, bottom = if (isLast) 0.dp else 12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -735,7 +781,7 @@ private fun AdjustTimelineItem(
             ) {
                 Text(
                     text = "¥${NumberFormat.measure(item.price)}",
-                    fontSize = if (isLatest) 20.sp else 15.sp,
+                    fontSize = if (isLatest) 18.sp else 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (stranded) {
                         MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f)
@@ -792,22 +838,140 @@ private fun AdjustTimelineItem(
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                     )
                 }
-            }
-            Spacer(Modifier.height(3.dp))
-            // 副行：日期（搁浅行追加「维持 X 价格」）
-            Text(
-                text = if (stranded) {
-                    item.label + " · " + stringResource(
-                        R.string.koil_detail_held_price,
-                        item.keptFrom ?: stringResource(R.string.koil_detail_last_year),
+                // v1.6.3 方案 A：百分比紧随涨跌额，主行右端形成「金额 + 幅度」信息块
+                val pct = item.pctChange
+                if (pct != null) {
+                    Spacer(Modifier.width(5.dp))
+                    Text(
+                        text = if (pct >= 0) {
+                            stringResource(R.string.koil_detail_pct_up, NumberFormat.measure(pct * 100))
+                        } else {
+                            stringResource(R.string.koil_detail_pct_down, NumberFormat.measure(-pct * 100))
+                        },
+                        fontSize = 11.sp,
+                        color = accent.copy(alpha = 0.9f),
                     )
-                } else {
-                    item.label
-                },
-                fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.85f),
-            )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            // 副行：日期 ——点线引导—— 右端信息（v1.6.3 方案 A）
+            // 中段空白原来是纯留白，现在由点线承担「连接日期与右列」的视觉职责，
+            // 同时两行都两端对齐，整条记录形成稳定的左右两列，不再左重右空。
+            // 非搁浅行右端 = 与上一条的间隔天数；搁浅行右端 = 维持来源（信息量等价，列位一致）。
+            val gapLine = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.22f)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = item.label,
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.85f),
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                        .height(1.dp)
+                        .drawBehind {
+                            // DrawScope 本身是 Density，dp 直接可换算，无需再注入 LocalDensity
+                            drawLine(
+                                color = gapLine,
+                                start = Offset(0f, size.height / 2f),
+                                end = Offset(size.width, size.height / 2f),
+                                strokeWidth = 1.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(
+                                    floatArrayOf(2.dp.toPx(), 3.dp.toPx()), 0f,
+                                ),
+                            )
+                        },
+                )
+                Text(
+                    text = if (stranded) {
+                        stringResource(
+                            R.string.koil_detail_held_price,
+                            item.keptFrom ?: stringResource(R.string.koil_detail_last_year),
+                        )
+                    } else {
+                        item.daysSincePrev?.let { stringResource(R.string.koil_detail_gap_days, it) }.orEmpty()
+                    },
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = if (stranded) 0.7f else 0.85f),
+                )
+            }
         }
     }
 }
 
+/**
+ * v1.6.3：筛选吸顶条。
+ * 滚过页面顶部筛选区后，把「省 · 油号 · 年份」压成一条窄条钉在顶栏下方，滚动过程中
+ * 始终能确认当前筛选上下文（原先滚到历史记录区就完全看不到筛选项）。
+ * - 毛玻璃与页面卡片/顶栏一致；设备不支持 RuntimeShader 时退化为 surface 0.9 纯色
+ * - 整条可点：滚回页面顶部展开完整筛选区（尾部上箭头暗示「回到上面」）
+ * - 放在 scaffold 的 overlay 槽里 → 位于 backdrop 录制树之外，textureBlur 不会自采样递归
+ */
+@Composable
+private fun StickyFilterBar(
+    backdrop: LayerBackdrop?,
+    topPadding: Dp,
+    text: String,
+    onBackToFilters: () -> Unit,
+) {
+    val canBlur = backdrop != null && isRuntimeShaderSupported()
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            // 左右 12dp 对齐页面 Column 的 contentPadding，窄条与下方卡片同宽
+            .padding(start = 12.dp, end = 12.dp, top = topPadding),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(shape)
+                .then(
+                    if (canBlur) {
+                        Modifier.textureBlur(
+                            backdrop = backdrop,
+                            shape = shape,
+                            blurRadius = 25f,
+                            colors = BlurColors(
+                                blendColors = listOf(
+                                    BlendColorEntry(
+                                        color = MiuixTheme.colorScheme.surface.copy(alpha = 0.78f),
+                                    ),
+                                ),
+                            ),
+                        )
+                    } else {
+                        Modifier.background(MiuixTheme.colorScheme.surface.copy(alpha = 0.92f))
+                    },
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f),
+                    shape = shape,
+                )
+                .clickable(onClick = onBackToFilters)
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = text,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.width(6.dp))
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowUp,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
+}
