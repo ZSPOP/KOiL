@@ -109,6 +109,7 @@ import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
 import org.koin.androidx.compose.koinViewModel
+import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.delay
 import kotlin.ranges.ClosedFloatingPointRange
 import top.yukonga.miuix.kmp.basic.Button
@@ -1756,7 +1757,6 @@ fun SettingsScreen(
 // ===== 关于区（v1.6.3 新增）=====
 
 private const val KOIL_REPO_URL = "https://github.com/ZSPOP/KOiL"
-private const val KOIL_RELEASE_API = "https://api.github.com/repos/ZSPOP/KOiL/releases/latest"
 
 private sealed interface UpdateCheck {
     data object Idle : UpdateCheck
@@ -1782,47 +1782,7 @@ private fun openExternalUrl(context: Context, url: String) {
     }
 }
 
-/** 语义版本比较：只比数字段，忽略 V/v 前缀与非数字后缀（如 -beta） */
-private fun compareVersionNames(a: String, b: String): Int {
-    val pa = a.split(".", "-").mapNotNull { it.toIntOrNull() }
-    val pb = b.split(".", "-").mapNotNull { it.toIntOrNull() }
-    for (i in 0 until maxOf(pa.size, pb.size)) {
-        val x = pa.getOrElse(i) { 0 }
-        val y = pb.getOrElse(i) { 0 }
-        if (x != y) return x.compareTo(y)
-    }
-    return 0
-}
-
-/**
- * 查 GitHub 最新 release。不引第三方库：一次 GET + 两个正则足够。
- * 失败一律回落 Failed（离线 / 限流 / 仓库不可达），UI 显示「检查失败，点击重试」，不留假状态。
- */
-private fun fetchLatestRelease(): UpdateCheck {
-    var conn: java.net.HttpURLConnection? = null
-    return try {
-        conn = java.net.URL(KOIL_RELEASE_API).openConnection() as java.net.HttpURLConnection
-        conn.connectTimeout = 6000
-        conn.readTimeout = 6000
-        conn.setRequestProperty("User-Agent", "KOiL-Android")
-        conn.setRequestProperty("Accept", "application/vnd.github+json")
-        if (conn.responseCode !in 200..299) return UpdateCheck.Failed
-        val json = conn.inputStream.bufferedReader().use { it.readText() }
-        val tag = Regex("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.getOrNull(1)
-            ?: return UpdateCheck.Failed
-        val htmlUrl = Regex("\"html_url\"\\s*:\\s*\"([^\"]+)\"").find(json)?.groupValues?.getOrNull(1).orEmpty()
-        val latest = tag.trim().trimStart('V', 'v')
-        if (compareVersionNames(latest, com.llpop.koil.BuildConfig.VERSION_NAME) > 0) {
-            UpdateCheck.Newer(latest, htmlUrl)
-        } else {
-            UpdateCheck.Latest
-        }
-    } catch (t: Throwable) {
-        UpdateCheck.Failed
-    } finally {
-        runCatching { conn?.disconnect() }
-    }
-}
+/** 检查入口统一收在 data.update.UpdateChecker（冷启动静默检查与手动检查共用一条通道） */
 
 @Composable
 private fun AboutSection(
@@ -1832,6 +1792,14 @@ private fun AboutSection(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    // v1.6.5：冷启动静默检查的结果落在 DataStore，进页面即可判红点（不用先点一次）
+    val updateChecker = remember { GlobalContext.get().get<com.llpop.koil.data.update.UpdateChecker>() }
+    val storedTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
+    val storedVersion = remember(storedTag) { com.llpop.koil.data.update.normalizeVersion(storedTag) }
+    val storedHasNewer = storedVersion.isNotEmpty() &&
+        com.llpop.koil.data.update.compareVersionNames(
+            storedVersion, com.llpop.koil.BuildConfig.VERSION_NAME,
+        ) > 0
     var update by remember { mutableStateOf<UpdateCheck>(UpdateCheck.Idle) }
     var sheet by remember { mutableStateOf("") }
 
@@ -1887,12 +1855,16 @@ private fun AboutSection(
             title = stringResource(R.string.koil_set_about_check_update),
             subtitle = stringResource(R.string.koil_set_about_check_update_sub),
             value = when (val u = update) {
-                UpdateCheck.Idle -> ""
+                // Idle 时回落到"上次静默检查"的结论：冷启动查到新版本，这一行直接显示「发现 1.6.4」
+                UpdateCheck.Idle ->
+                    if (storedHasNewer) stringResource(R.string.koil_set_about_newer, storedVersion) else ""
                 UpdateCheck.Checking -> stringResource(R.string.koil_set_about_checking)
                 UpdateCheck.Latest -> stringResource(R.string.koil_set_about_latest)
                 is UpdateCheck.Newer -> stringResource(R.string.koil_set_about_newer, u.version)
                 UpdateCheck.Failed -> stringResource(R.string.koil_set_about_check_failed)
             },
+            // 红点：手动查到新版本，或冷启动静默检查已发现新版本（点一次即进入 Release 页后消失）
+            badgeDot = update is UpdateCheck.Newer || (update is UpdateCheck.Idle && storedHasNewer),
             onClick = {
                 when (val u = update) {
                     is UpdateCheck.Newer -> if (u.url.isNotBlank()) openExternalUrl(context, u.url)
@@ -1900,7 +1872,18 @@ private fun AboutSection(
                     else -> {
                         update = UpdateCheck.Checking
                         scope.launch {
-                            update = withContext(Dispatchers.IO) { fetchLatestRelease() }
+                            val tag = updateChecker.refresh()
+                            update = when {
+                                tag == null -> UpdateCheck.Failed
+                                com.llpop.koil.data.update.compareVersionNames(
+                                    com.llpop.koil.data.update.normalizeVersion(tag),
+                                    com.llpop.koil.BuildConfig.VERSION_NAME,
+                                ) > 0 -> UpdateCheck.Newer(
+                                    com.llpop.koil.data.update.normalizeVersion(tag),
+                                    com.llpop.koil.data.update.releasePageUrl(tag),
+                                )
+                                else -> UpdateCheck.Latest
+                            }
                         }
                     }
                 }
@@ -2069,6 +2052,8 @@ private fun SettingRow(
     showArrow: Boolean = true,
     arrowIcon: androidx.compose.ui.graphics.vector.ImageVector =
         Icons.AutoMirrored.Filled.KeyboardArrowRight,
+    // v1.6.5：value 前挂一个 6dp 红点，用于「有新版本」这类需要主动提醒的行
+    badgeDot: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -2096,6 +2081,15 @@ private fun SettingRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
+        if (badgeDot) {
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFE53935)),
+            )
+            Spacer(Modifier.width(6.dp))
         }
         Text(
             text = value,

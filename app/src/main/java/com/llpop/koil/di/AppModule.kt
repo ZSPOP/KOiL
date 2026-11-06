@@ -11,6 +11,7 @@ import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
+import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.sync.WebDavClient
 import com.llpop.koil.ui.MainViewModel
 import com.llpop.koil.ui.screen.add.AddViewModel
@@ -36,6 +37,7 @@ val appModule = module {
     singleOf(::OilPriceDbSyncer)
     singleOf(::WebDavClient)
     singleOf(::CloudSyncManager)
+    singleOf(::UpdateChecker)
 
     single<KOiLRecordDao> { get<AppDatabase>().KOiLRecordDao() }
     single<KOiLPriceDao> { get<AppDatabase>().koilPriceDao() }
