@@ -734,162 +734,119 @@ fun SettingsScreen(
         }
         Spacer(Modifier.height(16.dp))
 
-        // ===== 数据源与更新（vc282：从油价大卡拆出，状态与配置分离）=====
-        // 原来「自动更新 / EIA / 同步来源」压在油价大卡最底部，整卡近 2/3 屏，
-        // 想改 EIA 得先滚过全部统计与窗口信息。拆开后：上一张卡只看状态，这一张只管配置。
-        KOiLBlurBackground(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 20f,
-        ) {
+        // ===== 数据源与提醒（vc283：数据源卡与提醒卡合并为一卡，去掉卡内标题）=====
+        // 自动更新 / EIA / 同步来源 / 调价窗口提醒 / 调价推送，同属「数据更新」一族配置，一张卡说完。
+        SettingsCard {
             val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = stringResource(R.string.koil_set_price_sources),
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                )
-                Spacer(Modifier.height(12.dp))
 
-                // —— 自动更新开关 ——
-                if (uiState.loaded) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.koil_set_price_db_auto),
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onBackground,
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = stringResource(R.string.koil_pdb_auto_sub),
-                                fontSize = 14.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                        }
-                        Switch(
-                            checked = uiState.priceDbAutoUpdate,
-                            onCheckedChange = viewModel::setPriceDbAutoUpdate,
+            // —— 自动更新开关 ——
+            if (uiState.loaded) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.koil_set_price_db_auto),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
                         )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-
-                // —— EIA API Key（原油估算数据源；开关开=用 EIA 隐藏输入框，
-                //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
-                val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
-                val eiaEnabled by viewModel.eiaEnabled.collectAsStateWithLifecycle()
-                val eiaLoaded by viewModel.eiaLoaded.collectAsStateWithLifecycle()
-                // EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
-                if (eiaLoaded) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(0.5.dp)
-                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = stringResource(R.string.koil_set_eia_key_title),
-                                modifier = Modifier.weight(1f),
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onBackground,
-                            )
-                            Switch(
-                                checked = eiaEnabled,
-                                onCheckedChange = viewModel::setEiaEnabled,
-                            )
-                        }
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            text = stringResource(R.string.koil_set_eia_key_sub),
+                            text = stringResource(R.string.koil_pdb_auto_sub),
                             fontSize = 14.sp,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         )
-                        if (!eiaEnabled) {
-                            Spacer(Modifier.height(8.dp))
-                            var showEiaKey by remember { mutableStateOf(false) }
-                            TextField(
-                                value = eiaKey,
-                                onValueChange = { viewModel.setEiaApiKey(it) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(
-                                    keyboardType = KeyboardType.Ascii,
-                                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                                ),
-                                colors = TextFieldDefaults.textFieldColors(
-                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                                    labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                                    borderColor = Color.Transparent,
-                                ),
-                                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                                visualTransformation = if (showEiaKey) {
-                                    androidx.compose.ui.text.input.VisualTransformation.None
-                                } else {
-                                    androidx.compose.ui.text.input.PasswordVisualTransformation()
-                                },
-                                trailingIcon = {
-                                    IconButton(onClick = { showEiaKey = !showEiaKey }) {
-                                        Icon(
-                                            imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                            contentDescription = null,
-                                            tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                },
-                            )
-                        }
                     }
-                }
-                // —— 同步来源（本卡最底）——
-                if (priceDbStatus.lastSyncSources.isNotBlank()) {
-                    Spacer(Modifier.height(12.dp))
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(0.5.dp)
-                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
+                    Switch(
+                        checked = uiState.priceDbAutoUpdate,
+                        onCheckedChange = viewModel::setPriceDbAutoUpdate,
                     )
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                    Spacer(Modifier.height(1.dp))
                 }
             }
-        }
 
+            // —— EIA API Key（原油估算数据源；开关开=用 EIA 隐藏输入框，
+            //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
+            val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
+            val eiaEnabled by viewModel.eiaEnabled.collectAsStateWithLifecycle()
+            val eiaLoaded by viewModel.eiaLoaded.collectAsStateWithLifecycle()
+            // EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
+            if (eiaLoaded) {
+                SettingDivider()
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.koil_set_eia_key_title),
+                            modifier = Modifier.weight(1f),
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        Switch(
+                            checked = eiaEnabled,
+                            onCheckedChange = viewModel::setEiaEnabled,
+                        )
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.koil_set_eia_key_sub),
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                    if (!eiaEnabled) {
+                        Spacer(Modifier.height(8.dp))
+                        var showEiaKey by remember { mutableStateOf(false) }
+                        TextField(
+                            value = eiaKey,
+                            onValueChange = { viewModel.setEiaApiKey(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                            ),
+                            colors = TextFieldDefaults.textFieldColors(
+                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                                borderColor = Color.Transparent,
+                            ),
+                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                            visualTransformation = if (showEiaKey) {
+                                androidx.compose.ui.text.input.VisualTransformation.None
+                            } else {
+                                androidx.compose.ui.text.input.PasswordVisualTransformation()
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { showEiaKey = !showEiaKey }) {
+                                    Icon(
+                                        imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = null,
+                                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                }
+            }
 
-        // ===== 崩溃日志（v1.6.8：本地累积 + 查看/导出，仅存本机不上传）=====
-        val crashContext = LocalContext.current
-        val crashScope = rememberCoroutineScope()
-        var showCrashDialog by remember { mutableStateOf(false) }
-        var crashLogText by remember { mutableStateOf("") }
-        var crashCount by remember { mutableIntStateOf(0) }
-        // 首帧与每次打开弹窗都刷新（导出/清空后重新打开也拿到最新值）
-        LaunchedEffect(showCrashDialog) {
-            crashLogText = withContext(Dispatchers.IO) { CrashReporter.readLogs(crashContext) }
-            crashCount = CrashReporter.countEntries(crashLogText)
-        }
+            // —— 同步来源（最近一次同步的通道与额度）——
+            if (priceDbStatus.lastSyncSources.isNotBlank()) {
+                SettingDivider()
+                Text(
+                    text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
+                    fontSize = 12.sp,
+                    lineHeight = 15.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                )
+            }
 
-        // ===== 提醒：由数据更新触发，跟数据卡同组 =====
-        SettingsCard {
+            SettingDivider()
+
+            // —— 调价窗口提醒 / 推送通知 ——
             SettingSwitchRow(
                 title = stringResource(R.string.koil_set_price_alert),
                 subtitle = stringResource(R.string.koil_set_price_alert_sub),
@@ -932,6 +889,18 @@ fun SettingsScreen(
             }
         }
         Spacer(Modifier.height(16.dp))
+
+        // —— 崩溃日志状态（卡片本体已迁到关于区，这里只保留状态供其读取）——
+        val crashContext = LocalContext.current
+        val crashScope = rememberCoroutineScope()
+        var showCrashDialog by remember { mutableStateOf(false) }
+        var crashLogText by remember { mutableStateOf("") }
+        var crashCount by remember { mutableIntStateOf(0) }
+        // 首帧与每次打开弹窗都刷新（导出/清空后重新打开也拿到最新值）
+        LaunchedEffect(showCrashDialog) {
+            crashLogText = withContext(Dispatchers.IO) { CrashReporter.readLogs(crashContext) }
+            crashCount = CrashReporter.countEntries(crashLogText)
+        }
 
         // ===== 数据与备份 =====
         // v1.6.3 重构：6 个出口按「加油记录 / 完整备份 / 油价历史」三组配对，
@@ -1367,7 +1336,6 @@ fun SettingsScreen(
                 onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
             )
         }
-        Spacer(Modifier.height(16.dp))
 
         if (showCrashDialog) {
             KOiLGlassDialog(

@@ -204,7 +204,6 @@
     <string name="koil_set_group_backup_restore">Backup &amp; restore</string>
     <string name="koil_set_location">Location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
-    <string name="koil_set_price_sources">Data source &amp; updates</string>
     <string name="koil_set_price_db_auto">Auto-update price DB</string>
     <string name="koil_set_eia_key_title">EIA API Key</string>
     <string name="koil_set_eia_key_sub">Crude estimation source (editable; blank falls back to Tencent)</string>

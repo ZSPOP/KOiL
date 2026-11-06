@@ -199,7 +199,6 @@
     <string name="koil_set_group_backup_restore">備份與還原</string>
     <string name="koil_set_location">定位</string>
     <string name="koil_set_location_sub">自動識別省份</string>
-    <string name="koil_set_price_sources">資料來源與更新</string>
     <string name="koil_set_price_db_auto">油價庫自動更新</string>
     <string name="koil_set_eia_key_title">EIA API Key</string>
     <string name="koil_set_eia_key_sub">原油估算源（可修改，留空降級騰訊）</string>
