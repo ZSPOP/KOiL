@@ -51,8 +51,8 @@ object OilPriceNotifier {
     /** 发通知；未授权通知权限时静默跳过（不 crash）；notificationId 区分不同通知（v1.5.23 D3）。
      *  v1.5.28：BigTextStyle → 正文完整显示、横幅更高、可展开。 */
     fun notify(context: Context, title: String, message: String, notificationId: Int = NOTIFICATION_ID) {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+        // minSdk 33 起 POST_NOTIFICATIONS 恒存在（v1.6.3 清理死分支）
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
             return

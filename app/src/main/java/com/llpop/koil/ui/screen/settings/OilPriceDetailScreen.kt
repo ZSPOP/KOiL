@@ -28,7 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +59,8 @@ import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.gradeLabel
+import com.llpop.koil.ui.component.provinceLabel
 import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
@@ -83,7 +85,7 @@ fun OilPriceDetailScreen(
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     viewModel: OilPriceDetailViewModel = koinViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     BackHandler(onBack = onBack)
     val surfaceColor = MiuixTheme.colorScheme.surface
 
@@ -160,7 +162,8 @@ fun OilPriceDetailScreen(
                 ) {
                     state.provinces.forEach { p ->
                         ProvinceChip(
-                            label = p,
+                            // 数据键是中文省名（DB 主键），这里只换显示名
+                            label = provinceLabel(p),
                             selected = p == state.province,
                             onClick = { viewModel.selectProvince(p) },
                         )
@@ -178,11 +181,17 @@ fun OilPriceDetailScreen(
             }
             Spacer(Modifier.height(10.dp))
 
-            // —— 油号选择 ——
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // —— 油号选择（v1.6.8：与省份行同款横向滚动——原先是裸 Row，4 个 chip 放不下时
+            // 文字被压缩宽度硬折行，"0# Diesel" 变成 3 行；真机截图反馈）——
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 state.grades.forEach { g ->
                     GradeChip(
-                        label = g,
+                        label = gradeLabel(g),
                         selected = g == state.grade,
                         onClick = { viewModel.selectGrade(g) },
                     )
@@ -195,7 +204,7 @@ fun OilPriceDetailScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.years.forEach { y ->
                         GradeChip(
-                            label = "$y 年",
+                            label = stringResource(R.string.koil_detail_year, y),
                             selected = y == state.year,
                             onClick = { viewModel.selectYear(y) },
                         )
@@ -346,7 +355,16 @@ private fun ProvinceChip(label: String, selected: Boolean, onClick: () -> Unit) 
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
-        Text(text = label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+        // v1.6.8：chip 文字禁止折行——上一版 "0# Diesel" 在空间不足时被压成 3 行（真机反馈）；
+        // 容器已可横向滚动，宽度不够整体滚而不是把字拆开
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = fg,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -362,7 +380,16 @@ private fun GradeChip(label: String, selected: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
-        Text(text = label, fontSize = 12.sp, color = fg, fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal)
+        // v1.6.8：chip 文字禁止折行——上一版 "0# Diesel" 在空间不足时被压成 3 行（真机反馈）；
+        // 容器已可横向滚动，宽度不够整体滚而不是把字拆开
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = fg,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }
 
@@ -671,7 +698,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "擱淺",
+                        text = stringResource(R.string.koil_detail_stranded),
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -685,7 +712,7 @@ private fun AdjustTimelineRow(item: PriceAdjustItem) {
             //       搁浅 → 「維持 09-25 價格」说明（无幅度条）
             if (item.isStranded) {
                 Text(
-                    text = "維持 ${item.keptFrom ?: "上年"} 價格",
+                    text = stringResource(R.string.koil_detail_held_price, item.keptFrom ?: stringResource(R.string.koil_detail_last_year)),
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                     modifier = Modifier.weight(1f),

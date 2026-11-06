@@ -64,6 +64,12 @@ class AnchoredPopupHostState {
     var cardBounds: IntRect? = null
 
     fun register(entry: AnchoredPopupEntry) {
+        // v1.6.6：同一弹窗内同时只允许一个下拉展开——新展开的先收起其它条目。
+        // 原来允许多个同时展开，点一次卡片外 dismissAll() 会把它们一起收掉，
+        // 观感就是「没有逐级关闭、一下全关」（真机反馈）。
+        if (entries.any { it.id != entry.id }) {
+            entries.filter { it.id != entry.id }.forEach { it.onDismiss() }
+        }
         if (entries.none { it.id == entry.id }) entries.add(entry)
     }
 
@@ -230,7 +236,7 @@ private fun AnchoredPopupPanel(
  * 字段组件便捷注册：组合内调用，show 时注册、关闭时注销（锚点变化自动重建）。
  */
 @Composable
-fun rememberAnchoredPopupRegistration(
+fun AnchoredPopupAnchor(
     show: Boolean,
     id: Any,
     anchorBounds: IntRect?,

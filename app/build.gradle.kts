@@ -41,7 +41,7 @@ android {
         // 兼容旧变量名 KOIL_CI_VERSION_CODE（直接用其值）；本地构建无环境变量时 fallback 到下方基准值，每轮手动 +1。
         versionCode = System.getenv("KOIL_CI_RUN_NUMBER")?.toIntOrNull()?.let { it + 251 }
             ?: System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull() ?: 252
-        versionName = "1.6.1"
+        versionName = "1.6.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -53,7 +53,13 @@ android {
         release {
             // 正式签名（keystore.properties 存在时）；否则回退 debug 签名
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-            isMinifyEnabled = false
+            // v1.6.2：开启 R8 代码压缩 + 资源压缩。此前 isMinifyEnabled=false，dex 未压缩 58MB（4 个 dex），
+            // 绝大多数体积是未被引用到的 material-icons-extended（2000+ 图标，实际只用 28 个）与调试符号。
+            // 混淆在 proguard-rules.pro 里用 -dontobfuscate 关闭（只做 shrink/optimize）：
+            // ① CrashReporter 会把堆栈写进文件给用户看，保留原类名才看得懂；
+            // ② 枚举名（ThemeMode/Language 的 name()）已持久化进 DataStore，不做混淆规避改名风险。
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -71,6 +77,13 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+    // v1.6.3：App 内置运行时语言切换（MainScreen 覆盖 Configuration）。若按语言拆分 AAB，
+    // 用户切到的语言包可能根本不在设备上，切了等于没切 —— 关掉语言拆分，全部语言随包下发。
+    bundle {
+        language {
+            enableSplit = false
         }
     }
     testOptions {
@@ -102,11 +115,13 @@ dependencies {
     // Compose
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
+    // v1.6.2：tooling.preview 只含 @Preview 等 IDE 预览注解，主源码零引用（已全量核对），
+    // 移到 debugImplementation，release 不再打进包
+    debugImplementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation("androidx.compose.material3:material3:1.3.1")
+    implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Miuix（含柔光玻璃模糊库）
@@ -150,7 +165,7 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
 
     // Tests
-    testImplementation("junit:junit:4.13.2")
-    testImplementation("androidx.test:core:1.6.1")
-    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation(libs.junit)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.robolectric)
 }

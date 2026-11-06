@@ -27,10 +27,21 @@ class OilPriceSyncWorker(
             if (result.success) {
                 Result.success()
             } else {
-                Result.retry()
+                retryOrGiveUp()
             }
         } catch (e: Exception) {
-            Result.retry()
+            retryOrGiveUp()
         }
+    }
+
+    /**
+     * v1.6.2：重试上限保护——原实现失败即 Result.retry()，叠加指数退避会长时间反复唤醒；
+     * 周期任务（8 小时）本来就会再来一次，连续失败 3 次后直接收尾，等下个周期，避免无谓耗电。
+     */
+    private fun retryOrGiveUp(): Result =
+        if (runAttemptCount >= MAX_RETRY) Result.success() else Result.retry()
+
+    private companion object {
+        const val MAX_RETRY = 3
     }
 }

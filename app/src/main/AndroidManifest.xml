@@ -13,19 +13,41 @@
     <!-- 油价调整提醒（Android 13+ 运行时通知权限） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!--
+      Queries：SettingsScreen 跳"应用通知设置"前用 resolveActivity 预检处理者，
+      Android 11+ 包可见性下不声明 <queries> 会恒返回 null，预检永远走 fallback。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.settings.APP_NOTIFICATION_SETTINGS" />
+        </intent>
+    </queries>
+
     <application
         android:name=".KOiLApplication"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/koil_app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.KOiL.Starting">
+        android:theme="@style/Theme.KOiL.Starting"
+        tools:targetApi="33">
+        <!--
+          v1.6.7：移除 v1.6.6 的 android:enableOnBackInvokedCallback="false"。
+          那条是误诊——当时以为"预测性返回链路接不住 BackHandler"，实际上是 MainActivity
+          自建了一个与平台隔离的 NavigationEventDispatcher，BackHandler 注册在那上面，
+          永远收不到系统返回事件。现在改为直接提供 Activity 自身的 dispatcher
+          （它就是 OnBackPressedDispatcher 的事件管道，已在 onCreate 与 window.onBackInvokedDispatcher 对接），
+          返回回归平台默认的预测性返回链路。
+        -->
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.KOiL.Starting">
+            android:theme="@style/Theme.KOiL.Starting"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

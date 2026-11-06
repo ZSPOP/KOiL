@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -52,7 +53,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,9 +82,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,6 +100,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
@@ -106,10 +109,12 @@ import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.overview.OverviewUiState
+import com.llpop.koil.ui.screen.overview.DialogUiState
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
 import com.llpop.koil.domain.logic.RecordWithDerived
 import com.llpop.koil.ui.screen.overview.TrendPoint
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.ui.component.provinceLabel
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -148,7 +153,9 @@ fun OverviewScreen(
     onNavigateToAdd: (() -> Unit)? = null,
     viewModel: OverviewViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // v1.6.8 P2-4：弹窗独立状态流——弹窗输入只重组弹窗，不牵动列表/四宫格/趋势图
+    val dlg by viewModel.dialogState.collectAsStateWithLifecycle()
     // v1.5.20：全页改 LazyColumn 惰性渲染，历史记录只组合可见项；不再需要按月手动分页（visibleMonths）
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -311,7 +318,7 @@ fun OverviewScreen(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.koil_ov_total_count_in_list, uiState.records.size),
+                        text = pluralStringResource(R.plurals.koil_ov_total_count_in_list, uiState.records.size, uiState.records.size),
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -592,9 +599,9 @@ fun OverviewScreen(
     }
 
     // 编辑弹窗（v1.5.13 复刻补录卡：日期只读 + 全量校验 + 保存置灰/变蓝）
-    if (uiState.showEditDialog) {
+    if (dlg.showEditDialog) {
         EditRecordDialog(
-            uiState = uiState,
+            uiState = dlg,
             onMileageChange = viewModel::setEditMileage,
             onOilAmountChange = viewModel::setEditOilAmount,
             onActualAmountChange = viewModel::setEditActualAmount,
@@ -607,8 +614,11 @@ fun OverviewScreen(
     }
 
     // 补录弹窗（source=backfill_modal）
-    if (uiState.showBackfillDialog) {
-        val maxH = (LocalConfiguration.current.screenHeightDp * 0.85f).dp
+    if (dlg.showBackfillDialog) {
+        // v1.6.4：按窗口可用高度算（分屏/键盘弹出时 Configuration 仍是整屏）
+        val maxH = with(LocalDensity.current) {
+            (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
+        }
         com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
             onDismissRequest = viewModel::cancelBackfill,
@@ -621,25 +631,25 @@ fun OverviewScreen(
                 Text(stringResource(R.string.koil_ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 // 加油省份（与设置页同款下拉列表）
-                ProvinceSelectField(province = uiState.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
+                ProvinceSelectField(province = dlg.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
                 Spacer(Modifier.height(14.dp))
                 // 第一行：日期（日历可改）+ 油号（联动当日参考单价）
                 Row(verticalAlignment = Alignment.Top) {
-                    com.llpop.koil.ui.component.KOiLDateField(modifier = Modifier.weight(1f), date = uiState.backfillDate, recordDates = uiState.backfillRecordDates, onDateSelected = viewModel::setBackfillDate)
+                    com.llpop.koil.ui.component.KOiLDateField(modifier = Modifier.weight(1f), date = dlg.backfillDate, recordDates = dlg.backfillRecordDates, onDateSelected = viewModel::setBackfillDate)
                     Spacer(Modifier.width(14.dp))
                     GradePriceSelect(
-                        grade = uiState.backfillGrade,
-                        price = uiState.backfillReferencePrice,
+                        grade = dlg.backfillGrade,
+                        price = dlg.backfillReferencePrice,
                         onGradeSelected = viewModel::setBackfillGrade,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(14.dp))
                 // v1.5.12：选日期后该区间可输入里程范围提示（日期行与里程行之间）
-                if (uiState.backfillRangeMin != null || uiState.backfillRangeMax != null) {
+                if (dlg.backfillRangeMin != null || dlg.backfillRangeMax != null) {
                     MileageRangeHint(
-                        rangeMin = uiState.backfillRangeMin,
-                        rangeMax = uiState.backfillRangeMax,
+                        rangeMin = dlg.backfillRangeMin,
+                        rangeMax = dlg.backfillRangeMax,
                     )
                     Spacer(Modifier.height(14.dp))
                 }
@@ -648,20 +658,20 @@ fun OverviewScreen(
                     EditField(
                         label = stringResource(R.string.koil_add_field_mileage),
                         icon = Icons.Filled.Speed,
-                        value = uiState.backfillMileage,
+                        value = dlg.backfillMileage,
                         onValueChange = viewModel::setBackfillMileage,
                         keyboardType = KeyboardType.Number,
-                        error = uiState.backfillMileageConflictType.isNotBlank() || uiState.backfillSameDayExists,
+                        error = dlg.backfillMileageConflictType.isNotBlank() || dlg.backfillSameDayExists,
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(14.dp))
                     EditField(
                         label = stringResource(R.string.koil_add_field_oil_amount),
                         icon = Icons.Filled.WaterDrop,
-                        value = uiState.backfillOilAmount,
+                        value = dlg.backfillOilAmount,
                         onValueChange = viewModel::setBackfillOilAmount,
                         keyboardType = KeyboardType.Decimal,
-                        error = uiState.backfillOverTank,
+                        error = dlg.backfillOverTank,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -671,7 +681,7 @@ fun OverviewScreen(
                     EditField(
                         label = stringResource(R.string.koil_add_field_payable),
                         icon = Icons.Filled.Money,
-                        value = uiState.backfillPayableAmount,
+                        value = dlg.backfillPayableAmount,
                         onValueChange = viewModel::setBackfillPayableAmount,
                         keyboardType = KeyboardType.Decimal,
                         readOnly = true,
@@ -683,39 +693,39 @@ fun OverviewScreen(
                     EditField(
                         label = stringResource(R.string.koil_add_field_actual),
                         icon = Icons.Filled.Money,
-                        value = uiState.backfillActualAmount,
+                        value = dlg.backfillActualAmount,
                         onValueChange = viewModel::setBackfillActualAmount,
                         keyboardType = KeyboardType.Decimal,
-                        error = uiState.backfillDeviationExceeded || uiState.backfillOverPayable,
+                        error = dlg.backfillDeviationExceeded || dlg.backfillOverPayable,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 Spacer(Modifier.height(10.dp))
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
                 PaymentSummaryCard(
-                    payable = uiState.backfillPayableAmount.toDoubleOrNull(),
-                    actual = uiState.backfillActualAmount.toDoubleOrNull(),
-                    fuelAmount = uiState.backfillOilAmount.toDoubleOrNull(),
-                    referencePrice = uiState.backfillReferencePrice,
+                    payable = dlg.backfillPayableAmount.toDoubleOrNull(),
+                    actual = dlg.backfillActualAmount.toDoubleOrNull(),
+                    fuelAmount = dlg.backfillOilAmount.toDoubleOrNull(),
+                    referencePrice = dlg.backfillReferencePrice,
                 )
                 Spacer(Modifier.height(8.dp))
                 // v1.5.11：补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
                 BackfillPrecheckHint(
-                    beforeFirst = uiState.backfillBeforeFirst,
-                    sameDayExists = uiState.backfillSameDayExists,
-                    mileageConflictType = uiState.backfillMileageConflictType,
-                    mileageConflictDate = uiState.backfillMileageConflictDate,
-                    mileageConflictValue = uiState.backfillMileageConflictValue,
-                    deviationPct = uiState.backfillDeviationPct,
-                    deviationExceeded = uiState.backfillDeviationExceeded,
-                    overPayable = uiState.backfillOverPayable,
-                    overTank = uiState.backfillOverTank,
-                    tankCapacity = uiState.backfillTankCapacity,
-                    ready = uiState.backfillReady,
+                    beforeFirst = dlg.backfillBeforeFirst,
+                    sameDayExists = dlg.backfillSameDayExists,
+                    mileageConflictType = dlg.backfillMileageConflictType,
+                    mileageConflictDate = dlg.backfillMileageConflictDate,
+                    mileageConflictValue = dlg.backfillMileageConflictValue,
+                    deviationPct = dlg.backfillDeviationPct,
+                    deviationExceeded = dlg.backfillDeviationExceeded,
+                    overPayable = dlg.backfillOverPayable,
+                    overTank = dlg.backfillOverTank,
+                    tankCapacity = dlg.backfillTankCapacity,
+                    ready = dlg.backfillReady,
                     readyText = stringResource(R.string.koil_ov_bf_ready),
                 )
                 // v1.5.16：保存失败提示（如唯一约束冲突等）
-                if (uiState.saveError) {
+                if (dlg.saveError) {
                     Spacer(Modifier.height(8.dp))
                     SaveErrorHint()
                 }
@@ -726,7 +736,7 @@ fun OverviewScreen(
                     Button(
                         onClick = viewModel::saveBackfill,
                         modifier = Modifier.weight(1f).height(44.dp),
-                        enabled = uiState.backfillReady && !uiState.isSavingBackfill,
+                        enabled = dlg.backfillReady && !dlg.isSavingBackfill,
                         // v1.5.13：全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
                         colors = ButtonDefaults.buttonColors(
                             color = KOiLColors.Primary,
@@ -1034,7 +1044,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
             Spacer(Modifier.height(10.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = stringResource(R.string.koil_ov_total_count, stats.totalCount),
+                    text = pluralStringResource(R.plurals.koil_ov_total_count, stats.totalCount, stats.totalCount),
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -1232,19 +1242,89 @@ private fun GradeFilterChip(label: String, selected: Boolean, onClick: () -> Uni
 private fun DualAxisCanvas(trend: List<TrendPoint>) {
     val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
     val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
-    val consumptions = trend.mapNotNull { it.oilConsumption }
-    val costs = trend.mapNotNull { it.costPerKm }
-    Canvas(
+    // v1.6.2：Paint 提到绘制回调之外缓存。原实现在 Canvas 的 onDraw 里每画一个标签就 new 一个
+    // android.graphics.Paint（单帧最多 4 组轴标签 + N 个日期标签，共 ~35 个对象）。
+    val density = LocalDensity.current
+    val axisTextSizePx = with(density) { 9.dp.toPx() }
+    val dateTextSizePx = with(density) { 8.dp.toPx() }
+    val axisLabelPaint = remember(labelColor, axisTextSizePx) {
+        labelPaint(labelColor, alpha = 153, textSizePx = axisTextSizePx)
+    }
+    val dateLabelPaint = remember(labelColor, dateTextSizePx) {
+        labelPaint(labelColor, alpha = 102, textSizePx = dateTextSizePx)
+    }
+    // v1.6.3：几何（Path、点坐标、标签文本与其基线坐标、画笔宽度）整体抽进 remember。
+    // 原先这些都在 onDraw 里逐帧重建：2 个 Path、2 个 MutableList<Offset>、10 次 NumberFormat.measure
+    //（每次 BigDecimal + 字符串）、以及每个标签一次字符串拼接与测量。图表本身没有动画，
+    // 只有"数据/尺寸/主题色变化"才需要重算，逐帧重算纯粹是白烧 CPU 并制造垃圾。
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(140.dp)
     ) {
+        // 尺寸按 density 只取标量做 key：Density 是接口，不同实例未必 equals，用它当 key 会让几何每次都重算
+        val wPx = if (maxWidth.value.isFinite()) with(density) { maxWidth.toPx() } else 0f
+        val hPx = if (maxHeight.value.isFinite()) with(density) { maxHeight.toPx() } else 0f
+        val geometry = remember(trend, wPx, hPx, density.density, density.fontScale) {
+            if (wPx <= 0f || hPx <= 0f) null else buildChartGeometry(trend, wPx, hPx, density)
+        }
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val geo = geometry ?: return@Canvas   // 尺寸异常（无界约束）时不画，也不崩
+            val native = drawContext.canvas.nativeCanvas
+            geo.gridLines.forEach { drawLine(gridColor, it.first, it.second, geo.gridStroke) }
+            geo.axisLabels.forEach { native.drawText(it.text, it.x, it.y, axisLabelPaint) }
+            geo.consumptionPath?.let { path ->
+                drawPath(path = path, color = KOiLColors.Primary, style = geo.lineStroke)
+                geo.consumptionPoints.forEach {
+                    drawCircle(color = KOiLColors.Primary, radius = geo.dotRadius, center = it)
+                }
+            }
+            geo.costPath?.let { path ->
+                drawPath(path = path, color = CHART_COST_COLOR, style = geo.lineStroke)
+                geo.costPoints.forEach {
+                    drawCircle(color = CHART_COST_COLOR, radius = geo.dotRadius, center = it)
+                }
+            }
+            geo.dateLabels.forEach { native.drawText(it.text, it.x, it.y, dateLabelPaint) }
+        }
+    }
+}
+
+private val CHART_COST_COLOR = Color(0xFFF97316)
+
+/** 轴/日期标签：坐标为绘制时直接用（已包含 padding 与基线偏移） */
+private class ChartLabel(val text: String, val x: Float, val y: Float)
+
+/** 图表几何快照：全部在 remember 里算一次，onDraw 只负责画 */
+private class ChartGeometry(
+    val gridLines: List<Pair<Offset, Offset>>,
+    val gridStroke: Float,
+    val lineStroke: Stroke,
+    val dotRadius: Float,
+    val axisLabels: List<ChartLabel>,
+    val dateLabels: List<ChartLabel>,
+    val consumptionPath: Path?,
+    val consumptionPoints: List<Offset>,
+    val costPath: Path?,
+    val costPoints: List<Offset>,
+)
+
+private fun buildChartGeometry(
+    trend: List<TrendPoint>,
+    widthPx: Float,
+    heightPx: Float,
+    density: androidx.compose.ui.unit.Density,
+): ChartGeometry {
+    with(density) {
         val padL = 30.dp.toPx()
         val padR = 34.dp.toPx()
         val padT = 8.dp.toPx()
         val padB = 22.dp.toPx()
-        val w = size.width - padL - padR
-        val h = size.height - padT - padB
+        val w = widthPx - padL - padR
+        val h = heightPx - padT - padB
+
+        val consumptions = trend.mapNotNull { it.oilConsumption }
+        val costs = trend.mapNotNull { it.costPerKm }
 
         // 左轴（油耗 2.0~8.0 对齐 Web，自动兜底）
         val leftMin = consumptions.minOrNull()?.let { it * 0.75 } ?: 2.0
@@ -1257,91 +1337,101 @@ private fun DualAxisCanvas(trend: List<TrendPoint>) {
         val rightRange = (rightMax - rightMin).coerceAtLeast(0.05)
 
         // 横向网格线 + 左/右轴刻度标签
-        val gridLines = 4
-        for (i in 0..gridLines) {
-            val frac = i.toFloat() / gridLines
+        val gridLines = ArrayList<Pair<Offset, Offset>>(5)
+        val axisLabels = ArrayList<ChartLabel>(10)
+        val gridLinesCount = 4
+        for (i in 0..gridLinesCount) {
+            val frac = i.toFloat() / gridLinesCount
             val y = padT + h * frac
-            drawLine(
-                color = gridColor,
-                start = Offset(padL, y),
-                end = Offset(padL + w, y),
-                strokeWidth = 1.dp.toPx(),
-            )
-            // 左轴标签
+            gridLines.add(Offset(padL, y) to Offset(padL + w, y))
             val lv = leftMax - leftRange * frac
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        153,
-                        (labelColor.red * 255).toInt(),
-                        (labelColor.green * 255).toInt(),
-                        (labelColor.blue * 255).toInt(),
-                    )
-                    textSize = 9.dp.toPx()
-                }
-                drawText(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx(), paint)
-                // 右轴标签
-                val rv = rightMin + rightRange * (1 - frac)
-                drawText(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx(), paint)
-            }
+            axisLabels.add(ChartLabel(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx()))
+            val rv = rightMin + rightRange * (1 - frac)
+            axisLabels.add(
+                ChartLabel(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx())
+            )
         }
 
         fun xAt(i: Int): Float = padL + (i.toFloat() / (trend.size - 1).coerceAtLeast(1)) * w
 
         // 平均油耗线（蓝，主色）
-        val consPath = Path()
+        var consPath: Path? = null
         var consStarted = false
-        val consPts = mutableListOf<Offset>()
+        val consPts = ArrayList<Offset>(trend.size)
         for ((i, p) in trend.withIndex()) {
-            if (p.oilConsumption == null) { consStarted = false; continue }
+            val v = p.oilConsumption
+            if (v == null) {
+                consStarted = false
+                continue
+            }
             val x = xAt(i)
-            val y = padT + h - (((p.oilConsumption - leftMin) / leftRange).toFloat() * h)
+            val y = padT + h - (((v - leftMin) / leftRange).toFloat() * h)
             consPts.add(Offset(x, y))
-            if (!consStarted) { consPath.moveTo(x, y); consStarted = true }
-            else consPath.lineTo(x, y)
-        }
-        if (consPts.size >= 2) {
-            drawPath(path = consPath, color = KOiLColors.Primary, style = Stroke(width = 2.dp.toPx()))
-            consPts.forEach { drawCircle(color = KOiLColors.Primary, radius = 2.5.dp.toPx(), center = it) }
+            if (!consStarted) {
+                consPath = Path().also { it.moveTo(x, y) }
+                consStarted = true
+            } else {
+                consPath?.lineTo(x, y)
+            }
         }
 
         // 每公里成本线（橙）
-        val costPath = Path()
+        var costPath: Path? = null
         var costStarted = false
-        val costPts = mutableListOf<Offset>()
+        val costPts = ArrayList<Offset>(trend.size)
         for ((i, p) in trend.withIndex()) {
-            if (p.costPerKm == null) { costStarted = false; continue }
+            val v = p.costPerKm
+            if (v == null) {
+                costStarted = false
+                continue
+            }
             val x = xAt(i)
-            val y = padT + h - (((p.costPerKm - rightMin) / rightRange).toFloat() * h)
+            val y = padT + h - (((v - rightMin) / rightRange).toFloat() * h)
             costPts.add(Offset(x, y))
-            if (!costStarted) { costPath.moveTo(x, y); costStarted = true }
-            else costPath.lineTo(x, y)
-        }
-        if (costPts.size >= 2) {
-            drawPath(path = costPath, color = Color(0xFFF97316), style = Stroke(width = 2.dp.toPx()))
-            costPts.forEach { drawCircle(color = Color(0xFFF97316), radius = 2.5.dp.toPx(), center = it) }
-        }
-
-        // 横轴日期标签（每2个显示一个避免拥挤）
-        for (i in trend.indices) {
-            if (i % 2 == 1 && trend.size > 4) continue
-            val x = xAt(i)
-            val label = trend[i].date
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        102,
-                        (labelColor.red * 255).toInt(),
-                        (labelColor.green * 255).toInt(),
-                        (labelColor.blue * 255).toInt(),
-                    )
-                    textSize = 8.dp.toPx()
-                }
-                drawText(label, x - 12.dp.toPx(), padT + h + 14.dp.toPx(), paint)
+            if (!costStarted) {
+                costPath = Path().also { it.moveTo(x, y) }
+                costStarted = true
+            } else {
+                costPath?.lineTo(x, y)
             }
         }
+
+        // 横轴日期标签（每 2 个显示一个避免拥挤）
+        val dateLabels = ArrayList<ChartLabel>((trend.size + 1) / 2)
+        for (i in trend.indices) {
+            if (i % 2 == 1 && trend.size > 4) continue
+            dateLabels.add(
+                ChartLabel(trend[i].date, xAt(i) - 12.dp.toPx(), padT + h + 14.dp.toPx())
+            )
+        }
+
+        return ChartGeometry(
+            gridLines = gridLines,
+            gridStroke = 1.dp.toPx(),
+            lineStroke = Stroke(width = 2.dp.toPx()),
+            dotRadius = 2.5.dp.toPx(),
+            axisLabels = axisLabels,
+            dateLabels = dateLabels,
+            // 单点画不出线（与原实现 consPts.size >= 2 才画一致）
+            consumptionPath = consPath.takeIf { consPts.size >= 2 },
+            consumptionPoints = consPts,
+            costPath = costPath.takeIf { costPts.size >= 2 },
+            costPoints = costPts,
+        )
     }
 }
+
+/** v1.6.2：图表标签画笔工厂（供 DualAxisCanvas 的 remember 缓存，避免每帧 new Paint） */
+private fun labelPaint(color: Color, alpha: Int, textSizePx: Float): android.graphics.Paint =
+    android.graphics.Paint().apply {
+        this.color = android.graphics.Color.argb(
+            alpha,
+            (color.red * 255).toInt(),
+            (color.green * 255).toInt(),
+            (color.blue * 255).toInt(),
+        )
+        this.textSize = textSizePx
+    }
 
 // ===== 异常卡（对齐 Web：空态 + 右上"N 次加油"）；v1.5.31：有异常时可点击查看明细 =====
 @Composable
@@ -1380,7 +1470,7 @@ private fun AbnormalAlertCard(
             Column(Modifier.weight(1f)) {
                 if (count > 0) {
                     Text(
-                        text = stringResource(R.string.koil_ov_abnormal_count, count),
+                        text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
@@ -1411,7 +1501,7 @@ private fun AbnormalAlertCard(
                     color = KOiLColors.Primary,
                 )
                 Text(
-                    text = stringResource(R.string.koil_ov_record_count, recordCount),
+                    text = pluralStringResource(R.plurals.koil_ov_record_count, recordCount, recordCount),
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -1428,8 +1518,9 @@ private fun RecordCard(
     isInitial: Boolean,
     showMoreMenu: Boolean,
     onMoreMenu: (RecordWithDerived) -> Unit,
-    onRect: (Rect) -> Unit = {},
+    // v1.6.4：Modifier 放第一个可选参数位（Compose 约定，调用方全用命名参数，无兼容问题）
     modifier: Modifier = Modifier,
+    onRect: (Rect) -> Unit = {},
 ) {
     val r = record.record
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
@@ -1525,7 +1616,7 @@ private fun RecordCard(
                     if (!r.province.isNullOrBlank()) {
                         Spacer(Modifier.width(6.dp))
                         Pill(
-                            text = r.province,
+                            text = provinceLabel(r.province),
                             color = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
                             textColor = MiuixTheme.colorScheme.onSecondaryContainer,
                             border = MiuixTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f),
@@ -1828,7 +1919,7 @@ private fun RecordDetail(
 // ===== 编辑记录弹窗（v1.5.13 复刻补录卡：字段结构/图标/红色错误态/里程区间提示/校验提示条/应付只读自动算/保存置灰变蓝；唯一差异：日期只读） =====
 @Composable
 private fun EditRecordDialog(
-    uiState: OverviewUiState,
+    uiState: DialogUiState,
     onMileageChange: (String) -> Unit,
     onOilAmountChange: (String) -> Unit,
     onActualAmountChange: (String) -> Unit,
@@ -1843,7 +1934,9 @@ private fun EditRecordDialog(
         onDismissRequest = onDismiss,
         contentPadding = 16.dp,
         scrollable = true,
-        maxHeight = (LocalConfiguration.current.screenHeightDp * 0.85f).dp,
+        maxHeight = with(LocalDensity.current) {
+            (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
+        },
         widthFraction = 0.90f,
     ) {
         Column {
@@ -2071,12 +2164,7 @@ private fun MileageRangeHint(rangeMin: Double?, rangeMax: Double?) {
 }
 
 // ===== 全国 31 省（与 AddScreen 一致） =====
-private val PROVINCES = listOf(
-    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-    "新疆", "海南", "宁夏", "青海", "西藏",
-)
+private val PROVINCES = Provinces.ALL
 
 /** 加油省份选择字段（锚定下拉列表：紧贴字段下方弹出、空间不足自动上翻、底色与首页下拉一致，联动参考价/应付/偏差预检） */
 @Composable
@@ -2118,7 +2206,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else province,
+                    text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else provinceLabel(province),
                     fontSize = 14.sp,
                     fontWeight = if (province.isBlank()) FontWeight.Normal else FontWeight.Bold,
                     color = if (province.isBlank()) MiuixTheme.colorScheme.onBackgroundVariant else MiuixTheme.colorScheme.onBackground,
@@ -2131,7 +2219,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
     }
     if (showPicker.value) {
         // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位，与 miuix 同款视觉）
-        com.llpop.koil.ui.component.rememberAnchoredPopupRegistration(
+        com.llpop.koil.ui.component.AnchoredPopupAnchor(
             show = true,
             id = "ov-province-picker",
             anchorBounds = anchorBounds.value,
@@ -2141,7 +2229,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
             com.llpop.koil.ui.component.AnchoredDropdownColumn {
                 PROVINCES.forEachIndexed { index, p ->
                     com.llpop.koil.ui.component.AnchoredDropdownItemRow(
-                        text = p,
+                        text = provinceLabel(p),
                         selected = p == province,
                         isFirst = index == 0,
                         isLast = index == PROVINCES.lastIndex,
@@ -2253,11 +2341,12 @@ private fun EditField(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     value: String,
     onValueChange: (String) -> Unit,
+    // v1.6.4：Modifier 放第一个可选参数位（Compose 约定）
+    modifier: Modifier = Modifier,
     keyboardType: KeyboardType = KeyboardType.Text,
     readOnly: Boolean = false,
     error: Boolean = false,
     placeholder: String? = null,
-    modifier: Modifier = Modifier,
 ) {
     val errorColor = Color(0xFFFF3B30)
     val tfColors = TextFieldDefaults.textFieldColors(
@@ -2362,7 +2451,7 @@ private fun GradePriceSelect(
     }
     if (showMenu.value) {
         // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位，与 miuix 同款视觉）
-        com.llpop.koil.ui.component.rememberAnchoredPopupRegistration(
+        com.llpop.koil.ui.component.AnchoredPopupAnchor(
             show = true,
             id = "ov-grade-picker",
             anchorBounds = anchorBounds.value,

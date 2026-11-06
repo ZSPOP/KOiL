@@ -1,13 +1,14 @@
 package com.llpop.koil.data.sync
 
 import com.llpop.koil.BuildConfig
+import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,6 +30,7 @@ class CloudSyncManager(
     private val settings: AppSettings,
     private val recordDao: KOiLRecordDao,
     private val client: WebDavClient,
+    private val db: AppDatabase,
 ) {
 
     companion object {
@@ -148,22 +150,23 @@ class CloudSyncManager(
         val password = getAppPassword()
 
         val json = client.download(url, BackupCodec.CLOUD_FILE_NAME, username, password) ?: return null
-        val total = BackupCodec.countRecords(json)
-        val parsed = BackupCodec.parseRecords(json)
+        // v1.6.2：一次解析同时拿到总条数与有效记录（原先 countRecords + parseRecords 把大 JSON 解析两遍）
+        val parsed = BackupCodec.parse(json)
+        val total = parsed.total
 
         // 与本地比对：同日同里程视为重复（沿用 CSV 导入的复合键口径，Double 精确比较）
         val existing = recordDao.getRange("1970-01-01", "2999-12-31")
         val keys = existing.map { it.reoilDate to it.mileage }.toSet()
         val valid = mutableListOf<KOiLRecordEntity>()
         var duplicates = 0
-        for (r in parsed) {
+        for (r in parsed.records) {
             if (r.reoilDate to r.mileage in keys) duplicates++
             else valid.add(r.toEntity())
         }
         return RestoreResult(
             valid = valid,
             duplicates = duplicates,
-            errors = (total - parsed.size).coerceAtLeast(0),
+            errors = (total - parsed.records.size).coerceAtLeast(0),
             cloudRecordCount = total,
         )
     }
@@ -199,9 +202,15 @@ class CloudSyncManager(
     // ===== 变更订阅 =====
 
     private suspend fun recordChangeCollector() {
-        recordDao.observeAll()
+        // v1.6.2：改用 Room 表级失效流——只在 koil_record 有写入时发一个"表名集合"信号，
+        // 不跑查询、不物化实体。原实现 observeAll() 会把整张表拉成 List<Entity>，
+        // 再 distinctUntilChanged() 对列表做全量 equals（每次写入 O(n) 对象比较、O(n) 内存分配）。
+        // 失效流对插入/更新/删除都会触发，语义比"行数变化"更完整（编辑记录同样会推）。
+        // onStart 补一次：失效流不像 observeAll 那样在订阅瞬间就发首个值，这里显式补上，
+        // 保留"每次启动检查一次云端是否需要推送"的旧语义（内部仍受 30s 最小间隔节流）。
+        db.invalidationTracker.createFlow("koil_record")
+            .onStart { emit(setOf("koil_record")) }
             .debounce(RECORD_DEBOUNCE_MS)
-            .distinctUntilChanged()
             .collect { pushIfAllowed() }
     }
 }

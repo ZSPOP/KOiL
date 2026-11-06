@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  v1.6.3：系统备份规则（Android 12+ 用 dataExtractionRules 取代 allowBackup/fullBackupContent）。
+
+  核心目标：**备份包里不含任何凭据**。
+  同步密码已单独存到 datastore/KOiL_secret.preferences_pb（见 AppSettings.KOiLSecretStore 注释），
+  这里按文件粒度把它排除掉；其余设置（主题、语言、默认省份、阈值…）与 Room 数据库照常备份/迁移。
+  换机后同步密码必然缺失 → 设置页会显示"应用密码已失效，请重新输入"（SyncViewModel.passwordInvalid）。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="file"
+            path="datastore/KOiL_secret.preferences_pb" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="file"
+            path="datastore/KOiL_secret.preferences_pb" />
+    </device-transfer>
+</data-extraction-rules>

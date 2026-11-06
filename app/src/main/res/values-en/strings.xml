@@ -30,7 +30,10 @@
     <string name="koil_add_suggest_early">Suggest filling up soon</string>
     <string name="koil_add_suggest_wait">Wait for a price drop</string>
     <string name="koil_add_window_prefix">Next adjustment window %1$s 24:00</string>
-    <string name="koil_add_window_days"> · %1$d days left</string>
+    <plurals name="koil_add_window_days">
+    <item quantity="one"> · %1$d day left</item>
+    <item quantity="other"> · %1$d days left</item>
+    </plurals>
     <string name="koil_add_forecast_up">%1$s up</string>
     <string name="koil_add_forecast_down">%1$s down</string>
     <string name="koil_add_forecast_per_ton">¥/ton</string>
@@ -40,7 +43,6 @@
     <string name="koil_add_forecast_sep">, </string>
     <string name="koil_add_approx_per_liter_up">≈ up ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter_down">≈ down ¥%1$.2f/L</string>
-    <string name="koil_add_approx_per_liter">≈ ¥%1$.2f/L</string>
     <string name="koil_add_unit_per_liter">¥/L</string>
     <string name="koil_add_last_refuel">Last fill-up</string>
     <string name="koil_add_no_record">No records yet</string>
@@ -54,7 +56,6 @@
     <string name="koil_precheck_over_payable">Paid amount exceeds payable, please confirm</string>
     <string name="koil_precheck_over_tank">Amount exceeds tank capacity %1$d L, please confirm</string>
     <string name="koil_precheck_deviation">Price deviation %1$.1f%%, please confirm before adding</string>
-    <string name="koil_precheck_price_ok">Price matches the reference price</string>
     <string name="koil_precheck_ready">Pre-check passed · %1$.0f km since last refuel, saved %2$.2f yuan</string>
     <string name="koil_precheck_added">Added — enter the next fill-up</string>
     <string name="koil_precheck_add_failed_generic">Add failed, please try again</string>
@@ -74,14 +75,14 @@
     <string name="koil_ov_empty_title">No refuel records yet</string>
     <string name="koil_ov_empty_hint">Go to the Add tab to record your first refuel</string>
     <string name="koil_ov_empty_action">Add Record</string>
-    <string name="koil_ov_total_count_in_list">%1$d records</string>
+    <plurals name="koil_ov_total_count_in_list">
+    <item quantity="one">%1$d record</item>
+    <item quantity="other">%1$d records</item>
+    </plurals>
     <string name="koil_ov_backfill">Backfill</string>
     <string name="koil_ov_month_count">%1$d</string>
-    <string name="koil_ov_load_more">Load more (%1$d left)</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>
-    <string name="koil_ov_field_mileage">Mileage (km)</string>
     <string name="koil_ov_grade">Grade</string>
-    <string name="koil_ov_backfill_save">Backfill</string>
     <string name="koil_ov_field_province">Province</string>
     <string name="koil_ps_payable_actual">Payable ¥%1$.2f · Actual ¥%2$.2f</string>
     <string name="koil_ps_savings">Save ¥%1$.2f (%2$.1f%%)</string>
@@ -102,27 +103,33 @@
     <string name="koil_stat_avg_price">Avg fuel price</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">Avg per fill-up</string>
-    <string name="koil_stat_avg_interval">Avg interval</string>
-    <string name="koil_stat_interval_unit">days</string>
-    <string name="koil_ov_total_count">%1$d fill-ups</string>
+    <plurals name="koil_ov_total_count">
+    <item quantity="one">%1$d fill-up</item>
+    <item quantity="other">%1$d fill-ups</item>
+    </plurals>
     <string name="koil_ov_vs_prev">vs prev.</string>
     <string name="koil_ov_trend">Trend</string>
     <string name="koil_ov_legend_consumption">Consumption</string>
     <string name="koil_ov_legend_cost">Cost/km</string>
     <string name="koil_ov_trend_insufficient">Not enough data for the trend chart</string>
     <string name="koil_ov_trend_all">All</string>
-    <string name="koil_ov_abnormal_count">%1$d abnormal records</string>
+    <plurals name="koil_ov_abnormal_count">
+    <item quantity="one">%1$d abnormal record</item>
+    <item quantity="other">%1$d abnormal records</item>
+    </plurals>
     <string name="koil_ov_abnormal_avg">vs mean · avg %1$.2f L/100km</string>
     <string name="koil_ov_abnormal_empty">No abnormal records</string>
     <string name="koil_ov_abnormal_stable">Steady fuel economy in this range</string>
     <string name="koil_ov_abnormal_detail_title">Anomaly details (%1$d)</string>
     <string name="koil_ov_abnormal_high">High</string>
     <string name="koil_ov_abnormal_low">Low</string>
-    <string name="koil_ov_record_count">%1$d fill-ups</string>
+    <plurals name="koil_ov_record_count">
+    <item quantity="one">%1$d fill-up</item>
+    <item quantity="other">%1$d fill-ups</item>
+    </plurals>
     <string name="koil_ov_oil_days">%1$dd</string>
     <string name="koil_ov_high">High</string>
     <string name="koil_ov_low">Low</string>
-    <string name="koil_ov_more_actions">More</string>
     <string name="koil_ov_prev_line">Last %1$s · mileage %2$d → %3$d km</string>
     <string name="koil_ov_current_mileage">Current mileage %1$d km</string>
     <string name="koil_ov_metric_consumption">Consumption</string>
@@ -169,12 +176,10 @@
     <string name="koil_set_section_entry">Entry</string>
     <string name="koil_set_default_province">Default province</string>
     <string name="koil_set_default_province_sum">Price query &amp; location · %1$s</string>
-    <string name="koil_set_default_province_auto">Auto-located · %1$s</string>
     <string name="koil_set_default_grade">Default grade</string>
     <string name="koil_set_default_grade_sum">Preselect %1$s# for new records</string>
     <string name="koil_set_tank">Tank capacity</string>
     <string name="koil_set_tank_sub_fmt">Tank capacity %1$dL · Overfill check</string>
-    <string name="koil_set_tank_sub">Overfill check</string>
     <string name="koil_set_keep_grade">Keep last grade</string>
     <string name="koil_set_keep_grade_sub">Auto-fill on entry</string>
     <string name="koil_set_section_remind">Reminders &amp; checks</string>
@@ -185,38 +190,20 @@
     <string name="koil_set_price_alert">Price adjustment window</string>
     <string name="koil_set_price_alert_sub">Show next window, forecast &amp; per-liter on home</string>
     <string name="koil_set_section_price_db">Oil price database</string>
-    <string name="koil_set_check_update">Check update</string>
-    <string name="koil_pdb_data_until">Data until</string>
-    <string name="koil_pdb_last_change">Last change: %1$s</string>
-    <string name="koil_pdb_stranded">Stranded, price holds %1$s</string>
-    <string name="koil_pdb_follow_note">Auto-follow domestic fuel adjustment windows, incl. stranded</string>
     <string name="koil_pdb_provinces">Provinces</string>
     <string name="koil_pdb_grades">Grades</string>
     <string name="koil_pdb_adjustments">Adjustments</string>
     <string name="koil_pdb_records">Records</string>
     <string name="koil_pdb_last_update">Last update: %1$s</string>
-    <string name="koil_pdb_checked_until">Checked until %1$s, no change (stranded)</string>
     <string name="koil_pdb_pending_title">Pending updates</string>
-    <string name="koil_pdb_no_pending">No pending updates</string>
     <string name="koil_pdb_update_now">Update now</string>
     <string name="koil_pdb_auto_sub">Check every 8h, apply on release</string>
-    <string name="koil_pdb_deviation_title">Price deviation threshold</string>
-    <string name="koil_pdb_deviation_sub">Alert when actual unit price deviates from confirmed price</string>
     <string name="koil_set_section_data">Data</string>
     <string name="koil_set_location">Location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_price_db_auto">Auto-update price DB</string>
-    <string name="koil_set_price_db_auto_sub">Check for new prices on launch</string>
     <string name="koil_set_eia_key_title">EIA API Key</string>
-    <string name="koil_set_eia_key_edit">Edit</string>
     <string name="koil_set_eia_key_sub">Crude estimation source (editable; blank falls back to Tencent)</string>
-    <string name="koil_set_price_db_status">Price DB status</string>
-    <string name="koil_set_price_db_status_sum">%1$d entries · %2$d provinces × %3$d grades · latest %4$s</string>
-    <string name="koil_set_pending_count">%1$d pending</string>
-    <string name="koil_set_normal">Normal</string>
-    <string name="koil_set_no_pending">No pending prices</string>
-    <string name="koil_set_primary_source">Primary</string>
-    <string name="koil_set_secondary_source">Secondary</string>
     <string name="koil_set_primary_secondary_price">Primary ¥%1$.2f / Secondary ¥%2$.2f</string>
     <string name="koil_set_accept_primary">Use primary</string>
     <string name="koil_set_accept_secondary">Use secondary</string>
@@ -232,10 +219,18 @@
     <string name="koil_act_backup">Backup</string>
     <string name="koil_set_export_price_history">Export price history</string>
     <string name="koil_set_export_price_history_sub">CSV · full price DB</string>
+    <string name="koil_set_crash_log">Crash log</string>
+    <string name="koil_set_crash_log_sub">Recorded automatically on crash (stored locally only, never uploaded) · keeps last 10</string>
+    <string name="koil_set_crash_count">%1$d entries</string>
+    <string name="koil_set_crash_none">No crash records</string>
+    <string name="koil_set_crash_export">Export</string>
+    <string name="koil_set_crash_export_ok">Exported to Downloads: KOiL-crash.txt</string>
+    <string name="koil_set_crash_export_fail">Export failed, please retry</string>
+    <string name="koil_set_crash_clear">Clear</string>
+    <string name="koil_set_crash_cleared">Cleared</string>
     <string name="koil_set_restore">Restore backup</string>
     <string name="koil_set_restore_sub">Restore records + settings from JSON</string>
     <string name="koil_act_restore">Restore</string>
-    <string name="koil_set_footer">KOiL v%1$s · com.llpop.koil</string>
     <string name="koil_import_tab_valid">Valid (%1$d)</string>
     <string name="koil_import_tab_dup">Duplicates (%1$d)</string>
     <string name="koil_import_tab_conflict">Mileage conflict (%1$d)</string>
@@ -247,7 +242,7 @@
     <string name="koil_theme_light">Light theme</string>
     <string name="koil_theme_dark">Dark theme</string>
     <string name="koil_lang_system">System default</string>
-    <string name="koil_lang_zh_cn">Simplified Chinese</string>
+    <string name="koil_lang_zh_cn">简体中文</string>
     <string name="koil_lang_zh_tw">繁體中文</string>
     <string name="koil_lang_en">English</string>
 
@@ -258,9 +253,7 @@
     <string name="koil_msg_pdb_update_failed">Update failed: %1$s</string>
         <string name="koil_pdb_db_title">Database version (%1$s)</string>
     <string name="koil_pdb_db_title_plain">Database version (pending)</string>
-<string name="koil_pdb_stats">%1$d provinces %2$d grades %3$d adjustments %4$d records</string>
-    <string name="koil_pdb_updated_and_until">Updated %1$s · Data to %2$s</string>
-    <string name="koil_pdb_adjust_stranded">Window %1$s (stranded, price held at %2$s)</string>
+    <string name="koil_pdb_adjust_stranded">Window %1$s (stranded, price held at %2$s ¥%3$s)</string>
     <string name="koil_pdb_adjust_stranded_short">Window %1$s (stranded)</string>
     <string name="koil_pdb_adjust_adjusted">Window %1$s · adjusted to %2$s yuan/L</string>
     <string name="koil_pdb_next_window">Next window: %1$s</string>
@@ -268,13 +261,9 @@
     <string name="koil_pdb_sync_sources">Sync sources: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>
     <string name="koil_pdb_detail_title">Price Adjustments</string>
-    <string name="koil_pdb_back">Back to settings</string>
     <string name="koil_pdb_detail_empty">No adjustment records yet</string>
-    <string name="koil_pdb_rise_total">Total rises (YTD)</string>
-    <string name="koil_pdb_fall_total">Total falls (YTD)</string>
     <string name="koil_pdb_latest_price">Latest price</string>
     <string name="koil_pdb_col_date">Date</string>
-    <string name="koil_pdb_col_action">Change</string>
     <string name="koil_pdb_col_price">Price</string>
     <string name="koil_pdb_col_change">Change</string>
     <string name="koil_pdb_up_count">Rises</string>
@@ -289,7 +278,10 @@
     <string name="koil_pdb_flat">Unchanged</string>
     <string name="koil_pdb_first_base">Baseline</string>
     <string name="koil_pdb_view_detail">View</string>
-    <string name="koil_pdb_incomplete">%1$d province(s) incomplete</string>
+    <plurals name="koil_pdb_incomplete">
+    <item quantity="one">%1$d province incomplete</item>
+    <item quantity="other">%1$d provinces incomplete</item>
+    </plurals>
     <string name="koil_pdb_seeding">Seeding in background, will refresh automatically</string>
     <string name="koil_set_price_push">Price change notifications</string>
     <string name="koil_set_price_push_sub">System notification on adjustment &amp; day before window</string>
@@ -305,10 +297,16 @@
     <string name="koil_noti_msg_window_today">Today (%1$s) is the adjustment window; new prices take effect after 24:00.</string>
     <string name="koil_pdb_updating">Updating…</string>
     <string name="koil_msg_price_db_empty">Price DB is empty</string>
-    <string name="koil_msg_price_exported">Exported %1$d prices → %2$s</string>
+    <plurals name="koil_msg_price_exported">
+    <item quantity="one">Exported %1$d price → %2$s</item>
+    <item quantity="other">Exported %1$d prices → %2$s</item>
+    </plurals>
     <string name="koil_msg_export_failed">Export failed: %1$s</string>
     <string name="koil_msg_no_records">No records to export</string>
-    <string name="koil_msg_records_exported">Exported %1$d records → %2$s</string>
+    <plurals name="koil_msg_records_exported">
+    <item quantity="one">Exported %1$d record → %2$s</item>
+    <item quantity="other">Exported %1$d records → %2$s</item>
+    </plurals>
     <string name="koil_msg_cannot_read">Cannot read file</string>
     <string name="koil_msg_file_empty">File empty or no data rows</string>
     <string name="koil_msg_missing_columns">Missing required columns (date/mileage/amount/paid)</string>
@@ -317,12 +315,18 @@
     <string name="koil_msg_mileage_lt_prev">Mileage below previous %1$dkm</string>
     <string name="koil_msg_mileage_gt_next">Mileage above next %1$dkm</string>
     <string name="koil_msg_parse_failed">Parse failed: %1$s</string>
-    <string name="koil_msg_import_done">Imported %1$d (skipped %2$d dup/conflict/error)</string>
+    <string name="koil_msg_import_done">Imported %1$d, skipped %2$d (dup / conflict / error)</string>
     <string name="koil_msg_backup_no_records">No records in backup file</string>
-    <string name="koil_msg_restore_done">Restored %1$d records, skipped %2$d; settings restored</string>
+    <plurals name="koil_msg_restore_done">
+    <item quantity="one">Restored %1$d record, skipped %2$d; settings restored</item>
+    <item quantity="other">Restored %1$d records, skipped %2$d; settings restored</item>
+    </plurals>
     <string name="koil_msg_restore_failed">Restore failed: %1$s</string>
     <string name="koil_msg_no_records_backup">No records to back up</string>
-    <string name="koil_msg_backup_done">Backup: %1$d records → %2$s</string>
+    <plurals name="koil_msg_backup_done">
+    <item quantity="one">Backup: %1$d record → %2$s</item>
+    <item quantity="other">Backup: %1$d records → %2$s</item>
+    </plurals>
     <string name="koil_msg_backup_failed">Backup failed: %1$s</string>
     <!-- Calendar -->
     <string-array name="koil_cal_week">
@@ -330,8 +334,6 @@
     </string-array>
     <string name="koil_cal_month">%2$d / %1$d</string>
     <string name="koil_cal_today">Today</string>
-    <string name="koil_cal_confirm">OK</string>
-    <string name="koil_cal_cancel">Cancel</string>
 
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_sync_section">Cloud Sync</string>
@@ -352,7 +354,10 @@
     <string name="koil_sync_status_fail">Sync failed: %1$s (will retry)</string>
     <string name="koil_sync_status_never">Not backed up yet</string>
     <string name="koil_sync_restore_confirm_title">Restore from Cloud</string>
-    <string name="koil_sync_restore_confirm_msg">Cloud has %1$d records: %2$d new, %3$d duplicates, %4$d invalid. Local records are kept.</string>
+    <plurals name="koil_sync_restore_confirm_msg">
+    <item quantity="one">Cloud has %1$d record: %2$d new, %3$d duplicates, %4$d invalid. Local records are kept.</item>
+    <item quantity="other">Cloud has %1$d records: %2$d new, %3$d duplicates, %4$d invalid. Local records are kept.</item>
+    </plurals>
     <string name="koil_sync_restore_confirm">Restore %1$d</string>
     <string name="koil_sync_backup_done">Backed up</string>
     <string name="koil_sync_backup_failed">Backup failed — check account and network</string>
@@ -363,4 +368,10 @@
     <string name="koil_sync_config_saved">Saved, connection OK</string>
     <string name="koil_sync_config_test_failed">Connection failed — check account &amp; app password</string>
 
+    <string name="koil_detail_year">%1$s</string>
+    <string name="koil_detail_stranded">Stranded</string>
+    <string name="koil_detail_held_price">Held at %1$s</string>
+    <string name="koil_detail_last_year">last year</string>
+    <string name="koil_sync_password_invalid">App password is unreadable (key lost after device change) — please re-enter it</string>
+    <string name="koil_sync_status_password_invalid">Sync paused: re-enter the app password</string>
 </resources>

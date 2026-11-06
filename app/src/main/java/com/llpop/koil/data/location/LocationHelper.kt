@@ -7,12 +7,14 @@ import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
+import com.llpop.koil.data.oil.Provinces
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.request.get
-import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.nio.charset.Charset
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -21,14 +23,14 @@ import java.util.concurrent.TimeUnit
  * 定位助手：获取当前位置并逆地理编码为省份。
  * 三级降级链（对应 Web 端 use-location-permission）：
  *   1. GPS/网络定位 → Geocoder 反查
- *   2. IP 归属地（ip-api.com）
+ *   2. IP 归属地（whois.pconline.com.cn，HTTPS）
  *   3. null（调用方用默认省份）
  */
 class LocationHelper(private val context: Context) {
 
     private val httpClient = HttpClient { }
 
-    // v1.5.23 A3：IP 定位节流（进程内 30 分钟一次）——ip-api.com 免费版 45 次/分钟/IP 限流，启动+手动叠加易触发
+    // v1.5.23 A3：IP 定位节流（进程内 30 分钟一次）——归属地接口按 IP 限流，启动+手动叠加易被打回
     private var lastIpLookupAt = 0L
 
     /** 检查定位权限是否已授予 */
@@ -48,32 +50,38 @@ class LocationHelper(private val context: Context) {
                 val location = getLastKnownLocation()
                 if (location != null) {
                     val province = geocodeProvince(location.latitude, location.longitude)
-                    if (!province.isNullOrBlank()) return@withContext province
+                    if (Provinces.isValid(province)) return@withContext province
                 }
             } catch (_: Exception) { }
         }
         // 第二级：IP 归属地
         try {
             val province = getProvinceByIp()
-            if (!province.isNullOrBlank()) return@withContext province
+            if (Provinces.isValid(province)) return@withContext province
         } catch (_: Exception) { }
         // 第三级：null（调用方回退默认）
         null
     }
 
-    /** IP 归属地：请求 ip-api.com 获取省份（免费版仅 http 明文可用，https 需付费 Key；
-     *  明文只含省份信息、敏感度低，配合 30 分钟节流缓解限流与暴露面） */
+    /** IP 归属地：走 HTTPS 的 whois.pconline.com.cn（v1.6.3 起，此前用 ip-api.com 的 http 接口）。
+     *
+     *  v1.6.2 曾为 ip-api.com 单独放行明文流量，属于"能用但破口"。本版换成 HTTPS 源，全局重新禁止明文：
+     *  - 该接口返回 GBK（Response Header: charset=GBK），必须按 GBK 显式解码，否则省份是乱码 → 白名单直接判非法；
+     *  - 返回值就是中文省名（"广东省"），比原 ip-api 的英文 regionName 更稳，normalizeProvince 去后缀后即入白名单；
+     *  - 仍是 30 分钟节流：接口按 IP 限流，启动 + 手动叠加容易被打回。
+     */
     private suspend fun getProvinceByIp(): String? {
         val now = System.currentTimeMillis()
         if (now - lastIpLookupAt < 30 * 60 * 1000L) return null
         lastIpLookupAt = now
         return try {
-            val response = httpClient.get("http://ip-api.com/json/?fields=status,regionName,country")
-            val json = JSONObject(response.bodyAsText())
-            if (json.optString("status") == "success") {
-                val region = json.optString("regionName")
-                if (region.isNotBlank()) normalizeProvince(region) else null
-            } else null
+            val response = httpClient.get("https://whois.pconline.com.cn/ipJson.jsp?json=true")
+            val text = String(response.body<ByteArray>(), Charset.forName("GBK")).trim()
+            // 接口在 JSON 前后可能夹空白/BOM，JSONObject 自己能吃空白，这里再兜一层空串
+            if (text.isEmpty()) return null
+            val json = JSONObject(text.trim())
+            val province = json.optString("pro")
+            if (province.isNotBlank() && province != "内网IP") normalizeProvince(province) else null
         } catch (_: Exception) {
             null
         }

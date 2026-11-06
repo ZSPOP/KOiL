@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,7 +46,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +62,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +82,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
@@ -92,6 +97,8 @@ import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.ui.component.gradeLabel
+import com.llpop.koil.ui.component.provinceLabel
 import org.koin.androidx.compose.koinViewModel
 import kotlinx.coroutines.delay
 import kotlin.ranges.ClosedFloatingPointRange
@@ -104,13 +111,14 @@ import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
+import com.llpop.koil.util.CrashReporter
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 
-private val PROVINCES = listOf(
-    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-    "新疆", "海南", "宁夏", "青海", "西藏",
-)
+private val PROVINCES = Provinces.ALL
 private val GRADES = listOf("92", "95", "98", "0")
 
 /** 云同步自用默认值（作者私有账号；应用密码泄露可去坚果云官网单独撤销重新生成） */
@@ -127,7 +135,7 @@ fun SettingsScreen(
     onOpenPriceDetail: () -> Unit = {},
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     // 全局焦点管理 + 偏差输入框点击标志（用于"点击输入框外部即收起提交"，无需坐标计算）
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
@@ -160,8 +168,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     var pushPermissionGranted by remember {
         mutableStateOf(
-            Build.VERSION.SDK_INT < 33 ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                 PackageManager.PERMISSION_GRANTED,
         )
     }
@@ -172,7 +179,7 @@ fun SettingsScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                pushPermissionGranted = Build.VERSION.SDK_INT < 33 ||
+                pushPermissionGranted =
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
                 locationPermissionGranted = viewModel.hasLocationPermission()
@@ -200,6 +207,9 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
+                // v1.6.2：edge-to-edge 下键盘不再自动 resize 窗口，缺了 imePadding 时
+                // 底部输入项（EIA Key / 阈值）会被键盘盖住且滚不到
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp)
                 // 点击输入框外部任意位置 = 收起焦点并提交（requireUnconsumed=false 确保子按钮消费后仍触发）
@@ -359,12 +369,14 @@ fun SettingsScreen(
                 val provinces = PROVINCES
                 val provinceIdx = provinces.indexOf(uiState.defaultProvince).coerceAtLeast(0)
                 OverlayDropdownPreference(
-                    items = provinces,
+                    // v1.6.7：省份是数据库主键（中文），列表与摘要都走显示名映射，否则英文界面下
+                    // 这一栏恒为中文，且选完显示的还是中文（真机反馈）
+                    items = provinces.map { provinceLabel(it) },
                     selectedIndex = provinceIdx,
                     title = stringResource(R.string.koil_set_default_province),
                     summary = stringResource(
                         R.string.koil_set_default_province_sum,
-                        provinces.getOrElse(provinceIdx) { provinces.first() },
+                        provinceLabel(provinces.getOrElse(provinceIdx) { provinces.first() }),
                     ),
                     onSelectedIndexChange = { index ->
                         viewModel.setDefaultProvince(provinces[index])
@@ -485,14 +497,17 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
         ) {
-            val priceDbStatus by viewModel.priceDbStatus.collectAsState()
-            val pendingItems by viewModel.pendingItems.collectAsState()
-            val priceDbUpdating by viewModel.priceDbUpdating.collectAsState()
+            val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
+            val pendingItems by viewModel.pendingItems.collectAsStateWithLifecycle()
+            val priceDbUpdating by viewModel.priceDbUpdating.collectAsStateWithLifecycle()
             val latestShort = (priceDbStatus.lastPriceChangeDate ?: priceDbStatus.latestDate).takeLast(5)
             val versionShort = (priceDbStatus.versionDate ?: priceDbStatus.latestDate).takeLast(5)
             // 最近检查时间格式化（MM/dd HH:mm），未检查过显示 "--"
+            // v1.6.2：语言用可观察的 Configuration locale（原 Locale.getDefault() 在组合内不可观察，
+            // 切换语言后时间格式不会跟着变）
+            val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
             val lastCheckedText = if (priceDbStatus.lastCheckedAt > 0) {
-                java.text.SimpleDateFormat("MM-dd HH:mm", java.util.Locale.getDefault())
+                java.text.SimpleDateFormat("MM-dd HH:mm", uiLocale)
                     .format(java.util.Date(priceDbStatus.lastCheckedAt))
             } else "--"
 
@@ -545,7 +560,7 @@ fun SettingsScreen(
                 if (priceDbStatus.incompleteProvinceCount > 0) {
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = stringResource(R.string.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount),
+                        text = pluralStringResource(R.plurals.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount, priceDbStatus.incompleteProvinceCount),
                         fontSize = 12.sp,
                         color = Color(0xFFE53935),
                     )
@@ -623,9 +638,12 @@ fun SettingsScreen(
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                         Spacer(Modifier.height(4.dp))
-                        // 行2：下個窗口 ｜ 最近更新（紧凑同行，竖线分隔）
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        // 行2：下個窗口 ｜ 最近更新。v1.6.8 改 FlowRow：原先裸 Row 在空间不足时
+                        // 会把 "Last update: 11-06 01:58" 从中间折断，"01:58" 孤零零挂到下一行
+                        //（真机截图反馈）；FlowRow 放不下时整段换行，文案永远完整。
+                        @OptIn(ExperimentalLayoutApi::class)
+                        FlowRow(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             if (w2Short != null) {
@@ -711,7 +729,7 @@ fun SettingsScreen(
                         ) {
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    text = "${item.province} · ${item.grade} · ${item.effectiveDate}",
+                                    text = "${provinceLabel(item.province)} · ${gradeLabel(item.grade)} · ${item.effectiveDate}",
                                     fontSize = 12.sp,
                                     color = MiuixTheme.colorScheme.onBackground,
                                 )
@@ -791,9 +809,9 @@ fun SettingsScreen(
 
                 // —— EIA API Key（原油估算数据源；v1.5.1：数据源开关——开=用 EIA 隐藏输入框；
                 //    关=直接用腾讯，显示输入框供修改 Key，改完再打开即启用新 Key）——
-                val eiaKey by viewModel.eiaApiKey.collectAsState()
-                val eiaEnabled by viewModel.eiaEnabled.collectAsState()
-                val eiaLoaded by viewModel.eiaLoaded.collectAsState()
+                val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
+                val eiaEnabled by viewModel.eiaEnabled.collectAsStateWithLifecycle()
+                val eiaLoaded by viewModel.eiaLoaded.collectAsStateWithLifecycle()
                 // v1.5.47：EIA 配置加载完成前不渲染开关/输入框（杜绝默认值先行闪烁）
                 if (eiaLoaded) {
                 Box(
@@ -885,6 +903,18 @@ fun SettingsScreen(
         }
         Spacer(Modifier.height(16.dp))
 
+        // ===== 崩溃日志（v1.6.8：本地累积 + 查看/导出，仅存本机不上传）=====
+        val crashContext = LocalContext.current
+        val crashScope = rememberCoroutineScope()
+        var showCrashDialog by remember { mutableStateOf(false) }
+        var crashLogText by remember { mutableStateOf("") }
+        var crashCount by remember { mutableIntStateOf(0) }
+        // 首帧与每次打开弹窗都刷新（导出/清空后重新打开也拿到最新值）
+        LaunchedEffect(showCrashDialog) {
+            crashLogText = withContext(Dispatchers.IO) { CrashReporter.readLogs(crashContext) }
+            crashCount = CrashReporter.countEntries(crashLogText)
+        }
+
         // ===== 数据 =====
         SectionTitle(stringResource(R.string.koil_set_section_data))
         SettingsCard {
@@ -922,12 +952,123 @@ fun SettingsScreen(
                 value = stringResource(R.string.koil_act_restore),
                 onClick = { backupLauncher.launch(arrayOf("application/json", "*/*")) },
             )
+            SettingDivider()
+            SettingRow(
+                title = stringResource(R.string.koil_set_crash_log),
+                subtitle = stringResource(R.string.koil_set_crash_log_sub),
+                value = if (crashCount > 0) stringResource(R.string.koil_set_crash_count, crashCount) else "",
+                onClick = { showCrashDialog = true },
+            )
         }
         Spacer(Modifier.height(16.dp))
 
+        if (showCrashDialog) {
+            KOiLGlassDialog(
+                show = true,
+                onDismissRequest = { showCrashDialog = false },
+                contentPadding = 16.dp,
+                scrollable = true,
+                widthFraction = 0.90f,
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.koil_set_crash_log),
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (crashCount > 0) {
+                            Text(
+                                text = stringResource(R.string.koil_set_crash_count, crashCount),
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    if (crashLogText.isBlank()) {
+                        Text(
+                            text = stringResource(R.string.koil_set_crash_none),
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    } else {
+                        // 日志原文（等宽观感：小号字 + 按行呈现；GlassDialog 的 scrollable 负责滚动）
+                        Text(
+                            text = crashLogText,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        if (crashLogText.isNotBlank()) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .clickable {
+                                        crashScope.launch {
+                                            CrashReporter.clear(crashContext)
+                                            crashLogText = ""
+                                            crashCount = 0
+                                            android.widget.Toast.makeText(
+                                                crashContext,
+                                                crashContext.getString(R.string.koil_set_crash_cleared),
+                                                android.widget.Toast.LENGTH_SHORT,
+                                            ).show()
+                                        }
+                                    }
+                                    .padding(vertical = 11.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.koil_set_crash_clear),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onBackground,
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (crashLogText.isNotBlank()) KOiLColors.Primary else KOiLColors.Primary.copy(alpha = 0.4f))
+                                .clickable(enabled = crashLogText.isNotBlank()) {
+                                    crashScope.launch {
+                                        val ok = withContext(Dispatchers.IO) { CrashReporter.exportToDownloads(crashContext) }
+                                        android.widget.Toast.makeText(
+                                            crashContext,
+                                            crashContext.getString(
+                                                if (ok) R.string.koil_set_crash_export_ok else R.string.koil_set_crash_export_fail
+                                            ),
+                                            android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
+                                    }
+                                }
+                                .padding(vertical = 11.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.koil_set_crash_export),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // ===== 云同步（坚果云 WebDAV：私有数据自动备份/恢复，docs/KOiL云同步设计.md） =====
         val syncVm: SyncViewModel = koinViewModel()
-        val syncUi by syncVm.uiState.collectAsState()
+        val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
         SectionTitle(stringResource(R.string.koil_sync_section))
         KOiLBlurBackground(
             modifier = Modifier.fillMaxWidth(),
@@ -939,7 +1080,17 @@ fun SettingsScreen(
                 //    默认值预填：账号/应用密码为作者自用默认（未设置过才预填，已设置显示存储值）——
                 var urlDraft by remember { mutableStateOf(syncUi.url) }
                 var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
-                var pwdDraft by remember { mutableStateOf(if (syncUi.passwordSet) "" else DEFAULT_SYNC_APP_PASSWORD) }
+                // v1.6.7：密码草稿 = 存储里的**真实密码**（异步到达后自动回填一次）。
+                // 设计口径：眼睛关闭 → 掩码（一排点）；点亮眼睛 → 显示真实字符。
+                // 前一版为了"不覆盖已存密码"把草稿做成恒空，结果掩码永远没有内容可掩，
+                // 真机看到的就是"有时候一排点、有时候完全空白"（取决于异步加载时机）。
+                // 现在直接回显：password 变化（启动加载 / 刚保存）才重置草稿，用户输入期间不受影响。
+                var pwdDraft by remember(syncUi.password) { mutableStateOf(syncUi.password) }
+                val effectivePwd: String? = when {
+                    pwdDraft.isNotBlank() -> pwdDraft
+                    syncUi.passwordSet -> null            // 已存密码 + 本次没输入 → 不覆盖
+                    else -> DEFAULT_SYNC_APP_PASSWORD     // 首次使用 → 沿用默认口令
+                }
                 LaunchedEffect(syncUi.url) { if (urlDraft != syncUi.url) urlDraft = syncUi.url }
                 LaunchedEffect(syncUi.username) {
                     // 仅外部真实写入（如云端恢复）才同步；空值不覆盖预填默认账号
@@ -960,7 +1111,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.koil_sync_switch_sub),
                     checked = syncUi.enabled,
                     onCheckedChange = { on ->
-                        syncVm.setEnabled(on, urlDraft, usernameDraft, pwdDraft)
+                        syncVm.setEnabled(on, urlDraft, usernameDraft, effectivePwd)
                     },
                 )
                 }
@@ -1106,7 +1257,8 @@ fun SettingsScreen(
                         Switch(
                             checked = pwdLocked,
                             onCheckedChange = { locked ->
-                                if (locked && pwdDraft.isNotBlank()) {
+                                // 只在真的改了才落盘（草稿现在会回显存储值，避免每次锁开关都重加密一次）
+                                if (locked && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
                                 pwdLocked = locked
@@ -1122,11 +1274,17 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .onFocusChanged { state ->
                                 tappedOnField.value = state.isFocused
-                                if (!state.isFocused && pwdDraft.isNotBlank()) {
+                                if (!state.isFocused && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
                             },
                         readOnly = pwdLocked,
+                        // v1.6.6：草稿恒为空（密文不回显），必须给占位提示，否则看起来像"密码丢了"
+                        label = stringResource(
+                            if (syncUi.passwordSet) R.string.koil_sync_app_password_set
+                            else R.string.koil_sync_app_password_unset,
+                        ),
+                        useLabelAsPlaceholder = true,
                         // v1.5.44 补丁：锁定态用 textStyle 强制暗色文字（labelColor 不作用于输入文字）
                         textStyle = TextStyle(
                             color = if (pwdLocked) {
@@ -1142,7 +1300,7 @@ fun SettingsScreen(
                         ),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(
                             onDone = {
-                                if (pwdDraft.isNotBlank()) {
+                                if (pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
                                 focusManager.clearFocus()
@@ -1179,17 +1337,21 @@ fun SettingsScreen(
                             }
                         },
                     )
-                    // 密码状态行 + 明文存储警示
+                    // 密码状态行 + 明文存储/失效警示
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        val passwordWarn = syncUi.passwordInvalid || (syncUi.passwordSet && !syncUi.passwordEncrypted)
                         Text(
                             text = when {
                                 !syncUi.passwordSet -> stringResource(R.string.koil_sync_app_password_unset)
+                                // v1.6.3：密文解不开（换机/重装）排在明文存储之前——不然只提示"未加密存储"，
+                                // 用户会以为同步正常，实际推送与恢复都已被 isConfigured() 挡掉
+                                syncUi.passwordInvalid -> stringResource(R.string.koil_sync_password_invalid)
                                 !syncUi.passwordEncrypted -> stringResource(R.string.koil_sync_password_plain_warn)
                                 else -> stringResource(R.string.koil_sync_app_password_set)
                             },
                             fontSize = 11.sp,
                             lineHeight = 14.sp,
-                            color = if (syncUi.passwordSet && !syncUi.passwordEncrypted) KOiLColors.Warning
+                            color = if (passwordWarn && syncUi.passwordSet) KOiLColors.Warning
                             else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                             modifier = Modifier.weight(1f).padding(top = 4.dp),
                         )
@@ -1216,7 +1378,7 @@ fun SettingsScreen(
                             .clip(RoundedCornerShape(18.dp))
                             .background(MiuixTheme.colorScheme.secondaryContainer)
                             .clickable(enabled = !syncUi.busy) {
-                                syncVm.saveAndTest(urlDraft, usernameDraft, pwdDraft)
+                                syncVm.saveAndTest(urlDraft, usernameDraft, effectivePwd)
                             }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -1247,7 +1409,7 @@ fun SettingsScreen(
                                 .clip(RoundedCornerShape(18.dp))
                                 .background(KOiLColors.Primary)
                                 .clickable(enabled = !syncUi.busy) {
-                                    syncVm.backupNow(urlDraft, usernameDraft, pwdDraft)
+                                    syncVm.backupNow(urlDraft, usernameDraft, effectivePwd)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
@@ -1276,7 +1438,7 @@ fun SettingsScreen(
                                 .background(KOiLColors.Primary)
                                 .clickable(enabled = !syncUi.busy) {
                                     // 恢复后保留密码草稿（不再清空，避免误以为未填）
-                                    syncVm.restoreNow(urlDraft, usernameDraft, pwdDraft)
+                                    syncVm.restoreNow(urlDraft, usernameDraft, effectivePwd)
                                 }
                                 .padding(horizontal = 14.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center,
@@ -1300,9 +1462,11 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    // —— 状态行（未配置 / 已备份时间 / 失败待重试）——
+                    // —— 状态行（未配置 / 密码失效 / 已备份时间 / 失败待重试）——
                     val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
                     val statusText = when {
+                        // v1.6.3：最高优先级——密码解不开时其余状态都是假的（lastStatus 可能还是上次成功备份）
+                        syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)
                         !configured -> stringResource(R.string.koil_sync_status_not_configured)
                         syncUi.busy -> stringResource(R.string.koil_sync_status_busy)
                         syncUi.lastStatus.startsWith("ok@") ->
@@ -1315,7 +1479,7 @@ fun SettingsScreen(
                         text = statusText,
                         fontSize = 12.sp,
                         lineHeight = 15.sp,
-                        color = if (!configured || syncUi.lastStatus.startsWith("fail:")) KOiLColors.Warning
+                        color = if (syncUi.passwordInvalid || !configured || syncUi.lastStatus.startsWith("fail:")) KOiLColors.Warning
                         else MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                         Spacer(Modifier.height(1.dp))
@@ -1325,7 +1489,7 @@ fun SettingsScreen(
         }
 
         // 云同步 Toast（备份/恢复结果）
-        val syncMessage by syncVm.message.collectAsState()
+        val syncMessage by syncVm.message.collectAsStateWithLifecycle()
         val syncToastContext = LocalContext.current
         val syncText = syncMessage?.let { formatSyncNotice(it) }
         LaunchedEffect(syncMessage) {
@@ -1340,7 +1504,7 @@ fun SettingsScreen(
         }
 
         // 云同步恢复确认弹窗（预览 valid/dup/errors，确认后不删本地）
-        val syncRestorePreview by syncVm.restorePreview.collectAsState()
+        val syncRestorePreview by syncVm.restorePreview.collectAsStateWithLifecycle()
         syncRestorePreview?.let { preview ->
             KOiLGlassDialog(show = true, onDismissRequest = syncVm::dismissRestorePreview) {
                 Column {
@@ -1352,8 +1516,9 @@ fun SettingsScreen(
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        text = stringResource(
-                            R.string.koil_sync_restore_confirm_msg,
+                        text = pluralStringResource(
+                            R.plurals.koil_sync_restore_confirm_msg,
+                            preview.total,
                             preview.total, preview.valid, preview.duplicates, preview.errors,
                         ),
                         fontSize = 13.sp,
@@ -1385,7 +1550,7 @@ fun SettingsScreen(
         }
 
         // 导出/备份/更新结果提示：Toast 短暂提醒（自动消失，替代常驻卡片）
-        val exportNotice by viewModel.exportMessage.collectAsState()
+        val exportNotice by viewModel.exportMessage.collectAsStateWithLifecycle()
         val toastContext = LocalContext.current
         val exportText = exportNotice.key?.let { formatNotice(it, exportNotice.args) }
         LaunchedEffect(exportNotice) {
@@ -1428,7 +1593,7 @@ fun SettingsScreen(
     // 省份选择弹窗
 
     // CSV 导入预览弹窗
-    val importPreview by viewModel.importPreview.collectAsState()
+    val importPreview by viewModel.importPreview.collectAsStateWithLifecycle()
     importPreview?.let { preview ->
         val activeTab = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
         val tabs = listOf(
@@ -1883,6 +2048,9 @@ private fun modeLabel(mode: BottomBarMode) = when (mode) {
     BottomBarMode.IconOnly -> stringResource(R.string.koil_mode_icon_only)
 }
 
+/** 通知参数里的第 n 个整数（plurals 的 count 必须是 Int，而 args 是 List<Any>） */
+private fun List<Any>.intAt(index: Int): Int = (getOrNull(index) as? Int) ?: (getOrNull(index) as? Number)?.toInt() ?: 0
+
 /** 把 ViewModel 给出的结果通知 key 翻译为当前语言文案 */
 @Composable
 private fun formatNotice(key: String, args: List<Any>): String = when (key) {
@@ -1891,20 +2059,28 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "adopt_failed" -> stringResource(R.string.koil_msg_adopt_failed)
     "pdb_update_failed" -> stringResource(R.string.koil_msg_pdb_update_failed, args.getOrElse(0) { "" })
     "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
-    "price_exported" -> stringResource(R.string.koil_msg_price_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "price_exported" -> pluralStringResource(
+        R.plurals.koil_msg_price_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
+    )
     "export_failed" -> stringResource(R.string.koil_msg_export_failed, args.getOrElse(0) { "" })
     "no_records" -> stringResource(R.string.koil_msg_no_records)
-    "records_exported" -> stringResource(R.string.koil_msg_records_exported, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "records_exported" -> pluralStringResource(
+        R.plurals.koil_msg_records_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
+    )
     "cannot_read" -> stringResource(R.string.koil_msg_cannot_read)
     "file_empty" -> stringResource(R.string.koil_msg_file_empty)
     "missing_columns" -> stringResource(R.string.koil_msg_missing_columns)
     "parse_failed" -> stringResource(R.string.koil_msg_parse_failed, args.getOrElse(0) { "" })
     "import_done" -> stringResource(R.string.koil_msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
     "backup_no_records" -> stringResource(R.string.koil_msg_backup_no_records)
-    "restore_done" -> stringResource(R.string.koil_msg_restore_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
+    "restore_done" -> pluralStringResource(
+        R.plurals.koil_msg_restore_done, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 },
+    )
     "restore_failed" -> stringResource(R.string.koil_msg_restore_failed, args.getOrElse(0) { "" })
     "no_records_backup" -> stringResource(R.string.koil_msg_no_records_backup)
-    "backup_done" -> stringResource(R.string.koil_msg_backup_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { "" })
+    "backup_done" -> pluralStringResource(
+        R.plurals.koil_msg_backup_done, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
+    )
     "backup_failed" -> stringResource(R.string.koil_msg_backup_failed, args.getOrElse(0) { "" })
     else -> key
 }

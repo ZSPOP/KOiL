@@ -22,7 +22,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,11 +82,11 @@ import top.yukonga.miuix.kmp.utils.springAnimateToPage
  */
 @Composable
 fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
-    val themeMode by viewModel.themeMode.collectAsState()
-    val language by viewModel.language.collectAsState()
-    val floatingBottomBar by viewModel.floatingBottomBar.collectAsState()
-    val floatingStyle by viewModel.floatingBottomBarStyle.collectAsState()
-    val barMode by viewModel.bottomBarMode.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val language by viewModel.language.collectAsStateWithLifecycle()
+    val floatingBottomBar by viewModel.floatingBottomBar.collectAsStateWithLifecycle()
+    val floatingStyle by viewModel.floatingBottomBarStyle.collectAsStateWithLifecycle()
+    val barMode by viewModel.bottomBarMode.collectAsStateWithLifecycle()
 
     val darkTheme = when (themeMode) {
         AppSettings.ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -120,6 +120,10 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     check(registryOwner != null) { "KOiL: 无法从 baseContext 解析 ActivityResultRegistryOwner" }
 
     androidx.compose.runtime.CompositionLocalProvider(
+        // v1.6.7：把"应用语言"显式注入组合。Dialog/Popup 是独立组合根，会用窗口自己的
+        // configuration 覆盖 LocalConfiguration/LocalContext（MainScreen 的覆盖到不了），
+        // 而自定义 CompositionLocal 会随父组合继承 —— 弹窗据此把语言重新盖回去。
+        com.llpop.koil.ui.component.LocalAppLocale provides locale,
         androidx.compose.ui.platform.LocalConfiguration provides overrideConfig,
         androidx.compose.ui.platform.LocalContext provides localizedContext,
         androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
@@ -150,11 +154,18 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             // 脱离 Pager 的手势拦截器，页面内横向组件可自由滑动）
             var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
 
-            val navigationItems = listOf(
-                NavigationItem(label = stringResource(R.string.koil_nav_add), icon = Icons.Filled.Home),
-                NavigationItem(label = stringResource(R.string.koil_nav_overview), icon = Icons.Filled.Storage),
-                NavigationItem(label = stringResource(R.string.koil_nav_settings), icon = Icons.Filled.Settings),
-            )
+            // v1.6.2：导航项列表按标签缓存。原实现每次重组都重新 listOf 三个 NavigationItem
+            // （含 stringResource 解析），Pager 滑动引发的高频重组下属于纯浪费。
+            val navAddLabel = stringResource(R.string.koil_nav_add)
+            val navOverviewLabel = stringResource(R.string.koil_nav_overview)
+            val navSettingsLabel = stringResource(R.string.koil_nav_settings)
+            val navigationItems = remember(navAddLabel, navOverviewLabel, navSettingsLabel) {
+                listOf(
+                    NavigationItem(label = navAddLabel, icon = Icons.Filled.Home),
+                    NavigationItem(label = navOverviewLabel, icon = Icons.Filled.Storage),
+                    NavigationItem(label = navSettingsLabel, icon = Icons.Filled.Settings),
+                )
+            }
             val showLabels = barMode == BottomBarMode.IconAndText.storageValue
             val isFloatingStyleIos = floatingStyle == FloatingBottomBarStyle.IosLike.storageValue
             val isDark = darkTheme

@@ -11,13 +11,17 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,17 +41,20 @@ import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
@@ -64,6 +72,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.ui.screen.add.AddUiState
 import com.llpop.koil.ui.screen.add.AddViewModel
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.ui.component.provinceLabel
 import kotlinx.coroutines.flow.first
 import org.koin.androidx.compose.koinViewModel
 import android.widget.Toast
@@ -95,20 +104,21 @@ fun AddScreen(
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     viewModel: AddViewModel = koinViewModel(),
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val locationHelper = org.koin.compose.koinInject<com.llpop.koil.data.location.LocationHelper>()
 
     // 定位权限提醒弹窗显隐
     val showPermissionDialog = remember { mutableStateOf(false) }
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
-    LaunchedEffect(uiState.locateMessage) {
-        uiState.locateMessage?.let {
-            Toast.makeText(
-                context,
-                context.getString(R.string.koil_add_locate_switched, it),
-                Toast.LENGTH_SHORT,
-            ).show()
+    // v1.6.2：文案在组合期解析（stringResource 跟随 Configuration 变化），
+    // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
+    val locateToast = uiState.locateMessage?.let {
+        stringResource(R.string.koil_add_locate_switched, it)
+    }
+    LaunchedEffect(uiState.locateMessage, locateToast) {
+        if (locateToast != null) {
+            Toast.makeText(context, locateToast, Toast.LENGTH_SHORT).show()
             viewModel.clearLocateMessage()
         }
     }
@@ -119,6 +129,14 @@ fun AddScreen(
         if (!locationHelper.hasPermission() && !settings.hasPromptedLocation.first()) {
             settings.setHasPromptedLocation(true)
             showPermissionDialog.value = true
+        }
+    }
+
+    // v1.6.2：录入成功的一次性反馈（清除状态，避免下次进入页面重复提示）
+    LaunchedEffect(uiState.addSuccess) {
+        if (uiState.addSuccess) {
+            Toast.makeText(context, R.string.koil_precheck_added, Toast.LENGTH_SHORT).show()
+            viewModel.consumeAddSuccess()
         }
     }
 
@@ -137,6 +155,8 @@ fun AddScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
+                // v1.6.2：edge-to-edge 下键盘不 resize 窗口，补 imePadding 让表单底部（实付/提交按钮）不被键盘遮挡
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 12.dp),
         ) {
@@ -260,7 +280,10 @@ fun AddScreen(
                 fontWeight = FontWeight.Medium,
             )
         }
-        Spacer(Modifier.height(bottomPadding + 12.dp))
+        // v1.6.5：键盘弹起时不保留底部悬浮导航条的留白。
+        // 底部导航条（84dp）此时已被键盘盖住，再留 84dp 会让「添加记录」下方出现一大块空白，
+        // 观感像"内容没渲染出来"（真机反馈原话：只见空白、没有内容）。
+        Spacer(Modifier.height(if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 12.dp else bottomPadding + 12.dp))
         }
     }
 
@@ -282,12 +305,7 @@ fun AddScreen(
 }
 
 // ===== 省份选择弹窗 =====
-private val PROVINCES = listOf(
-    "广东", "北京", "上海", "江苏", "浙江", "山东", "四川", "湖北", "湖南",
-    "河南", "河北", "福建", "安徽", "江西", "辽宁", "陕西", "云南", "广西",
-    "重庆", "天津", "山西", "贵州", "黑龙江", "吉林", "甘肃", "内蒙古",
-    "新疆", "海南", "宁夏", "青海", "西藏",
-)
+private val PROVINCES = Provinces.ALL
 
 @Composable
 private fun ProvincePickerDialog(
@@ -324,7 +342,7 @@ private fun ProvincePickerDialog(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Text(
-                                text = province,
+                                text = provinceLabel(province),
                                 fontSize = 14.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackground,
@@ -434,47 +452,74 @@ private fun OilPriceCard(
                 )
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
+                    // v1.6.8：标题自动缩字不换行——原先宽度不够（英文 "Guangdong fuel prices" 较长，
+                    // 加上定位/省份按钮占位）就硬折成两行，真机反馈不美观。溢出时按 0.92 缩字号直到放下。
+                    var titleScale by remember { mutableFloatStateOf(1f) }
                     Text(
-                        text = stringResource(R.string.koil_add_province_price, uiState.viewProvince),
-                        fontSize = 16.sp,
+                        text = stringResource(R.string.koil_add_province_price, provinceLabel(uiState.viewProvince)),
+                        fontSize = 16.sp * titleScale,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
+                        onTextLayout = { if (it.hasVisualOverflow && titleScale > 0.6f) titleScale *= 0.92f },
                     )
                     Text(
                         text = stringResource(R.string.koil_add_price_db_version, uiState.versionLabel),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
                 // 定位按钮
+                // v1.6.3：命中区补到 48×48dp（视觉仍是小胶囊）。原来只有 30×24dp，远低于 Material 的 48dp 建议，
+                // 手指点偏就落到省份按钮上。做法是外层撑开 48dp 承担点击，内层保持原样只管外观。
+                // v1.6.8：clip 必须放在 clickable 之前——否则按下波纹是 48dp 外层的矩形色块
+                //（真机反馈"点击出现矩形色块"）。裁成圆角后波纹跟随圆角轮廓。
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerBg)
-                        .clickable { onLocateClick() }
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(onClick = onLocateClick),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.MyLocation,
-                        contentDescription = stringResource(R.string.koil_add_locate_cd),
-                        tint = containerText,
-                        modifier = Modifier.size(14.dp),
-                    )
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(containerBg)
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.MyLocation,
+                            contentDescription = stringResource(R.string.koil_add_locate_cd),
+                            tint = containerText,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
                 }
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(2.dp))
                 // 省份选择按钮（点击弹设置页同款 OverlayDropdownPopup 下拉，锚定按钮下方、跟随位置）
+                // v1.6.8：同定位按钮——clip 在 clickable 之前，波纹圆角不再出现矩形色块
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerBg)
-                        .clickable { showProvincePicker.value = true }
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { showProvincePicker.value = true },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(containerBg)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         // v1.5.34：省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
                         // v1.5.35：文字→箭头加 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
                         Text(
-                            text = uiState.viewProvince,
+                            // v1.6.7：省份是数据库主键（中文），显示层换本地化名
+                            text = provinceLabel(uiState.viewProvince),
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold,
                             color = containerText,
@@ -490,7 +535,7 @@ private fun OilPriceCard(
                         entry = DropdownEntry(
                             items = PROVINCES.map { p ->
                                 DropdownItem(
-                                    text = p,
+                                    text = provinceLabel(p),
                                     selected = p == uiState.viewProvince,
                                     onClick = {
                                         onProvinceSelect(p)
@@ -584,7 +629,7 @@ private fun OilPriceCard(
                             Text(
                                 text = buildString {
                                     append(stringResource(R.string.koil_add_window_prefix, nextDate.let { if (it.length >= 5) it.substring(5) else it }))
-                                    if (days >= 0) append(stringResource(R.string.koil_add_window_days, days))
+                                    if (days >= 0) append(pluralStringResource(R.plurals.koil_add_window_days, days, days))
                                 },
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
@@ -736,8 +781,10 @@ private fun LastRecordBar(
                 )
                 if (last != null) {
                     Text(
-                        text = "${last.reoilDate.takeLast(5)} · ${last.mileage.toInt()} km · " +
-                            "${last.oilAmount} L · ¥${last.actualAmount.toInt()}",
+                        // v1.6.2：原实现直接拼 Double（"45.0 L"/"油量 38.0"）且金额 toInt() 截断分位，
+                        // 与全站金额口径（两位小数）不一致。统一走 NumberFormat。
+                        text = "${last.reoilDate.takeLast(5)} · ${NumberFormat.measure(last.mileage)} km · " +
+                            "${NumberFormat.measure(last.oilAmount)} L · ¥${NumberFormat.money(last.actualAmount)}",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
@@ -954,7 +1001,8 @@ private fun PrecheckBanner(uiState: AddUiState) {
             Color(0x1AFF3B30) to Color(0xFFFF3B30)
         precheck.priceDeviationExceeded ->
             Color(0x1AFF9500) to Color(0xFFFF9500)
-        precheck.isReady ->
+        // v1.6.2："已添加"与"可提交"同用绿色成功态（原实现落在灰色默认态，像提示又像报错）
+        precheck.isReady || precheck.messageKey == "added" ->
             Color(0x1A34C759) to Color(0xFF34C759)
         else ->
             MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) to MiuixTheme.colorScheme.onBackgroundVariant

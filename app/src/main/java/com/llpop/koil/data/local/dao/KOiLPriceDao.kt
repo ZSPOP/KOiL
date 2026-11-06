@@ -40,6 +40,17 @@ interface KOiLPriceDao {
     @Query("SELECT * FROM koil_prices ORDER BY effectiveDate ASC")
     fun observeAll(): Flow<List<KOiLPriceEntity>>
 
+    /**
+     * v1.6.2：指定省份的非搁浅价格（按生效日升序）。
+     * 用于补灌前的"同价假记录"清理——原实现每省都 `getAll()` 全表加载再内存过滤，
+     * 31 省补灌时等于把 2000+ 行表反复读 31 遍；改 SQL 过滤后每省只取本省行。
+     */
+    @Query(
+        "SELECT * FROM koil_prices WHERE province = :province AND isStranded = 0 " +
+            "ORDER BY effectiveDate ASC"
+    )
+    suspend fun getNonStrandedByProvince(province: String): List<KOiLPriceEntity>
+
     @Query("SELECT COUNT(*) FROM koil_prices")
     suspend fun count(): Int
 
@@ -70,6 +81,14 @@ interface KOiLPriceDao {
     /** 按主键（省+油号+生效日）删除单条（一次性异常记录清理用） */
     @Query("DELETE FROM koil_prices WHERE province = :province AND grade = :grade AND effectiveDate = :date")
     suspend fun deleteByKey(province: String, grade: String, date: String)
+
+    /**
+     * v1.6.2：批量删除指定生效日的全部行。
+     * 替代「getAll() 全表载入内存 + 逐条 deleteByKey」——31 省 × 4 油号 × 多年窗口是万级行，
+     * 原实现在每次窗口日历刷新时把整张表读进内存再逐条删，是补灌期间最主要的一次性卡顿源。
+     */
+    @Query("DELETE FROM koil_prices WHERE effectiveDate IN (:dates)")
+    suspend fun deleteByEffectiveDates(dates: List<String>): Int
 
     /** 指定生效日期任一记录（窗口 W1 是否已调价的全国判定） */
     @Query("SELECT * FROM koil_prices WHERE effectiveDate = :date LIMIT 1")
