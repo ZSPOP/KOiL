@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
@@ -102,12 +105,16 @@ import com.llpop.koil.ui.component.provinceLabel
 import org.koin.androidx.compose.koinViewModel
 import kotlinx.coroutines.delay
 import kotlin.ranges.ClosedFloatingPointRange
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
@@ -239,8 +246,8 @@ fun SettingsScreen(
                 items = themeModes.map { themeLabel(it) },
                 selectedIndex = themeModeIdx,
                 title = stringResource(R.string.koil_set_appearance),
-                summary = themeModes.getOrElse(themeModeIdx) { themeModes.first() }
-                    .let { themeLabel(it) },
+                // v1.6.3：不再同时给 summary——当前值由 Miuix 的右侧 value 显示，
+                // 两处都写等于一行里重复同一个词（「跟随系统 / 跟随系统」）
                 onSelectedIndexChange = { index ->
                     viewModel.setThemeMode(themeModes[index])
                 },
@@ -253,8 +260,6 @@ fun SettingsScreen(
                 items = languages.map { langLabel(it) },
                 selectedIndex = languageIdx,
                 title = stringResource(R.string.koil_set_language),
-                summary = languages.getOrElse(languageIdx) { languages.first() }
-                    .let { langLabel(it) },
                 onSelectedIndexChange = { index ->
                     viewModel.setLanguage(languages[index])
                 },
@@ -288,8 +293,6 @@ fun SettingsScreen(
                     items = floatingStyles.map { styleLabel(it) },
                     selectedIndex = floatingStyleIdx,
                     title = stringResource(R.string.koil_set_floating_style),
-                    summary = floatingStyles.getOrElse(floatingStyleIdx) { floatingStyles.first() }
-                        .let { styleLabel(it) },
                     onSelectedIndexChange = { index ->
                         viewModel.setFloatingBottomBarStyle(floatingStyles[index].storageValue)
                     },
@@ -304,8 +307,6 @@ fun SettingsScreen(
                 items = barModes.map { modeLabel(it) },
                 selectedIndex = barModeIdx,
                 title = stringResource(R.string.koil_set_bar_mode),
-                summary = barModes.getOrElse(barModeIdx) { barModes.first() }
-                    .let { modeLabel(it) },
                 onSelectedIndexChange = { index ->
                     viewModel.setBottomBarMode(barModes[index].storageValue)
                 },
@@ -1811,15 +1812,21 @@ private fun SectionTitle(text: String) {
     )
 }
 
+/**
+ * 设置页列表卡（v1.6.3 对齐 Miuix Card）。
+ * 之前是自绘的 KOiLBlurBackground：20dp 圆角 + 1dp 白色高光描边，和 Miuix 的
+ * CardDefaults（16dp 圆角、无边框、surfaceContainer 底色）不一致，整页看起来比
+ * App 其他位置「圆一号、多一圈亮边」。改用原生 Card 后与全局同源。
+ * 卡内各行自带内距，所以 insideMargin 保持 0。
+ */
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
-    KOiLBlurBackground(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
+        cornerRadius = 16.dp,
+        insideMargin = PaddingValues(0.dp),
     ) {
-        Column(modifier = Modifier.padding(0.dp)) {
-            content()
-        }
+        content()
     }
 }
 
@@ -1848,6 +1855,12 @@ private fun SettingDivider() {
     )
 }
 
+/**
+ * 普通设置行（v1.6.3 对齐 Miuix BasicComponent）。
+ * 行高不再自己算：Miuix 统一 16dp 四边内距 + 最小 56dp + 内容垂直居中，
+ * 之前是 13dp 内距、高度随有无副标题变化（49dp / 68dp），同一张卡里节奏不齐。
+ * 行尾箭头同时换成 Miuix 标准的 10×16dp ArrowRight，不再是 18dp 的 Material 大箭头。
+ */
 @Composable
 private fun SettingRow(
     title: String,
@@ -1855,50 +1868,40 @@ private fun SettingRow(
     value: String,
     onClick: () -> Unit,
     showArrow: Boolean = true,
-    arrowIcon: androidx.compose.ui.graphics.vector.ImageVector =
-        Icons.AutoMirrored.Filled.KeyboardArrowRight,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            // v1.6.3：副标题可空——关于区里「条款/隐私」这类行只有标题，
-            // 无条件渲染会白占一行高度（空 Text + 2dp），行高忽高忽低
-            if (subtitle.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
+    BasicComponent(
+        title = title,
+        summary = subtitle.ifBlank { null },
+        onClick = onClick,
+        endActions = {
+            if (value.isNotEmpty()) {
                 Text(
-                    text = subtitle,
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    text = value,
+                    fontSize = MiuixTheme.textStyles.body2.fontSize,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .padding(end = 8.dp),
                 )
             }
-        }
-        Text(
-            text = value,
-            fontSize = 14.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-            fontWeight = FontWeight.Medium,
-        )
-        if (showArrow) {
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                imageVector = arrowIcon,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
+            if (showArrow) {
+                MiuixArrowEndAction()
+            }
+        },
+    )
+}
+
+/** Miuix 标准的行尾箭头（ArrowPreference 同款：10×16dp、随主题着色） */
+@Composable
+private fun RowScope.MiuixArrowEndAction() {
+    Image(
+        imageVector = MiuixIcons.Basic.ArrowRight,
+        contentDescription = null,
+        colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurfaceVariantActions),
+        modifier = Modifier
+            .align(Alignment.CenterVertically)
+            .size(width = 10.dp, height = 16.dp),
+    )
 }
 
 /** 四宫格统计项（蓝色图标 + 数值 + 标签，对齐截图样式） */
@@ -1975,7 +1978,9 @@ private fun StepperInputRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = horizontalPadding, vertical = 13.dp),
+            // 与 Miuix BasicComponent 同一套行尺寸：16dp 内距 + 最小 56dp（v1.6.3）
+            .heightIn(min = 56.dp)
+            .padding(horizontal = horizontalPadding, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -2114,6 +2119,7 @@ private fun StepperInputRow(
     }
 }
 
+/** 开关行：同样走 Miuix BasicComponent，行高/内距与普通行完全一致 */
 @Composable
 private fun SettingSwitchRow(
     title: String,
@@ -2121,31 +2127,17 @@ private fun SettingSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = title,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onBackground,
+    BasicComponent(
+        title = title,
+        summary = subtitle.ifBlank { null },
+        endActions = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
-    }
+        },
+    )
 }
 
 @Composable
