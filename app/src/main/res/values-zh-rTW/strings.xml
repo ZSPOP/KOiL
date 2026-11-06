@@ -79,6 +79,7 @@
     </plurals>
     <string name="koil_ov_backfill">補錄</string>
     <string name="koil_ov_month_count">%1$d筆</string>
+    <string name="koil_back_to_top">返回頂部</string>
     <string name="koil_ov_backfill_title">補錄加油記錄</string>
     <string name="koil_ov_grade">油號</string>
     <string name="koil_ov_field_province">加油省份</string>

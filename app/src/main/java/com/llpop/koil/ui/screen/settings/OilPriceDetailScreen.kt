@@ -19,11 +19,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -34,8 +32,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,10 +44,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
@@ -57,6 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
+import com.llpop.koil.ui.component.AnchoredDropdownColumn
+import com.llpop.koil.ui.component.AnchoredDropdownItemRow
+import com.llpop.koil.ui.component.AnchoredPopup
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.gradeLabel
@@ -120,96 +121,115 @@ fun OilPriceDetailScreen(
             Spacer(Modifier.height(topPadding))
             Spacer(Modifier.height(4.dp))
 
-            // —— 省份选择（横向滑动 chips）——
-            // 用最朴素的基础 horizontalScroll（非 LazyRow）：排除懒加载/绘制层/兄弟覆盖
-            // 一切可能干扰手势的因素，保证横向滑动必定生效；进入时估算滚动到当前省。
-            val provinceScrollState = rememberScrollState()
-            var provinceInitialScroll by remember { mutableStateOf(true) }
-            val density = LocalDensity.current
-            LaunchedEffect(state.province) {
-                if (provinceInitialScroll) {
-                    val idx = state.provinces.indexOf(state.province)
-                    if (idx >= 0) {
-                        // chip 宽约 52dp（2-3 字）+ 间距 8dp
-                        val offsetPx = with(density) { idx * 60.dp.roundToPx() }
-                        provinceScrollState.scrollTo(offsetPx)
-                    }
-                    provinceInitialScroll = false
-                }
-            }
-            // 省份选择：左右箭头（提示可滑动 + 点击切换，边界变灰）+ 横向滑动 chips
-            val curIdx = state.provinces.indexOf(state.province)
-            val arrowOn = KOiLColors.Primary
-            val arrowOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.25f)
+            // —— v1.6.3（UX 方案 A）筛选区重排——
+            // 行 1：省份 / 年份收进下拉 pill（31 省、多年份是高基数项，原先各占一行横滑 chips
+            //       + 左右箭头，筛选区顶占大半屏且 31 省里定位难）；下拉用自研 AnchoredPopup，
+            //       视觉/动效对齐 miuix Dropdown，与设置页省份选择一致。
+            // 行 2：油号分段控件——固定 4 项（92/95/98/0）整行等宽分段，不再横滑。
+            var provinceMenuExpanded by remember { mutableStateOf(false) }
+            var yearMenuExpanded by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    contentDescription = "上一个省份",
-                    tint = if (curIdx > 0) arrowOn else arrowOff,
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .clickable(enabled = curIdx > 0) { viewModel.selectPrevProvince() },
-                )
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(provinceScrollState),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    state.provinces.forEach { p ->
-                        ProvinceChip(
-                            // 数据键是中文省名（DB 主键），这里只换显示名
-                            label = provinceLabel(p),
-                            selected = p == state.province,
-                            onClick = { viewModel.selectProvince(p) },
-                        )
+                // 省份下拉 pill（含展开浮层，Popup 锚定在 pill 所在 Box）
+                // map 是 inline lambda，保留组合上下文，provinceLabel（@Composable）可直接调用
+                val provinceItems = state.provinces.map { provinceLabel(it) }
+                Box {
+                    DropdownPill(
+                        label = provinceLabel(state.province),
+                        expanded = provinceMenuExpanded,
+                        onToggle = { provinceMenuExpanded = !provinceMenuExpanded },
+                    )
+                    AnchoredPopup(
+                        expanded = provinceMenuExpanded,
+                        onDismissRequest = { provinceMenuExpanded = false },
+                        maxHeight = 380.dp,
+                    ) {
+                        AnchoredDropdownColumn {
+                            provinceItems.forEachIndexed { idx, name ->
+                                AnchoredDropdownItemRow(
+                                    text = name,
+                                    selected = state.provinces[idx] == state.province,
+                                    isFirst = idx == 0,
+                                    isLast = idx == provinceItems.lastIndex,
+                                    onClick = {
+                                        provinceMenuExpanded = false
+                                        // 数据键是中文省名（DB 主键），这里只换显示名
+                                        viewModel.selectProvince(state.provinces[idx])
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "下一个省份",
-                    tint = if (curIdx < state.provinces.size - 1) arrowOn else arrowOff,
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .clickable(enabled = curIdx < state.provinces.size - 1) { viewModel.selectNextProvince() },
-                )
+                // 年份下拉 pill（无年份数据时占位，保持省份 pill 左对齐语义）
+                if (state.years.isNotEmpty()) {
+                    Box {
+                        DropdownPill(
+                            label = stringResource(R.string.koil_detail_year, state.year),
+                            expanded = yearMenuExpanded,
+                            onToggle = { yearMenuExpanded = !yearMenuExpanded },
+                        )
+                        AnchoredPopup(
+                            expanded = yearMenuExpanded,
+                            onDismissRequest = { yearMenuExpanded = false },
+                        ) {
+                            AnchoredDropdownColumn {
+                                state.years.forEachIndexed { idx, y ->
+                                    AnchoredDropdownItemRow(
+                                        text = stringResource(R.string.koil_detail_year, y),
+                                        selected = y == state.year,
+                                        isFirst = idx == 0,
+                                        isLast = idx == state.years.lastIndex,
+                                        onClick = {
+                                            yearMenuExpanded = false
+                                            viewModel.selectYear(y)
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Spacer(Modifier.width(1.dp))
+                }
             }
             Spacer(Modifier.height(10.dp))
 
-            // —— 油号选择（v1.6.8：与省份行同款横向滚动——原先是裸 Row，4 个 chip 放不下时
-            // 文字被压缩宽度硬折行，"0# Diesel" 变成 3 行；真机截图反馈）——
+            // —— 油号分段控件（v1.6.3：固定 4 项整行等宽，替代横滑 chips；选中项蓝底白字）——
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f))
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 state.grades.forEach { g ->
-                    GradeChip(
-                        label = gradeLabel(g),
-                        selected = g == state.grade,
-                        onClick = { viewModel.selectGrade(g) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-
-            // —— 年份选择（v1.4.191 跨年维度：默认当年，跨年后当年从零开始、可切回看往年）——
-            if (state.years.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.years.forEach { y ->
-                        GradeChip(
-                            label = stringResource(R.string.koil_detail_year, y),
-                            selected = y == state.year,
-                            onClick = { viewModel.selectYear(y) },
+                    val selected = g == state.grade
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(9.dp))
+                            .background(if (selected) KOiLColors.Primary else Color.Transparent)
+                            .clickable { viewModel.selectGrade(g) }
+                            .padding(vertical = 9.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = gradeLabel(g),
+                            fontSize = 12.sp,
+                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
+            }
+            if (state.years.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
             } else {
                 Spacer(Modifier.height(2.dp))
@@ -343,52 +363,41 @@ fun OilPriceDetailScreen(
     }
 }
 
-/** 省份选择 chip（横向滑动） */
+/**
+ * v1.6.3：紧凑下拉 pill（筛选区行 1：省份 / 年份）。
+ * 视觉对齐分段控件（surface 底 8% + 圆角 10dp），点击后由调用处的 AnchoredPopup 展开选择列表。
+ */
 @Composable
-private fun ProvinceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-    val fg = if (selected) Color.White else MiuixTheme.colorScheme.onBackground
-    Box(
+private fun DropdownPill(
+    label: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .clip(RoundedCornerShape(10.dp))
+            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f))
+            .clickable(onClick = onToggle)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
     ) {
-        // v1.6.8：chip 文字禁止折行——上一版 "0# Diesel" 在空间不足时被压成 3 行（真机反馈）；
-        // 容器已可横向滚动，宽度不够整体滚而不是把字拆开
         Text(
             text = label,
-            fontSize = 12.sp,
-            color = fg,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            color = MiuixTheme.colorScheme.onBackground,
             maxLines = 1,
             softWrap = false,
         )
-    }
-}
-
-/** 油号选择 chip */
-@Composable
-private fun GradeChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    val bg = if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f)
-    val fg = if (selected) Color.White else MiuixTheme.colorScheme.onBackground
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(bg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-    ) {
-        // v1.6.8：chip 文字禁止折行——上一版 "0# Diesel" 在空间不足时被压成 3 行（真机反馈）；
-        // 容器已可横向滚动，宽度不够整体滚而不是把字拆开
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            color = fg,
-            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
-            maxLines = 1,
-            softWrap = false,
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Filled.KeyboardArrowDown,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onBackgroundVariant,
+            // 展开时箭头轻微上转，给出状态反馈
+            modifier = Modifier
+                .size(18.dp)
+                .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
         )
     }
 }

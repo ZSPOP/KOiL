@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Receipt
@@ -446,21 +447,38 @@ fun OverviewScreen(
             }
         }
 
-        // 右下角返回顶部按钮（对齐 Web；bottom 抬高避让悬浮导航条）
-        if (showBackToTop) {
+        // v1.6.3（UX 方案 A）：返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
+        // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
+        // 再短动画收尾到 0；近处保持平滑 animateScrollToItem。不再从深处慢速长飞。
+        AnimatedVisibility(
+            visible = showBackToTop,
+            enter = fadeIn() + scaleIn(initialScale = 0.6f),
+            exit = fadeOut() + scaleOut(targetScale = 0.6f),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
+        ) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = bottomPadding + 16.dp)
                     .size(44.dp)
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
                     .clickable {
-                        scope.launch { listState.animateScrollToItem(0) }
+                        scope.launch {
+                            if (listState.firstVisibleItemIndex > 60) {
+                                listState.scrollToItem(60)
+                            }
+                            listState.animateScrollToItem(0)
+                        }
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text(text = "↑", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                Icon(
+                    imageVector = Icons.Filled.KeyboardArrowUp,
+                    contentDescription = stringResource(R.string.koil_back_to_top),
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp),
+                )
             }
         }
     }
