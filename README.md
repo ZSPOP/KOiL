@@ -19,6 +19,14 @@
 - 云同步：WebDAV（坚果云等）自动备份与恢复
 - 深色/浅色主题，简体中文 / 繁體中文 / English 三语
 
+<!-- 截图区：实机截图就位后取消注释（放 docs/screenshots/）
+## 截图
+
+| 总览 | 油价调价 | 设置 |
+|---|---|---|
+| ![总览](docs/screenshots/overview.png) | ![油价调价](docs/screenshots/prices.png) | ![设置](docs/screenshots/settings.png) |
+-->
+
 ## 本地构建
 
 需要 JDK 21 + Android SDK 37。
