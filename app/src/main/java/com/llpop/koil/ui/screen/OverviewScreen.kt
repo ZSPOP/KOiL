@@ -1740,8 +1740,9 @@ private fun RecordCard(
                     ) {
                         Text(
                             text = NumberFormat.fixed2(record.oilConsumption),
-                            // 8. 与右列两行（10sp+12sp+2dp）总高等高：27sp 收到 24sp
+                            // 8. 与右列两行总高严格等高：行高锁 31sp = 13+2+16
                             fontSize = 24.sp,
+                            lineHeight = 31.sp,
                             fontWeight = FontWeight.ExtraBold,
                             // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
                             color = if (isAbnormal) accentColor else MiuixTheme.colorScheme.onBackground,
@@ -1754,11 +1755,13 @@ private fun RecordCard(
                             Text(
                                 text = "L/100km",
                                 fontSize = 10.sp,
+                                lineHeight = 13.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
                             Text(
                                 text = delta?.text ?: "—",
                                 fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = delta?.color ?: MiuixTheme.colorScheme.onBackgroundVariant,
                                 maxLines = 1,
@@ -1777,6 +1780,7 @@ private fun RecordCard(
                                     stationPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
                                 fontSize = 10.sp,
+                                lineHeight = 13.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 maxLines = 1,
                                 softWrap = false,
@@ -1787,6 +1791,7 @@ private fun RecordCard(
                                     actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
                                 fontSize = 12.sp,
+                                lineHeight = 16.sp,
                                 color = MiuixTheme.colorScheme.onBackground,
                                 maxLines = 1,
                                 softWrap = false,
