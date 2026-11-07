@@ -185,6 +185,21 @@ fun OverviewScreen(
         uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }.toList()
     }
     val prevMap = remember(uiState.records) { buildPrevMap(uiState.records) }
+    // v1.6.5：每条记录的「近 N 次油耗均值」（含自身，往旧最多取 5 条有效油耗），供展开明细对比条
+    val recentAvgMap = remember(uiState.records) {
+        val map = HashMap<Long, Pair<Double, Int>>()
+        val list = uiState.records
+        for (i in list.indices) {
+            val vals = ArrayList<Double>(5)
+            var j = i
+            while (j < list.size && vals.size < 5) {
+                list[j].oilConsumption?.let { vals.add(it) }
+                j++
+            }
+            if (vals.size >= 2) map[list[i].record.id] = Pair(vals.average(), vals.size)
+        }
+        map
+    }
     // v1.5.46：趋势图可选的油号（当前范围有数据的油号，按 92/95/98/0 固定顺序）
     val availableGrades = remember(uiState.records) {
         val order = listOf("92", "95", "98", "0")
@@ -388,6 +403,8 @@ fun OverviewScreen(
                             showMoreMenu = moreMenuFor == record.record.id,
                             onMoreMenu = onMoreMenuCard,
                             onRect = onActionRect,
+                            recentAvg = recentAvgMap[record.record.id]?.first,
+                            recentCount = recentAvgMap[record.record.id]?.second ?: 0,
                             modifier = Modifier.padding(bottom = 10.dp),
                         )
                     }
@@ -1579,11 +1596,16 @@ private fun RecordCard(
     isInitial: Boolean,
     showMoreMenu: Boolean,
     onMoreMenu: (RecordWithDerived) -> Unit,
+    // v1.6.5：展开明细用——本条起往旧最多 5 条的有效油耗均值与条数
+    recentAvg: Double? = null,
+    recentCount: Int = 0,
     // v1.6.4：Modifier 放第一个可选参数位（Compose 约定，调用方全用命名参数，无兼容问题）
     modifier: Modifier = Modifier,
     onRect: (Rect) -> Unit = {},
 ) {
     val r = record.record
+    // v1.6.5：点击卡片展开明细（LazyColumn 滚动回收后自动收起）
+    var expanded by remember(record.record.id) { mutableStateOf(false) }
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
     val isHigh = record.consumptionStatus == ConsumptionStatus.HIGH
     val accentColor = when {
@@ -1630,7 +1652,7 @@ private fun RecordCard(
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { if (showMoreMenu) onMoreMenu(record) },
+                        onClick = { if (showMoreMenu) onMoreMenu(record) else expanded = !expanded },
                         onLongClick = { if (!showMoreMenu) onMoreMenu(record) },
                     ),
             ) {
@@ -1647,7 +1669,8 @@ private fun RecordCard(
                         // v1.6.5：方案 A——改用文字字形「←」，与里程行的「→」、环比的「↑」同一套字体风格
                         Text(
                             text = "←",
-                            fontSize = 15.sp,
+                            // v1.6.5：旧日期缩到 11sp 后，箭头同步缩小配套
+                            fontSize = 12.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                         )
                         Spacer(Modifier.width(3.dp))
@@ -1766,8 +1789,8 @@ private fun RecordCard(
                     ) {
                         Text(
                             text = NumberFormat.fixed2(record.oilConsumption),
-                            // 8. 与右列两行总高严格等高：行高锁 31sp = 13+2+16
-                            fontSize = 24.sp,
+                            // v1.6.5：加大到 33sp——数字墨迹与右列两行的墨迹等高（行高仍锁 31sp，不撑高卡片）
+                            fontSize = 33.sp,
                             lineHeight = 31.sp,
                             fontWeight = FontWeight.ExtraBold,
                             // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
@@ -1850,8 +1873,105 @@ private fun RecordCard(
                     Spacer(Modifier.height(9.dp))
                     HintLine(stringResource(R.string.koil_ov_short_skip))
                 }
+
+                // —— v1.6.5：点击展开明细——油耗对比条 + 较油站单价优惠 ——
+                AnimatedVisibility(visible = expanded) {
+                    Column {
+                        val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+                        val goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32)
+                        val badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
+                        if (recentAvg != null && record.oilConsumption != null) {
+                            Spacer(Modifier.height(10.dp))
+                            val cur = record.oilConsumption!!
+                            val avg = recentAvg
+                            val maxV = maxOf(cur, avg)
+                            val curColor = if (cur <= avg) goodColor else badColor
+                            DetailBarRow(
+                                label = stringResource(R.string.koil_ov_detail_this),
+                                value = NumberFormat.fixed2(cur),
+                                valueColor = curColor,
+                                fraction = (cur / maxV).toFloat().coerceIn(0.05f, 1f),
+                                fillColor = curColor,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            DetailBarRow(
+                                label = stringResource(R.string.koil_ov_detail_avg, recentCount),
+                                value = NumberFormat.fixed2(avg),
+                                valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                                fraction = (avg / maxV).toFloat().coerceIn(0.05f, 1f),
+                                fillColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
+                            )
+                        }
+                        // 优惠：实付低于油站（挂牌）单价的差额 × 加油量
+                        val ap = record.unitPriceActual ?: r.oilPrice
+                        val sp = record.unitPricePayable ?: r.oilPrice
+                        val saved = if (ap != null && sp != null && r.oilAmount > 0) (sp - ap) * r.oilAmount else null
+                        if (saved != null && (saved > 0.005 || saved < -0.005)) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = if (saved > 0) {
+                                    stringResource(R.string.koil_ov_detail_saved, NumberFormat.money(saved))
+                                } else {
+                                    stringResource(R.string.koil_ov_detail_over, NumberFormat.money(-saved))
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if (saved > 0) goodColor else badColor,
+                                maxLines = 1,
+                                softWrap = false,
+                            )
+                        }
+                    }
+                }
             }
         }
+    }
+}
+
+/** v1.6.5：展开明细的单行对比条（标签 + 比例条 + 数值） */
+@Composable
+private fun DetailBarRow(
+    label: String,
+    value: String,
+    valueColor: Color,
+    fraction: Float,
+    fillColor: Color,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.width(64.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(fillColor),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.width(48.dp),
+        )
     }
 }
 
