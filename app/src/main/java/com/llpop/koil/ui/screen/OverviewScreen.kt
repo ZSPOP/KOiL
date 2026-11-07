@@ -225,11 +225,11 @@ fun OverviewScreen(
             val monthKeys = remember(monthGroups) { monthGroups.map { it.first } }
             val pinnedMonth = rememberTopPinnedMonth(listState, topPadding, monthKeys)
             if (pinnedMonth != null) {
-                val count = monthGroups.firstOrNull { it.first == pinnedMonth }?.second?.size ?: 0
+                val group = monthGroups.firstOrNull { it.first == pinnedMonth }
                 StickyMonthOverlay(
                     backdrop = backdrop,
                     pinnedMonth = pinnedMonth,
-                    monthCount = count,
+                    summary = group?.let { monthSummaryText(it.second) },
                     topPadding = topPadding,
                 )
             }
@@ -372,7 +372,11 @@ fun OverviewScreen(
                         }
                         // 贴顶（进入顶栏区域）时自身透明占位；标题由覆盖层显示
                         Box(Modifier.alpha(if (pinned) 0f else 1f)) {
-                            MonthHeaderRow(monthKey = monthKey, count = monthRecords.size)
+                            MonthHeaderRow(
+                                monthKey = monthKey,
+                                count = monthRecords.size,
+                                summary = monthSummaryText(monthRecords),
+                            )
                         }
                     }
                     // v1.5.20（#10）：key=记录 id，回调稳定；未变化的滚出/滚入卡片可被跳过/回收
@@ -786,9 +790,26 @@ private fun monthTitle(monthKey: String): String {
     else monthKey
 }
 
+/** ④ 月度小结：「N条 · 共 ¥X · YL」（金额与油量为当月合计） */
+@Composable
+private fun monthSummaryText(records: List<RecordWithDerived>): String {
+    var totalAmount = 0.0
+    var totalOil = 0.0
+    for (rr in records) {
+        totalAmount += rr.record.actualAmount
+        totalOil += rr.record.oilAmount
+    }
+    return stringResource(
+        R.string.koil_ov_month_summary,
+        records.size,
+        NumberFormat.money(totalAmount),
+        NumberFormat.fixed2(totalOil),
+    )
+}
+
 /** v1.5.50：月份标题行（列表 item 与吸顶覆盖层共用，保证两处布局/字号/间距完全一致，切换无跳变） */
 @Composable
-private fun MonthHeaderRow(monthKey: String, count: Int) {
+private fun MonthHeaderRow(monthKey: String, count: Int, summary: String?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -804,9 +825,13 @@ private fun MonthHeaderRow(monthKey: String, count: Int) {
         )
         Spacer(Modifier.weight(1f))
         Text(
-            text = stringResource(R.string.koil_ov_month_count, count),
-            fontSize = 16.sp,
+            // ④ 有月度小结时替代纯计数
+            text = summary ?: stringResource(R.string.koil_ov_month_count, count),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(end = 4.dp),
         )
     }
@@ -893,7 +918,7 @@ private fun rememberTopPinnedMonth(
 private fun StickyMonthOverlay(
     backdrop: LayerBackdrop?,
     pinnedMonth: String,
-    monthCount: Int,
+    summary: String?,
     topPadding: Dp,
 ) {
     val bd = backdrop
@@ -931,7 +956,7 @@ private fun StickyMonthOverlay(
                 )
             },
     ) {
-        MonthHeaderRow(monthKey = pinnedMonth, count = monthCount)
+        MonthHeaderRow(monthKey = pinnedMonth, count = 0, summary = summary)
     }
 }
 
@@ -1628,28 +1653,28 @@ private fun RecordCard(
                         Spacer(Modifier.width(3.dp))
                         Text(
                             text = md(prevRecord.record.reoilDate),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            // v1.6.5：与新日期同字号（17sp），仅以灰色弱化主次
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
+                            softWrap = false,
                         )
                     }
                     if (record.oilDays != null && !isInitial) {
                         Spacer(Modifier.width(6.dp))
-                        // v1.6.5：设置页版本徽章同款——主色字 + 12% 主色底；字号与旧日期一致 12sp
-                        Pill(
-                            text = stringResource(R.string.koil_ov_oil_days, record.oilDays),
-                            fontSize = 12.sp,
-                        )
+                        // v1.6.5：设置页版本徽章同款；字号与里程胶囊统一 11sp
+                        Pill(text = stringResource(R.string.koil_ov_oil_days, record.oilDays))
                     }
                     Spacer(Modifier.weight(1f))
                     Text(
                         text = "¥" + NumberFormat.money(r.actualAmount),
-                        fontSize = 18.sp,
-                        // v1.6.5：实付金额再粗一档
-                        fontWeight = FontWeight.ExtraBold,
+                        // v1.6.5：与日期同字号 17sp，把视觉锚点让给油耗大数字
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                         maxLines = 1,
+                        softWrap = false,
                     )
                 }
 
@@ -1682,7 +1707,8 @@ private fun RecordCard(
                             Spacer(Modifier.width(5.dp))
                             Pill(text = stringResource(R.string.koil_ov_distance_pill, record.distance.toInt()))
                             Spacer(Modifier.width(5.dp))
-                            Pill(text = gradePill)
+                            // ② 胶囊分色：油号胶囊用中性灰，与蓝色里程胶囊区分语义
+                            Pill(text = gradePill, neutral = true)
                         } else {
                             Text(
                                 text = stringResource(R.string.koil_ov_current_mileage, r.mileage.toInt()),
@@ -1694,7 +1720,7 @@ private fun RecordCard(
                                 modifier = Modifier.weight(1f, fill = false),
                             )
                             Spacer(Modifier.width(5.dp))
-                            Pill(text = gradePill)
+                            Pill(text = gradePill, neutral = true)
                         }
                     }
                     // v1.6.5：每公里成本放在「¥实付金额」正下方（第二行右侧），不再占灰块右列
@@ -1758,15 +1784,28 @@ private fun RecordCard(
                                 lineHeight = 13.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
-                            Text(
-                                text = delta?.text ?: "—",
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = delta?.color ?: MiuixTheme.colorScheme.onBackgroundVariant,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
+                            if (delta != null) {
+                                Text(
+                                    text = delta.text,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = delta.color,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            } else {
+                                // ③ 无上条记录：「首次记录」小字替代「—」
+                                Text(
+                                    text = stringResource(R.string.koil_ov_first_tag),
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
                         }
                         Spacer(Modifier.weight(1f))
                         Column(
@@ -1906,18 +1945,27 @@ private fun Pill(
     text: String,
     modifier: Modifier = Modifier,
     fontSize: TextUnit = 11.sp,
+    // ② neutral = true：中性灰变体（正文色 8~10% 底 + 次要灰字），用于油号胶囊与蓝色里程胶囊区分
+    neutral: Boolean = false,
 ) {
+    val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+    val bg = if (neutral) {
+        MiuixTheme.colorScheme.onBackground.copy(alpha = if (darkBg) 0.10f else 0.08f)
+    } else {
+        KOiLColors.Primary.copy(alpha = 0.12f)
+    }
+    val fg = if (neutral) MiuixTheme.colorScheme.onBackgroundVariant else KOiLColors.Primary
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(20.dp))
-            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+            .background(bg)
             .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(
             text = text,
             fontSize = fontSize,
             fontWeight = FontWeight.Medium,
-            color = KOiLColors.Primary,
+            color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )

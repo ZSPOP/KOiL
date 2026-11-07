@@ -81,6 +81,8 @@
     </plurals>
     <string name="koil_ov_backfill">Backfill</string>
     <string name="koil_ov_month_count">%1$d</string>
+    <string name="koil_ov_month_summary">%1$d records · ¥%2$s · %3$sL</string>
+    <string name="koil_ov_first_tag">First record</string>
     <string name="koil_back_to_top">Back to top</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>
     <string name="koil_ov_grade">Grade</string>
