@@ -2,6 +2,7 @@ package com.llpop.koil.domain.logic
 
 import java.math.BigDecimal
 import java.math.RoundingMode
+import kotlin.math.abs
 
 /**
  * 数字显示规范化（v1.5.31，全局统一口径）：
@@ -27,8 +28,26 @@ object NumberFormat {
     /** 度量值：最多 2 位小数，剪尾零，整数不带小数点（7.00 → 7，7.50 → 7.5，7.856 → 7.86） */
     fun measure(v: Double): String = trimmed(v, 2)
 
+    /** 固定 2 位小数（不剪尾零）：用于卡片内需要位数对齐的度量（油耗 5.80、油价 8.10） */
+    fun fixed2(v: Double): String = fixed(v, 2)
+
     /** 百分比：最多 1 位小数，剪尾零，整数不带小数点（20.0 → 20，20.55 → 20.6） */
     fun pct(v: Double): String = trimmed(v, 1)
+
+    /**
+     * 大数值（总里程/总油量/整数金额）：四舍五入到整数并加千分位（10992 → 10,992）
+     * 摘要区 21sp 大数字用，避免五位数挤满格子且难以扫读
+     */
+    fun grouped(v: Double): String {
+        if (!v.isFinite()) return PLACEHOLDER
+        val digits = BigDecimal.valueOf(abs(v)).setScale(0, RoundingMode.HALF_UP).toBigInteger().toString()
+        val sb = StringBuilder(digits.length + digits.length / 3)
+        digits.forEachIndexed { i, ch ->
+            if (i > 0 && (digits.length - i) % 3 == 0) sb.append(',')
+            sb.append(ch)
+        }
+        return if (v < 0) "-$sb" else sb.toString()
+    }
 
     private fun fixed(v: Double, scale: Int): String =
         scaled(v, scale)?.toPlainString() ?: PLACEHOLDER

@@ -15,6 +15,7 @@ import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceSyncWorker
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
+import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.di.appModule
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -149,6 +150,15 @@ class KOiLApplication : Application() {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
+
+        // v1.6.5：冷启动静默检查应用更新（8h 节流）——查到比本机更新的 release 就把 tag 落到 DataStore，
+        // 设置页「检查更新」行据此挂红点，用户不用主动点也能知道有新版本。
+        // 失败（离线 / 限流 / 超时）静默吞掉，保留上一次的 tag，不打扰、不显示假状态。
+        appScope.launch {
+            runCatching {
+                GlobalContext.get().get<UpdateChecker>().checkIfDue()
+            }.onFailure { Log.w("KOiL", "Startup update check failed: ${it.message}") }
+        }
 
         // 云同步（坚果云 WebDAV，docs/KOiL云同步设计.md）：启动接入——
         // 空库自动恢复 / 上次失败补推 / 记录与设置变更订阅推送（内部幂等，不影响主流程）

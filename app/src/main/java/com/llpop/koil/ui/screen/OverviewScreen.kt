@@ -72,10 +72,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -184,13 +187,24 @@ fun OverviewScreen(
         uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }.toList()
     }
     val prevMap = remember(uiState.records) { buildPrevMap(uiState.records) }
-    // v1.5.46：趋势图可选的油号（当前范围有数据的油号，按 92/95/98/0 固定顺序）
-    val availableGrades = remember(uiState.records) {
-        val order = listOf("92", "95", "98", "0")
-        uiState.records.mapNotNull { it.record.oilGrade }
-            .distinct()
-            .filter { it in order }
-            .sortedBy { order.indexOf(it) }
+    // v1.6.5：每条记录的「近 N 次油耗均值」（含自身，往旧最多取 5 条有效油耗），供展开明细对比条
+    val recentAvgMap = remember(uiState.records) {
+        val map = HashMap<Long, Pair<Double, Int>>()
+        val list = uiState.records
+        for (i in list.indices) {
+            val vals = ArrayList<Double>(5)
+            var j = i
+            while (j < list.size && vals.size < 5) {
+                list[j].oilConsumption?.let { vals.add(it) }
+                j++
+            }
+            if (vals.size >= 2) map[list[i].record.id] = Pair(vals.average(), vals.size)
+        }
+        map
+    }
+    // v1.6.5：趋势图降级为摘要卡内 sparkline，油号筛选胶囊随之移除——进入页面统一回「全部」
+    LaunchedEffect(Unit) {
+        if (uiState.trendGrade != "all") viewModel.setTrendGrade("all")
     }
     // v1.5.20（#10）：长按相关回调稳定（remember 一次），配合 items(key=id) 让未变化卡片可跳过重组
     val onMoreMenuCard = remember {
@@ -224,11 +238,11 @@ fun OverviewScreen(
             val monthKeys = remember(monthGroups) { monthGroups.map { it.first } }
             val pinnedMonth = rememberTopPinnedMonth(listState, topPadding, monthKeys)
             if (pinnedMonth != null) {
-                val count = monthGroups.firstOrNull { it.first == pinnedMonth }?.second?.size ?: 0
+                val group = monthGroups.firstOrNull { it.first == pinnedMonth }
                 StickyMonthOverlay(
                     backdrop = backdrop,
                     pinnedMonth = pinnedMonth,
-                    monthCount = count,
+                    summary = group?.let { monthSummaryText(it.second) },
                     topPadding = topPadding,
                 )
             }
@@ -245,63 +259,43 @@ fun OverviewScreen(
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
             item { Spacer(Modifier.height(topPadding)) }
 
-            // 范围筛选器（对齐 Web：全部/今年/近6个月/近3个月）
+            // 范围筛选器已并入摘要卡顶部（v1.6.5）；六指标摘要（带图标 + 环比）
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    rangeLabels.forEach { (key, label) ->
-                        val selected = uiState.range == key
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) KOiLColors.Primary else Color.Transparent)
-                                .clickable { viewModel.setRange(key) }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 12.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
-                            )
-                        }
-                    }
+                SummaryGrid(
+                    uiState = uiState,
+                    rangeLabels = rangeLabels,
+                    onRangeChange = viewModel::setRange,
+                    // 无异常时把「油耗稳定」并进摘要卡底部，不再单占一张卡
+                    stableNote = if (uiState.abnormalRecords.isEmpty()) {
+                        stringResource(
+                            when (uiState.range) {
+                                "year" -> R.string.koil_ov_stable_year
+                                "6m" -> R.string.koil_ov_stable_6m
+                                "3m" -> R.string.koil_ov_stable_3m
+                                else -> R.string.koil_ov_stable_all
+                            }
+                        )
+                    } else {
+                        null
+                    },
+                )
+            }
+            item { Spacer(Modifier.height(12.dp)) }
+
+
+            // 异常卡：只有真有异常才占位；v1.5.31 起整卡可点击查看明细
+            if (uiState.abnormalRecords.isNotEmpty()) {
+                item {
+                    AbnormalAlertCard(
+                        count = uiState.abnormalRecords.size,
+                        peakConsumption = uiState.abnormalRecords.mapNotNull { it.oilConsumption }.maxOrNull(),
+                        latestConsumption = uiState.abnormalRecords
+                            .maxByOrNull { it.record.reoilDate }?.oilConsumption,
+                        onClick = { showAbnormalDetail = true },
+                    )
                 }
+                item { Spacer(Modifier.height(12.dp)) }
             }
-            item { Spacer(Modifier.height(12.dp)) }
-
-            // 六指标 2×2 网格（对齐 Web：带图标 + 较上期）
-            item { SummaryGrid(uiState = uiState) }
-            item { Spacer(Modifier.height(12.dp)) }
-
-            // 趋势分析（双轴一张图）；v1.5.46：支持油号筛选
-            item {
-                TrendChart(
-                    trend = uiState.trend,
-                    grade = uiState.trendGrade,
-                    onGradeChange = viewModel::setTrendGrade,
-                    availableGrades = availableGrades,
-                )
-            }
-            item { Spacer(Modifier.height(12.dp)) }
-
-            // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）；v1.5.31：有异常时可点击查看明细
-            item {
-                AbnormalAlertCard(
-                    count = uiState.abnormalRecords.size,
-                    rangeLabel = rangeLabel(uiState.range),
-                    recordCount = uiState.records.size,
-                    avgConsumption = uiState.avgConsumption,
-                    onClick = if (uiState.abnormalRecords.isNotEmpty()) { { showAbnormalDetail = true } } else { null },
-                )
-            }
-            item { Spacer(Modifier.height(12.dp)) }
 
             // 加油历史区（对齐 Web：标题 + 共N条 + 补录）
             item {
@@ -315,12 +309,6 @@ fun OverviewScreen(
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 4.dp),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = pluralStringResource(R.plurals.koil_ov_total_count_in_list, uiState.records.size, uiState.records.size),
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                     Spacer(Modifier.weight(1f))
                     // v1.5.4：補錄改为胶囊按钮（主色浅底 + 加号图标），点击区域加大
@@ -371,7 +359,11 @@ fun OverviewScreen(
                         }
                         // 贴顶（进入顶栏区域）时自身透明占位；标题由覆盖层显示
                         Box(Modifier.alpha(if (pinned) 0f else 1f)) {
-                            MonthHeaderRow(monthKey = monthKey, count = monthRecords.size)
+                            MonthHeaderRow(
+                                monthKey = monthKey,
+                                count = monthRecords.size,
+                                summary = monthSummaryText(monthRecords),
+                            )
                         }
                     }
                     // v1.5.20（#10）：key=记录 id，回调稳定；未变化的滚出/滚入卡片可被跳过/回收
@@ -383,12 +375,15 @@ fun OverviewScreen(
                             showMoreMenu = moreMenuFor == record.record.id,
                             onMoreMenu = onMoreMenuCard,
                             onRect = onActionRect,
+                            recentAvg = recentAvgMap[record.record.id]?.first,
+                            recentCount = recentAvgMap[record.record.id]?.second ?: 0,
                             modifier = Modifier.padding(bottom = 10.dp),
                         )
                     }
                 }
             }
-            item { Spacer(Modifier.height(bottomPadding + 12.dp)) }
+            // v1.6.5：底部留白加大——回顶按钮占 bottomPadding+16 起的高度，12dp 会被它盖住末卡内容
+            item { Spacer(Modifier.height(bottomPadding + 80.dp)) }
         }
 
         // v1.5.5：长按全屏操作层——点击任意处收起；圆按钮定位在长按卡片中央
@@ -769,14 +764,6 @@ fun OverviewScreen(
 }
 
 @Composable
-private fun rangeLabel(range: String): String = when (range) {
-    "year" -> stringResource(R.string.koil_range_year)
-    "6m" -> stringResource(R.string.koil_range_6m)
-    "3m" -> stringResource(R.string.koil_range_3m)
-    else -> stringResource(R.string.koil_range_all)
-}
-
-@Composable
 private fun monthTitle(monthKey: String): String {
     val parts = monthKey.split("-")
     return if (parts.size == 2)
@@ -784,9 +771,26 @@ private fun monthTitle(monthKey: String): String {
     else monthKey
 }
 
+/** ④ 月度小结：「N条 · 共 ¥X · YL」（金额与油量为当月合计） */
+@Composable
+private fun monthSummaryText(records: List<RecordWithDerived>): String {
+    var totalAmount = 0.0
+    var totalOil = 0.0
+    for (rr in records) {
+        totalAmount += rr.record.actualAmount
+        totalOil += rr.record.oilAmount
+    }
+    return stringResource(
+        R.string.koil_ov_month_summary,
+        records.size,
+        NumberFormat.money(totalAmount),
+        NumberFormat.fixed2(totalOil),
+    )
+}
+
 /** v1.5.50：月份标题行（列表 item 与吸顶覆盖层共用，保证两处布局/字号/间距完全一致，切换无跳变） */
 @Composable
-private fun MonthHeaderRow(monthKey: String, count: Int) {
+private fun MonthHeaderRow(monthKey: String, count: Int, summary: String?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -802,9 +806,13 @@ private fun MonthHeaderRow(monthKey: String, count: Int) {
         )
         Spacer(Modifier.weight(1f))
         Text(
-            text = stringResource(R.string.koil_ov_month_count, count),
-            fontSize = 16.sp,
+            // ④ 有月度小结时替代纯计数
+            text = summary ?: stringResource(R.string.koil_ov_month_count, count),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(end = 4.dp),
         )
     }
@@ -891,7 +899,7 @@ private fun rememberTopPinnedMonth(
 private fun StickyMonthOverlay(
     backdrop: LayerBackdrop?,
     pinnedMonth: String,
-    monthCount: Int,
+    summary: String?,
     topPadding: Dp,
 ) {
     val bd = backdrop
@@ -929,7 +937,7 @@ private fun StickyMonthOverlay(
                 )
             },
     ) {
-        MonthHeaderRow(monthKey = pinnedMonth, count = monthCount)
+        MonthHeaderRow(monthKey = pinnedMonth, count = 0, summary = summary)
     }
 }
 
@@ -996,7 +1004,13 @@ private fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
 
 // ===== 六指标 2×2 网格（对齐 Web） =====
 @Composable
-private fun SummaryGrid(uiState: OverviewUiState) {
+private fun SummaryGrid(
+    uiState: OverviewUiState,
+    rangeLabels: List<Pair<String, String>>,
+    onRangeChange: (String) -> Unit,
+    // v1.6.5：无异常时不再单占一整张卡，收成卡片底部一行小字（null = 有异常，不显示）
+    stableNote: String? = null,
+) {
     val stats = uiState.stats
     val prev = uiState.prevStats
     fun pct(cur: Double, prevVal: Double?): Double? =
@@ -1007,7 +1021,35 @@ private fun SummaryGrid(uiState: OverviewUiState) {
         cornerRadius = 20f,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // —— 六指标 3×2（v1.5.24：2×3 改 3×2，每行 3 项；v1.5.26：列间显式 12dp 间距 + 内容居中）——
+            // v1.6.5：范围筛选器收进摘要卡顶部（原来是一层独立悬浮灰条，卡片区少一块浮块）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                rangeLabels.forEach { (key, label) ->
+                    val selected = uiState.range == key
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) KOiLColors.Primary else Color.Transparent)
+                            .clickable { onRangeChange(key) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            // —— 六指标 3×2（v1.6.5：字号统一 21sp；里程/油量涨幅不判好坏用中性灰）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -1016,7 +1058,6 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     value = NumberFormat.measure(stats.avgOilConsumption ?: 0.0),
                     unit = "L/100km",
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
-                    valueFontSize = 24.sp,
                 )
                 Spacer(Modifier.width(12.dp))
                 StatCell(
@@ -1026,16 +1067,17 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     value = NumberFormat.money(stats.avgCostPerKm ?: 0.0),
                     unit = stringResource(R.string.koil_stat_cost_unit),
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
-                    valueFontSize = 24.sp,
                 )
                 Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Speed,
                     label = stringResource(R.string.koil_stat_total_mileage),
-                    value = "${stats.totalDistance.toInt()}",
+                    value = NumberFormat.grouped(stats.totalDistance),
                     unit = "km",
                     comparePct = pct(stats.totalDistance, prev?.totalDistance),
+                    // 里程增长不代表变差：中性灰，只显示变化幅度
+                    neutral = true,
                 )
             }
             Spacer(Modifier.height(14.dp))
@@ -1044,27 +1086,29 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.LocalGasStation,
                     label = stringResource(R.string.koil_stat_total_oil),
-                    value = "${stats.totalOilAmount.toInt()}",
+                    value = NumberFormat.grouped(stats.totalOilAmount),
                     unit = "L",
                     comparePct = pct(stats.totalOilAmount, prev?.totalOilAmount),
+                    neutral = true,
                 )
                 Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
                     label = stringResource(R.string.koil_stat_total_cost),
-                    value = "¥${NumberFormat.money(stats.totalActual)}",
+                    value = "¥" + NumberFormat.grouped(stats.totalActual),
                     unit = "",
                     comparePct = pct(stats.totalActual, prev?.totalActual),
                 )
                 Spacer(Modifier.width(12.dp))
+                // v1.6.5：总应付信息量低（与总实付几乎同值），换成平均油价（含环比，可看油价走势）
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Receipt,
-                    label = stringResource(R.string.koil_stat_total_payable),
-                    value = "¥${NumberFormat.money(stats.totalPayable)}",
-                    unit = "",
-                    comparePct = pct(stats.totalPayable, prev?.totalPayable),
+                    label = stringResource(R.string.koil_stat_avg_price),
+                    value = NumberFormat.measure(stats.avgUnitPriceActual ?: 0.0),
+                    unit = stringResource(R.string.koil_stat_price_unit_long),
+                    comparePct = pct(stats.avgUnitPriceActual ?: 0.0, prev?.avgUnitPriceActual),
                 )
             }
             // v1.5.24：删除「實付 vs 應付 对比条」——用户要求移除节省提示
@@ -1076,6 +1120,63 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
             )
             Spacer(Modifier.height(10.dp))
+            // v1.6.5：油耗走势 sparkline（原独立趋势卡降级至此）——无坐标轴无图例，只表达形状
+            val sparkValues = remember(uiState.trend) {
+                uiState.trend.mapNotNull { it.oilConsumption }.takeLast(40)
+            }
+            if (sparkValues.size >= 2) {
+                // v1.6.5：补参照——原来只有末值，看不出当前算高还是低；给出样本数与区间
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.koil_ov_spark_label),
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(
+                            R.string.koil_ov_spark_range,
+                            sparkValues.size,
+                            NumberFormat.fixed2(sparkValues.min()),
+                            NumberFormat.fixed2(sparkValues.max()),
+                        ),
+                        fontSize = 9.5.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        text = NumberFormat.fixed2(sparkValues.last()),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        text = "L/100km",
+                        fontSize = 9.5.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                ConsumptionSparkline(
+                    values = sparkValues,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp),
+                )
+                Spacer(Modifier.height(10.dp))
+            }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = pluralStringResource(R.plurals.koil_ov_total_count, stats.totalCount, stats.totalCount),
@@ -1085,22 +1186,48 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "%s ¥%s/%s · %s %d km".format(Locale.ROOT, 
-                        stringResource(R.string.koil_stat_avg_price),
-                        NumberFormat.measure(stats.avgUnitPriceActual ?: 0.0),
-                        stringResource(R.string.koil_stat_price_unit),
-                        stringResource(R.string.koil_stat_avg_distance),
+                    text = stringResource(
+                        R.string.koil_ov_avg_distance_line,
                         (stats.avgDistancePerReoil ?: 0.0).toInt(),
                     ),
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.koil_ov_vs_prev),
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+            }
+            // v1.6.5：无异常 → 原来那张「暂无异常」整卡收成这一行（省约 80dp）
+            if (stableNote != null) {
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
                 )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(KOiLColors.Primary),
+                    )
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        text = stringResource(R.string.koil_ov_stable_inline),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Text(
+                        text = " · $stableNote",
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
             }
         }
     }
@@ -1114,8 +1241,13 @@ private fun StatCell(
     value: String,
     unit: String,
     comparePct: Double? = null,
-    valueFontSize: TextUnit = 19.sp,
+    // v1.6.5：里程/油量这类「涨了不代表变差」的指标不判好坏，只显示幅度（中性灰）
+    neutral: Boolean = false,
 ) {
+    // v1.6.5：字号统一（原来前两项 24sp、其余 19sp，视觉上误导重要性）；深色主题换亮色变体
+    val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+    val upColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
+    val downColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32)
     // v1.5.26：单元格内容水平居中——原 start 对齐导致三列内容都挤在格子左侧、
     // 右侧留白约 20% 屏宽，视觉整体偏左；居中后三列视觉完全平衡
     Column(modifier = modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1137,9 +1269,12 @@ private fun StatCell(
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = value,
-                fontSize = valueFontSize,
+                // v1.6.5：六个指标统一 21sp（原 24/19sp 混排）
+                fontSize = 21.sp,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
+                maxLines = 1,
+                softWrap = false,
             )
             if (unit.isNotBlank()) {
                 Spacer(Modifier.width(2.dp))
@@ -1148,23 +1283,29 @@ private fun StatCell(
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
         comparePct?.let { pct ->
+            Spacer(Modifier.height(2.dp))
             if (abs(pct) >= 0.5) {
-                Spacer(Modifier.height(2.dp))
                 val up = pct > 0
                 Text(
                     text = "${if (up) "↑" else "↓"}${NumberFormat.pct(abs(pct))}%",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (up) Color(0xFFE65100) else Color(0xFF2E7D32),
+                    color = when {
+                        neutral -> MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f)
+                        up -> upColor
+                        else -> downColor
+                    },
                 )
             } else {
-                Spacer(Modifier.height(2.dp))
+                // v1.6.5：「较上期」→「持平」，变化不足 0.5% 时说清是没变化，而不是让人猜在跟谁比
                 Text(
-                    text = stringResource(R.string.koil_ov_vs_prev),
+                    text = stringResource(R.string.koil_ov_flat),
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                 )
@@ -1173,308 +1314,48 @@ private fun StatCell(
     }
 }
 
-// ===== 趋势分析：双轴折线图（对齐 Web） =====
+/**
+ * v1.6.5：摘要卡内的油耗 sparkline。
+ * 只画折线 + 末点，不画坐标轴与网格——趋势的形状用一条线就能表达，
+ * 原双轴折线图（油耗 + 每公里成本同画布）两套量纲不可比、轴标签 9sp 也读不清。
+ */
 @Composable
-private fun TrendChart(
-    trend: List<TrendPoint>,
-    grade: String,
-    onGradeChange: (String) -> Unit,
-    availableGrades: List<String>,
-) {
-    KOiLBlurBackground(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (availableGrades.size >= 2) 228.dp else 200.dp),
-        cornerRadius = 20f,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                    contentDescription = null,
-                    tint = KOiLColors.Primary,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.koil_ov_trend),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.weight(1f))
-                // 图例
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(KOiLColors.Primary))
-                    Spacer(Modifier.width(3.dp))
-                    Text(stringResource(R.string.koil_ov_legend_consumption), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                    Spacer(Modifier.width(8.dp))
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFF97316)))
-                    Spacer(Modifier.width(3.dp))
-                    Text(stringResource(R.string.koil_ov_legend_cost), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            // v1.5.46：油号筛选胶囊（全部 + 当前范围有数据的油号）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                GradeFilterChip(
-                    label = stringResource(R.string.koil_ov_trend_all),
-                    selected = grade == "all",
-                    onClick = { onGradeChange("all") },
-                )
-                availableGrades.forEach { g ->
-                    GradeFilterChip(
-                        label = OilPriceNetwork.GRADE_LABELS[g]?.removeSuffix("号汽油")?.removeSuffix("号柴油")
-                            ?.plus("#") ?: "$g#",
-                        selected = grade == g,
-                        onClick = { onGradeChange(g) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            if (trend.size >= 2) {
-                DualAxisCanvas(trend = trend)
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(118.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_ov_trend_insufficient),
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
-            }
+private fun ConsumptionSparkline(values: List<Double>, modifier: Modifier = Modifier) {
+    val lineColor = KOiLColors.Primary
+    Canvas(modifier = modifier) {
+        if (values.size < 2) return@Canvas
+        val minV = values.min()
+        val maxV = values.max()
+        val span = (maxV - minV).takeIf { it > 0.0001 } ?: 1.0
+        val inset = 3.dp.toPx()
+        val usableH = (size.height - inset * 2).coerceAtLeast(1f)
+        val stepX = size.width / (values.size - 1)
+        val pts = values.mapIndexed { i, v ->
+            Offset(stepX * i, inset + usableH - ((v - minV) / span).toFloat() * usableH)
         }
-    }
-}
-
-/** v1.5.46：趋势图油号筛选胶囊（选中主色实底） */
-@Composable
-private fun GradeFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackgroundVariant,
+        val path = Path().apply {
+            moveTo(pts.first().x, pts.first().y)
+            for (i in 1 until pts.size) lineTo(pts[i].x, pts[i].y)
+        }
+        drawPath(
+            path = path,
+            color = lineColor,
+            style = Stroke(
+                width = 1.6.dp.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            ),
         )
+        drawCircle(color = lineColor, radius = 2.4.dp.toPx(), center = pts.last())
     }
 }
 
-@Composable
-private fun DualAxisCanvas(trend: List<TrendPoint>) {
-    val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
-    val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
-    // v1.6.2：Paint 提到绘制回调之外缓存。原实现在 Canvas 的 onDraw 里每画一个标签就 new 一个
-    // android.graphics.Paint（单帧最多 4 组轴标签 + N 个日期标签，共 ~35 个对象）。
-    val density = LocalDensity.current
-    val axisTextSizePx = with(density) { 9.dp.toPx() }
-    val dateTextSizePx = with(density) { 8.dp.toPx() }
-    val axisLabelPaint = remember(labelColor, axisTextSizePx) {
-        labelPaint(labelColor, alpha = 153, textSizePx = axisTextSizePx)
-    }
-    val dateLabelPaint = remember(labelColor, dateTextSizePx) {
-        labelPaint(labelColor, alpha = 102, textSizePx = dateTextSizePx)
-    }
-    // v1.6.3：几何（Path、点坐标、标签文本与其基线坐标、画笔宽度）整体抽进 remember。
-    // 原先这些都在 onDraw 里逐帧重建：2 个 Path、2 个 MutableList<Offset>、10 次 NumberFormat.measure
-    //（每次 BigDecimal + 字符串）、以及每个标签一次字符串拼接与测量。图表本身没有动画，
-    // 只有"数据/尺寸/主题色变化"才需要重算，逐帧重算纯粹是白烧 CPU 并制造垃圾。
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(140.dp)
-    ) {
-        // 尺寸按 density 只取标量做 key：Density 是接口，不同实例未必 equals，用它当 key 会让几何每次都重算
-        val wPx = if (maxWidth.value.isFinite()) with(density) { maxWidth.toPx() } else 0f
-        val hPx = if (maxHeight.value.isFinite()) with(density) { maxHeight.toPx() } else 0f
-        val geometry = remember(trend, wPx, hPx, density.density, density.fontScale) {
-            if (wPx <= 0f || hPx <= 0f) null else buildChartGeometry(trend, wPx, hPx, density)
-        }
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val geo = geometry ?: return@Canvas   // 尺寸异常（无界约束）时不画，也不崩
-            val native = drawContext.canvas.nativeCanvas
-            geo.gridLines.forEach { drawLine(gridColor, it.first, it.second, geo.gridStroke) }
-            geo.axisLabels.forEach { native.drawText(it.text, it.x, it.y, axisLabelPaint) }
-            geo.consumptionPath?.let { path ->
-                drawPath(path = path, color = KOiLColors.Primary, style = geo.lineStroke)
-                geo.consumptionPoints.forEach {
-                    drawCircle(color = KOiLColors.Primary, radius = geo.dotRadius, center = it)
-                }
-            }
-            geo.costPath?.let { path ->
-                drawPath(path = path, color = CHART_COST_COLOR, style = geo.lineStroke)
-                geo.costPoints.forEach {
-                    drawCircle(color = CHART_COST_COLOR, radius = geo.dotRadius, center = it)
-                }
-            }
-            geo.dateLabels.forEach { native.drawText(it.text, it.x, it.y, dateLabelPaint) }
-        }
-    }
-}
-
-private val CHART_COST_COLOR = Color(0xFFF97316)
-
-/** 轴/日期标签：坐标为绘制时直接用（已包含 padding 与基线偏移） */
-private class ChartLabel(val text: String, val x: Float, val y: Float)
-
-/** 图表几何快照：全部在 remember 里算一次，onDraw 只负责画 */
-private class ChartGeometry(
-    val gridLines: List<Pair<Offset, Offset>>,
-    val gridStroke: Float,
-    val lineStroke: Stroke,
-    val dotRadius: Float,
-    val axisLabels: List<ChartLabel>,
-    val dateLabels: List<ChartLabel>,
-    val consumptionPath: Path?,
-    val consumptionPoints: List<Offset>,
-    val costPath: Path?,
-    val costPoints: List<Offset>,
-)
-
-private fun buildChartGeometry(
-    trend: List<TrendPoint>,
-    widthPx: Float,
-    heightPx: Float,
-    density: androidx.compose.ui.unit.Density,
-): ChartGeometry {
-    with(density) {
-        val padL = 30.dp.toPx()
-        val padR = 34.dp.toPx()
-        val padT = 8.dp.toPx()
-        val padB = 22.dp.toPx()
-        val w = widthPx - padL - padR
-        val h = heightPx - padT - padB
-
-        val consumptions = trend.mapNotNull { it.oilConsumption }
-        val costs = trend.mapNotNull { it.costPerKm }
-
-        // 左轴（油耗 2.0~8.0 对齐 Web，自动兜底）
-        val leftMin = consumptions.minOrNull()?.let { it * 0.75 } ?: 2.0
-        val leftMax = consumptions.maxOrNull()?.let { it * 1.25 } ?: 8.0
-        val leftRange = (leftMax - leftMin).coerceAtLeast(0.1)
-
-        // 右轴（成本 0.10~0.60 对齐 Web，自动兜底）
-        val rightMin = costs.minOrNull()?.let { (it * 0.75 * 100).roundToInt() / 100.0 } ?: 0.10
-        val rightMax = costs.maxOrNull()?.let { (it * 1.25 * 100).roundToInt() / 100.0 } ?: 0.60
-        val rightRange = (rightMax - rightMin).coerceAtLeast(0.05)
-
-        // 横向网格线 + 左/右轴刻度标签
-        val gridLines = ArrayList<Pair<Offset, Offset>>(5)
-        val axisLabels = ArrayList<ChartLabel>(10)
-        val gridLinesCount = 4
-        for (i in 0..gridLinesCount) {
-            val frac = i.toFloat() / gridLinesCount
-            val y = padT + h * frac
-            gridLines.add(Offset(padL, y) to Offset(padL + w, y))
-            val lv = leftMax - leftRange * frac
-            axisLabels.add(ChartLabel(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx()))
-            val rv = rightMin + rightRange * (1 - frac)
-            axisLabels.add(
-                ChartLabel(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx())
-            )
-        }
-
-        fun xAt(i: Int): Float = padL + (i.toFloat() / (trend.size - 1).coerceAtLeast(1)) * w
-
-        // 平均油耗线（蓝，主色）
-        var consPath: Path? = null
-        var consStarted = false
-        val consPts = ArrayList<Offset>(trend.size)
-        for ((i, p) in trend.withIndex()) {
-            val v = p.oilConsumption
-            if (v == null) {
-                consStarted = false
-                continue
-            }
-            val x = xAt(i)
-            val y = padT + h - (((v - leftMin) / leftRange).toFloat() * h)
-            consPts.add(Offset(x, y))
-            if (!consStarted) {
-                consPath = Path().also { it.moveTo(x, y) }
-                consStarted = true
-            } else {
-                consPath?.lineTo(x, y)
-            }
-        }
-
-        // 每公里成本线（橙）
-        var costPath: Path? = null
-        var costStarted = false
-        val costPts = ArrayList<Offset>(trend.size)
-        for ((i, p) in trend.withIndex()) {
-            val v = p.costPerKm
-            if (v == null) {
-                costStarted = false
-                continue
-            }
-            val x = xAt(i)
-            val y = padT + h - (((v - rightMin) / rightRange).toFloat() * h)
-            costPts.add(Offset(x, y))
-            if (!costStarted) {
-                costPath = Path().also { it.moveTo(x, y) }
-                costStarted = true
-            } else {
-                costPath?.lineTo(x, y)
-            }
-        }
-
-        // 横轴日期标签（每 2 个显示一个避免拥挤）
-        val dateLabels = ArrayList<ChartLabel>((trend.size + 1) / 2)
-        for (i in trend.indices) {
-            if (i % 2 == 1 && trend.size > 4) continue
-            dateLabels.add(
-                ChartLabel(trend[i].date, xAt(i) - 12.dp.toPx(), padT + h + 14.dp.toPx())
-            )
-        }
-
-        return ChartGeometry(
-            gridLines = gridLines,
-            gridStroke = 1.dp.toPx(),
-            lineStroke = Stroke(width = 2.dp.toPx()),
-            dotRadius = 2.5.dp.toPx(),
-            axisLabels = axisLabels,
-            dateLabels = dateLabels,
-            // 单点画不出线（与原实现 consPts.size >= 2 才画一致）
-            consumptionPath = consPath.takeIf { consPts.size >= 2 },
-            consumptionPoints = consPts,
-            costPath = costPath.takeIf { costPts.size >= 2 },
-            costPoints = costPts,
-        )
-    }
-}
-
-/** v1.6.2：图表标签画笔工厂（供 DualAxisCanvas 的 remember 缓存，避免每帧 new Paint） */
-private fun labelPaint(color: Color, alpha: Int, textSizePx: Float): android.graphics.Paint =
-    android.graphics.Paint().apply {
-        this.color = android.graphics.Color.argb(
-            alpha,
-            (color.red * 255).toInt(),
-            (color.green * 255).toInt(),
-            (color.blue * 255).toInt(),
-        )
-        this.textSize = textSizePx
-    }
-
-// ===== 异常卡（对齐 Web：空态 + 右上"N 次加油"）；v1.5.31：有异常时可点击查看明细 =====
 @Composable
 private fun AbnormalAlertCard(
     count: Int,
-    rangeLabel: String,
-    recordCount: Int,
-    avgConsumption: Double,
-    onClick: (() -> Unit)? = null,
+    peakConsumption: Double?,
+    latestConsumption: Double?,
+    onClick: () -> Unit,
 ) {
     KOiLBlurBackground(
         modifier = Modifier.fillMaxWidth(),
@@ -1483,63 +1364,49 @@ private fun AbnormalAlertCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        Modifier
-                            .clickable(enabled = count > 0, onClick = onClick)
-                            .padding(16.dp)
-                    } else {
-                        Modifier.padding(16.dp)
-                    }
-                ),
+                .clickable(onClick = onClick)
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = Icons.Filled.Warning,
                 contentDescription = null,
-                tint = if (count > 0) Color(0xFFE65100) else Color(0xFF34C759),
+                tint = Color(0xFFE65100),
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                if (count > 0) {
+                Text(
+                    text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                // v1.6.5：原来这里是「平均油耗」，跟摘要卡同一个数；换成异常里最高/最近两次，才是新增信息
+                if (peakConsumption != null && latestConsumption != null) {
                     Text(
-                        text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = stringResource(R.string.koil_ov_abnormal_avg, avgConsumption),
+                        text = stringResource(
+                            R.string.koil_ov_abnormal_peak,
+                            NumberFormat.fixed2(peakConsumption),
+                            NumberFormat.fixed2(latestConsumption),
+                        ),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.koil_ov_abnormal_empty),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = stringResource(R.string.koil_ov_abnormal_stable),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = rangeLabel,
-                    fontSize = 11.sp,
-                    color = KOiLColors.Primary,
-                )
-                Text(
-                    text = pluralStringResource(R.plurals.koil_ov_record_count, recordCount, recordCount),
-                    fontSize = 10.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-            }
+            Spacer(Modifier.width(8.dp))
+            // v1.6.5：右侧原来是「范围 + 条数」两行，跟顶部筛选器、摘要卡全重复；改成明确的点击入口
+            Text(
+                text = stringResource(R.string.koil_ov_detail_go) + " ›",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = KOiLColors.Primary,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }
@@ -1552,11 +1419,16 @@ private fun RecordCard(
     isInitial: Boolean,
     showMoreMenu: Boolean,
     onMoreMenu: (RecordWithDerived) -> Unit,
+    // v1.6.5：展开明细用——本条起往旧最多 5 条的有效油耗均值与条数
+    recentAvg: Double? = null,
+    recentCount: Int = 0,
     // v1.6.4：Modifier 放第一个可选参数位（Compose 约定，调用方全用命名参数，无兼容问题）
     modifier: Modifier = Modifier,
     onRect: (Rect) -> Unit = {},
 ) {
     val r = record.record
+    // v1.6.5：点击卡片展开明细（LazyColumn 滚动回收后自动收起）
+    var expanded by remember(record.record.id) { mutableStateOf(false) }
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
     val isHigh = record.consumptionStatus == ConsumptionStatus.HIGH
     val accentColor = when {
@@ -1564,11 +1436,15 @@ private fun RecordCard(
         record.consumptionStatus == ConsumptionStatus.LOW -> Color(0xFFF59E0B)
         else -> KOiLColors.Primary
     }
-    val accentBg = when {
-        isHigh -> Color(0xFFE65100).copy(alpha = 0.06f)
-        record.consumptionStatus == ConsumptionStatus.LOW -> Color(0xFFF59E0B).copy(alpha = 0.07f)
-        else -> MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-    }
+    // v1.6.5：实付/油站单价与差额（明细优惠行、底部把手可见性共用）
+    val actualPrice = record.unitPriceActual ?: r.oilPrice
+    val stationPrice = record.unitPricePayable ?: r.oilPrice
+    val stationSaved = if (actualPrice != null && stationPrice != null && r.oilAmount > 0) {
+        (stationPrice - actualPrice) * r.oilAmount
+    } else null
+    // v1.6.5：有无可展开内容——决定底部「展开暗示把手」是否显示
+    val hasDetail = (recentAvg != null && record.oilConsumption != null) ||
+        (stationSaved != null && (stationSaved > 0.005 || stationSaved < -0.005))
 
     Box(
         modifier = modifier
@@ -1580,198 +1456,385 @@ private fun RecordCard(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
         ) {
-            // 异常左竖条
+            // 异常左竖条（v1.6.5：异常卡唯一结构性信号，加宽到 4dp）
             if (isAbnormal) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(3.dp)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B),
-                                    if (isHigh) Color(0xFFD84315) else Color(0xFFD97706),
+                // v1.6.5 fix：外层 Box 是 wrap-content（滚动列表里高度约束无穷），fillMaxHeight 解析为 0 高导致竖条隐身；
+                // 用 matchParentSize 跟随卡片实际尺寸（不参与测量），内部再取 4dp 宽
+                Box(modifier = Modifier.matchParentSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(4.dp)
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(
+                                        if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B),
+                                        if (isHigh) Color(0xFFD84315) else Color(0xFFD97706),
+                                    )
                                 )
                             )
-                        )
-                        .align(Alignment.CenterStart),
-                )
+                            .align(Alignment.CenterStart),
+                    )
+                }
             }
             Column(
                 modifier = Modifier
-                    .padding(start = if (isAbnormal) 15.dp else 16.dp, end = 12.dp, top = 14.dp, bottom = 14.dp)
+                    .padding(start = if (isAbnormal) 16.dp else 16.dp, end = 16.dp, top = 13.dp, bottom = 13.dp)
                     // v1.5.8：去除按压涟漪（直角长方形）+ 点击不再进入编辑；长按=弹出中央圆按钮
                     .combinedClickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = { if (showMoreMenu) onMoreMenu(record) },
+                        onClick = { if (showMoreMenu) onMoreMenu(record) else expanded = !expanded },
                         onLongClick = { if (!showMoreMenu) onMoreMenu(record) },
                     ),
             ) {
-                // —— 顶部：日期大字 + 油号胶囊 + 天数胶囊 + 异常胶囊 + ⋮ ——
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                // —— 顶行：日期链（新日期 ← 旧日期 + 天数胶囊） ····· 右侧实付金额 ——
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = r.reoilDate,
+                        text = md(r.reoilDate),
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Pill(
-                        text = if (r.oilPrice != null) "${r.oilGrade ?: "-"}# ¥${NumberFormat.measure(r.oilPrice)}" else "${r.oilGrade ?: "-"}#",
-                        color = KOiLColors.Primary.copy(alpha = 0.12f),
-                        textColor = KOiLColors.Primary,
-                        border = KOiLColors.Primary.copy(alpha = 0.25f),
-                        // 窄屏多胶囊并存时油号胶囊可收缩省略，防止顶行挤出屏幕
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
+                    if (prevRecord != null) {
+                        Spacer(Modifier.width(4.dp))
+                        // v1.6.5：方案 A——改用文字字形「←」，与里程行的「→」、环比的「↑」同一套字体风格
+                        Text(
+                            text = "←",
+                            // v1.6.5：旧日期缩到 11sp 后，箭头同步缩小配套
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            text = md(prevRecord.record.reoilDate),
+                            // v1.6.5：旧日期弱化为 11sp 次要信息（用户定稿）
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
                     if (record.oilDays != null && !isInitial) {
                         Spacer(Modifier.width(6.dp))
-                        Pill(
-                            text = stringResource(R.string.koil_ov_oil_days, record.oilDays),
-                            color = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                            textColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                            border = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.2f),
-                        )
-                    }
-                    if (isAbnormal) {
-                        Spacer(Modifier.width(6.dp))
-                        Pill(
-                            text = if (isHigh) stringResource(R.string.koil_ov_high) else stringResource(R.string.koil_ov_low),
-                            color = accentColor.copy(alpha = 0.14f),
-                            textColor = accentColor,
-                            border = accentColor.copy(alpha = 0.3f),
-                        )
-                    }
-                    // 省份徽标：多省加油时可一眼区分记录来源（沿用油号胶囊同款可收缩样式）
-                    if (!r.province.isNullOrBlank()) {
-                        Spacer(Modifier.width(6.dp))
-                        Pill(
-                            text = provinceLabel(r.province),
-                            color = MiuixTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
-                            textColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            border = MiuixTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.15f),
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
+                        // v1.6.5：设置页版本徽章同款；字号与里程胶囊统一 11sp
+                        Pill(text = stringResource(R.string.koil_ov_oil_days, record.oilDays))
                     }
                     Spacer(Modifier.weight(1f))
-                    // v1.5.4：移除 ⋮ 菜单，长按交互统一（见卡片外层操作层）
-                    if (false) Unit
-                }
-
-                // —— 区间行：上次 X月X日 · 里程 a → b km / 当前里程 ——
-                Spacer(Modifier.height(6.dp))
-                if (prevRecord != null) {
                     Text(
-                        text = stringResource(
-                            R.string.koil_ov_prev_line,
-                            md(prevRecord.record.reoilDate),
-                            (r.mileage - (record.distance ?: 0.0)).toInt(),
-                            r.mileage.toInt(),
-                        ),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.koil_ov_current_mileage, r.mileage.toInt()),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        text = "¥" + NumberFormat.money(r.actualAmount),
+                        // v1.6.5：与日期同字号 16sp，把视觉锚点让给油耗大数字
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
 
-                // —— 核心三栏（带环比 delta） ——
+                // —— 二行：里程区间 + 行驶胶囊 + 油号·加油量胶囊 ····· 右侧 每公里成本 ——
+                Spacer(Modifier.height(7.dp))
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        val gradePill = stringResource(
+                            R.string.koil_ov_grade_pill,
+                            r.oilGrade ?: "-",
+                            NumberFormat.fixed2(r.oilAmount),
+                        )
+                        if (prevRecord != null && record.distance != null) {
+                            Text(
+                                text = stringResource(
+                                    R.string.koil_ov_range_line,
+                                    (r.mileage - record.distance).toInt(),
+                                    r.mileage.toInt(),
+                                ),
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Pill(text = stringResource(R.string.koil_ov_distance_pill, record.distance.toInt()))
+                            Spacer(Modifier.width(5.dp))
+                            // ② 胶囊分色：油号胶囊用中性灰，与蓝色里程胶囊区分语义
+                            Pill(text = gradePill, neutral = true)
+                        } else {
+                            Text(
+                                text = stringResource(R.string.koil_ov_current_mileage, r.mileage.toInt()),
+                                fontSize = 11.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            Spacer(Modifier.width(5.dp))
+                            Pill(text = gradePill, neutral = true)
+                        }
+                    }
+                    // v1.6.5：每公里成本放在「¥实付金额」正下方（第二行右侧），不再占灰块右列
+                    if (record.costPerKm != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "¥" + NumberFormat.money(record.costPerKm) + "/km",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
+
+                // —— 油耗区（v1.6.5：去掉灰底，改淡分割线分组；数字左对齐、单价右对齐到内容线）——
                 if (record.oilConsumption != null && record.distance != null) {
+                    // 14. 分割线：1dp、内容区全宽、文字色 10%
                     Spacer(Modifier.height(10.dp))
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(accentBg),
+                            .height(1.dp)
+                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    // v1.6.5 细节：深色主题下 2E7D32/E65100 对比度不足，按背景亮度切换亮色变体
+                    val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+                    val delta = deltaText(
+                        record.oilConsumption,
+                        prevRecord?.oilConsumption,
+                        lowerBetter = true,
+                        goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32),
+                        badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100),
+                    )
+                    // v1.6.5：实付单价（实付金额/加油量）与油站单价（挂牌/应付单价）都固定两位小数
+                    // （actualPrice / stationPrice 已提升到卡片顶层，与明细区共用）
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(modifier = Modifier.padding(vertical = 10.dp)) {
-                            MetricCell(
-                                Modifier.weight(1f),
-                                label = stringResource(R.string.koil_ov_metric_consumption),
-                                value = NumberFormat.measure(record.oilConsumption),
-                                unit = "L/100km",
-                                valueColor = accentColor,
-                                delta = deltaText(record.oilConsumption, prevRecord?.oilConsumption, lowerBetter = true),
+                        Text(
+                            text = NumberFormat.fixed2(record.oilConsumption),
+                            // v1.6.5：加大到 33sp——数字墨迹与右列两行的墨迹等高（行高仍锁 31sp，不撑高卡片）
+                            fontSize = 33.sp,
+                            lineHeight = 31.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
+                            color = if (isAbnormal) accentColor else MiuixTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                        // v1.6.5：用户要求去掉数字右边的异常圆点（异常已由左竖条 + 数字着色表达）
+                        Spacer(Modifier.width(8.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "L/100km",
+                                fontSize = 10.sp,
+                                lineHeight = 13.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
-                            MetricCell(
-                                Modifier.weight(1f),
-                                label = stringResource(R.string.koil_ov_metric_cost),
-                                value = "¥${NumberFormat.money(record.costPerKm ?: 0.0)}",
-                                unit = "",
-                                valueColor = accentColor,
-                                delta = deltaText(record.costPerKm, prevRecord?.costPerKm, lowerBetter = true),
+                            if (delta != null) {
+                                Text(
+                                    text = delta.text,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = delta.color,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            } else if (prevRecord == null) {
+                                // ③ 仅「真的没有上一条」才叫首次记录；
+                                // 有上一条但上条无有效油耗（短途不计/里程异常）时留空——那张卡自己有提示行
+                                Text(
+                                    text = stringResource(R.string.koil_ov_first_tag),
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            // 6. 换位：油站单价 10sp 灰在上、实付单价 12sp 白在下（上小下大、上灰下白）
+                            Text(
+                                text = stringResource(
+                                    R.string.koil_ov_unit_price_station,
+                                    stationPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
+                                ),
+                                fontSize = 10.sp,
+                                lineHeight = 13.sp,
+                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                maxLines = 1,
+                                softWrap = false,
                             )
-                            MetricCell(
-                                Modifier.weight(1f),
-                                label = stringResource(R.string.koil_ov_metric_distance),
-                                value = "${record.distance.toInt()}",
-                                unit = "km",
-                                valueColor = accentColor,
-                                delta = deltaText(record.distance, prevRecord?.distance, lowerBetter = false, digits = 0),
+                            Text(
+                                text = stringResource(
+                                    R.string.koil_ov_unit_price_actual,
+                                    actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
+                                ),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                color = MiuixTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                     }
                 } else if (isInitial) {
                     // Initial Record 虚线提示（对齐 Web）
-                    Spacer(Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("ℹ", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f))
-                            Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.height(9.dp))
+                    HintLine(stringResource(R.string.koil_ov_first_record))
+                } else if (record.distanceAnomaly) {
+                    // v1.6.5：里程段为负——数据录错，明说而不是静默消失
+                    Spacer(Modifier.height(9.dp))
+                    HintLine(stringResource(R.string.koil_ov_distance_anomaly))
+                } else if (record.shortDistanceSkipped) {
+                    // v1.6.5：短途不计油耗——给一行文字兜底，不能只靠"没有灰块"
+                    Spacer(Modifier.height(9.dp))
+                    HintLine(stringResource(R.string.koil_ov_short_skip))
+                }
+
+                // —— v1.6.5：点击展开明细——油耗对比条 + 较油站单价优惠 ——
+                AnimatedVisibility(visible = expanded) {
+                    Column {
+                        val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+                        val goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32)
+                        val badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
+                        if (recentAvg != null && record.oilConsumption != null) {
+                            Spacer(Modifier.height(10.dp))
+                            val cur = record.oilConsumption!!
+                            val avg = recentAvg
+                            val maxV = maxOf(cur, avg)
+                            val curColor = if (cur <= avg) goodColor else badColor
+                            DetailBarRow(
+                                label = stringResource(R.string.koil_ov_detail_this),
+                                value = NumberFormat.fixed2(cur),
+                                valueColor = curColor,
+                                fraction = (cur / maxV).toFloat().coerceIn(0.05f, 1f),
+                                fillColor = curColor,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            DetailBarRow(
+                                label = stringResource(R.string.koil_ov_detail_avg, recentCount),
+                                value = NumberFormat.fixed2(avg),
+                                valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                                fraction = (avg / maxV).toFloat().coerceIn(0.05f, 1f),
+                                fillColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
+                            )
+                        }
+                        // 优惠：实付低于油站（挂牌）单价的差额 × 加油量
+                        val saved = stationSaved
+                        if (saved != null && (saved > 0.005 || saved < -0.005)) {
+                            Spacer(Modifier.height(8.dp))
                             Text(
-                                text = stringResource(R.string.koil_ov_first_record),
+                                text = if (saved > 0) {
+                                    stringResource(R.string.koil_ov_detail_saved, NumberFormat.money(saved))
+                                } else {
+                                    stringResource(R.string.koil_ov_detail_over, NumberFormat.money(-saved))
+                                },
                                 fontSize = 11.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                fontWeight = FontWeight.Medium,
+                                color = if (saved > 0) goodColor else badColor,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                     }
                 }
-
-                // —— 底部三栏：加油量 | 实付金额 | 实付单价 ——
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(0.5.dp)
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                )
-                Spacer(Modifier.height(10.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    RecordDetail(
-                        Modifier.weight(1f),
-                        stringResource(R.string.koil_col_oil_amount),
-                        NumberFormat.measure(r.oilAmount),
-                        "L",
-                    )
-                    RecordDetail(
-                        Modifier.weight(1f),
-                        stringResource(R.string.koil_col_actual),
-                        "¥${NumberFormat.money(r.actualAmount)}",
-                        "",
-                    )
-                    RecordDetail(
-                        Modifier.weight(1f),
-                        stringResource(R.string.koil_col_unit_price),
-                        "¥${NumberFormat.measure(record.unitPriceActual ?: 0.0)}",
-                        "",
-                        warn = false,
+                // v1.6.5：底部展开暗示把手（28×4dp 圆角条）——常驻：收起时提示可展开，展开后提示可收起
+                if (hasDetail) {
+                    Spacer(Modifier.height(9.dp))
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .width(28.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MiuixTheme.colorScheme.onBackground.copy(alpha = 0.15f)),
                     )
                 }
             }
+        }
+    }
+}
+
+/** v1.6.5：展开明细的单行对比条（标签 + 比例条 + 数值） */
+@Composable
+private fun DetailBarRow(
+    label: String,
+    value: String,
+    valueColor: Color,
+    fraction: Float,
+    fillColor: Color,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = MiuixTheme.colorScheme.onBackgroundVariant,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.width(64.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(fillColor),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.width(48.dp),
+        )
+    }
+}
+
+/** v1.6.5：无油耗记录（首次 / 短途 / 里程异常）的统一提示行 */
+@Composable
+private fun HintLine(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("ℹ", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = text,
+                fontSize = 11.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+            )
         }
     }
 }
@@ -1811,94 +1874,60 @@ private fun RecordWithDerived.isLow(): Boolean = consumptionStatus == Consumptio
 private data class DeltaText(val text: String, val color: Color)
 
 /** 环比 delta 文本（对齐 Web：↓0.26 (4.0%)；里程整数指标 digits=0 → ↓35 (5.7%)，不再显示 35.00） */
-private fun deltaText(cur: Double?, prev: Double?, lowerBetter: Boolean, digits: Int = 2): DeltaText? {
+private fun deltaText(
+    cur: Double?,
+    prev: Double?,
+    lowerBetter: Boolean,
+    goodColor: Color = Color(0xFF2E7D32),
+    badColor: Color = Color(0xFFE65100),
+    digits: Int = 2,
+): DeltaText? {
     if (cur == null || prev == null || prev <= 0) return null
     val diff = cur - prev
     val pct = diff / prev * 100
     val arrow = if (diff > 0) "↑" else "↓"
     val good = if (lowerBetter) diff < 0 else diff > 0
-    val color = if (good) Color(0xFF2E7D32) else Color(0xFFE65100)
+    val color = if (good) goodColor else badColor
     val fmt = if (digits <= 0) "%.0f" else "%.${digits}f"
     val diffTxt = if (digits <= 0) fmt.format(abs(diff)) else NumberFormat.measure(abs(diff))
     return DeltaText(
-        text = "$arrow $diffTxt (${NumberFormat.pct(abs(pct))}%)",
+        // v1.6.5：箭头放数字后面
+        text = "$diffTxt (${NumberFormat.pct(abs(pct))}%) $arrow",
         color = color,
     )
 }
 
-@Composable
-private fun MetricCell(
-    modifier: Modifier = Modifier,
-    label: String,
-    value: String,
-    unit: String,
-    valueColor: Color,
-    delta: DeltaText?,
-) {
-    Column(
-        modifier = modifier.padding(horizontal = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = label,
-            fontSize = 9.sp,
-            color = valueColor.copy(alpha = 0.6f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(2.dp))
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                text = value,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = valueColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (unit.isNotBlank()) {
-                Spacer(Modifier.width(1.dp))
-                Text(
-                    text = unit,
-                    fontSize = 8.sp,
-                    color = valueColor.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(bottom = 2.dp),
-                )
-            }
-        }
-        if (delta != null) {
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = delta.text,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Medium,
-                color = delta.color,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
+/**
+ * v1.6.5：设置页版本徽章同款胶囊——主色字 + 12% 主色底、圆角 20dp。
+ * 顶行天数用 12sp（与旧日期一致），第二行两颗用 11sp 以便三样连排进一行。
+ * 深浅主题都有对比（主色底不会像 surfaceVariant 那样与卡片同色而隐形）。
+ */
 @Composable
 private fun Pill(
     text: String,
-    color: Color,
-    textColor: Color,
-    border: Color,
     modifier: Modifier = Modifier,
+    fontSize: TextUnit = 11.sp,
+    // ② neutral = true：中性灰变体（正文色 8~10% 底 + 次要灰字），用于油号胶囊与蓝色里程胶囊区分
+    neutral: Boolean = false,
 ) {
+    val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+    val bg = if (neutral) {
+        MiuixTheme.colorScheme.onBackground.copy(alpha = if (darkBg) 0.10f else 0.08f)
+    } else {
+        KOiLColors.Primary.copy(alpha = 0.12f)
+    }
+    val fg = if (neutral) MiuixTheme.colorScheme.onBackgroundVariant else KOiLColors.Primary
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(color)
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Text(
             text = text,
-            fontSize = 10.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = textColor,
+            fontSize = fontSize,
+            fontWeight = FontWeight.Medium,
+            color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -1911,43 +1940,6 @@ private fun md(date: String): String {
     return if (parts.size == 3)
         stringResource(R.string.koil_ov_md_date, parts[1].toInt(), parts[2].toInt())
     else date
-}
-
-@Composable
-private fun RecordDetail(
-    modifier: Modifier = Modifier,
-    label: String,
-    value: String,
-    unit: String,
-    warn: Boolean = false,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Row(verticalAlignment = Alignment.Bottom) {
-            Text(
-                text = value,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            if (unit.isNotBlank()) {
-                Spacer(Modifier.width(1.dp))
-                Text(
-                    text = unit,
-                    fontSize = 9.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    modifier = Modifier.padding(bottom = 1.dp),
-                )
-            }
-        }
-        Text(
-            text = label,
-            fontSize = 9.sp,
-            color = MiuixTheme.colorScheme.onBackgroundVariant,
-        )
-    }
 }
 
 // ===== 编辑记录弹窗（v1.5.13 复刻补录卡：字段结构/图标/红色错误态/里程区间提示/校验提示条/应付只读自动算/保存置灰变蓝；唯一差异：日期只读） =====

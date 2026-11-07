@@ -81,6 +81,12 @@
     </plurals>
     <string name="koil_ov_backfill">Backfill</string>
     <string name="koil_ov_month_count">%1$d</string>
+    <string name="koil_ov_month_summary">%1$d records · ¥%2$s · %3$sL</string>
+    <string name="koil_ov_first_tag">First record</string>
+    <string name="koil_ov_detail_this">This</string>
+    <string name="koil_ov_detail_avg">Last %1$d avg</string>
+    <string name="koil_ov_detail_saved">Saved ¥%1$s vs station price</string>
+    <string name="koil_ov_detail_over">Paid ¥%1$s extra vs station</string>
     <string name="koil_back_to_top">Back to top</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>
     <string name="koil_ov_grade">Grade</string>
@@ -102,6 +108,15 @@
     <string name="koil_stat_total_cost">Total paid</string>
     <string name="koil_stat_total_payable">Total payable</string>
     <string name="koil_stat_avg_price">Avg fuel price</string>
+    <string name="koil_ov_flat">flat</string>
+    <string name="koil_ov_spark_label">Fuel trend</string>
+    <string name="koil_ov_spark_range">%1$d pts · %2$s–%3$s</string>
+    <string name="koil_ov_change_caption">Change %1$s</string>
+    <string name="koil_ov_cmp_3m">vs prior 3 mo</string>
+    <string name="koil_ov_cmp_6m">vs prior 6 mo</string>
+    <string name="koil_ov_cmp_year">vs last year</string>
+    <string name="koil_ov_avg_distance_line">Avg %1$d km</string>
+    <string name="koil_stat_price_unit_long">¥/L</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">Avg per fill-up</string>
     <plurals name="koil_ov_total_count">
@@ -119,6 +134,13 @@
     <item quantity="other">%1$d abnormal records</item>
     </plurals>
     <string name="koil_ov_abnormal_avg">vs mean · avg %1$.2f L/100km</string>
+    <string name="koil_ov_stable_inline">Steady</string>
+    <string name="koil_ov_stable_all">no anomalies yet</string>
+    <string name="koil_ov_stable_year">none this year</string>
+    <string name="koil_ov_stable_6m">none in 6 months</string>
+    <string name="koil_ov_stable_3m">none in 3 months</string>
+    <string name="koil_ov_abnormal_peak">peak %1$s · latest %2$s L/100km</string>
+    <string name="koil_ov_detail_go">Details</string>
     <string name="koil_ov_abnormal_empty">No abnormal records</string>
     <string name="koil_ov_abnormal_stable">Steady fuel economy in this range</string>
     <string name="koil_ov_abnormal_detail_title">Anomaly details (%1$d)</string>
@@ -132,11 +154,20 @@
     <string name="koil_ov_high">High</string>
     <string name="koil_ov_low">Low</string>
     <string name="koil_ov_prev_line">Last %1$s · mileage %2$d → %3$d km</string>
-    <string name="koil_ov_current_mileage">Current mileage %1$d km</string>
+    <string name="koil_ov_current_mileage">Current mileage %1$d</string>
     <string name="koil_ov_metric_consumption">Consumption</string>
     <string name="koil_ov_metric_cost">Cost/km</string>
     <string name="koil_ov_metric_distance">Distance</string>
-    <string name="koil_ov_first_record">First record; consumption and mileage calculate after the next fill-up</string>
+    <string name="koil_ov_first_record">First record — consumption shows up after the next fill-up</string>
+    <string name="koil_ov_range_line">Mileage %1$d → %2$d</string>
+    <string name="koil_ov_distance_pill">%1$dkm</string>
+    <string name="koil_ov_grade_actual">%1$s# ¥%2$s · %3$s L</string>
+    <string name="koil_ov_payable_price">Listed ¥%1$s</string>
+    <string name="koil_ov_grade_pill">%1$s# · %2$sL</string>
+    <string name="koil_ov_unit_price_actual">Paid ¥%1$s/L</string>
+    <string name="koil_ov_unit_price_station">Station ¥%1$s/L</string>
+    <string name="koil_ov_short_skip">Short trip — excluded from consumption</string>
+    <string name="koil_ov_distance_anomaly">Mileage anomaly — consumption unavailable</string>
     <string name="koil_col_oil_amount">Fuel</string>
     <string name="koil_col_actual">Paid</string>
     <string name="koil_col_unit_price">Unit price</string>

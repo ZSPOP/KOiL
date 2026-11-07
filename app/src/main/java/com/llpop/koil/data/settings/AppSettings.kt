@@ -146,6 +146,10 @@ class AppSettings(private val context: Context) {
         private val KEY_SYNC_LAST_STATUS = stringPreferencesKey("KOiL-sync-last-status")
         const val DEFAULT_SYNC_URL = "https://dav.jianguoyun.com/dav/KOiL/"
 
+        // ---- 应用更新检查（v1.6.5：冷启动静默查 GitHub Releases，8h 节流；查到新版本设置页挂红点）----
+        private val KEY_UPDATE_LATEST_TAG = stringPreferencesKey("KOiL-update-latest-tag")
+        private val KEY_UPDATE_LAST_CHECK_AT = longPreferencesKey("KOiL-update-last-check-at")
+
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
@@ -533,6 +537,22 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_PRICE_DB_ADJUST_DATES_LEANED] ?: false }
     suspend fun setPriceDbAdjustDatesLeaned(leaned: Boolean) {
         context.KOiLDataStore.edit { it[KEY_PRICE_DB_ADJUST_DATES_LEANED] = leaned }
+    }
+
+    // ---- 应用更新检查（v1.6.5）----
+
+    /** 最近一次查到的 Release tag（原始形式如 "V1.6.4"；空串=从未查到过）——设置页据此判断是否挂红点 */
+    val updateLatestTag: Flow<String> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LATEST_TAG] ?: "" }
+    suspend fun setUpdateLatestTag(tag: String) {
+        context.KOiLDataStore.edit { it[KEY_UPDATE_LATEST_TAG] = tag }
+    }
+
+    /** 最近一次「成功」检查的时间戳（毫秒，0=从未成功）——冷启动静默检查的 8h 节流依据 */
+    val updateLastCheckAt: Flow<Long> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_CHECK_AT] ?: 0L }
+    suspend fun setUpdateLastCheckAt(at: Long) {
+        context.KOiLDataStore.edit { it[KEY_UPDATE_LAST_CHECK_AT] = at }
     }
 
     // ---- 底部导航条（参考 Mishka 悬浮导航体系）----

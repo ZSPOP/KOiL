@@ -79,6 +79,12 @@
     </plurals>
     <string name="koil_ov_backfill">補錄</string>
     <string name="koil_ov_month_count">%1$d筆</string>
+    <string name="koil_ov_month_summary">%1$d筆 · 共 ¥%2$s · %3$sL</string>
+    <string name="koil_ov_first_tag">首次記錄</string>
+    <string name="koil_ov_detail_this">本次</string>
+    <string name="koil_ov_detail_avg">近%1$d次均值</string>
+    <string name="koil_ov_detail_saved">較油站單價已省 ¥%1$s</string>
+    <string name="koil_ov_detail_over">較油站單價多付 ¥%1$s</string>
     <string name="koil_back_to_top">返回頂部</string>
     <string name="koil_ov_backfill_title">補錄加油記錄</string>
     <string name="koil_ov_grade">油號</string>
@@ -100,6 +106,15 @@
     <string name="koil_stat_total_cost">總實付</string>
     <string name="koil_stat_total_payable">總應付</string>
     <string name="koil_stat_avg_price">平均油價</string>
+    <string name="koil_ov_flat">持平</string>
+    <string name="koil_ov_spark_label">油耗走勢</string>
+    <string name="koil_ov_spark_range">近 %1$d 次 · %2$s ~ %3$s</string>
+    <string name="koil_ov_change_caption">變化幅度 · %1$s</string>
+    <string name="koil_ov_cmp_3m">較前3個月</string>
+    <string name="koil_ov_cmp_6m">較前6個月</string>
+    <string name="koil_ov_cmp_year">較去年同期</string>
+    <string name="koil_ov_avg_distance_line">均距 %1$d km</string>
+    <string name="koil_stat_price_unit_long">元/L</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">平均每次</string>
     <plurals name="koil_ov_total_count">
@@ -115,6 +130,13 @@
     <item quantity="other">%1$d 筆異常油耗記錄</item>
     </plurals>
     <string name="koil_ov_abnormal_avg">偏離均值 · 平均油耗 %1$.2f L/100km</string>
+    <string name="koil_ov_stable_inline">油耗穩定</string>
+    <string name="koil_ov_stable_all">至今無異常</string>
+    <string name="koil_ov_stable_year">今年無異常</string>
+    <string name="koil_ov_stable_6m">近6個月無異常</string>
+    <string name="koil_ov_stable_3m">近3個月無異常</string>
+    <string name="koil_ov_abnormal_peak">最高 %1$s · 最近 %2$s L/100km</string>
+    <string name="koil_ov_detail_go">查看明細</string>
     <string name="koil_ov_abnormal_empty">暫無異常油耗記錄</string>
     <string name="koil_ov_abnormal_stable">本範圍油耗表現平穩</string>
     <string name="koil_ov_abnormal_detail_title">油耗異常明細（%1$d 筆）</string>
@@ -123,15 +145,24 @@
     <plurals name="koil_ov_record_count">
     <item quantity="other">%1$d次加油</item>
     </plurals>
-    <string name="koil_ov_oil_days">%1$d天</string>
+    <string name="koil_ov_oil_days">%1$d 天</string>
     <string name="koil_ov_high">偏高</string>
     <string name="koil_ov_low">偏低</string>
     <string name="koil_ov_prev_line">上次 %1$s · 里程 %2$d → %3$d km</string>
-    <string name="koil_ov_current_mileage">當前里程 %1$d km</string>
+    <string name="koil_ov_current_mileage">當前里程 %1$d</string>
     <string name="koil_ov_metric_consumption">平均油耗</string>
     <string name="koil_ov_metric_cost">每公里成本</string>
     <string name="koil_ov_metric_distance">行駛里程</string>
     <string name="koil_ov_first_record">首次記錄，油耗與里程將在下次加油後計算</string>
+    <string name="koil_ov_range_line">里程 %1$d → %2$d</string>
+    <string name="koil_ov_distance_pill">%1$dkm</string>
+    <string name="koil_ov_grade_actual">%1$s# ¥%2$s · %3$s L</string>
+    <string name="koil_ov_payable_price">應付單價 ¥%1$s</string>
+    <string name="koil_ov_grade_pill">%1$s# · %2$sL</string>
+    <string name="koil_ov_unit_price_actual">實付單價 ¥%1$s/L</string>
+    <string name="koil_ov_unit_price_station">油站單價 ¥%1$s/L</string>
+    <string name="koil_ov_short_skip">短途行駛，不計入油耗統計</string>
+    <string name="koil_ov_distance_anomaly">里程數據異常，無法計算油耗</string>
     <string name="koil_col_oil_amount">加油量</string>
     <string name="koil_col_actual">實付金額</string>
     <string name="koil_col_unit_price">實付單價</string>
