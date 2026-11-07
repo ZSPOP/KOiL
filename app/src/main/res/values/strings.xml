@@ -85,6 +85,7 @@
     <string name="koil_ov_detail_avg">近%1$d次均值</string>
     <string name="koil_ov_detail_saved">较油站单价已省 ¥%1$s</string>
     <string name="koil_ov_detail_over">较油站单价多付 ¥%1$s</string>
+    <string name="koil_ov_detail_price_group">实付单价（¥/L）</string>
     <string name="koil_back_to_top">返回顶部</string>
     <string name="koil_ov_backfill_title">补录加油记录</string>
     <string name="koil_ov_grade">油号</string>

@@ -87,6 +87,7 @@
     <string name="koil_ov_detail_avg">Last %1$d avg</string>
     <string name="koil_ov_detail_saved">Saved ¥%1$s vs station price</string>
     <string name="koil_ov_detail_over">Paid ¥%1$s extra vs station</string>
+    <string name="koil_ov_detail_price_group">Paid price (¥/L)</string>
     <string name="koil_back_to_top">Back to top</string>
     <string name="koil_ov_backfill_title">Backfill a record</string>
     <string name="koil_ov_grade">Grade</string>
