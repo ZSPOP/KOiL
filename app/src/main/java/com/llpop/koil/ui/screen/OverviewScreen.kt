@@ -1638,7 +1638,7 @@ private fun RecordCard(
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = md(r.reoilDate),
-                        fontSize = 17.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -1653,8 +1653,8 @@ private fun RecordCard(
                         Spacer(Modifier.width(3.dp))
                         Text(
                             text = md(prevRecord.record.reoilDate),
-                            // v1.6.5：与新日期同字号（17sp），仅以灰色弱化主次
-                            fontSize = 17.sp,
+                            // v1.6.5：与新日期同字号（16sp），仅以灰色弱化主次
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
@@ -1669,8 +1669,8 @@ private fun RecordCard(
                     Spacer(Modifier.weight(1f))
                     Text(
                         text = "¥" + NumberFormat.money(r.actualAmount),
-                        // v1.6.5：与日期同字号 17sp，把视觉锚点让给油耗大数字
-                        fontSize = 17.sp,
+                        // v1.6.5：与日期同字号 16sp，把视觉锚点让给油耗大数字
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                         maxLines = 1,
