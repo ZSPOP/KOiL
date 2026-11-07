@@ -107,6 +107,7 @@
     <string name="koil_stat_total_payable">总应付</string>
     <string name="koil_stat_avg_price">平均油价</string>
     <string name="koil_ov_flat">持平</string>
+    <string name="koil_ov_change_caption">变化幅度 · %1$s</string>
     <string name="koil_ov_cmp_3m">较前3个月</string>
     <string name="koil_ov_cmp_6m">较前6个月</string>
     <string name="koil_ov_cmp_year">较去年同期</string>

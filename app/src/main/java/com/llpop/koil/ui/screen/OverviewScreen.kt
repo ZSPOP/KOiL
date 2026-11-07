@@ -1064,7 +1064,15 @@ private fun SummaryGrid(
                     }
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(8.dp))
+            // v1.6.5：环比口径紧跟分段控件、就在六指标头顶——原来放卡片最底部，太远太弱看不见
+            Text(
+                text = stringResource(R.string.koil_ov_change_caption, compareLabel),
+                fontSize = 10.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(start = 2.dp),
+            )
+            Spacer(Modifier.height(10.dp))
             // —— 六指标 3×2（v1.6.5：字号统一 21sp；里程/油量涨幅不判好坏用中性灰）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
@@ -1151,12 +1159,6 @@ private fun SummaryGrid(
                     ),
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = compareLabel,
-                    fontSize = 11.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                 )
             }
         }
