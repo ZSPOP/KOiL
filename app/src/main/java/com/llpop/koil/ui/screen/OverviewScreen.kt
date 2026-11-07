@@ -47,7 +47,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -186,29 +185,18 @@ fun OverviewScreen(
         uiState.records.groupBy { it.record.reoilDate.substring(0, 7) }.toList()
     }
     val prevMap = remember(uiState.records) { buildPrevMap(uiState.records) }
-    // v1.6.5：每条记录的「近 N 次均值」（含自身，往旧最多取 5 条有效油耗），供展开明细对比条。
-    // Triple = (油耗均值, 条数, 实付单价均值)；单价均值与油耗取同一窗口，不足 2 条单价不给
+    // v1.6.5：每条记录的「近 N 次油耗均值」（含自身，往旧最多取 5 条有效油耗），供展开明细对比条
     val recentAvgMap = remember(uiState.records) {
-        val map = HashMap<Long, Triple<Double, Int, Double?>>()
+        val map = HashMap<Long, Pair<Double, Int>>()
         val list = uiState.records
         for (i in list.indices) {
             val vals = ArrayList<Double>(5)
-            val prices = ArrayList<Double>(5)
             var j = i
             while (j < list.size && vals.size < 5) {
-                list[j].oilConsumption?.let {
-                    vals.add(it)
-                    (list[j].unitPriceActual ?: list[j].record.oilPrice)?.let { p -> prices.add(p) }
-                }
+                list[j].oilConsumption?.let { vals.add(it) }
                 j++
             }
-            if (vals.size >= 2) {
-                map[list[i].record.id] = Triple(
-                    vals.average(),
-                    vals.size,
-                    if (prices.size >= 2) prices.average() else null,
-                )
-            }
+            if (vals.size >= 2) map[list[i].record.id] = Pair(vals.average(), vals.size)
         }
         map
     }
@@ -417,7 +405,6 @@ fun OverviewScreen(
                             onRect = onActionRect,
                             recentAvg = recentAvgMap[record.record.id]?.first,
                             recentCount = recentAvgMap[record.record.id]?.second ?: 0,
-                            recentPriceAvg = recentAvgMap[record.record.id]?.third,
                             modifier = Modifier.padding(bottom = 10.dp),
                         )
                     }
@@ -1609,10 +1596,9 @@ private fun RecordCard(
     isInitial: Boolean,
     showMoreMenu: Boolean,
     onMoreMenu: (RecordWithDerived) -> Unit,
-    // v1.6.5：展开明细用——本条起往旧最多 5 条的有效油耗均值与条数；recentPriceAvg = 同窗口实付单价均值
+    // v1.6.5：展开明细用——本条起往旧最多 5 条的有效油耗均值与条数
     recentAvg: Double? = null,
     recentCount: Int = 0,
-    recentPriceAvg: Double? = null,
     // v1.6.4：Modifier 放第一个可选参数位（Compose 约定，调用方全用命名参数，无兼容问题）
     modifier: Modifier = Modifier,
     onRect: (Rect) -> Unit = {},
@@ -1924,36 +1910,6 @@ private fun RecordCard(
                                 fillColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
                             )
                         }
-                        // v1.6.5：实付单价对比条（本次 vs 近 N 次均价，同窗口同口径）
-                        if (recentPriceAvg != null && actualPrice != null) {
-                            Spacer(Modifier.height(10.dp))
-                            Text(
-                                text = stringResource(R.string.koil_ov_detail_price_group),
-                                fontSize = 10.sp,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                                maxLines = 1,
-                                softWrap = false,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            val avgP = recentPriceAvg
-                            val maxP = maxOf(actualPrice, avgP)
-                            val curPColor = if (actualPrice <= avgP) goodColor else badColor
-                            DetailBarRow(
-                                label = stringResource(R.string.koil_ov_detail_this),
-                                value = "¥" + NumberFormat.fixed2(actualPrice),
-                                valueColor = curPColor,
-                                fraction = (actualPrice / maxP).toFloat().coerceIn(0.05f, 1f),
-                                fillColor = curPColor,
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            DetailBarRow(
-                                label = stringResource(R.string.koil_ov_detail_avg, recentCount),
-                                value = "¥" + NumberFormat.fixed2(avgP),
-                                valueColor = MiuixTheme.colorScheme.onBackgroundVariant,
-                                fraction = (avgP / maxP).toFloat().coerceIn(0.05f, 1f),
-                                fillColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
-                            )
-                        }
                         // 优惠：实付低于油站（挂牌）单价的差额 × 加油量
                         val saved = stationSaved
                         if (saved != null && (saved > 0.005 || saved < -0.005)) {
@@ -1973,23 +1929,16 @@ private fun RecordCard(
                         }
                     }
                 }
-                // v1.6.5：底部展开暗示把手（28×4dp 圆角条）——有可展开内容才显示，展开后淡出
+                // v1.6.5：底部展开暗示把手（28×4dp 圆角条）——常驻：收起时提示可展开，展开后提示可收起
                 if (hasDetail) {
                     Spacer(Modifier.height(9.dp))
-                    val grabberAlpha by animateFloatAsState(
-                        targetValue = if (expanded) 0f else 1f,
-                        animationSpec = tween(180),
-                        label = "grabberAlpha",
-                    )
                     Box(
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
                             .width(28.dp)
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(
-                                MiuixTheme.colorScheme.onBackground.copy(alpha = 0.15f * grabberAlpha)
-                            ),
+                            .background(MiuixTheme.colorScheme.onBackground.copy(alpha = 0.15f)),
                     )
                 }
             }
