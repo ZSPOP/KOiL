@@ -1653,9 +1653,9 @@ private fun RecordCard(
                         Spacer(Modifier.width(3.dp))
                         Text(
                             text = md(prevRecord.record.reoilDate),
-                            // v1.6.5：与新日期同字号（16sp），仅以灰色弱化主次
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
+                            // v1.6.5：旧日期弱化为 11sp 次要信息（用户定稿）
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
                             softWrap = false,
