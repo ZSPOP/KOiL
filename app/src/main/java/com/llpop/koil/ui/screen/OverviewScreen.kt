@@ -77,6 +77,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -200,13 +202,9 @@ fun OverviewScreen(
         }
         map
     }
-    // v1.5.46：趋势图可选的油号（当前范围有数据的油号，按 92/95/98/0 固定顺序）
-    val availableGrades = remember(uiState.records) {
-        val order = listOf("92", "95", "98", "0")
-        uiState.records.mapNotNull { it.record.oilGrade }
-            .distinct()
-            .filter { it in order }
-            .sortedBy { order.indexOf(it) }
+    // v1.6.5：趋势图降级为摘要卡内 sparkline，油号筛选胶囊随之移除——进入页面统一回「全部」
+    LaunchedEffect(Unit) {
+        if (uiState.trendGrade != "all") viewModel.setTrendGrade("all")
     }
     // v1.5.20（#10）：长按相关回调稳定（remember 一次），配合 items(key=id) 让未变化卡片可跳过重组
     val onMoreMenuCard = remember {
@@ -271,16 +269,6 @@ fun OverviewScreen(
             }
             item { Spacer(Modifier.height(12.dp)) }
 
-            // 趋势分析（双轴一张图）；v1.5.46：支持油号筛选
-            item {
-                TrendChart(
-                    trend = uiState.trend,
-                    grade = uiState.trendGrade,
-                    onGradeChange = viewModel::setTrendGrade,
-                    availableGrades = availableGrades,
-                )
-            }
-            item { Spacer(Modifier.height(12.dp)) }
 
             // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）；v1.5.31：有异常时可点击查看明细
             item {
@@ -1024,13 +1012,6 @@ private fun SummaryGrid(
     val prev = uiState.prevStats
     fun pct(cur: Double, prevVal: Double?): Double? =
         if (prevVal != null && prevVal > 0) (cur - prevVal) / prevVal * 100 else null
-    // v1.6.5：环比口径文案随范围变化——原来固定「较上期」，用户看不出到底在跟哪一段比
-    val compareLabel = when (uiState.range) {
-        "3m" -> stringResource(R.string.koil_ov_cmp_3m)
-        "6m" -> stringResource(R.string.koil_ov_cmp_6m)
-        "year" -> stringResource(R.string.koil_ov_cmp_year)
-        else -> stringResource(R.string.koil_ov_vs_prev)
-    }
 
     KOiLBlurBackground(
         modifier = Modifier.fillMaxWidth(),
@@ -1064,15 +1045,7 @@ private fun SummaryGrid(
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            // v1.6.5：环比口径紧跟分段控件、就在六指标头顶——原来放卡片最底部，太远太弱看不见
-            Text(
-                text = stringResource(R.string.koil_ov_change_caption, compareLabel),
-                fontSize = 10.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                modifier = Modifier.padding(start = 2.dp),
-            )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(14.dp))
             // —— 六指标 3×2（v1.6.5：字号统一 21sp；里程/油量涨幅不判好坏用中性灰）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
@@ -1144,6 +1117,41 @@ private fun SummaryGrid(
                     .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
             )
             Spacer(Modifier.height(10.dp))
+            // v1.6.5：油耗走势 sparkline（原独立趋势卡降级至此）——无坐标轴无图例，只表达形状
+            val sparkValues = remember(uiState.trend) {
+                uiState.trend.mapNotNull { it.oilConsumption }.takeLast(40)
+            }
+            if (sparkValues.size >= 2) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.koil_ov_spark_label),
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    ConsumptionSparkline(
+                        values = sparkValues,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(34.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = NumberFormat.fixed2(sparkValues.last()),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+            }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = pluralStringResource(R.plurals.koil_ov_total_count, stats.totalCount, stats.totalCount),
@@ -1246,301 +1254,42 @@ private fun StatCell(
     }
 }
 
-// ===== 趋势分析：双轴折线图（对齐 Web） =====
+/**
+ * v1.6.5：摘要卡内的油耗 sparkline。
+ * 只画折线 + 末点，不画坐标轴与网格——趋势的形状用一条线就能表达，
+ * 原双轴折线图（油耗 + 每公里成本同画布）两套量纲不可比、轴标签 9sp 也读不清。
+ */
 @Composable
-private fun TrendChart(
-    trend: List<TrendPoint>,
-    grade: String,
-    onGradeChange: (String) -> Unit,
-    availableGrades: List<String>,
-) {
-    KOiLBlurBackground(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(if (availableGrades.size >= 2) 228.dp else 200.dp),
-        cornerRadius = 20f,
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.TrendingUp,
-                    contentDescription = null,
-                    tint = KOiLColors.Primary,
-                    modifier = Modifier.size(16.dp),
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = stringResource(R.string.koil_ov_trend),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.weight(1f))
-                // 图例
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(KOiLColors.Primary))
-                    Spacer(Modifier.width(3.dp))
-                    Text(stringResource(R.string.koil_ov_legend_consumption), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                    Spacer(Modifier.width(8.dp))
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFF97316)))
-                    Spacer(Modifier.width(3.dp))
-                    Text(stringResource(R.string.koil_ov_legend_cost), fontSize = 9.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            // v1.5.46：油号筛选胶囊（全部 + 当前范围有数据的油号）
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                GradeFilterChip(
-                    label = stringResource(R.string.koil_ov_trend_all),
-                    selected = grade == "all",
-                    onClick = { onGradeChange("all") },
-                )
-                availableGrades.forEach { g ->
-                    GradeFilterChip(
-                        label = OilPriceNetwork.GRADE_LABELS[g]?.removeSuffix("号汽油")?.removeSuffix("号柴油")
-                            ?.plus("#") ?: "$g#",
-                        selected = grade == g,
-                        onClick = { onGradeChange(g) },
-                    )
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            if (trend.size >= 2) {
-                DualAxisCanvas(trend = trend)
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxWidth().height(118.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_ov_trend_insufficient),
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
-            }
+private fun ConsumptionSparkline(values: List<Double>, modifier: Modifier = Modifier) {
+    val lineColor = KOiLColors.Primary
+    Canvas(modifier = modifier) {
+        if (values.size < 2) return@Canvas
+        val minV = values.min()
+        val maxV = values.max()
+        val span = (maxV - minV).takeIf { it > 0.0001 } ?: 1.0
+        val inset = 3.dp.toPx()
+        val usableH = (size.height - inset * 2).coerceAtLeast(1f)
+        val stepX = size.width / (values.size - 1)
+        val pts = values.mapIndexed { i, v ->
+            Offset(stepX * i, inset + usableH - ((v - minV) / span).toFloat() * usableH)
         }
-    }
-}
-
-/** v1.5.46：趋势图油号筛选胶囊（选中主色实底） */
-@Composable
-private fun GradeFilterChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) KOiLColors.Primary else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-    ) {
-        Text(
-            text = label,
-            fontSize = 11.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackgroundVariant,
+        val path = Path().apply {
+            moveTo(pts.first().x, pts.first().y)
+            for (i in 1 until pts.size) lineTo(pts[i].x, pts[i].y)
+        }
+        drawPath(
+            path = path,
+            color = lineColor,
+            style = Stroke(
+                width = 1.6.dp.toPx(),
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+            ),
         )
+        drawCircle(color = lineColor, radius = 2.4.dp.toPx(), center = pts.last())
     }
 }
 
-@Composable
-private fun DualAxisCanvas(trend: List<TrendPoint>) {
-    val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
-    val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f)
-    // v1.6.2：Paint 提到绘制回调之外缓存。原实现在 Canvas 的 onDraw 里每画一个标签就 new 一个
-    // android.graphics.Paint（单帧最多 4 组轴标签 + N 个日期标签，共 ~35 个对象）。
-    val density = LocalDensity.current
-    val axisTextSizePx = with(density) { 9.dp.toPx() }
-    val dateTextSizePx = with(density) { 8.dp.toPx() }
-    val axisLabelPaint = remember(labelColor, axisTextSizePx) {
-        labelPaint(labelColor, alpha = 153, textSizePx = axisTextSizePx)
-    }
-    val dateLabelPaint = remember(labelColor, dateTextSizePx) {
-        labelPaint(labelColor, alpha = 102, textSizePx = dateTextSizePx)
-    }
-    // v1.6.3：几何（Path、点坐标、标签文本与其基线坐标、画笔宽度）整体抽进 remember。
-    // 原先这些都在 onDraw 里逐帧重建：2 个 Path、2 个 MutableList<Offset>、10 次 NumberFormat.measure
-    //（每次 BigDecimal + 字符串）、以及每个标签一次字符串拼接与测量。图表本身没有动画，
-    // 只有"数据/尺寸/主题色变化"才需要重算，逐帧重算纯粹是白烧 CPU 并制造垃圾。
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(140.dp)
-    ) {
-        // 尺寸按 density 只取标量做 key：Density 是接口，不同实例未必 equals，用它当 key 会让几何每次都重算
-        val wPx = if (maxWidth.value.isFinite()) with(density) { maxWidth.toPx() } else 0f
-        val hPx = if (maxHeight.value.isFinite()) with(density) { maxHeight.toPx() } else 0f
-        val geometry = remember(trend, wPx, hPx, density.density, density.fontScale) {
-            if (wPx <= 0f || hPx <= 0f) null else buildChartGeometry(trend, wPx, hPx, density)
-        }
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val geo = geometry ?: return@Canvas   // 尺寸异常（无界约束）时不画，也不崩
-            val native = drawContext.canvas.nativeCanvas
-            geo.gridLines.forEach { drawLine(gridColor, it.first, it.second, geo.gridStroke) }
-            geo.axisLabels.forEach { native.drawText(it.text, it.x, it.y, axisLabelPaint) }
-            geo.consumptionPath?.let { path ->
-                drawPath(path = path, color = KOiLColors.Primary, style = geo.lineStroke)
-                geo.consumptionPoints.forEach {
-                    drawCircle(color = KOiLColors.Primary, radius = geo.dotRadius, center = it)
-                }
-            }
-            geo.costPath?.let { path ->
-                drawPath(path = path, color = CHART_COST_COLOR, style = geo.lineStroke)
-                geo.costPoints.forEach {
-                    drawCircle(color = CHART_COST_COLOR, radius = geo.dotRadius, center = it)
-                }
-            }
-            geo.dateLabels.forEach { native.drawText(it.text, it.x, it.y, dateLabelPaint) }
-        }
-    }
-}
-
-private val CHART_COST_COLOR = Color(0xFFF97316)
-
-/** 轴/日期标签：坐标为绘制时直接用（已包含 padding 与基线偏移） */
-private class ChartLabel(val text: String, val x: Float, val y: Float)
-
-/** 图表几何快照：全部在 remember 里算一次，onDraw 只负责画 */
-private class ChartGeometry(
-    val gridLines: List<Pair<Offset, Offset>>,
-    val gridStroke: Float,
-    val lineStroke: Stroke,
-    val dotRadius: Float,
-    val axisLabels: List<ChartLabel>,
-    val dateLabels: List<ChartLabel>,
-    val consumptionPath: Path?,
-    val consumptionPoints: List<Offset>,
-    val costPath: Path?,
-    val costPoints: List<Offset>,
-)
-
-private fun buildChartGeometry(
-    trend: List<TrendPoint>,
-    widthPx: Float,
-    heightPx: Float,
-    density: androidx.compose.ui.unit.Density,
-): ChartGeometry {
-    with(density) {
-        val padL = 30.dp.toPx()
-        val padR = 34.dp.toPx()
-        val padT = 8.dp.toPx()
-        val padB = 22.dp.toPx()
-        val w = widthPx - padL - padR
-        val h = heightPx - padT - padB
-
-        val consumptions = trend.mapNotNull { it.oilConsumption }
-        val costs = trend.mapNotNull { it.costPerKm }
-
-        // 左轴（油耗 2.0~8.0 对齐 Web，自动兜底）
-        val leftMin = consumptions.minOrNull()?.let { it * 0.75 } ?: 2.0
-        val leftMax = consumptions.maxOrNull()?.let { it * 1.25 } ?: 8.0
-        val leftRange = (leftMax - leftMin).coerceAtLeast(0.1)
-
-        // 右轴（成本 0.10~0.60 对齐 Web，自动兜底）
-        val rightMin = costs.minOrNull()?.let { (it * 0.75 * 100).roundToInt() / 100.0 } ?: 0.10
-        val rightMax = costs.maxOrNull()?.let { (it * 1.25 * 100).roundToInt() / 100.0 } ?: 0.60
-        val rightRange = (rightMax - rightMin).coerceAtLeast(0.05)
-
-        // 横向网格线 + 左/右轴刻度标签
-        val gridLines = ArrayList<Pair<Offset, Offset>>(5)
-        val axisLabels = ArrayList<ChartLabel>(10)
-        val gridLinesCount = 4
-        for (i in 0..gridLinesCount) {
-            val frac = i.toFloat() / gridLinesCount
-            val y = padT + h * frac
-            gridLines.add(Offset(padL, y) to Offset(padL + w, y))
-            val lv = leftMax - leftRange * frac
-            axisLabels.add(ChartLabel(NumberFormat.measure(lv), padL - 4.dp.toPx(), y + 3.dp.toPx()))
-            val rv = rightMin + rightRange * (1 - frac)
-            axisLabels.add(
-                ChartLabel(NumberFormat.measure(rv), padL + w + 4.dp.toPx(), y + 3.dp.toPx())
-            )
-        }
-
-        fun xAt(i: Int): Float = padL + (i.toFloat() / (trend.size - 1).coerceAtLeast(1)) * w
-
-        // 平均油耗线（蓝，主色）
-        var consPath: Path? = null
-        var consStarted = false
-        val consPts = ArrayList<Offset>(trend.size)
-        for ((i, p) in trend.withIndex()) {
-            val v = p.oilConsumption
-            if (v == null) {
-                consStarted = false
-                continue
-            }
-            val x = xAt(i)
-            val y = padT + h - (((v - leftMin) / leftRange).toFloat() * h)
-            consPts.add(Offset(x, y))
-            if (!consStarted) {
-                consPath = Path().also { it.moveTo(x, y) }
-                consStarted = true
-            } else {
-                consPath?.lineTo(x, y)
-            }
-        }
-
-        // 每公里成本线（橙）
-        var costPath: Path? = null
-        var costStarted = false
-        val costPts = ArrayList<Offset>(trend.size)
-        for ((i, p) in trend.withIndex()) {
-            val v = p.costPerKm
-            if (v == null) {
-                costStarted = false
-                continue
-            }
-            val x = xAt(i)
-            val y = padT + h - (((v - rightMin) / rightRange).toFloat() * h)
-            costPts.add(Offset(x, y))
-            if (!costStarted) {
-                costPath = Path().also { it.moveTo(x, y) }
-                costStarted = true
-            } else {
-                costPath?.lineTo(x, y)
-            }
-        }
-
-        // 横轴日期标签（每 2 个显示一个避免拥挤）
-        val dateLabels = ArrayList<ChartLabel>((trend.size + 1) / 2)
-        for (i in trend.indices) {
-            if (i % 2 == 1 && trend.size > 4) continue
-            dateLabels.add(
-                ChartLabel(trend[i].date, xAt(i) - 12.dp.toPx(), padT + h + 14.dp.toPx())
-            )
-        }
-
-        return ChartGeometry(
-            gridLines = gridLines,
-            gridStroke = 1.dp.toPx(),
-            lineStroke = Stroke(width = 2.dp.toPx()),
-            dotRadius = 2.5.dp.toPx(),
-            axisLabels = axisLabels,
-            dateLabels = dateLabels,
-            // 单点画不出线（与原实现 consPts.size >= 2 才画一致）
-            consumptionPath = consPath.takeIf { consPts.size >= 2 },
-            consumptionPoints = consPts,
-            costPath = costPath.takeIf { costPts.size >= 2 },
-            costPoints = costPts,
-        )
-    }
-}
-
-/** v1.6.2：图表标签画笔工厂（供 DualAxisCanvas 的 remember 缓存，避免每帧 new Paint） */
-private fun labelPaint(color: Color, alpha: Int, textSizePx: Float): android.graphics.Paint =
-    android.graphics.Paint().apply {
-        this.color = android.graphics.Color.argb(
-            alpha,
-            (color.red * 255).toInt(),
-            (color.green * 255).toInt(),
-            (color.blue * 255).toInt(),
-        )
-        this.textSize = textSizePx
-    }
-
-// ===== 异常卡（对齐 Web：空态 + 右上"N 次加油"）；v1.5.31：有异常时可点击查看明细 =====
 @Composable
 private fun AbnormalAlertCard(
     count: Int,
