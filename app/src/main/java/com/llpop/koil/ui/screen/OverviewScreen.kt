@@ -265,22 +265,37 @@ fun OverviewScreen(
                     uiState = uiState,
                     rangeLabels = rangeLabels,
                     onRangeChange = viewModel::setRange,
+                    // 无异常时把「油耗稳定」并进摘要卡底部，不再单占一张卡
+                    stableNote = if (uiState.abnormalRecords.isEmpty()) {
+                        stringResource(
+                            when (uiState.range) {
+                                "year" -> R.string.koil_ov_stable_year
+                                "6m" -> R.string.koil_ov_stable_6m
+                                "3m" -> R.string.koil_ov_stable_3m
+                                else -> R.string.koil_ov_stable_all
+                            }
+                        )
+                    } else {
+                        null
+                    },
                 )
             }
             item { Spacer(Modifier.height(12.dp)) }
 
 
-            // 异常卡（对齐 Web：空态 + 右上"N 次加油"徽标）；v1.5.31：有异常时可点击查看明细
-            item {
-                AbnormalAlertCard(
-                    count = uiState.abnormalRecords.size,
-                    rangeLabel = rangeLabel(uiState.range),
-                    recordCount = uiState.records.size,
-                    avgConsumption = uiState.avgConsumption,
-                    onClick = if (uiState.abnormalRecords.isNotEmpty()) { { showAbnormalDetail = true } } else { null },
-                )
+            // 异常卡：只有真有异常才占位；v1.5.31 起整卡可点击查看明细
+            if (uiState.abnormalRecords.isNotEmpty()) {
+                item {
+                    AbnormalAlertCard(
+                        count = uiState.abnormalRecords.size,
+                        peakConsumption = uiState.abnormalRecords.mapNotNull { it.oilConsumption }.maxOrNull(),
+                        latestConsumption = uiState.abnormalRecords
+                            .maxByOrNull { it.record.reoilDate }?.oilConsumption,
+                        onClick = { showAbnormalDetail = true },
+                    )
+                }
+                item { Spacer(Modifier.height(12.dp)) }
             }
-            item { Spacer(Modifier.height(12.dp)) }
 
             // 加油历史区（对齐 Web：标题 + 共N条 + 补录）
             item {
@@ -755,14 +770,6 @@ fun OverviewScreen(
 }
 
 @Composable
-private fun rangeLabel(range: String): String = when (range) {
-    "year" -> stringResource(R.string.koil_range_year)
-    "6m" -> stringResource(R.string.koil_range_6m)
-    "3m" -> stringResource(R.string.koil_range_3m)
-    else -> stringResource(R.string.koil_range_all)
-}
-
-@Composable
 private fun monthTitle(monthKey: String): String {
     val parts = monthKey.split("-")
     return if (parts.size == 2)
@@ -1007,6 +1014,8 @@ private fun SummaryGrid(
     uiState: OverviewUiState,
     rangeLabels: List<Pair<String, String>>,
     onRangeChange: (String) -> Unit,
+    // v1.6.5：无异常时不再单占一整张卡，收成卡片底部一行小字（null = 有异常，不显示）
+    stableNote: String? = null,
 ) {
     val stats = uiState.stats
     val prev = uiState.prevStats
@@ -1169,6 +1178,41 @@ private fun SummaryGrid(
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                 )
             }
+            // v1.6.5：无异常 → 原来那张「暂无异常」整卡收成这一行（省约 80dp）
+            if (stableNote != null) {
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(KOiLColors.Primary),
+                    )
+                    Spacer(Modifier.width(7.dp))
+                    Text(
+                        text = stringResource(R.string.koil_ov_stable_inline),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Text(
+                        text = " · $stableNote",
+                        fontSize = 11.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+            }
         }
     }
 }
@@ -1293,10 +1337,9 @@ private fun ConsumptionSparkline(values: List<Double>, modifier: Modifier = Modi
 @Composable
 private fun AbnormalAlertCard(
     count: Int,
-    rangeLabel: String,
-    recordCount: Int,
-    avgConsumption: Double,
-    onClick: (() -> Unit)? = null,
+    peakConsumption: Double?,
+    latestConsumption: Double?,
+    onClick: () -> Unit,
 ) {
     KOiLBlurBackground(
         modifier = Modifier.fillMaxWidth(),
@@ -1305,63 +1348,49 @@ private fun AbnormalAlertCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .then(
-                    if (onClick != null) {
-                        Modifier
-                            .clickable(enabled = count > 0, onClick = onClick)
-                            .padding(16.dp)
-                    } else {
-                        Modifier.padding(16.dp)
-                    }
-                ),
+                .clickable(onClick = onClick)
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = Icons.Filled.Warning,
                 contentDescription = null,
-                tint = if (count > 0) Color(0xFFE65100) else Color(0xFF34C759),
+                tint = Color(0xFFE65100),
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                if (count > 0) {
+                Text(
+                    text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                // v1.6.5：原来这里是「平均油耗」，跟摘要卡同一个数；换成异常里最高/最近两次，才是新增信息
+                if (peakConsumption != null && latestConsumption != null) {
                     Text(
-                        text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = stringResource(R.string.koil_ov_abnormal_avg, avgConsumption),
+                        text = stringResource(
+                            R.string.koil_ov_abnormal_peak,
+                            NumberFormat.fixed2(peakConsumption),
+                            NumberFormat.fixed2(latestConsumption),
+                        ),
                         fontSize = 11.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.koil_ov_abnormal_empty),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Text(
-                        text = stringResource(R.string.koil_ov_abnormal_stable),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 1,
+                        softWrap = false,
                     )
                 }
             }
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = rangeLabel,
-                    fontSize = 11.sp,
-                    color = KOiLColors.Primary,
-                )
-                Text(
-                    text = pluralStringResource(R.plurals.koil_ov_record_count, recordCount, recordCount),
-                    fontSize = 10.sp,
-                    color = MiuixTheme.colorScheme.onBackgroundVariant,
-                )
-            }
+            Spacer(Modifier.width(8.dp))
+            // v1.6.5：右侧原来是「范围 + 条数」两行，跟顶部筛选器、摘要卡全重复；改成明确的点击入口
+            Text(
+                text = stringResource(R.string.koil_ov_detail_go) + " ›",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Medium,
+                color = KOiLColors.Primary,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
     }
 }

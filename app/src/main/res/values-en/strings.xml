@@ -133,6 +133,13 @@
     <item quantity="other">%1$d abnormal records</item>
     </plurals>
     <string name="koil_ov_abnormal_avg">vs mean · avg %1$.2f L/100km</string>
+    <string name="koil_ov_stable_inline">Steady</string>
+    <string name="koil_ov_stable_all">no anomalies yet</string>
+    <string name="koil_ov_stable_year">none this year</string>
+    <string name="koil_ov_stable_6m">none in 6 months</string>
+    <string name="koil_ov_stable_3m">none in 3 months</string>
+    <string name="koil_ov_abnormal_peak">peak %1$s · latest %2$s L/100km</string>
+    <string name="koil_ov_detail_go">Details</string>
     <string name="koil_ov_abnormal_empty">No abnormal records</string>
     <string name="koil_ov_abnormal_stable">Steady fuel economy in this range</string>
     <string name="koil_ov_abnormal_detail_title">Anomaly details (%1$d)</string>

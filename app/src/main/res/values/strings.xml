@@ -129,6 +129,13 @@
     <item quantity="other">%1$d 条异常油耗记录</item>
     </plurals>
     <string name="koil_ov_abnormal_avg">偏离均值 · 平均油耗 %1$.2f L/100km</string>
+    <string name="koil_ov_stable_inline">油耗稳定</string>
+    <string name="koil_ov_stable_all">至今无异常</string>
+    <string name="koil_ov_stable_year">今年无异常</string>
+    <string name="koil_ov_stable_6m">近6个月无异常</string>
+    <string name="koil_ov_stable_3m">近3个月无异常</string>
+    <string name="koil_ov_abnormal_peak">最高 %1$s · 最近 %2$s L/100km</string>
+    <string name="koil_ov_detail_go">查看明细</string>
     <string name="koil_ov_abnormal_empty">暂无异常油耗记录</string>
     <string name="koil_ov_abnormal_stable">本范围油耗表现平稳</string>
     <string name="koil_ov_abnormal_detail_title">油耗异常明细（%1$d 条）</string>
