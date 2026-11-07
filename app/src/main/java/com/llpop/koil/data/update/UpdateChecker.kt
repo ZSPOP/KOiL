@@ -25,9 +25,17 @@ class UpdateChecker(private val settings: AppSettings) {
     /** 最近一次查到的 Release tag（原始形式，如 "V1.6.4"；空串=从未查到过） */
     fun latestTag(): Flow<String> = settings.updateLatestTag
 
+    /** 最近一次**成功**检查的时间戳（0=从未查过），设置页据此显示「上次检查」 */
+    fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
+
     /**
-     * 冷启动静默检查：距上次**成功**检查不足 [INTERVAL_MS] 时直接返回 null（不发请求、不写库）。
+     * 冷启动 / 回前台静默检查：距上次**成功**检查不足 [INTERVAL_MS] 时直接返回 null（不发请求、不写库）。
      * 时间戳取自机的墙上时钟；用户改系统时间导致差值异常时按"该查了"处理（宁多查一次，不漏提示）。
+     *
+     * v1.6.5 修正：原窗口 8 小时太长——刚装完包时那次冷启动会把当时的 release 记为"最新"，
+     * 之后就算你发了新版，也要等满 8 小时才会再查，表现就是"好像从不自动检查"。
+     * 缩短到 45 分钟（GitHub 匿名 API 限 60 次/小时，每分钟一次都够，不会触发限流），
+     * 并让「回前台」也走同一条通道，日常开 App 基本不会错过新版本。
      */
     suspend fun checkIfDue(): String? {
         val last = settings.updateLastCheckAt.first()
@@ -50,6 +58,7 @@ class UpdateChecker(private val settings: AppSettings) {
             settings.setUpdateLatestTag(tag)
             settings.setUpdateLastCheckAt(System.currentTimeMillis())
         }.onFailure { Log.w("KOiL", "persist update tag failed: ${it.message}") }
+        Log.i("KOiL", "update check ok: latest=$tag")
         tag
     }
 
@@ -72,7 +81,8 @@ class UpdateChecker(private val settings: AppSettings) {
     }
 
     companion object {
-        const val INTERVAL_MS = 8L * 60 * 60 * 1000
+        /** 两次检查的最小间隔（v1.6.5：8 小时 → 45 分钟，见 [checkIfDue] 注释） */
+        const val INTERVAL_MS = 45L * 60 * 1000
         const val RELEASE_API = "https://api.github.com/repos/ZSPOP/KOiL/releases/latest"
         private const val TIMEOUT_MS = 6000
     }

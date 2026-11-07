@@ -548,7 +548,7 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_LATEST_TAG] = tag }
     }
 
-    /** 最近一次「成功」检查的时间戳（毫秒，0=从未成功）——冷启动静默检查的 8h 节流依据 */
+    /** 最近一次「成功」检查的时间戳（毫秒，0=从未成功）——静默检查的 45 分钟节流依据 + 设置页「上次检查」 */
     val updateLastCheckAt: Flow<Long> =
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_CHECK_AT] ?: 0L }
     suspend fun setUpdateLastCheckAt(at: Long) {

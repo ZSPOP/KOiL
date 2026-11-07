@@ -1782,6 +1782,23 @@ private fun openExternalUrl(context: Context, url: String) {
 
 /** 检查入口统一收在 data.update.UpdateChecker（冷启动静默检查与手动检查共用一条通道） */
 
+/**
+ * v1.6.5：「上次检查」相对时间（刚刚 / 12 分钟前 / 3 小时前 / 2 天前）。
+ * 从未查过（0）或时钟倒挂时返回 null，调用方回落到默认副标题。
+ */
+@Composable
+private fun checkedAgoText(at: Long): String? {
+    if (at <= 0L) return null
+    val diff = System.currentTimeMillis() - at
+    if (diff < 0) return null
+    return when {
+        diff < 60_000L -> stringResource(R.string.koil_set_check_just_now)
+        diff < 3_600_000L -> stringResource(R.string.koil_set_check_min_ago, (diff / 60_000L).toInt())
+        diff < 86_400_000L -> stringResource(R.string.koil_set_check_hour_ago, (diff / 3_600_000L).toInt())
+        else -> stringResource(R.string.koil_set_check_day_ago, (diff / 86_400_000L).toInt())
+    }
+}
+
 @Composable
 private fun AboutSection(
     crashCount: Int,
@@ -1793,6 +1810,9 @@ private fun AboutSection(
     // v1.6.5：冷启动静默检查的结果落在 DataStore，进页面即可判红点（不用先点一次）
     val updateChecker = remember { GlobalContext.get().get<com.llpop.koil.data.update.UpdateChecker>() }
     val storedTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
+    // v1.6.5：把「上次检查」显示出来——静默检查本来没有可见反馈，用户会以为它从没跑过
+    val lastCheckAt by updateChecker.lastCheckAt().collectAsStateWithLifecycle(initialValue = 0L)
+    val checkedAgo = checkedAgoText(lastCheckAt)
     val storedVersion = remember(storedTag) { com.llpop.koil.data.update.normalizeVersion(storedTag) }
     val storedHasNewer = storedVersion.isNotEmpty() &&
         com.llpop.koil.data.update.compareVersionNames(
@@ -1851,7 +1871,8 @@ private fun AboutSection(
         // —— 检查更新：查到新版本后这一行直接变成「打开 Release 页」——
         SettingRow(
             title = stringResource(R.string.koil_set_about_check_update),
-            subtitle = stringResource(R.string.koil_set_about_check_update_sub),
+            subtitle = checkedAgo?.let { stringResource(R.string.koil_set_about_checked_ago, it) }
+                ?: stringResource(R.string.koil_set_about_check_update_sub),
             value = when (val u = update) {
                 // Idle 时回落到"上次静默检查"的结论：冷启动查到新版本，这一行直接显示「发现 1.6.4」
                 UpdateCheck.Idle ->

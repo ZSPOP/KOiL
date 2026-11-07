@@ -138,6 +138,13 @@ class KOiLApplication : Application() {
                         GlobalContext.get().get<OilPriceDbSyncer>().resumeSeedingIfNeeded()
                     }.onFailure { Log.w("KOiL", "Foreground seeding retry failed: ${it.message}") }
                 }
+                // v1.6.5：回前台也顺手看一眼更新（同样受 45 分钟节流约束）——
+                // 原来只在冷启动查，App 常驻后台几天就可能一直看不到新版本
+                appScope.launch {
+                    runCatching {
+                        GlobalContext.get().get<UpdateChecker>().checkIfDue()
+                    }.onFailure { Log.w("KOiL", "Foreground update check failed: ${it.message}") }
+                }
             }
 
             override fun onActivityStopped(activity: Activity) {
