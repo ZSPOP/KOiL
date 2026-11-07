@@ -108,6 +108,12 @@
     <string name="koil_stat_total_cost">Total paid</string>
     <string name="koil_stat_total_payable">Total payable</string>
     <string name="koil_stat_avg_price">Avg fuel price</string>
+    <string name="koil_ov_flat">flat</string>
+    <string name="koil_ov_cmp_3m">vs prior 3 mo</string>
+    <string name="koil_ov_cmp_6m">vs prior 6 mo</string>
+    <string name="koil_ov_cmp_year">vs last year</string>
+    <string name="koil_ov_avg_distance_line">Avg %1$d km</string>
+    <string name="koil_stat_price_unit_long">¥/L</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">Avg per fill-up</string>
     <plurals name="koil_ov_total_count">

@@ -106,6 +106,12 @@
     <string name="koil_stat_total_cost">总实付</string>
     <string name="koil_stat_total_payable">总应付</string>
     <string name="koil_stat_avg_price">平均油价</string>
+    <string name="koil_ov_flat">持平</string>
+    <string name="koil_ov_cmp_3m">较前3个月</string>
+    <string name="koil_ov_cmp_6m">较前6个月</string>
+    <string name="koil_ov_cmp_year">较去年同期</string>
+    <string name="koil_ov_avg_distance_line">均距 %1$d km</string>
+    <string name="koil_stat_price_unit_long">元/L</string>
     <string name="koil_stat_price_unit">L</string>
     <string name="koil_stat_avg_distance">平均每次</string>
     <plurals name="koil_ov_total_count">

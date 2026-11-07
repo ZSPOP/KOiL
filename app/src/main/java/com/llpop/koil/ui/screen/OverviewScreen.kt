@@ -261,39 +261,14 @@ fun OverviewScreen(
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
             item { Spacer(Modifier.height(topPadding)) }
 
-            // 范围筛选器（对齐 Web：全部/今年/近6个月/近3个月）
+            // 范围筛选器已并入摘要卡顶部（v1.6.5）；六指标摘要（带图标 + 环比）
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                        .padding(4.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                ) {
-                    rangeLabels.forEach { (key, label) ->
-                        val selected = uiState.range == key
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) KOiLColors.Primary else Color.Transparent)
-                                .clickable { viewModel.setRange(key) }
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                        ) {
-                            Text(
-                                text = label,
-                                fontSize = 12.sp,
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
-                            )
-                        }
-                    }
-                }
+                SummaryGrid(
+                    uiState = uiState,
+                    rangeLabels = rangeLabels,
+                    onRangeChange = viewModel::setRange,
+                )
             }
-            item { Spacer(Modifier.height(12.dp)) }
-
-            // 六指标 2×2 网格（对齐 Web：带图标 + 较上期）
-            item { SummaryGrid(uiState = uiState) }
             item { Spacer(Modifier.height(12.dp)) }
 
             // 趋势分析（双轴一张图）；v1.5.46：支持油号筛选
@@ -1040,18 +1015,57 @@ private fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
 
 // ===== 六指标 2×2 网格（对齐 Web） =====
 @Composable
-private fun SummaryGrid(uiState: OverviewUiState) {
+private fun SummaryGrid(
+    uiState: OverviewUiState,
+    rangeLabels: List<Pair<String, String>>,
+    onRangeChange: (String) -> Unit,
+) {
     val stats = uiState.stats
     val prev = uiState.prevStats
     fun pct(cur: Double, prevVal: Double?): Double? =
         if (prevVal != null && prevVal > 0) (cur - prevVal) / prevVal * 100 else null
+    // v1.6.5：环比口径文案随范围变化——原来固定「较上期」，用户看不出到底在跟哪一段比
+    val compareLabel = when (uiState.range) {
+        "3m" -> stringResource(R.string.koil_ov_cmp_3m)
+        "6m" -> stringResource(R.string.koil_ov_cmp_6m)
+        "year" -> stringResource(R.string.koil_ov_cmp_year)
+        else -> stringResource(R.string.koil_ov_vs_prev)
+    }
 
     KOiLBlurBackground(
         modifier = Modifier.fillMaxWidth(),
         cornerRadius = 20f,
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // —— 六指标 3×2（v1.5.24：2×3 改 3×2，每行 3 项；v1.5.26：列间显式 12dp 间距 + 内容居中）——
+            // v1.6.5：范围筛选器收进摘要卡顶部（原来是一层独立悬浮灰条，卡片区少一块浮块）
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                rangeLabels.forEach { (key, label) ->
+                    val selected = uiState.range == key
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (selected) KOiLColors.Primary else Color.Transparent)
+                            .clickable { onRangeChange(key) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            // —— 六指标 3×2（v1.6.5：字号统一 21sp；里程/油量涨幅不判好坏用中性灰）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
                     Modifier.weight(1f),
@@ -1060,7 +1074,6 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     value = NumberFormat.measure(stats.avgOilConsumption ?: 0.0),
                     unit = "L/100km",
                     comparePct = pct(stats.avgOilConsumption ?: 0.0, prev?.avgOilConsumption),
-                    valueFontSize = 24.sp,
                 )
                 Spacer(Modifier.width(12.dp))
                 StatCell(
@@ -1070,16 +1083,17 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     value = NumberFormat.money(stats.avgCostPerKm ?: 0.0),
                     unit = stringResource(R.string.koil_stat_cost_unit),
                     comparePct = pct(stats.avgCostPerKm ?: 0.0, prev?.avgCostPerKm),
-                    valueFontSize = 24.sp,
                 )
                 Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Speed,
                     label = stringResource(R.string.koil_stat_total_mileage),
-                    value = "${stats.totalDistance.toInt()}",
+                    value = NumberFormat.grouped(stats.totalDistance),
                     unit = "km",
                     comparePct = pct(stats.totalDistance, prev?.totalDistance),
+                    // 里程增长不代表变差：中性灰，只显示变化幅度
+                    neutral = true,
                 )
             }
             Spacer(Modifier.height(14.dp))
@@ -1088,27 +1102,29 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     Modifier.weight(1f),
                     icon = Icons.Filled.LocalGasStation,
                     label = stringResource(R.string.koil_stat_total_oil),
-                    value = "${stats.totalOilAmount.toInt()}",
+                    value = NumberFormat.grouped(stats.totalOilAmount),
                     unit = "L",
                     comparePct = pct(stats.totalOilAmount, prev?.totalOilAmount),
+                    neutral = true,
                 )
                 Spacer(Modifier.width(12.dp))
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Payments,
                     label = stringResource(R.string.koil_stat_total_cost),
-                    value = "¥${NumberFormat.money(stats.totalActual)}",
+                    value = "¥" + NumberFormat.grouped(stats.totalActual),
                     unit = "",
                     comparePct = pct(stats.totalActual, prev?.totalActual),
                 )
                 Spacer(Modifier.width(12.dp))
+                // v1.6.5：总应付信息量低（与总实付几乎同值），换成平均油价（含环比，可看油价走势）
                 StatCell(
                     Modifier.weight(1f),
                     icon = Icons.Filled.Receipt,
-                    label = stringResource(R.string.koil_stat_total_payable),
-                    value = "¥${NumberFormat.money(stats.totalPayable)}",
-                    unit = "",
-                    comparePct = pct(stats.totalPayable, prev?.totalPayable),
+                    label = stringResource(R.string.koil_stat_avg_price),
+                    value = NumberFormat.measure(stats.avgUnitPriceActual ?: 0.0),
+                    unit = stringResource(R.string.koil_stat_price_unit_long),
+                    comparePct = pct(stats.avgUnitPriceActual ?: 0.0, prev?.avgUnitPriceActual),
                 )
             }
             // v1.5.24：删除「實付 vs 應付 对比条」——用户要求移除节省提示
@@ -1129,11 +1145,8 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "%s ¥%s/%s · %s %d km".format(Locale.ROOT, 
-                        stringResource(R.string.koil_stat_avg_price),
-                        NumberFormat.measure(stats.avgUnitPriceActual ?: 0.0),
-                        stringResource(R.string.koil_stat_price_unit),
-                        stringResource(R.string.koil_stat_avg_distance),
+                    text = stringResource(
+                        R.string.koil_ov_avg_distance_line,
                         (stats.avgDistancePerReoil ?: 0.0).toInt(),
                     ),
                     fontSize = 11.sp,
@@ -1141,7 +1154,7 @@ private fun SummaryGrid(uiState: OverviewUiState) {
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.koil_ov_vs_prev),
+                    text = compareLabel,
                     fontSize = 11.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                 )
@@ -1158,8 +1171,13 @@ private fun StatCell(
     value: String,
     unit: String,
     comparePct: Double? = null,
-    valueFontSize: TextUnit = 19.sp,
+    // v1.6.5：里程/油量这类「涨了不代表变差」的指标不判好坏，只显示幅度（中性灰）
+    neutral: Boolean = false,
 ) {
+    // v1.6.5：字号统一（原来前两项 24sp、其余 19sp，视觉上误导重要性）；深色主题换亮色变体
+    val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
+    val upColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
+    val downColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32)
     // v1.5.26：单元格内容水平居中——原 start 对齐导致三列内容都挤在格子左侧、
     // 右侧留白约 20% 屏宽，视觉整体偏左；居中后三列视觉完全平衡
     Column(modifier = modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -1181,9 +1199,12 @@ private fun StatCell(
         Row(verticalAlignment = Alignment.Bottom) {
             Text(
                 text = value,
-                fontSize = valueFontSize,
+                // v1.6.5：六个指标统一 21sp（原 24/19sp 混排）
+                fontSize = 21.sp,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
+                maxLines = 1,
+                softWrap = false,
             )
             if (unit.isNotBlank()) {
                 Spacer(Modifier.width(2.dp))
@@ -1192,23 +1213,29 @@ private fun StatCell(
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
         comparePct?.let { pct ->
+            Spacer(Modifier.height(2.dp))
             if (abs(pct) >= 0.5) {
-                Spacer(Modifier.height(2.dp))
                 val up = pct > 0
                 Text(
                     text = "${if (up) "↑" else "↓"}${NumberFormat.pct(abs(pct))}%",
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (up) Color(0xFFE65100) else Color(0xFF2E7D32),
+                    color = when {
+                        neutral -> MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f)
+                        up -> upColor
+                        else -> downColor
+                    },
                 )
             } else {
-                Spacer(Modifier.height(2.dp))
+                // v1.6.5：「较上期」→「持平」，变化不足 0.5% 时说清是没变化，而不是让人猜在跟谁比
                 Text(
-                    text = stringResource(R.string.koil_ov_vs_prev),
+                    text = stringResource(R.string.koil_ov_flat),
                     fontSize = 10.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                 )
@@ -1825,8 +1852,9 @@ private fun RecordCard(
                                     maxLines = 1,
                                     softWrap = false,
                                 )
-                            } else {
-                                // ③ 无上条记录：「首次记录」小字替代「—」
+                            } else if (prevRecord == null) {
+                                // ③ 仅「真的没有上一条」才叫首次记录；
+                                // 有上一条但上条无有效油耗（短途不计/里程异常）时留空——那张卡自己有提示行
                                 Text(
                                     text = stringResource(R.string.koil_ov_first_tag),
                                     fontSize = 12.sp,
