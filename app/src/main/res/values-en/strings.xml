@@ -110,6 +110,7 @@
     <string name="koil_stat_avg_price">Avg fuel price</string>
     <string name="koil_ov_flat">flat</string>
     <string name="koil_ov_spark_label">Fuel trend</string>
+    <string name="koil_ov_spark_range">%1$d pts · %2$s–%3$s</string>
     <string name="koil_ov_change_caption">Change %1$s</string>
     <string name="koil_ov_cmp_3m">vs prior 3 mo</string>
     <string name="koil_ov_cmp_6m">vs prior 6 mo</string>

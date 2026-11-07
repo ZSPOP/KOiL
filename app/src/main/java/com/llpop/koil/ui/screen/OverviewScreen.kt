@@ -310,12 +310,6 @@ fun OverviewScreen(
                         color = MiuixTheme.colorScheme.onBackground,
                         modifier = Modifier.padding(start = 4.dp),
                     )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = pluralStringResource(R.plurals.koil_ov_total_count_in_list, uiState.records.size, uiState.records.size),
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
                     Spacer(Modifier.weight(1f))
                     // v1.5.4：補錄改为胶囊按钮（主色浅底 + 加号图标），点击区域加大
                     Row(
@@ -1131,6 +1125,7 @@ private fun SummaryGrid(
                 uiState.trend.mapNotNull { it.oilConsumption }.takeLast(40)
             }
             if (sparkValues.size >= 2) {
+                // v1.6.5：补参照——原来只有末值，看不出当前算高还是低；给出样本数与区间
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -1143,13 +1138,19 @@ private fun SummaryGrid(
                         softWrap = false,
                     )
                     Spacer(Modifier.width(8.dp))
-                    ConsumptionSparkline(
-                        values = sparkValues,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(34.dp),
+                    Text(
+                        text = stringResource(
+                            R.string.koil_ov_spark_range,
+                            sparkValues.size,
+                            NumberFormat.fixed2(sparkValues.min()),
+                            NumberFormat.fixed2(sparkValues.max()),
+                        ),
+                        fontSize = 9.5.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false,
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.weight(1f))
                     Text(
                         text = NumberFormat.fixed2(sparkValues.last()),
                         fontSize = 12.sp,
@@ -1158,7 +1159,22 @@ private fun SummaryGrid(
                         maxLines = 1,
                         softWrap = false,
                     )
+                    Spacer(Modifier.width(2.dp))
+                    Text(
+                        text = "L/100km",
+                        fontSize = 9.5.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        softWrap = false,
+                    )
                 }
+                Spacer(Modifier.height(6.dp))
+                ConsumptionSparkline(
+                    values = sparkValues,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(34.dp),
+                )
                 Spacer(Modifier.height(10.dp))
             }
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
