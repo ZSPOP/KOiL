@@ -29,7 +29,7 @@ import kotlin.math.roundToInt
  * [FullTankSwitchRow]）应让整行 clickable 并把本组件当纯展示，不要直接传 onCheckedChange。
  */
 @Composable
-fun MiniSwitch(
+fun KOiLMiniSwitch(
     checked: Boolean,
     trackOn: Color,
     trackOff: Color,

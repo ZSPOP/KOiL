@@ -70,7 +70,7 @@ data class KOiLUsdCnyRateSnapshot(
 )
 
 /** [KOiLUsdCnyRateRepository.rateForDetailed] 的返回：本次实际使用的汇率 + 所依据的缓存快照 */
-data class RateResult(
+data class KOiLUsdCnyRateResult(
     val rate: Double,
     val snapshot: KOiLUsdCnyRateSnapshot,
 )
@@ -196,14 +196,14 @@ open class KOiLUsdCnyRateRepository(
      * 估算方把它回传给 UI 判 stale——不要事后重读 [currentSnapshot]：rateFor 命中旧缓存
      * 会触发后台刷新，若刷新先于重读完成，isStale 会把旧值误判为新数据。
      */
-    open suspend fun rateForDetailed(date: String): RateResult? {
+    open suspend fun rateForDetailed(date: String): KOiLUsdCnyRateResult? {
         val cached = loadSnapshot()
         if (cached != null) {
             refreshInBackground()
-            return pick(cached, date)?.let { RateResult(it, cached) }
+            return pick(cached, date)?.let { KOiLUsdCnyRateResult(it, cached) }
         }
         val fresh = refreshNow(FIRST_LOAD_TIMEOUT_MS) ?: return null
-        return pick(fresh, date)?.let { RateResult(it, fresh) }
+        return pick(fresh, date)?.let { KOiLUsdCnyRateResult(it, fresh) }
     }
 
     /** 缓存是否已过期（超过 [STALE_DAYS] 天）：仍可用，但 UI 可据此弱化表述 */

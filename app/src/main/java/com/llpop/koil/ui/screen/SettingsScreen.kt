@@ -99,7 +99,7 @@ import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
-import com.llpop.koil.ui.component.MiniSwitch
+import com.llpop.koil.ui.component.KOiLMiniSwitch
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -1218,7 +1218,7 @@ private fun PriceDbSection(
                             maxLines = 1,
                         )
                         Spacer(Modifier.width(8.dp))
-                        MiniSwitch(
+                        KOiLMiniSwitch(
                             checked = autoOn,
                             trackOn = KOiLColors.Primary,
                             trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),

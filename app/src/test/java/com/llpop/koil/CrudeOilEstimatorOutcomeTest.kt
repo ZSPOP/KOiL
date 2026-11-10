@@ -9,7 +9,7 @@ import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.KOiLUsdCnyRateSnapshot
 import com.llpop.koil.data.oil.KOiLUsdCnyRateSource
 import com.llpop.koil.data.oil.OilPriceNetwork
-import com.llpop.koil.data.oil.RateResult
+import com.llpop.koil.data.oil.KOiLUsdCnyRateResult
 import com.llpop.koil.data.settings.AppSettings
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -67,9 +67,9 @@ class CrudeOilEstimatorOutcomeTest {
             source = KOiLUsdCnyRateSource.SDMX,
         )
 
-        override suspend fun rateForDetailed(date: String): RateResult? {
+        override suspend fun rateForDetailed(date: String): KOiLUsdCnyRateResult? {
             rateForCalls++ // 每次调用 = 一轮 15s 级同步尝试（无缓存场景）
-            return rate?.let { RateResult(it, fxSnapshot) }
+            return rate?.let { KOiLUsdCnyRateResult(it, fxSnapshot) }
         }
 
         override suspend fun currentSnapshot(): KOiLUsdCnyRateSnapshot? = null
@@ -132,16 +132,23 @@ class CrudeOilEstimatorOutcomeTest {
             val day = d.toString().padStart(2, '0')
             "2026-10-$day" to (70.0 + d * 0.1)
         }
+        var tencentCalls = 0
         val network = object : OilPriceNetwork() {
             override suspend fun fetchEiaBrentDaily(apiKey: String, length: Int) =
                 com.llpop.koil.data.oil.KOiLEiaBrentSeries(eiaPoints)
 
-            override suspend fun fetchTencentBrent(): Pair<Double, Double> = 105.0 to 104.0
+            override suspend fun fetchTencentBrent(): Pair<Double, Double> {
+                tencentCalls++
+                return 105.0 to 104.0
+            }
         }
         val fxRepo = FakeFx(null) // 无缓存且全源失败
         val outcome = estimator(network, fxRepo).estimateDetailed()
         // EIA 路径已同步失败过一次；腾讯报价再可用也不得再等一轮 15s——rateForDetailed 总数必须停在 1
         assertEquals(CrudeOilEstimator.EstimateOutcome.FxUnavailable, outcome)
         assertEquals(1, fxRepo.rateForCalls)
+        // 豆包复审轮 2 阻断 3：fxFailed 后腾讯结果会被丢弃，请求本身也不该发生——
+        // 否则首载最坏变成「EIA 8s + 汇率 15s + 腾讯 8s」，仍超 15s 预算
+        assertEquals(0, tencentCalls)
     }
 }

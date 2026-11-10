@@ -220,12 +220,13 @@ class CrudeOilEstimator(
             }
         }
         // 降级/直选：腾讯布伦特期货实时（单日涨跌，仅方向参考——UI 按来源标注「单日参考」，不冒充窗口幅度）
+        // EIA 路径刚经历一轮全源同步取数失败且未落缓存（rateForDetailed 返回 null 只可能是
+        // 无缓存且 fetchFirstAvailable 全失败）：同一快照池立刻重试只会再等一轮 15s，结果几乎
+        // 必然还是失败——直接复用同一次失败返回，且必须在腾讯请求**之前**：
+        // 腾讯超时 8s 反正会被丢弃，fxFailed 后再请求就是把首载预算从 15s 拖到 23s+。
+        if (fxFailed) return EstimateOutcome.FxUnavailable
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
-            // EIA 路径刚经历一轮全源同步取数失败且未落缓存（rateForDetailed 返回 null 只可能是
-            // 无缓存且 fetchFirstAvailable 全失败）：同一快照池立刻重试只会再等一轮 15s，
-            // 结果几乎必然还是失败——直接复用同一次失败，守住「首次同步等待 ≤ 15s」的预算。
-            if (fxFailed) return EstimateOutcome.FxUnavailable
             // 汇率拿不到就不给假值：乘 0 会把幅度静默算成 0，比不显示更糟
             val fx = fxRepository.rateForDetailed(today)
             if (fx == null) {
