@@ -45,7 +45,7 @@
     <string name="koil_add_forecast_caveat">实际可能因调控与测算不同，以发改委公告为准</string>
     <string name="koil_add_forecast_as_of">截至 %1$s</string>
     <string name="koil_add_forecast_sample">已计入 %1$d 个交易日</string>
-    <string name="koil_add_forecast_history_err">历史误差约 ±%1$d（P90 ±%2$d）</string>
+    <string name="koil_add_forecast_history_err">较公告误差 ±%1$d（P90 ±%2$d）</string>
     <string name="koil_add_forecast_meta_sep">" · "</string>
     <string name="koil_add_unit_per_liter">元/升</string>
     <string name="koil_add_last_refuel">上次加油</string>
