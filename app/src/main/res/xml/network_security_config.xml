@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络明文策略：
+  所有数据源均走 HTTPS，因此全局禁止明文 HTTP，不设任何域名例外。
+  保留本文件而不是删掉属性：显式声明比依赖平台默认更抗未来 targetSdk 变化，也便于以后真需要例外时有落脚点。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

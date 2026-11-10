@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      miuix-blur-android 0.9.4 官方 minSdk=33；本项目 minSdk 同为 33，无需再放行。
+      玻璃实现统一走原生 blur API，无低版本降级路径。
+    -->
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 定位降级链 GPS > IP > 默认北京（文档 §17.6：仅需 ACCESS_COARSE_LOCATION 省份级反查） -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- 油价调整提醒（Android 13+ 运行时通知权限） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+      Queries：SettingsScreen 跳"应用通知设置"前用 resolveActivity 预检处理者，
+      Android 11+ 包可见性下不声明 <queries> 会恒返回 null，预检永远走 fallback。
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.settings.APP_NOTIFICATION_SETTINGS" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".KOiLApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/koil_app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.KOiL.Starting">
+        <!--
+          返回链路直接使用 Activity 自身的 NavigationEventDispatcher
+          （它就是 OnBackPressedDispatcher 的事件管道，已在 onCreate 与 window.onBackInvokedDispatcher 对接）。
+          自建 dispatcher 会与平台返回链路隔离，让页面里的 BackHandler 收不到返回事件。
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.KOiL.Starting"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

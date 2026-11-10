@@ -1,0 +1,202 @@
+# KOiL Build
+#
+# 触发：推送 main / 手动 workflow_dispatch / PR（轻量检查 job）。
+#   V 标签构建已拆分到 android-release.yml：tags 与 branches 共用 paths-ignore 时，
+#   纯文档提交上打的 tag 会因路径过滤被整体跳过、Release 静默不发。
+#   日常构建保留路径过滤：文档（*.md）改动不触发构建。
+# 产物：KOiL-release artifact（app-release.apk，release 签名，签名材料由 GitHub Secrets 注入；
+#   任一 Secret 缺失即失败，并在上传前断言正式证书指纹，绝不静默回落 debug 签名）。
+#   正式 Release（附件 + Release Notes）只由 android-release.yml 在打 V 标签时发布。
+# versionCode：= github.run_number + 已发布版本数，由 Resolve 步骤在构建前解析；
+#   与 android-release.yml 配合，Build 与 Release 的号严格交替、互不重合（推导见该步骤注释）。
+#
+# 签名材料只在 GitHub Secrets：SIGNING_KEYSTORE_B64（keystore 的 base64）、
+#   SIGNING_PROPERTIES（keystore.properties 全文）。本地构建仍用工作区内的这两个文件（已 gitignore）。
+name: Build
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  # PR 事件跑轻量检查（编译+单测+lint，不签名、不消耗发版资源）；
+  # 签名与 versionCode 闸门只在 push main / 手动触发时执行
+  pr-check:
+    name: PR Check (compile + test + lint)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install SDK packages
+        run: |
+          SDKMANAGER="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+          ln -sfn "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37.0" "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      - name: Compile + Unit tests + Lint
+        run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug --no-daemon --console=plain
+
+  build-apk:
+    name: Build APK
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install SDK packages (runner 预装 SDK，用预装 sdkmanager 补 platform 37 + build-tools 37)
+        run: |
+          SDKMANAGER="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+          ln -sfn "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37.0" "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      # versionCode 分配：run_number + 已发布版本数。
+      # 不能用裸 run_number——重建仓库 / 换 CI 后它从 1 重来，会落在已发布正式版之下，系统判降级。
+      # 也不能用 max(已发布最大, run_number) + 1——发版后已发布号领先 run_number，此后每个
+      # run < 已发布号的 Build 都会落到同一个 P+1 上，连续构建立刻撞号。
+      # 以「已发布版本数 N」作固定偏移后，Build 号恒为 run_number + N（随 run_number 严格递增），
+      # Release 号取 build_max_run_number + N + 1，两条线恰好交替、无一重合。
+      - name: Resolve versionCode (run_number + released count)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          REL_COUNT=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq '[.[] | select(.draft == false and .prerelease == false)] | length' 2>/dev/null \
+            | awk '{s+=$1} END {print s+0}')
+          MAX_PUBLISHED=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .assets[].name' 2>/dev/null \
+            | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
+          NEXT=$(( ${{ github.run_number }} + REL_COUNT ))
+          if [ "$NEXT" -le "${MAX_PUBLISHED:-0}" ]; then
+            echo "::warning::推算号 $NEXT 未超过已发布最大 ${MAX_PUBLISHED}（Release 列表与版本号不一致），回退到 ${MAX_PUBLISHED}+1"
+            NEXT=$(( MAX_PUBLISHED + 1 ))
+          fi
+          echo "KOIL_CI_VERSION_CODE=$NEXT" >> "$GITHUB_ENV"
+          echo "versionCode = run_number ${{ github.run_number }} + 已发布 $REL_COUNT 版 = $NEXT（已发布最大 ${MAX_PUBLISHED:-无}）"
+
+      # 发布闸门①：两个签名 Secret 必须同时存在且可恢复，缺失即失败，
+      # 避免签名材料不全时静默回落 debug 签名后照常发 Release。
+      - name: Restore signing keystore from secrets
+        shell: bash
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          SIGNING_PROPERTIES: ${{ secrets.SIGNING_PROPERTIES }}
+        run: |
+          if [ -z "$SIGNING_KEYSTORE_B64" ] || [ -z "$SIGNING_PROPERTIES" ]; then
+            echo "::error::缺少签名 Secrets：SIGNING_KEYSTORE_B64 / SIGNING_PROPERTIES 必须同时配置"
+            exit 1
+          fi
+          mkdir -p keystore
+          printf '%s' "$SIGNING_KEYSTORE_B64" | base64 -d > keystore/koil-release.keystore
+          printf '%s' "$SIGNING_PROPERTIES" > keystore.properties
+          if [ ! -s keystore/koil-release.keystore ] || ! grep -q 'storePassword' keystore.properties; then
+            echo "::error::签名材料恢复失败（keystore 为空，或 properties 缺 storePassword）"
+            exit 1
+          fi
+          echo "keystore 已从 Secrets 恢复"
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon --console=plain
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease --no-daemon --console=plain
+
+      # 发布闸门②：产物必须是正式证书签名，且 versionCode 不得低于已发布最大值。
+      # tag 专属校验（tag 格式/与 versionName 一致/版本单调/main 祖先/同名 Release 查重）
+      # 已随 tag 触发一并移入 android-release.yml，避免两套发布逻辑并存。
+      - name: Verify release signing and tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APK="app/build/outputs/apk/release/app-release.apk"
+          SDK_ROOT="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}"
+          APKSIGNER=$(ls -1 "$SDK_ROOT"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::未找到 apksigner（$SDK_ROOT/build-tools/*/apksigner）"
+            exit 1
+          fi
+          AAPT2=$(ls -1 "$SDK_ROOT"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$AAPT2" ]; then
+            echo "::error::未找到 aapt2（$SDK_ROOT/build-tools/*/aapt2）"
+            exit 1
+          fi
+          VC=$("$AAPT2" dump badging "$APK" | sed -n "s/^package:.*versionCode='\([0-9]*\)'.*/\1/p" | head -1)
+          if [ -z "$VC" ]; then
+            echo "::error::无法从 APK 读取 versionCode"; exit 1
+          fi
+          echo "VERSION_CODE=$VC" >> "$GITHUB_ENV"
+          EXPECTED="cc962f1e2524ba8273c9d668436e9926d8a056e49b816e680c730518d46ffe4b"
+          CERT_OUT=$("$APKSIGNER" verify --print-certs "$APK" 2>&1 || true)
+          ACTUAL=$(printf '%s\n' "$CERT_OUT" | sed -n 's/^.*SHA-256 digest: //p' | sed -n '1p' | tr -d ':' | tr 'A-F' 'a-f')
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::release APK 证书指纹不符：期望 $EXPECTED，实际 ${ACTUAL:-<空>}（很可能是 debug 签名）"
+            exit 1
+          fi
+          echo "签名指纹校验通过：$ACTUAL"
+
+          # versionCode 只许向前：以已发布 Release 附件名里的 -vcN 为基准，本次必须严格更高。
+          # 拦住 run_number 归零（换仓库 / 换 CI）、本地手动指号、号段改动写错这三类事故 ——
+          # 它们的共同特征是「构建成功但用户装不上」。
+          MAX_PUBLISHED=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq '.[] | select(.draft == false and .prerelease == false) | .assets[].name' 2>/dev/null \
+            | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
+          if [ -n "${MAX_PUBLISHED:-}" ] && [ "$VC" -le "$MAX_PUBLISHED" ]; then
+            echo "::error::versionCode 回退：本次 $VC ≤ 已发布最大 $MAX_PUBLISHED（run_number 是否归零？）"
+            exit 1
+          fi
+          echo "versionCode 校验通过：$VC（已发布最大 ${MAX_PUBLISHED:-无}）"
+
+
+      - name: Upload APK (artifact 供日常查看，下载为原文件)
+        uses: actions/upload-artifact@v7
+        with:
+          name: KOiL-release
+          path: app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          archive: false

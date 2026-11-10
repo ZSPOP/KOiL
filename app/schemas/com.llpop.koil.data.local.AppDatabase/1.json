@@ -1,0 +1,164 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "f568ca07649a0bd5f68c42077a574376",
+    "entities": [
+      {
+        "tableName": "koil_record",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `reoilDate` TEXT NOT NULL, `mileage` REAL NOT NULL, `oilAmount` REAL NOT NULL, `payableAmount` REAL NOT NULL, `actualAmount` REAL NOT NULL, `oilPrice` REAL, `oilGrade` TEXT, `province` TEXT, `source` TEXT, `isFullTank` INTEGER NOT NULL DEFAULT 1)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reoilDate",
+            "columnName": "reoilDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mileage",
+            "columnName": "mileage",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oilAmount",
+            "columnName": "oilAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payableAmount",
+            "columnName": "payableAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actualAmount",
+            "columnName": "actualAmount",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oilPrice",
+            "columnName": "oilPrice",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "oilGrade",
+            "columnName": "oilGrade",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "province",
+            "columnName": "province",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isFullTank",
+            "columnName": "isFullTank",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_koil_record_reoilDate_mileage",
+            "unique": true,
+            "columnNames": [
+              "reoilDate",
+              "mileage"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_koil_record_reoilDate_mileage` ON `${TABLE_NAME}` (`reoilDate`, `mileage`)"
+          },
+          {
+            "name": "index_koil_record_reoilDate",
+            "unique": false,
+            "columnNames": [
+              "reoilDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_koil_record_reoilDate` ON `${TABLE_NAME}` (`reoilDate`)"
+          }
+        ]
+      },
+      {
+        "tableName": "koil_prices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`province` TEXT NOT NULL, `grade` TEXT NOT NULL, `effectiveDate` TEXT NOT NULL, `price` REAL NOT NULL, `source` TEXT, `isVerified` INTEGER NOT NULL, `isStranded` INTEGER NOT NULL, PRIMARY KEY(`province`, `grade`, `effectiveDate`))",
+        "fields": [
+          {
+            "fieldPath": "province",
+            "columnName": "province",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "grade",
+            "columnName": "grade",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "effectiveDate",
+            "columnName": "effectiveDate",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "price",
+            "columnName": "price",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isVerified",
+            "columnName": "isVerified",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isStranded",
+            "columnName": "isStranded",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "province",
+            "grade",
+            "effectiveDate"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f568ca07649a0bd5f68c42077a574376')"
+    ]
+  }
+}

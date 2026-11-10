@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  主题图标（Android 13+ 单色图标）前景层。
+  系统会把这里绘制的形状统一染色（跟随壁纸/主题取色），因此只能是纯白单色轮廓，
+  不能带渐变或多色。图形取自主图标前景里的 K 字路径，描边一并转白以补齐轮廓。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M 41.28,39.20 L 50.34,39.20 L 46.22,56.57 L 63.80,39.20 L 73.34,39.20 L 60.45,51.59 L 66.72,68.80 L 56.32,68.80 L 52.93,58.77 L 42.49,68.80 L 34.18,68.80 Z"
+        android:fillColor="#FFFFFFFF"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1.95"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round" />
+</vector>

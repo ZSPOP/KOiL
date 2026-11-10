@@ -1,0 +1,81 @@
+package com.llpop.koil.data.local.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
+import com.llpop.koil.data.local.entity.KOiLRecordEntity
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface KOiLRecordDao {
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(record: KOiLRecordEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAll(records: List<KOiLRecordEntity>)
+
+    /**
+     * 批量导入：单事务批量插入，命中唯一索引 (reoilDate,mileage) 时跳过该行（IGNORE，
+     * 不回滚整批）。返回每条 rowId，-1 表示被忽略，调用方据此统计实际插入数。
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIgnore(records: List<KOiLRecordEntity>): List<Long>
+
+    @Update
+    suspend fun update(record: KOiLRecordEntity)
+
+    @Query("DELETE FROM koil_record WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
+    @Query("SELECT * FROM koil_record WHERE id = :id")
+    suspend fun getById(id: Long): KOiLRecordEntity?
+
+    @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC")
+    fun observeAll(): Flow<List<KOiLRecordEntity>>
+
+    // 删除 getPage / getFirstPage——列表页采用全量 Flow + LazyColumn，游标分页无调用方。
+    // Room 仍会为它们生成 Dao 实现与查询校验，属于纯死代码。
+
+    /** 最新一条记录（用于"上次加油"等） */
+    @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC LIMIT 1")
+    suspend fun getLatest(): KOiLRecordEntity?
+
+    /** 最新一条记录实时观察（首页"上次加油"卡片常驻订阅，任何入口增删改即刷新） */
+    @Query("SELECT * FROM koil_record ORDER BY reoilDate DESC, id DESC LIMIT 1")
+    fun observeLatest(): Flow<KOiLRecordEntity?>
+
+    /** 最早一条记录（用于日期校验：补录/编辑不能早于第一条；编辑自身时由调用方排除） */
+    @Query("SELECT * FROM koil_record ORDER BY reoilDate ASC, id ASC LIMIT 1")
+    suspend fun getEarliest(): KOiLRecordEntity?
+
+    /** 指定日期之前最近一条（< date，复刻 Web checkMileageChain prev） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate < :date ORDER BY reoilDate DESC, id DESC LIMIT 1")
+    suspend fun getBeforeDate(date: String): KOiLRecordEntity?
+
+    /** 指定日期之后最近一条（> date，复刻 Web checkMileageChain next） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate > :date ORDER BY reoilDate ASC, id ASC LIMIT 1")
+    suspend fun getAfterDate(date: String): KOiLRecordEntity?
+
+    /** 指定日期全部记录（同日多条：判重 + 按 id 顺序做里程链邻居） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate = :date ORDER BY id ASC")
+    suspend fun getSameDayRecords(date: String): List<KOiLRecordEntity>
+
+    /** 指定日期、排除指定 id 的全部记录（编辑校验：不与自己判重，同日邻居按 id 顺序） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate = :date AND id != :excludeId ORDER BY id ASC")
+    suspend fun getSameDayRecordsExcluding(date: String, excludeId: Long): List<KOiLRecordEntity>
+
+    /** 同日同里程完全重复检测（预检） */
+    @Query("SELECT COUNT(*) FROM koil_record WHERE reoilDate = :date AND mileage = :mileage")
+    suspend fun countSameDayMileage(date: String, mileage: Double): Int
+
+
+    /** 指定日期区间内记录（汇总/趋势） */
+    @Query("SELECT * FROM koil_record WHERE reoilDate >= :start AND reoilDate <= :end ORDER BY reoilDate ASC")
+    suspend fun getRange(start: String, end: String): List<KOiLRecordEntity>
+
+    @Query("SELECT COUNT(*) FROM koil_record")
+    suspend fun count(): Int
+}
