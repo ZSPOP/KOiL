@@ -2,6 +2,7 @@ package com.llpop.koil
 
 import com.llpop.koil.data.oil.CrudeOilEstimator
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -103,6 +104,76 @@ class CrudeOilEstimatorTest {
         assertEquals(10, r.sampleDays)
         // 窗口 10-19~10-30 均价 121.095 vs 基准 10-05~10-16 均价 126.512 → -4.282% → -241.9
         assertEquals(-241.9, r.amountPerTon, 1.0)
+    }
+
+    // ---------- 基准锚点：生效日必须吸附到窗口网格 ----------
+
+    @Test
+    fun `生效日晚一天时基准锚点吸附到窗口日`() {
+        // 库内存的是生效日（= 窗口日 + 1 天）。直接拿它当锚点会让基准期整体前移一天：
+        // 30 个窗口里 24 个的生效日本身就是 EIA 交易日，基准均值会整体错位。
+        // 取「窗口日 10-29（周四）/ 生效日 10-30（周五，是交易日）」这组，才能暴露前移：
+        // 不吸附时基准变成 10-19~10-30（-446.6），吸附后是 10-19~10-29（-451.1）。
+        val thuCalendar = listOf("2026-10-16", "2026-10-29")
+        val onWindow = CrudeOilEstimator.calcFromEiaSeries(eia, thuCalendar, "2026-10-29", "2026-11-03")!!
+        val onEffective = CrudeOilEstimator.calcFromEiaSeries(eia, thuCalendar, "2026-10-30", "2026-11-03")!!
+        assertEquals(
+            "生效日 10-30 必须吸附到窗口日 10-29，两者结果应完全一致",
+            onWindow.amountPerTon,
+            onEffective.amountPerTon,
+            1.0,
+        )
+        assertEquals(-451.1, onEffective.amountPerTon, 1.0)
+    }
+
+    @Test
+    fun `生效日早三天时吸附到窗口日而不跳到上一窗口`() {
+        // abapi 锚点是「生效日 − 3 天」，那些记录比窗口日还早；单向 `<=` 会跳到上一个窗口（差 14 天），
+        // 基准变成 10-16 那一期，幅度被放大到 -862.0。±3 天就近吸附才正确。
+        val r = CrudeOilEstimator.calcFromEiaSeries(eia, adjustDates, "2026-10-27", "2026-11-10")
+        assertNotNull(r)
+        assertEquals(
+            "10-27 应吸附到 10-30（差 3 天），不是跳到 10-16",
+            -647.8,
+            r!!.amountPerTon,
+            1.0,
+        )
+    }
+
+    @Test
+    fun `搁浅轮不重置基准锚点`() {
+        // 10-30 那轮搁浅（幅度未过门槛），库内最近一条非搁浅调价仍是 10-16 窗口，其生效日为 10-17。
+        // 基准必须锚在 10-16 而非上一窗口日 10-30——否则等于让搁浅轮重置了基准价。
+        val r = CrudeOilEstimator.calcFromEiaSeries(eia, adjustDates, "2026-10-17", "2026-11-10")
+        assertNotNull(r)
+        // 基准期 = 10-16 之前凑不满一个窗口 → 退回往前 10 个交易日（10-05~10-16 均价 126.512）
+        // 本窗口 107.21 → -15.25% → -862.0
+        assertEquals(-862.0, r!!.amountPerTon, 1.5)
+        assertNotEquals(
+            "误把搁浅窗口 10-30 当基准会得到 -647.8",
+            -647.8,
+            r.amountPerTon,
+            5.0,
+        )
+    }
+
+    // ---------- 基准跨度：按上一期窗口取，不按固定 10 个交易日 ----------
+
+    @Test
+    fun `基准期按上一窗口跨度取值且包含国内假期内的交易日`() {
+        // 上一期窗口 09-30 → 10-16 跨了国庆：周期内有 12 个 EIA 交易日，比「10 个工作日」多。
+        // 官方取的是周期内均价，所以 12 天全算；固定前取 10 天会丢掉周期头部，把基准挪向末段。
+        val calendar = listOf("2026-09-30", "2026-10-16")
+        val r = CrudeOilEstimator.calcFromEiaSeries(eia, calendar, "2026-10-17", "2026-10-30")
+        assertNotNull(r)
+        // 基准 (09-30, 10-16] 12 天均价 126.2875，本窗口 (10-16, 10-30] 121.095 → -232.3
+        assertEquals(-232.3, r!!.amountPerTon, 1.0)
+        assertNotEquals(
+            "固定前取 10 个交易日会得到 -241.9，不是跨度口径",
+            -241.9,
+            r.amountPerTon,
+            2.0,
+        )
     }
 
     // ---------- 边界：数据不足时宁可不出值 ----------

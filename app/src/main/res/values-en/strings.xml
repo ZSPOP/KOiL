@@ -42,7 +42,7 @@
     <string name="koil_add_forecast_estimated">Est.</string>
     <string name="koil_add_forecast_single_day">1-day ref.</string>
     <string name="koil_add_forecast_as_of">as of %1$s</string>
-    <string name="koil_add_forecast_sample">sample %1$d/%2$d days</string>
+    <string name="koil_add_forecast_sample">trading days counted: %1$d</string>
     <string name="koil_add_forecast_sep">, </string>
     <string name="koil_add_approx_per_liter_up">≈ up ¥%1$.2f/L</string>
     <string name="koil_add_approx_per_liter_down">≈ down ¥%1$.2f/L</string>
