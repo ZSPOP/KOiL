@@ -38,6 +38,7 @@
     <!-- 预测幅度：头行「按机制测算：预计上调约 170 元/吨」+ 无条件下句 + 次级「截至 · 已计入 N 个交易日 · 历史误差」 -->
     <string name="koil_add_forecast_mech_up">按机制测算：预计上调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_mech_down">按机制测算：预计下调约 %1$s 元/吨</string>
+    <string name="koil_add_forecast_mech_stranded">按机制测算：预计搁浅（幅度约 %1$s 元/吨）</string>
     <string name="koil_add_forecast_single_up">单日参考：上调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_single_down">单日参考：下调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_per_liter">（折合约 %1$.2f 元/升）</string>

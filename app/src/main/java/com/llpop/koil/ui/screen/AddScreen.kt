@@ -60,7 +60,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.ForecastDirection
 import com.llpop.koil.data.oil.Provinces
+import com.llpop.koil.data.oil.forecastDirection
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
@@ -668,18 +670,25 @@ private fun OilPriceCard(
                             // 用户只看得到「预计上调170元/吨」——既不知道这是机制测算还是拍脑袋，
                             // 也不知道这个数在历史上偏多少。
                             val eiaSource = uiState.forecastSource != "腾讯"
+                            // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
+                            // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
+                            val direction = forecastDirection(forecast)
+                            val stranded = eiaSource && direction == ForecastDirection.STRANDED
                             val headRes = when {
-                                eiaSource && rising -> R.string.koil_add_forecast_mech_up
+                                stranded -> R.string.koil_add_forecast_mech_stranded
+                                eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_mech_up
                                 eiaSource -> R.string.koil_add_forecast_mech_down
                                 rising -> R.string.koil_add_forecast_single_up
                                 else -> R.string.koil_add_forecast_single_down
                             }
                             Spacer(Modifier.height(6.dp))
+                            // 搁浅时不显示折合元/升：<50 元/吨 折不到 0.04 元/升，四舍五入常显示 0.00，
+                            // 反而让人以为「白算了一个数」
                             Text(
                                 text = stringResource(
                                     headRes,
                                     kotlin.math.abs(forecast).toInt().toString(),
-                                ) + (perLiter?.let {
+                                ) + (perLiter?.takeIf { !stranded }?.let {
                                     stringResource(
                                         R.string.koil_add_forecast_per_liter,
                                         kotlin.math.abs(it),

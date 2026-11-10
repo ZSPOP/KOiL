@@ -37,6 +37,7 @@
     </plurals>
     <string name="koil_add_forecast_mech_up">按機制測算：預計上調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_mech_down">按機制測算：預計下調約 %1$s 元/噸</string>
+    <string name="koil_add_forecast_mech_stranded">按機制測算：預計擱淺（幅度約 %1$s 元/噸）</string>
     <string name="koil_add_forecast_single_up">單日參考：上調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_single_down">單日參考：下調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_per_liter">（折合約 %1$.2f 元/升）</string>

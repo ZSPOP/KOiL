@@ -38,6 +38,7 @@
     </plurals>
     <string name="koil_add_forecast_mech_up">Mechanism est.: up about %1$s ¥/ton</string>
     <string name="koil_add_forecast_mech_down">Mechanism est.: down about %1$s ¥/ton</string>
+    <string name="koil_add_forecast_mech_stranded">Mechanism est.: no change expected (about %1$s ¥/ton)</string>
     <string name="koil_add_forecast_single_up">1-day ref.: up about %1$s ¥/ton</string>
     <string name="koil_add_forecast_single_down">1-day ref.: down about %1$s ¥/ton</string>
     <string name="koil_add_forecast_per_liter">" (≈ ¥%1$.2f/L)"</string>
