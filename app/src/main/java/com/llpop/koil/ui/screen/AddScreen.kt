@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -61,7 +60,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
-import com.llpop.koil.data.oil.CrudeOilEstimator
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
@@ -90,6 +88,15 @@ import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
+
+/**
+ * 预测幅度的历史误差（元/吨），供 UI 次级行「历史误差约 ±170（P90 ±300）」。
+ *
+ * 口径：25 轮真实调价公告 vs 本 App 机制测算，MAE 173.4 → 取整 ±170，P90 ≈ 300。
+ * 这组数不是承诺，是让用户知道「±170 是常态、±300 是极端」，不把估算当公告读。
+ */
+private const val FORECAST_ERR_MAE = 170
+private const val FORECAST_ERR_P90 = 300
 
 /**
  * 录入页（M2 完整实现）
@@ -656,60 +663,71 @@ private fun OilPriceCard(
                             }
                         }
                         if (forecast != null) {
+                            // 三段式：头行给结论并写明口径是「按机制测算」，第二行无条件提示可能不成立，
+                            // 第三行给数据时点与历史误差。原先用一个徽章把口径/时点/折合全塞进括号，
+                            // 用户只看得到「预计上调170元/吨」——既不知道这是机制测算还是拍脑袋，
+                            // 也不知道这个数在历史上偏多少。
+                            val eiaSource = uiState.forecastSource != "腾讯"
+                            val headRes = when {
+                                eiaSource && rising -> R.string.koil_add_forecast_mech_up
+                                eiaSource -> R.string.koil_add_forecast_mech_down
+                                rising -> R.string.koil_add_forecast_single_up
+                                else -> R.string.koil_add_forecast_single_down
+                            }
                             Spacer(Modifier.height(6.dp))
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                // 预测幅度 + 折合单价合并为一个徽章；不使用 apizero forecast，
-                                // 幅度恒来自 EIA/腾讯本地估算 → 「估算」标注恒显示
-                                // (估算/单日参考) 放在「预计」后 → 预计(估算)上调170元/吨
-                                if (perLiter != null) {
-                                    AdjustBadge(
-                                        text = stringResource(
-                                            if (rising) R.string.koil_add_forecast_up else R.string.koil_add_forecast_down,
-                                            "(" + stringResource(
-                                                // 按来源标注——EIA=「估算」（窗口幅度）；腾讯=「单日参考」（当日波动，仅方向）
-                                                if (uiState.forecastSource == "腾讯") R.string.koil_add_forecast_single_day
-                                                else R.string.koil_add_forecast_estimated,
-                                            ) + ")",
-                                        ) +
-                                            "${kotlin.math.abs(forecast).toInt()}" +
-                                            stringResource(R.string.koil_add_forecast_per_ton) +
-                                            // EIA 数据 T+1 滞后——窗口日当天缺末段，标注数据截至日，避免误解
-                                            if (uiState.forecastSource != "腾讯" && uiState.forecastDataDate != null) {
-                                                "(" + stringResource(
-                                                    R.string.koil_add_forecast_as_of,
-                                                    uiState.forecastDataDate.takeLast(5),
-                                                ) +
-                                                    // 窗口未走满 10 个交易日时标注实际样本天数——幅度随样本增加而收敛，
-                                                    // 不标注会让「调价后头几天的小样本估算」被误读为完整窗口结论。
-                                                    // 只写「已计入 N 个交易日」不写 /10：EIA 交易日数与国内工作日数本来就不等
-                                                    // （30 个窗口里 11 个 ≠10），写死 /10 会让用户以为数据缺失。
-                                                    (uiState.forecastSampleDays
-                                                        ?.takeIf { it < CrudeOilEstimator.WINDOW_DAYS }
-                                                        ?.let {
-                                                            " " + stringResource(
-                                                                R.string.koil_add_forecast_sample,
-                                                                it,
-                                                            )
-                                                        }
-                                                        ?: "") +
-                                                    ")"
-                                            } else {
-                                                ""
-                                            } +
-                                            // 截至标注后用逗号分隔折合文案
-                                            stringResource(R.string.koil_add_forecast_sep) +
+                            Text(
+                                text = stringResource(
+                                    headRes,
+                                    kotlin.math.abs(forecast).toInt().toString(),
+                                ) + (perLiter?.let {
+                                    stringResource(
+                                        R.string.koil_add_forecast_per_liter,
+                                        kotlin.math.abs(it),
+                                    )
+                                } ?: ""),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = textColor,
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            // 这句不是免责套话：25 轮公告里有 4 轮被行政压价（且只压不托底），
+                            // 机制算出来的数和公告本来就会不一样，必须让用户知道以公告为准
+                            Text(
+                                text = stringResource(R.string.koil_add_forecast_caveat),
+                                fontSize = 11.sp,
+                                color = textColor.copy(alpha = 0.65f),
+                            )
+                            if (eiaSource) {
+                                // 样本天数改成恒显示：满窗口也写「已计入 10 个交易日」，
+                                // 只在 <10 时显示会让满窗口看起来像没标样本的最终值
+                                val meta = buildList {
+                                    uiState.forecastDataDate?.let {
+                                        add(
                                             stringResource(
-                                                if (rising) R.string.koil_add_approx_per_liter_up
-                                                else R.string.koil_add_approx_per_liter_down,
-                                                kotlin.math.abs(perLiter),
+                                                R.string.koil_add_forecast_as_of,
+                                                it.takeLast(5),
                                             ),
-                                        color = textColor,
+                                        )
+                                    }
+                                    uiState.forecastSampleDays?.let {
+                                        add(stringResource(R.string.koil_add_forecast_sample, it))
+                                    }
+                                    add(
+                                        stringResource(
+                                            R.string.koil_add_forecast_history_err,
+                                            FORECAST_ERR_MAE,
+                                            FORECAST_ERR_P90,
+                                        ),
                                     )
                                 }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = meta.joinToString(
+                                        stringResource(R.string.koil_add_forecast_meta_sep),
+                                    ),
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.65f),
+                                )
                             }
                         }
                     }
