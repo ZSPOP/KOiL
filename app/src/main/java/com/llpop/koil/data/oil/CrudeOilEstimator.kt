@@ -50,9 +50,18 @@ class CrudeOilEstimator(
     private val network: OilPriceNetwork,
     private val settings: AppSettings,
     private val priceDao: KOiLPriceDao,
+    private val fxRepository: KOiLUsdCnyRateRepository,
 ) {
 
     companion object {
+        /**
+         * 原油体积重量换算：1 吨 ≈ 7.33 桶。
+         *
+         * 原挂在 `UsdCnyMonthly` 上，汇率改为运行时取数、静态月表删除后移到这里——
+         * 它和汇率没有关系，本就不该被一个「USD/CNY 月表」对象持有。
+         */
+        const val BARRELS_PER_TON = 7.33
+
         /** EIA 需要至少 20 条日度数据才够 10+10 均值比较 */
         private const val MIN_EIA_POINTS = 20
         /** 官方口径：一个计价期 = 10 个工作日（UI 用它判断是否标注「已计入 N 个交易日」，故对外可见） */
@@ -94,14 +103,16 @@ class CrudeOilEstimator(
          * 窗口日历未就绪 → 回退「最近 10 vs 前 10」硬切。
          *
          * @param today 传入当天日期（默认系统日期），便于单测固定时间轴
-         * @param fxRate 汇率（CNY/USD）；null 时按 [latest] 所在月份从 [UsdCnyMonthly] 取，单测可注入固定值
+         * @param fxRate 汇率（CNY/USD），**必填、无默认值**：汇率已改为运行时从 ECB 取（见
+         *   [KOiLUsdCnyRateRepository]），生产代码不再内置月表。给默认值会让「表删了但还留一个
+         *   隐式引用」的尾巴留下来，PR #2 的验收就不再是纯显式汇率。单测显式传固定值即可。
          */
         internal fun calcFromEiaSeries(
             points: List<Pair<String, Double>>,
             adjustDates: List<String>,
             baseDate: String?,
             today: String = LocalDate.now().toString(),
-            fxRate: Double? = null,
+            fxRate: Double,
         ): CrudeOilCalcResult? {
             if (points.size < MIN_EIA_POINTS) return null
             val prevWindow = adjustDates.filter { it < today }.lastOrNull()
@@ -146,12 +157,12 @@ class CrudeOilEstimator(
             // 元/吨 = 原油价差(USD/bbl) × 桶吨换算 × 汇率(CNY/USD)，k=1
             // 不再走「变化率 × 56.5」：那个系数把油价与汇率一起冻在快照上，油价中枢一偏就系统性失真
             val deltaP = recent.average() - baseAvg
-            val fx = fxRate ?: UsdCnyMonthly.rateFor(latest)
-            return CrudeOilCalcResult(deltaP * UsdCnyMonthly.BARRELS_PER_TON * fx, latest, recent.size)
+            return CrudeOilCalcResult(deltaP * BARRELS_PER_TON * fxRate, latest, recent.size)
         }
     }
 
     suspend fun estimate(): CrudeOilEstimate? {
+        val today = LocalDate.now().toString()
         // 数据源开关——关 = 直接用腾讯（不请求 EIA）；开 = EIA 主源 → 失败降级腾讯
         val eiaOn = settings.eiaEnabled.first()
         if (eiaOn) {
@@ -164,15 +175,21 @@ class CrudeOilEstimator(
                         .split(",").map { it.trim() }.filter { it.isNotBlank() }
                     // 基准日 = 库内最近非搁浅调价生效日（10-15 搁浅不重置基准）
                     val baseDate = priceDao.getLatestNonStrandedEffectiveDates().firstOrNull()
-                    val calc = calcFromEiaSeries(eia.points, adjustDates, baseDate)
-                    if (calc != null) {
-                        return CrudeOilEstimate(
-                            amountPerTon = calc.amountPerTon,
-                            sourceLabel = "EIA",
-                            dataDate = calc.dataDate,
-                            sampleDays = calc.sampleDays,
-                            sourceReleaseDate = eia.releaseDate,
-                        )
+                    // 汇率按「数据最后一天」所属月份取，不是按今天：EIA 数据常停在上一月时，
+                    // 用今天所属月份会拿到一个还没数据的新月份，与窗口内油价不同期
+                    val latest = eia.points.lastOrNull { it.first <= today }?.first ?: today
+                    val fx = fxRepository.rateFor(latest)
+                    if (fx != null) {
+                        val calc = calcFromEiaSeries(eia.points, adjustDates, baseDate, today, fx)
+                        if (calc != null) {
+                            return CrudeOilEstimate(
+                                amountPerTon = calc.amountPerTon,
+                                sourceLabel = "EIA",
+                                dataDate = calc.dataDate,
+                                sampleDays = calc.sampleDays,
+                                sourceReleaseDate = eia.releaseDate,
+                            )
+                        }
                     }
                 }
             }
@@ -180,9 +197,10 @@ class CrudeOilEstimator(
         // 降级/直选：腾讯布伦特期货实时（单日涨跌，仅方向参考——UI 按来源标注「单日参考」，不冒充窗口幅度）
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
+            // 汇率拿不到就不给假值：乘 0 会把幅度静默算成 0，比不显示更糟
+            val fx = fxRepository.rateFor(today) ?: return null
             val deltaP = tencent.first - tencent.second
-            val fx = UsdCnyMonthly.rateFor(LocalDate.now().toString())
-            return CrudeOilEstimate(deltaP * UsdCnyMonthly.BARRELS_PER_TON * fx, "腾讯")
+            return CrudeOilEstimate(deltaP * BARRELS_PER_TON * fx, "腾讯")
         }
         return null
     }

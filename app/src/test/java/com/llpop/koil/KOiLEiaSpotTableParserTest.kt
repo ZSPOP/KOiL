@@ -268,7 +268,8 @@ class KOiLEiaSpotTableParserTest {
         val adjustDates = listOf("2026-10-15", "2026-10-29")
         val today = "2026-11-06"
 
-        val before = CrudeOilEstimator.calcFromEiaSeries(v2Points, adjustDates, null, today)
+        // fxRate 现在必填（静态月表已删）：用 2026-11 的月均值 6.6676，与 PR #2 验收口径一致
+        val before = CrudeOilEstimator.calcFromEiaSeries(v2Points, adjustDates, null, today, 6.6676)
         assertNotNull(before)
         assertEquals("2026-11-03", before!!.dataDate)
         assertEquals(3, before.sampleDays)
@@ -279,6 +280,7 @@ class KOiLEiaSpotTableParserTest {
             adjustDates,
             null,
             today,
+            6.6676,
         )
         assertNotNull(after)
         // 补上 11-04（107.03 → 91.84，单日 -15.19 美元）后结论从「小幅下调」变「大幅下调」

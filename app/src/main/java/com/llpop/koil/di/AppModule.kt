@@ -6,6 +6,7 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.CrudeOilEstimator
+import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
@@ -32,6 +33,10 @@ val appModule = module {
     single { AppDatabase.getInstance(androidContext()) }
     singleOf(::AppSettings)
     singleOf(::OilPriceNetwork)
+    // 汇率仓库的 engine 参数只给单测注入 MockEngine，默认 null 表示生产走默认引擎。
+    // 不能用 singleOf(::KOiLUsdCnyRateRepository)：Koin 会去容器里解析 HttpClientEngine?，
+    // 而工程没有（也不需要）注册该类型，解析失败会让 CrudeOilEstimator 连带创建失败。
+    single { KOiLUsdCnyRateRepository(androidContext()) }
     singleOf(::CrudeOilEstimator)
     singleOf(::OilPriceDbSyncer)
     // WebDavClient 的 engine 参数只给单测注入 MockEngine，默认 null 表示生产走默认引擎。
