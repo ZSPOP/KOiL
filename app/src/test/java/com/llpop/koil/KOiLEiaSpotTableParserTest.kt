@@ -129,6 +129,60 @@ class KOiLEiaSpotTableParserTest {
         assertTrue(KOiLEiaSpotTableParser.parse("""{"thead":[]}""").isEmpty())
     }
 
+    // ---------- 发布日 ----------
+
+    @Test
+    fun `真实响应解析出源端发布日且不改动价格`() {
+        val table = KOiLEiaSpotTableParser.parseWithMeta(realResponse)
+        // fixture 原文 "release_date": "11/9/2026"，月日不补零，必须按 M/d/yyyy 解
+        assertEquals("2026-11-09", table.releaseDate)
+        // 发布日（11-09）晚于数据最后一天（11-06）：这正是要展示给用户的「源端滞后 3 天」
+        assertEquals("2026-11-06", table.points.last().first)
+        assertEquals(KOiLEiaSpotTableParser.parse(realResponse), table.points)
+    }
+
+    @Test
+    fun `发布日等于数据最后一天时保留`() {
+        // 当天发布当天数据：边界合法，不能因为「不够新」就丢掉
+        val body = realResponse.replace("\"release_date\": \"11/9/2026\"", "\"release_date\": \"11/6/2026\"")
+        assertEquals("2026-11-06", KOiLEiaSpotTableParser.parseWithMeta(body).releaseDate)
+    }
+
+    @Test
+    fun `发布日早于数据最后一天时置空`() {
+        // 发布不可能早于数据日。出现即说明字段语义被改了（比如换成「本期起始日」），
+        // 照原样显示等于把一个未知说成一个具体日期
+        val body = realResponse.replace("\"release_date\": \"11/9/2026\"", "\"release_date\": \"11/5/2026\"")
+        val table = KOiLEiaSpotTableParser.parseWithMeta(body)
+        assertNull(table.releaseDate)
+        assertEquals(6, table.points.size) // 只丢发布日，不能连价格一起丢
+    }
+
+    @Test
+    fun `发布日缺失或格式非法时置空但价格照常`() {
+        val cases = listOf(
+            realResponse.replace("\"release_date\": \"11/9/2026\", ", ""),        // 字段被删
+            realResponse.replace("\"11/9/2026\"", "\"\""),                      // 空串
+            realResponse.replace("\"11/9/2026\"", "\"n/a\""),                    // 脏值
+            realResponse.replace("\"11/9/2026\"", "\"2026-11-09\""),             // 格式换成 ISO（解析器只认 M/d/yyyy）
+        )
+        cases.forEach { body ->
+            val table = KOiLEiaSpotTableParser.parseWithMeta(body)
+            assertNull("该响应的发布日应为 null", table.releaseDate)
+            assertEquals(6, table.points.size)
+        }
+    }
+
+    @Test
+    fun `一个价格点都没解析出来时不给发布日`() {
+        // 「这批数据」不存在，发布日没有指代对象；此时给日期反而像在说「数据是新的」
+        val body = """{"release_date":"11/9/2026","thead":["11/06/26"],""" +
+            """"tbody":[{"data":{"RBRTE":["indent_0","Brent - Europe","1987 - 2026",""]}}]}"""
+        val table = KOiLEiaSpotTableParser.parseWithMeta(body)
+        assertTrue(table.points.isEmpty())
+        assertNull(table.releaseDate)
+    }
+
     // ---------- 合并 ----------
 
     @Test
@@ -156,6 +210,55 @@ class KOiLEiaSpotTableParserTest {
             listOf("2026-11-02" to 107.39, "2026-11-03" to 107.03),
             KOiLEiaSpotTableParser.merge(base, emptyList()),
         )
+    }
+
+    // ---------- 合并后的发布日校验（不变量属于最终结果） ----------
+
+    @Test
+    fun `v2 反而更新时丢弃发布日但保留 v2 数据`() {
+        // 复审指出的反向场景：增量到 11-06、release_date 11-09，增量自查通过（11-09 ≥ 11-06）；
+        // 但 v2 已更新到 11-10，合并后若照原样挂 11-09，UI 会显示
+        // 「截至 11-10 · 源端 11-09 发布」——发布日早于数据日，与本次改造的第三条不变量冲突。
+        val base = listOf(
+            "2026-11-06" to 100.00,
+            "2026-11-09" to 99.00,
+            "2026-11-10" to 98.00, // v2 比增量新
+        )
+        val table = KOiLEiaSpotTableParser.parseWithMeta(realResponse)
+        assertEquals("2026-11-09", table.releaseDate) // 增量表自身校验是通过的
+        assertEquals("2026-11-06", table.points.last().first)
+
+        val merged = KOiLEiaSpotTableParser.merge(base, table.points)
+        val release = KOiLEiaSpotTableParser.resolveReleaseDate(table.releaseDate, merged)
+
+        assertNull("合并后最后一天 11-10 晚于发布日 11-09，发布日必须置空", release)
+        // 只丢字段不丢数据：v2 更新的 11-10 必须还在，且值没被增量覆盖
+        assertEquals("2026-11-10" to 98.00, merged.last())
+        assertEquals(99.00, merged.first { it.first == "2026-11-09" }.second, 0.0)
+    }
+
+    @Test
+    fun `v2 落后于发布日时保留发布日`() {
+        // 正常态：v2 停在 11-03，增量补到 11-06，发布日 11-09 → 合法，不能误伤
+        val merged = KOiLEiaSpotTableParser.merge(
+            v2Points,
+            KOiLEiaSpotTableParser.parse(realResponse),
+        )
+        assertEquals("2026-11-06", merged.last().first)
+        assertEquals("2026-11-09", KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-09", merged))
+    }
+
+    @Test
+    fun `合并后发布日校验的边界`() {
+        val points = listOf("2026-11-06" to 97.83)
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate(null, points)) // 没有发布日
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("", points)) // 空串
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("n/a", points)) // 脏值
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("11/9/2026", points)) // 只接受已归一化的 ISO
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-09", emptyList())) // 没有数据就没有指代对象
+        // 相等是合法边界：当天发布当天数据，不能因为「不够新」就丢掉
+        assertEquals("2026-11-06", KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-06", points))
+        assertEquals("2026-11-09", KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-09", points))
     }
 
     // ---------- 端到端 ----------

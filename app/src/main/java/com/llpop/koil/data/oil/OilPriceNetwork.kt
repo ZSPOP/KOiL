@@ -34,6 +34,19 @@ import java.util.Locale
  * - 预测幅度：EIA 官方原油估算 + 腾讯实时降级（见 CrudeOilEstimator）
  * - 节假日：chinese-days CDN（fetchChinaHolidays）
  */
+/**
+ * EIA 布伦特现货日度序列 + 官方发布日。
+ *
+ * [points] 已按日期升序、同日以增量为准合并；[releaseDate] 是增量链路的 `release_date`
+ * （`yyyy-MM-dd`），拿不到增量时为 null——只降级这个字段，[points] 照常返回 v2 那部分。
+ * 两个字段刻意分开：`points.last()` 是「数据截至哪天」，[releaseDate] 是「源端哪天发的」，
+ * 实测相差 3 天（11-06 的数据由 11-09 那批发布），混成一个数就没法向用户解释滞后。
+ */
+data class KOiLEiaBrentSeries(
+    val points: List<Pair<String, Double>>,
+    val releaseDate: String? = null,
+)
+
 // open：单测需要 override fetchYoujiaHistory 注入假曲线（补灌空数据省回归）
 open class OilPriceNetwork {
 
@@ -364,18 +377,18 @@ open class OilPriceNetwork {
 
     /**
      * EIA 官方布伦特现货日度价（RBRTE 系列，美元/桶，交易日数据，含完整历史）。
-     * 返回按日期升序的 (date, price) 列表：v2 的 `length` 条 + WPSR 增量（最多 6 条）按日期合并，
-     * 重叠日期以增量为准，所以条数可能超过 `length`（默认最多 30 + 6）。
+     * 返回 [KOiLEiaBrentSeries]：按日期升序的点集（v2 的 `length` 条 + WPSR 增量最多 6 条按日期合并，
+     * 重叠日期以增量为准，所以条数可能超过 `length`，默认最多 30 + 6），外加源端发布日。
      * 不做 `takeLast(length)` 截断——被截掉的正是最老那几天，而基准窗口就落在最老端，
      * 截一刀会让基准样本不足，整块预测直接消失。
-     * Key 无效/接口失败返回空列表。
+     * Key 无效/接口失败返回空序列（[KOiLEiaBrentSeries.points] 为空）。
      *
      * 数据取自两条同源链路的并集：v2 API 拿历史（实测比 WPSR 价格表慢 3 天），
      * WPSR 价格表 JSON 补最近 6 个交易日（见 [KOiLEiaSpotTableParser]）。
-     * 增量失败一律静默降级为纯 v2——功能不挂，只是数据旧几天。
+     * 增量失败一律静默降级为纯 v2——功能不挂，只是数据旧几天、且没有发布日可显示。
      */
-    suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): List<Pair<String, Double>> {
-        if (apiKey.isBlank()) return emptyList()
+    suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): KOiLEiaBrentSeries {
+        if (apiKey.isBlank()) return KOiLEiaBrentSeries(emptyList())
         val url = "https://api.eia.gov/v2/petroleum/pri/spt/data/" +
             "?frequency=daily" +
             "&data%5B0%5D=value" +
@@ -403,15 +416,23 @@ open class OilPriceNetwork {
         }
         // v2 没拿到任何点就不补增量：只有 6 个点也过不了 MIN_EIA_POINTS，
         // 反而会把「主源失败」伪装成「拿到了数据」
-        if (base.isEmpty()) return emptyList()
-        val overrides = try {
-            KOiLEiaSpotTableParser.parse(client.get(KOiLEiaSpotTableParser.URL).bodyAsText())
+        if (base.isEmpty()) return KOiLEiaBrentSeries(emptyList())
+        val table = try {
+            KOiLEiaSpotTableParser.parseWithMeta(client.get(KOiLEiaSpotTableParser.URL).bodyAsText())
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            emptyList()
+            KOiLEiaSpotTableParser.EiaSpotTable(emptyList())
         }
-        return KOiLEiaSpotTableParser.merge(base, overrides)
+        // 发布日按**合并后**的最终点集再校验一次：增量自查只保证「发布日 ≥ 增量最后一天」，
+        // 若 v2 反而更新（增量到 11-06、v2 到 11-10、release_date 11-09），合并后会显示
+        // 「截至 11-10 · 源端 11-09 发布」——发布日早于数据日，正是本 PR 第三条不变量要挡的情况。
+        // 只丢 releaseDate，points 保留 v2 数据。
+        val merged = KOiLEiaSpotTableParser.merge(base, table.points)
+        return KOiLEiaBrentSeries(
+            points = merged,
+            releaseDate = KOiLEiaSpotTableParser.resolveReleaseDate(table.releaseDate, merged),
+        )
     }
 
     /**

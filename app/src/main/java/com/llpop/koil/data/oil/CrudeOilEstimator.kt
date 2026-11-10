@@ -13,6 +13,10 @@ data class CrudeOilEstimate(
     val sourceLabel: String,
     val dataDate: String? = null,   // "yyyy-MM-dd"；EIA 路径=已用到的最后交易日，腾讯路径=null（实时）
     val sampleDays: Int? = null,    // EIA 路径=本窗口已计入的交易日数（官方口径 10 天）；腾讯路径=null
+    // "yyyy-MM-dd"；EIA 路径=源端发布这批数据的日期（WPSR 增量链路的 release_date），
+    // 拿不到增量时为 null。晚于 dataDate 3 天左右，UI 用来解释「数据为什么旧」而不是让用户以为卡住。
+    // 命名与 dataDate 显式区分：dataDate 是「数据截至哪天」，sourceReleaseDate 是「源端哪天发的」。
+    val sourceReleaseDate: String? = null,
 )
 
 /** 内部计算结果：幅度 + 数据截至日期 + 本窗口样本天数（internal 仅为单测可达，外部不应依赖） */
@@ -155,14 +159,20 @@ class CrudeOilEstimator(
             val key = settings.eiaApiKey.first()
             if (key.isNotBlank()) {
                 val eia = runCatching { network.fetchEiaBrentDaily(key, length = 30) }.getOrNull()
-                if (eia != null && eia.size >= MIN_EIA_POINTS) {
+                if (eia != null && eia.points.size >= MIN_EIA_POINTS) {
                     val adjustDates = settings.priceDbAdjustDates.first()
                         .split(",").map { it.trim() }.filter { it.isNotBlank() }
                     // 基准日 = 库内最近非搁浅调价生效日（10-15 搁浅不重置基准）
                     val baseDate = priceDao.getLatestNonStrandedEffectiveDates().firstOrNull()
-                    val calc = calcFromEiaSeries(eia, adjustDates, baseDate)
+                    val calc = calcFromEiaSeries(eia.points, adjustDates, baseDate)
                     if (calc != null) {
-                        return CrudeOilEstimate(calc.amountPerTon, "EIA", calc.dataDate, calc.sampleDays)
+                        return CrudeOilEstimate(
+                            amountPerTon = calc.amountPerTon,
+                            sourceLabel = "EIA",
+                            dataDate = calc.dataDate,
+                            sampleDays = calc.sampleDays,
+                            sourceReleaseDate = eia.releaseDate,
+                        )
                     }
                 }
             }

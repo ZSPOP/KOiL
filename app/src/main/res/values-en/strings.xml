@@ -44,6 +44,7 @@
     <string name="koil_add_forecast_per_liter">" (≈ ¥%1$.2f/L)"</string>
     <string name="koil_add_forecast_caveat">Actual result may differ due to price controls and estimation error; refer to the NDRC announcement</string>
     <string name="koil_add_forecast_as_of">as of %1$s</string>
+    <string name="koil_add_forecast_released">source released %1$s</string>
     <string name="koil_add_forecast_sample">trading days counted: %1$d</string>
     <string name="koil_add_forecast_history_err">error vs announcements ±%1$d (P90 ±%2$d)</string>
     <string name="koil_add_forecast_meta_sep">" · "</string>

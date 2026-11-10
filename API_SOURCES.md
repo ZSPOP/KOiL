@@ -31,6 +31,8 @@
 // 返回 { "release_date": "11/9/2026", "next_release_date": "11/10/2026",
 //        "thead": ["11/06/26", ...], "tbody": [{ "section": "Crude Oil", "data": { "RBRTE": ["indent_0", "Brent - Europe", "1987 - 2026", "97.83", ...] } }] }
 // 与上一条同 series（RBRTE）、同单位（USD/bbl），但 v2 比它慢约 3 天；只取最近 6 个交易日按日期覆盖
+// `release_date` 是「源端发布这批数据的日期」（M/d/yyyy，月日不补零），不是「数据截至日」——
+// 实测 11-09 发布、数据只到 11-06。App 把它透到 UI：「截至 11-06 · 源端 11-09 发布」
 
 // 腾讯降级 GET https://qt.gtimg.cn/q=hf_OIL（Header Referer: https://gu.qq.com/）
 // 返回 v_hf_OIL="110.45,-1.12,...,111.70,...,2026-10-26,布伦特原油"（index0=现价、index7=昨收）
