@@ -52,15 +52,13 @@ internal object KOiLEiaSpotTableParser {
             ?.firstNotNullOfOrNull { (it["data"] as? JsonObject)?.get(SERIES_KEY) as? JsonArray }
             ?: return emptyList()
 
-        // 行首 3 项是 [indent 类名, 展示名, 年份范围]，价格在其后。
-        // 不硬编码 3，改成「右侧对齐」：取尾部 thead.size 个元素。
-        // 对齐后必须**全是数字或空串**——描述列（indent 类名、年份范围）一旦被算进价格区，
+        // 行首 DESC_COLUMNS 项固定是 [indent 类名, 展示名, 年份范围]，价格在其后，
+        // 故价格列数必须与 thead 相等。
         // 结构判断只看「形状」，不看「值」——这是上一版的 bug 所在：
         // 曾用「尾部 N 个全部可解析」判断对齐，结果 6 天里只要有一天是 `n/a`，
         // 整条 RBRTE 行就被当成结构错位丢掉，App 仍然停在旧日期，比不修还差（少一天 ≠ 全丢）。
-        // 现在改成：描述列固定 3 列（indent 类名 / 展示名 / 年份范围），价格列数必须与 thead 相等。
         if (row.size != DESC_COLUMNS + thead.size) return emptyList()
-        // 前 3 列必须都不是价格。若连「indent_0 / Brent - Europe / 1987 - 2026」都变成数字，
+        // 描述列必须都不是价格。若连「indent_0 / Brent - Europe / 1987 - 2026」都变成数字，
         // 说明列序已经变了，此时按位置取值必然错位，整条丢弃
         val descIsText = row.subList(0, DESC_COLUMNS).none { cell ->
             (cell as? JsonPrimitive)?.content?.toDoubleOrNull() != null
