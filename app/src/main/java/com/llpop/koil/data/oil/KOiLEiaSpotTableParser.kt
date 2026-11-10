@@ -113,10 +113,30 @@ internal object KOiLEiaSpotTableParser {
         root: JsonObject,
         points: List<Pair<String, Double>>,
     ): String? {
-        if (points.isEmpty()) return null
         val raw = (root["release_date"] as? JsonPrimitive)?.content?.trim().orEmpty()
         val released = runCatching { LocalDate.parse(raw, RELEASE_DATE_FORMAT).toString() }
             .getOrNull() ?: return null
+        return resolveReleaseDate(released, points)
+    }
+
+    /**
+     * 按**最终点集**校验发布日：发布日不可能早于该点集的最后一天，否则置 null。
+     *
+     * 为什么 [parseWithMeta] 里校验过还要再校验一次：那里校验的是增量表**自己**的 `points`，
+     * 而调用方会把发布日挂到「v2 历史 + 增量」合并后的点集上。若 v2 反而更新
+     * （增量最后一天 11-06、v2 已到 11-10、`release_date` 是 11-09），增量自查会通过，
+     * 合并后却会出现「截至 11-10 · 源端 11-09 发布」这种自相矛盾的两个日期。
+     * 不变量属于最终结果而不是中间结果，所以合并后必须再校验一次。
+     *
+     * 前置条件：[points] 按日期升序（[merge] 与 [parseWithMeta] 都保证）。
+     */
+    fun resolveReleaseDate(
+        releaseDate: String?,
+        points: List<Pair<String, Double>>,
+    ): String? {
+        if (releaseDate.isNullOrBlank() || points.isEmpty()) return null
+        val released = runCatching { LocalDate.parse(releaseDate).toString() }.getOrNull()
+            ?: return null
         return released.takeIf { it >= points.last().first }
     }
 

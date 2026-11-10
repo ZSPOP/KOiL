@@ -212,6 +212,55 @@ class KOiLEiaSpotTableParserTest {
         )
     }
 
+    // ---------- 合并后的发布日校验（不变量属于最终结果） ----------
+
+    @Test
+    fun `v2 反而更新时丢弃发布日但保留 v2 数据`() {
+        // 复审指出的反向场景：增量到 11-06、release_date 11-09，增量自查通过（11-09 ≥ 11-06）；
+        // 但 v2 已更新到 11-10，合并后若照原样挂 11-09，UI 会显示
+        // 「截至 11-10 · 源端 11-09 发布」——发布日早于数据日，与本次改造的第三条不变量冲突。
+        val base = listOf(
+            "2026-11-06" to 100.00,
+            "2026-11-09" to 99.00,
+            "2026-11-10" to 98.00, // v2 比增量新
+        )
+        val table = KOiLEiaSpotTableParser.parseWithMeta(realResponse)
+        assertEquals("2026-11-09", table.releaseDate) // 增量表自身校验是通过的
+        assertEquals("2026-11-06", table.points.last().first)
+
+        val merged = KOiLEiaSpotTableParser.merge(base, table.points)
+        val release = KOiLEiaSpotTableParser.resolveReleaseDate(table.releaseDate, merged)
+
+        assertNull("合并后最后一天 11-10 晚于发布日 11-09，发布日必须置空", release)
+        // 只丢字段不丢数据：v2 更新的 11-10 必须还在，且值没被增量覆盖
+        assertEquals("2026-11-10" to 98.00, merged.last())
+        assertEquals(99.00, merged.first { it.first == "2026-11-09" }.second, 0.0)
+    }
+
+    @Test
+    fun `v2 落后于发布日时保留发布日`() {
+        // 正常态：v2 停在 11-03，增量补到 11-06，发布日 11-09 → 合法，不能误伤
+        val merged = KOiLEiaSpotTableParser.merge(
+            v2Points,
+            KOiLEiaSpotTableParser.parse(realResponse),
+        )
+        assertEquals("2026-11-06", merged.last().first)
+        assertEquals("2026-11-09", KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-09", merged))
+    }
+
+    @Test
+    fun `合并后发布日校验的边界`() {
+        val points = listOf("2026-11-06" to 97.83)
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate(null, points)) // 没有发布日
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("", points)) // 空串
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("n/a", points)) // 脏值
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("11/9/2026", points)) // 只接受已归一化的 ISO
+        assertNull(KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-09", emptyList())) // 没有数据就没有指代对象
+        // 相等是合法边界：当天发布当天数据，不能因为「不够新」就丢掉
+        assertEquals("2026-11-06", KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-06", points))
+        assertEquals("2026-11-09", KOiLEiaSpotTableParser.resolveReleaseDate("2026-11-09", points))
+    }
+
     // ---------- 端到端 ----------
 
     @Test

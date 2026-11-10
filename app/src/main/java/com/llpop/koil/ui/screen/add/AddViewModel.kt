@@ -435,7 +435,7 @@ class AddViewModel(
             forecastAmount = forecastAmount,
             forecastSource = estimate?.sourceLabel,
             forecastDataDate = estimate?.dataDate,
-            forecastReleaseDate = estimate?.releaseDate,
+            forecastReleaseDate = estimate?.sourceReleaseDate,
             forecastSampleDays = estimate?.sampleDays,
             perLiterEquivalent = perLiterEquivalent,
         )

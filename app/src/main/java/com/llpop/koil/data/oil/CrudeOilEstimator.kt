@@ -15,7 +15,8 @@ data class CrudeOilEstimate(
     val sampleDays: Int? = null,    // EIA 路径=本窗口已计入的交易日数（官方口径 10 天）；腾讯路径=null
     // "yyyy-MM-dd"；EIA 路径=源端发布这批数据的日期（WPSR 增量链路的 release_date），
     // 拿不到增量时为 null。晚于 dataDate 3 天左右，UI 用来解释「数据为什么旧」而不是让用户以为卡住。
-    val releaseDate: String? = null,
+    // 命名与 dataDate 显式区分：dataDate 是「数据截至哪天」，sourceReleaseDate 是「源端哪天发的」。
+    val sourceReleaseDate: String? = null,
 )
 
 /** 内部计算结果：幅度 + 数据截至日期 + 本窗口样本天数（internal 仅为单测可达，外部不应依赖） */
@@ -170,7 +171,7 @@ class CrudeOilEstimator(
                             sourceLabel = "EIA",
                             dataDate = calc.dataDate,
                             sampleDays = calc.sampleDays,
-                            releaseDate = eia.releaseDate,
+                            sourceReleaseDate = eia.releaseDate,
                         )
                     }
                 }
