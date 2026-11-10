@@ -122,6 +122,13 @@ class KOiLUsdCnyRateRepository(
         /** 同一进程内两次刷新之间的最小间隔（跨进程靠 [KOiLUsdCnyRateSnapshot.fetchedAt]） */
         private const val REFRESH_MIN_INTERVAL_MS = 6L * 60 * 60 * 1000
 
+        /**
+         * 单个源在总预算内的最小时限。预算按「剩余 ÷ 剩余源数」分配，若前面已耗掉大半，
+         * 分到第三路可能只剩几百毫秒（必然超时、等于没试），故给一个下限。
+         * 外层 [withTimeoutOrNull] 仍然兜住总预算，这里超出也无害。
+         */
+        private const val MIN_PER_SOURCE_MS = 1_500L
+
         private val KEY_SNAPSHOT = stringPreferencesKey("KOiL-usd-cny-rate")
 
         /**
@@ -192,16 +199,23 @@ class KOiLUsdCnyRateRepository(
     /**
      * 按已裁决口径选值：
      * - 目标月就是缓存月且样本够 → 用月均值；
-     * - 目标月样本不足 [MIN_SAMPLE_DAYS] → 回退上一个完整月；
-     * - 目标月不是缓存月（跨月/补算历史）→ 用缓存月均值兜底；
-     * - 上月也没有可用值 → 用当前值（宁可给一个近似，也不返回 null 让预测整块消失）。
+     * - 目标月是缓存月且样本不足 [MIN_SAMPLE_DAYS] → 回退上一个完整月；
+     * - 目标月比缓存月**旧** → 用 fallbackRate（缓存月的前一个月）：缓存里的 rate 属于
+     *   未来月份，拿它换算历史数据就是用没发生的数据；
+     * - 目标月比缓存月**新** → 缓存已过期，只能用缓存值近似（有边界比返回 null 让预测整块消失更好）。
      */
     internal fun pick(snapshot: KOiLUsdCnyRateSnapshot, date: String): Double? {
         val month = date.take(7)
+        val fallback = snapshot.fallbackRate.takeIf { it in MIN_PLAUSIBLE_RATE..MAX_PLAUSIBLE_RATE }
         return when {
-            snapshot.month != month -> snapshot.rate
-            snapshot.sampleDays >= MIN_SAMPLE_DAYS -> snapshot.rate
-            snapshot.fallbackRate in MIN_PLAUSIBLE_RATE..MAX_PLAUSIBLE_RATE -> snapshot.fallbackRate
+            month == snapshot.month ->
+                if (snapshot.sampleDays >= MIN_SAMPLE_DAYS) snapshot.rate else fallback ?: snapshot.rate
+
+            month < snapshot.month ->
+                // fallbackRate 只保证「缓存月前一个月」正确。目标月更早（差两个月以上）时它
+                // 也是近似值，但该场景不会出现：dataDate 最多落后缓存月一个多月。
+                fallback ?: snapshot.rate
+
             else -> snapshot.rate
         }
     }
@@ -261,7 +275,7 @@ class KOiLUsdCnyRateRepository(
     private suspend fun fetchFirstAvailable(
         timeoutMs: Long,
         previous: KOiLUsdCnyRateSnapshot?,
-    ): KOiLUsdCnyRateSnapshot? {
+    ): KOiLUsdCnyRateSnapshot? = withTimeoutOrNull(timeoutMs) {
         val attempts = listOf<suspend () -> List<Pair<String, Double>>>(
             { fetchSdmx() },
             { fetchEcbXml() },
@@ -272,12 +286,37 @@ class KOiLUsdCnyRateRepository(
             KOiLUsdCnyRateSource.ECB_XML,
             KOiLUsdCnyRateSource.CURRENCY_API,
         )
+        val startedAt = System.currentTimeMillis()
         for (i in attempts.indices) {
-            val points = withTimeoutOrNull(timeoutMs) { attempts[i]() } ?: continue
+            // 每源分到「剩余预算 ÷ 剩余源数」：前一个源失败后仍有余量给下一个，
+            // 而整条链的耗时总和不超过 timeoutMs（三个源各 15s = 45s 是错的）
+            val remaining = timeoutMs - (System.currentTimeMillis() - startedAt)
+            if (remaining <= 0) return@withTimeoutOrNull null
+            val share = maxOf(remaining / (attempts.size - i), MIN_PER_SOURCE_MS)
+            val points = attemptOrNull(attempts[i], share) ?: continue
             val snapshot = aggregate(points, sources[i], previous) ?: continue
-            return snapshot
+            return@withTimeoutOrNull snapshot
         }
-        return null
+        null
+    }
+
+    /**
+     * 跑一个源，把它的一切失败都归为「该源不可用」（返回 null 继续下一个）。
+     *
+     * 不能写成 `runCatching { ... }`：它同样会吞掉 [CancellationException]，
+     * 那样外层的总预算与协程取消都会失效（内层捕获后继续跑，外层超时形同虚设）。
+     * 连接失败、DNS 失败、HTTP 超时抛的都是普通异常，必须由这里兜住——
+     * `withTimeoutOrNull` 只处理它自己产生的超时。
+     */
+    private suspend fun attemptOrNull(
+        call: suspend () -> List<Pair<String, Double>>,
+        timeoutMs: Long,
+    ): List<Pair<String, Double>>? = try {
+        withTimeoutOrNull(timeoutMs) { call() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        null
     }
 
     /**

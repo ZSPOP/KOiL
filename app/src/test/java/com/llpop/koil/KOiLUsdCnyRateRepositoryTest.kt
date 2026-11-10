@@ -7,6 +7,7 @@ import com.llpop.koil.data.oil.KOiLUsdCnyRateSource
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -16,6 +17,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.IOException
 
 /**
  * 汇率仓库回归（Robolectric：DataStore 需要真实 Context）。
@@ -197,7 +199,7 @@ class KOiLUsdCnyRateRepositoryTest {
     }
 
     @Test
-    fun `目标月与缓存月不同时直接用缓存值`() {
+    fun `跨月时取目标月所属月份而不是未来月份的汇率`() {
         val repo = repository()
         val snap = KOiLUsdCnyRateSnapshot(
             month = "2026-11",
@@ -209,10 +211,32 @@ class KOiLUsdCnyRateRepositoryTest {
             fetchedAt = System.currentTimeMillis(),
             source = KOiLUsdCnyRateSource.SDMX,
         )
-        // 目标日期不在缓存月内（缓存已过期、预测日期更新）→ 用缓存月均值兜底，
-        // 不是用 fallbackRate：后者是「当月样本不足」时的替代，两者触发条件不同
+        // 目标月比缓存月旧（EIA 停在 10-31 而汇率已到 11 月）：必须用 10 月均值 6.6850。
+        // 旧实现返回 snapshot.rate（11 月的值），等于用未来月份汇率换算历史数据，
+        // 与 CrudeOilEstimator「按数据最后一天所属月份取，不是按今天」的注释相反。
+        assertEquals(6.6850, repo.pick(snap, "2026-10-15")!!, 0.0001)
+        assertEquals(6.6850, repo.pick(snap, "2026-10-31")!!, 0.0001)
+        // 当月且样本够 → 月均值
+        assertEquals(6.6676, repo.pick(snap, "2026-11-05")!!, 0.0001)
+        // 目标月比缓存月新（缓存过期）：只能用缓存值近似
+        assertEquals(6.6676, repo.pick(snap, "2026-12-02")!!, 0.0001)
+    }
+
+    @Test
+    fun `跨月且上月值非法时退回缓存值而不是返回非法数`() {
+        val repo = repository()
+        val snap = KOiLUsdCnyRateSnapshot(
+            month = "2026-11",
+            rate = 6.6676,
+            sampleDays = 6,
+            dataThrough = "2026-11-09",
+            fallbackMonth = "2026-10",
+            fallbackRate = 0.0, // 上月没取到（旧实现会存 0.0）
+            fetchedAt = System.currentTimeMillis(),
+            source = KOiLUsdCnyRateSource.SDMX,
+        )
         assertEquals(6.6676, repo.pick(snap, "2026-10-15")!!, 0.0001)
-        assertEquals(6.6676, repo.pick(snap, "2026-11-05")!!, 0.0001) // 当月且样本够 → 月均值
+        assertEquals(6.6676, repo.pick(snap, "2026-11-05")!!, 0.0001)
     }
 
     // ---------- 回退链 ----------
@@ -257,5 +281,51 @@ class KOiLUsdCnyRateRepositoryTest {
             api = HttpStatusCode.InternalServerError to "",
         )
         assertNull(repo.refreshNow())
+    }
+
+    /**
+     * 连接被重置、DNS 失败、读超时抛的都是普通异常，不是 [withTimeoutOrNull] 负责的
+     * TimeoutCancellationException。若不在单源外面兜住，第一个源一抛就整条链断掉，
+     * 后面的 ECB XML / currency-api 根本没机会跑。
+     *
+     * 旧测试用 500 状态码覆盖「失败」，但 Ktor 默认 expectSuccess=false 时 500 不抛异常，
+     * 恰好掩盖了这条路径。
+     */
+    @Test
+    fun `主源抛网络异常时仍回退到下一个源`() = runBlocking {
+        val engine = MockEngine { request ->
+            val url = request.url.toString()
+            when {
+                url.contains("data-api.ecb.europa.eu") -> throw IOException("connection reset")
+                url.contains("eurofxref") -> respond(ecbXml, HttpStatusCode.OK)
+                else -> respond("", HttpStatusCode.NotFound)
+            }
+        }
+        val repo = KOiLUsdCnyRateRepository(context, engine)
+        val snap = repo.refreshNow(5_000)
+        assertNotNull(snap)
+        assertEquals(KOiLUsdCnyRateSource.ECB_XML, snap!!.source)
+        assertEquals("2026-11-09", snap.dataThrough)
+    }
+
+    /**
+     * 预算必须是整条回退链的总预算，不是每源各一份。
+     * 三个源各 3s、总预算 800ms：正确实现约 800ms 返回（且三个源都没跑完）；
+     * 旧实现会依次等 800×3 = 2400ms。
+     */
+    @Test
+    fun `回退链总耗时受总预算约束而不是每源各算一份`() = runBlocking {
+        val engine = MockEngine {
+            delay(3_000)
+            respond(ecbXml, HttpStatusCode.OK)
+        }
+        val repo = KOiLUsdCnyRateRepository(context, engine)
+        val startedAt = System.currentTimeMillis()
+        val snap = repo.refreshNow(800)
+        val cost = System.currentTimeMillis() - startedAt
+        assertNull(snap)
+        // 旧实现（每源各 800ms）实测 2542ms；正确实现约 800ms。阈值取 1800ms，
+        // 两边都留出近 1s 余量，避免 CI 抖动造成假红。
+        assertTrue("总耗时 ${cost}ms 超出 800ms 总预算过多（旧实现为每源各 800ms）", cost < 1_800)
     }
 }
