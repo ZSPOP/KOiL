@@ -63,6 +63,8 @@ data class AddUiState(
     val forecastDataDate: String? = null,        // EIA 数据截至日期（T+1 滞后，窗口日当天缺末段），腾讯=null
     val forecastReleaseDate: String? = null,     // EIA 源端发布这批数据的日期（比 dataDate 晚 3 天左右），拿不到增量=null
     val forecastSampleDays: Int? = null,         // EIA 本窗口已计入的交易日数（官方口径 10 天），腾讯=null
+    val forecastFxMissing: Boolean = false,      // 预测不可用且原因是汇率未取到（无缓存且全部源失败）→ 空态显示「汇率获取中」而非待检测
+    val forecastFxStale: Boolean = false,        // 本次预测用的汇率快照超 90 天未更新 → 误差行旁弱化提示
     val perLiterEquivalent: Double? = null,      // 折合 元/升（按当前油号密度折算）
     val showPriceAdjust: Boolean = false,        // 油价调整窗口提醒板块（由设置页开关控制）
     /** 满箱标记：本次加油结束油箱是满的（跳枪），与加油量无关；油耗按满箱区间结算 */
@@ -439,11 +441,17 @@ class AddViewModel(
         // 只有成功拿到估算才占用窗口：一次网络失败不应把重试机会也吞掉。
         val now = System.currentTimeMillis()
         if (lastForecastAt != 0L && now - lastForecastAt < FORECAST_MIN_INTERVAL_MS) return
-        val estimate = runCatching { estimator.estimate() }.getOrNull()
+        val outcome = runCatching { estimator.estimateDetailed() }
+            .getOrNull() ?: CrudeOilEstimator.EstimateOutcome.Unavailable
+        val success = outcome as? CrudeOilEstimator.EstimateOutcome.Success
+        val estimate = success?.estimate
         if (estimate != null) lastForecastAt = now
         val forecastAmount = estimate?.amountPerTon
         val litersPerTon = if (_uiState.value.oilGrade == "0") 1205.0 else 1316.0
         val perLiterEquivalent = forecastAmount?.let { Math.round(it / litersPerTon * 100) / 100.0 }
+        // stale 判定用「本次预测实际依据的快照」（estimateDetailed 随 Success 带回），
+        // 不事后重读 currentSnapshot：rateFor 命中旧缓存会触发后台刷新，若刷新先于重读
+        // 完成，重读会把旧值误判为新数据
         _uiState.value = _uiState.value.copy(
             forecastAmount = forecastAmount,
             forecastSource = estimate?.sourceLabel,
@@ -451,6 +459,8 @@ class AddViewModel(
             forecastReleaseDate = estimate?.sourceReleaseDate,
             forecastSampleDays = estimate?.sampleDays,
             perLiterEquivalent = perLiterEquivalent,
+            forecastFxMissing = outcome is CrudeOilEstimator.EstimateOutcome.FxUnavailable,
+            forecastFxStale = success?.let { fxRepository.isStale(it.fxSnapshot) } == true,
         )
     }
 

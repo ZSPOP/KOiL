@@ -69,6 +69,12 @@ data class KOiLUsdCnyRateSnapshot(
     val source: KOiLUsdCnyRateSource,
 )
 
+/** [KOiLUsdCnyRateRepository.rateForDetailed] 的返回：本次实际使用的汇率 + 所依据的缓存快照 */
+data class KOiLUsdCnyRateResult(
+    val rate: Double,
+    val snapshot: KOiLUsdCnyRateSnapshot,
+)
+
 /**
  * USD/CNY 运行时取数与缓存 —— 替代代码内置的 35 个月静态表（原 `UsdCnyMonthly.RATES`）。
  *
@@ -94,7 +100,7 @@ data class KOiLUsdCnyRateSnapshot(
  * 白天拿到的永远是前一日汇率。对油价测算无实质影响（汇率偏 0.3% ≈ 2 元/吨），
  * 但 [KOiLUsdCnyRateSnapshot.dataThrough] 必须如实反映。
  */
-class KOiLUsdCnyRateRepository(
+open class KOiLUsdCnyRateRepository(
     private val context: Context,
     engine: HttpClientEngine? = null,
 ) {
@@ -183,18 +189,33 @@ class KOiLUsdCnyRateRepository(
      * 缓存优先：有缓存立刻返回并在后台刷新；无缓存才同步拉一次（首次安装路径）。
      * 全部失败返回 null —— 调用方应显示「汇率获取中」，不得用 0/NaN 冒充。
      */
-    suspend fun rateFor(date: String): Double? {
+    open suspend fun rateFor(date: String): Double? = rateForDetailed(date)?.rate
+
+    /**
+     * [rateFor] 的带快照版本：一并返回本次取值所依据的缓存快照。
+     * 估算方把它回传给 UI 判 stale——不要事后重读 [currentSnapshot]：rateFor 命中旧缓存
+     * 会触发后台刷新，若刷新先于重读完成，isStale 会把旧值误判为新数据。
+     */
+    open suspend fun rateForDetailed(date: String): KOiLUsdCnyRateResult? {
         val cached = loadSnapshot()
         if (cached != null) {
             refreshInBackground()
-            return pick(cached, date)
+            return pick(cached, date)?.let { KOiLUsdCnyRateResult(it, cached) }
         }
-        return refreshNow(FIRST_LOAD_TIMEOUT_MS)?.let { pick(it, date) }
+        val fresh = refreshNow(FIRST_LOAD_TIMEOUT_MS) ?: return null
+        return pick(fresh, date)?.let { KOiLUsdCnyRateResult(it, fresh) }
     }
 
     /** 缓存是否已过期（超过 [STALE_DAYS] 天）：仍可用，但 UI 可据此弱化表述 */
     fun isStale(snapshot: KOiLUsdCnyRateSnapshot, now: Long = System.currentTimeMillis()): Boolean =
         now - snapshot.fetchedAt > STALE_DAYS * 24 * 60 * 60 * 1000
+
+    /**
+     * 当前缓存快照（内存 → DataStore，不触发网络、不后台刷新）。
+     * [snapshot] 只在后台刷新成功时发布，读缓存路径不发布——UI 要判断「汇率是否就绪 /
+     * 是否过期」必须走这里，否则「有缓存但没刷新过」会被误判为「汇率未就绪」。
+     */
+    open suspend fun currentSnapshot(): KOiLUsdCnyRateSnapshot? = loadSnapshot()
 
     /**
      * 按已裁决口径选值：

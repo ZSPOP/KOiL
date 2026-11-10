@@ -387,7 +387,8 @@ open class OilPriceNetwork {
      * WPSR 价格表 JSON 补最近 6 个交易日（见 [KOiLEiaSpotTableParser]）。
      * 增量失败一律静默降级为纯 v2——功能不挂，只是数据旧几天、且没有发布日可显示。
      */
-    suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): KOiLEiaBrentSeries {
+    // open：单测需要注入假 EIA 曲线（验证「EIA 汇率失败后腾讯路径不再重复同步取数」）
+    open suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): KOiLEiaBrentSeries {
         if (apiKey.isBlank()) return KOiLEiaBrentSeries(emptyList())
         val url = "https://api.eia.gov/v2/petroleum/pri/spt/data/" +
             "?frequency=daily" +
@@ -441,7 +442,7 @@ open class OilPriceNetwork {
      * 实测返回示例：v_hf_OIL="110.45,-1.12,110.39,110.40,110.98,109.22,15:46:57,111.70,110.85,0,3,4,2026-10-26,布伦特原油"
      * 字段：index0=现价、index7=昨收（验证：现价110.45/涨跌幅-1.12% → 昨收=110.45/(1-0.0112)=111.70 ✓）
      */
-    suspend fun fetchTencentBrent(): Pair<Double, Double>? {
+    open suspend fun fetchTencentBrent(): Pair<Double, Double>? {
         return try {
             val body = client.get("https://qt.gtimg.cn/q=hf_OIL") {
                 header("Referer", "https://gu.qq.com/")

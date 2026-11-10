@@ -352,4 +352,22 @@ class KOiLUsdCnyRateRepositoryTest {
         assertEquals(KOiLUsdCnyRateSource.SDMX, snap!!.source)
         assertEquals(3, snap.sampleDays)
     }
+
+    /**
+     * currentSnapshot 是 UI 判断「汇率是否就绪/是否过期」的入口，与 [snapshot] Flow 的
+     * 区别在于：后者只在后台刷新成功时发布，读缓存路径（rateFor 命中 DataStore）不经过它。
+     * 若 UI 误用 Flow 的当前值，「有缓存但本轮没触发刷新」会被误判为「汇率未就绪」。
+     * （Robolectric 同配置用例共享 DataStore 单例，断言只对「刷新后应可读到同一份」这个
+     * 不依赖初始状态的性质，不假设测试开始时缓存为空。）
+     */
+    @Test
+    fun `currentSnapshot 读 DataStore 缓存而不只是内存 Flow`() = runBlocking {
+        val repo = repository(
+            sdmx = HttpStatusCode.OK to sdmxCsv,
+            xml = HttpStatusCode.OK to ecbXml,
+            api = HttpStatusCode.OK to currencyApiJson,
+        )
+        val fresh = repo.refreshNow(5_000)!!
+        assertEquals(fresh, repo.currentSnapshot())
+    }
 }

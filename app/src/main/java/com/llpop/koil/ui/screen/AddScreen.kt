@@ -92,21 +92,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 
 /**
- * 预测幅度**较公告**的误差（元/吨），供 UI 次级行「较公告误差 ±170（P90 ±300）」。
- *
- * 口径：25 轮真实调价公告 vs 本 App 机制测算，MAE 173.4 → 取整 ±170，P90 ≈ 300。
- *
- * 【必须写清参照物】这组数衡量的是「预测跟发改委公告差多少」，不是「预测跟机制应调金额差多少」。
- * 后者（22 轮机制口径 MAE 133.5）是 PR #2 的**验收**指标，只该出现在验收报告里——
- * 两个数混进同一句 UI，用户会以为这是一个数的两种说法。所以文案里固定写「较公告误差」，
- * 不再用「历史误差」这种无主语的写法。
- *
- * 这组数不是承诺，是让用户知道「±170 是常态、±300 是极端」，不把估算当公告读。
- */
-private const val FORECAST_ERR_MAE = 170
-private const val FORECAST_ERR_P90 = 300
-
-/**
  * 录入页（M2 完整实现）
  * - 油价四宫格柔光卡（当前省份四油号最新价格）
  * - 上次加油条（一键沿用）
@@ -609,8 +594,8 @@ private fun OilPriceCard(
                 val forecast = uiState.forecastAmount
                 val perLiter = uiState.perLiterEquivalent
                 val rising = forecast != null && forecast > 0
-                // 估算失败（EIA+腾讯均不可用）时不驱动建议——历史涨跌不预示下一轮方向（因果不成立），
-                // 只显示「待检测」徽章（forecast==null 时 suggestion 为空，由 else 分支兜底）
+                // 估算失败时不驱动建议——历史涨跌不预示下一轮方向（因果不成立），不给任何建议徽章；
+                // forecast==null 时下方按原因分两种空态：汇率没取到显示「汇率获取中」，其余什么都不显示
                 val suggestion = when {
                     rising -> stringResource(R.string.koil_add_suggest_early)
                     forecast != null -> stringResource(R.string.koil_add_suggest_wait)
@@ -660,21 +645,11 @@ private fun OilPriceCard(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
-                            // 建议徽章放在窗口日行右侧（右对齐、垂直居中）
-                            if (suggestion.isNotEmpty()) {
-                                Spacer(Modifier.width(6.dp))
-                                AdjustBadge(
-                                    text = suggestion,
-                                    color = if (urgent) urgentColor else accent,
-                                    bold = true,
-                                )
-                            }
                         }
                         if (forecast != null) {
-                            // 三段式：头行给结论并写明口径是「按机制测算」，第二行无条件提示可能不成立，
-                            // 第三行给数据时点与**较公告**误差。原先用一个徽章把口径/时点/折合全塞进括号，
-                            // 用户只看得到「预计上调170元/吨」——既不知道这是机制测算还是拍脑袋，
-                            // 也不知道这个数在历史上偏多少。
+                            // 三段式：头行给结论（「机制预测：上调约 X 元/吨」），第二行左侧提示以公告为准、
+                            // 右侧放建议徽章（两者贴在一起读），第三行给数据时点。原先徽章放在窗口日行
+                            // 右侧、与免责句分离，用户看到「建议提前加油」时不知道它跟哪个结论绑定。
                             val eiaSource = uiState.forecastSource != "腾讯"
                             // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
                             // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
@@ -706,12 +681,34 @@ private fun OilPriceCard(
                             )
                             Spacer(Modifier.height(3.dp))
                             // 这句不是免责套话：25 轮公告里有 4 轮被行政压价（且只压不托底），
-                            // 机制算出来的数和公告本来就会不一样，必须让用户知道以公告为准
-                            Text(
-                                text = stringResource(R.string.koil_add_forecast_caveat),
-                                fontSize = 11.sp,
-                                color = textColor.copy(alpha = 0.65f),
-                            )
+                            // 机制算出来的数和公告本来就会不一样。建议徽章跟这行同一行右侧——
+                            // 「最终调控以发改委公告为准 · 建议提前加油」是一组话，不该拆到两行
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.koil_add_forecast_caveat),
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.65f),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (suggestion.isNotEmpty()) {
+                                    Spacer(Modifier.width(6.dp))
+                                    AdjustBadge(
+                                        text = suggestion,
+                                        color = if (urgent) urgentColor else accent,
+                                        bold = true,
+                                    )
+                                }
+                            }
+                            if (uiState.forecastFxStale) {
+                                // 汇率缓存超 90 天：数值仍给出（有边界比没有好），但如实告知数据旧，
+                                // 提示用户这次误差可能比平时大
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.koil_add_forecast_fx_stale),
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.65f),
+                                )
+                            }
                             if (eiaSource) {
                                 // 样本天数改成恒显示：满窗口也写「已计入 10 个交易日」，
                                 // 只在 <10 时显示会让满窗口看起来像没标样本的最终值。
@@ -739,13 +736,6 @@ private fun OilPriceCard(
                                     uiState.forecastSampleDays?.let {
                                         add(stringResource(R.string.koil_add_forecast_sample, it))
                                     }
-                                    add(
-                                        stringResource(
-                                            R.string.koil_add_forecast_history_err,
-                                            FORECAST_ERR_MAE,
-                                            FORECAST_ERR_P90,
-                                        ),
-                                    )
                                 }
                                 Spacer(Modifier.height(2.dp))
                                 Text(
@@ -756,6 +746,15 @@ private fun OilPriceCard(
                                     color = textColor.copy(alpha = 0.65f),
                                 )
                             }
+                        } else if (uiState.forecastFxMissing) {
+                            // 与普通「待检测」区分开：这是汇率没取到（快照到位会触发重算、自动出数），
+                            // 不是 EIA/腾讯都挂了。合并成一个空态用户会以为卡死。
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = stringResource(R.string.koil_add_forecast_fx_pending),
+                                fontSize = 11.sp,
+                                color = textColor.copy(alpha = 0.65f),
+                            )
                         }
                     }
                 }
