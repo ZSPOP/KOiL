@@ -19,7 +19,7 @@
     <string name="koil_add_field_mileage">本次里程 (km)</string>
     <string name="koil_add_field_oil_amount">加油量 (L)</string>
     <string name="koil_add_full_tank">本次加滿（跳槍）</string>
-    <string name="koil_add_full_tank_hint">「本次加滿」指加油槍跳槍，與加油量多少無關；未加滿的記錄將在下次加滿後統一結算油耗</string>
+    <string name="koil_add_full_tank_hint">未加滿的記錄將在下次加滿後統一結算油耗</string>
     <string name="koil_add_field_payable">應付金額 (元)</string>
     <string name="koil_add_field_actual">實付金額 (元)</string>
     <string name="koil_add_adding">新增中…</string>
@@ -35,18 +35,19 @@
     <plurals name="koil_add_window_days">
     <item quantity="other"> · 還有 %1$d 天</item>
     </plurals>
-    <string name="koil_add_forecast_mech_up">按機制測算：預計上調約 %1$s 元/噸</string>
-    <string name="koil_add_forecast_mech_down">按機制測算：預計下調約 %1$s 元/噸</string>
-    <string name="koil_add_forecast_mech_stranded">按機制測算：預計擱淺（幅度約 %1$s 元/噸）</string>
+    <string name="koil_add_forecast_mech_up">機制預測：上調約 %1$s 元/噸</string>
+    <string name="koil_add_forecast_mech_down">機制預測：下調約 %1$s 元/噸</string>
+    <string name="koil_add_forecast_mech_stranded">機制預測：擱淺（幅度約 %1$s 元/噸）</string>
     <string name="koil_add_forecast_single_up">單日參考：上調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_single_down">單日參考：下調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_per_liter">（折合約 %1$.2f 元/升）</string>
-    <string name="koil_add_forecast_caveat">實際可能因調控與測算不同，以發改委公告為準</string>
+    <string name="koil_add_forecast_caveat">最終調控以發改委公告為準</string>
     <string name="koil_add_forecast_as_of">截至 %1$s</string>
     <string name="koil_add_forecast_released">源端 %1$s 發布</string>
     <string name="koil_add_forecast_sample">已計入 %1$d 個交易日</string>
-    <string name="koil_add_forecast_history_err">較公告誤差 ±%1$d（P90 ±%2$d）</string>
     <string name="koil_add_forecast_meta_sep">" · "</string>
+    <string name="koil_add_forecast_fx_pending">匯率獲取中，暫無法測算</string>
+    <string name="koil_add_forecast_fx_stale">匯率資料較舊（超 90 天未更新）</string>
     <string name="koil_add_unit_per_liter">元/升</string>
     <string name="koil_add_last_refuel">上次加油</string>
     <string name="koil_add_no_record">暫無記錄</string>

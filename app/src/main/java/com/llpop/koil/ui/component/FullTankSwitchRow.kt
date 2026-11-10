@@ -13,8 +13,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.R
-import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -23,6 +23,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 「加满」= 加油枪跳枪，与加油量多少无关——加 25L 可以是加满（剩 40L 补到跳枪），
  * 加 60L 也可能未满；判定权完全在用户，不做任何基于油量的自动推断。
  * 油耗只在「满箱 → 满箱」区间结算，未满记录待下次加满后一次结算。
+ *
+ * 开关用 [MiniSwitch]（34×20dp，与设置页「自动更新」一致），不用默认 Miuix Switch
+ * （52×32dp 会把这一行撑得比其他表单行高出一截）。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -40,7 +43,12 @@ fun FullTankSwitchRow(
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(8.dp))
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            MiniSwitch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                trackOn = KOiLColors.Primary,
+                trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
+            )
         }
         Spacer(Modifier.height(4.dp))
         Text(

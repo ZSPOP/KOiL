@@ -161,8 +161,24 @@ class CrudeOilEstimator(
         }
     }
 
-    suspend fun estimate(): CrudeOilEstimate? {
+    /**
+     * 取不到时的结果要分原因：失败不带原因，UI 只能统一显示「待检测」，
+     * 「汇率没取到（快照到位后能自动出数）」和「EIA/腾讯都不可用」就会被混成一种，
+     * 用户分不清是卡死还是真的没数据。
+     */
+    sealed interface EstimateOutcome {
+        data class Success(val estimate: CrudeOilEstimate) : EstimateOutcome
+
+        /** 汇率不可用：无缓存且所有汇率源取数失败。快照到位后 [KOiLUsdCnyRateRepository.snapshot] 会触发重算 */
+        data object FxUnavailable : EstimateOutcome
+
+        /** EIA/腾讯均不可用等其它原因，与汇率无关 */
+        data object Unavailable : EstimateOutcome
+    }
+
+    suspend fun estimateDetailed(): EstimateOutcome {
         val today = LocalDate.now().toString()
+        var fxFailed = false
         // 数据源开关——关 = 直接用腾讯（不请求 EIA）；开 = EIA 主源 → 失败降级腾讯
         val eiaOn = settings.eiaEnabled.first()
         if (eiaOn) {
@@ -182,14 +198,18 @@ class CrudeOilEstimator(
                     if (fx != null) {
                         val calc = calcFromEiaSeries(eia.points, adjustDates, baseDate, today, fx)
                         if (calc != null) {
-                            return CrudeOilEstimate(
-                                amountPerTon = calc.amountPerTon,
-                                sourceLabel = "EIA",
-                                dataDate = calc.dataDate,
-                                sampleDays = calc.sampleDays,
-                                sourceReleaseDate = eia.releaseDate,
+                            return EstimateOutcome.Success(
+                                CrudeOilEstimate(
+                                    amountPerTon = calc.amountPerTon,
+                                    sourceLabel = "EIA",
+                                    dataDate = calc.dataDate,
+                                    sampleDays = calc.sampleDays,
+                                    sourceReleaseDate = eia.releaseDate,
+                                ),
                             )
                         }
+                    } else {
+                        fxFailed = true
                     }
                 }
             }
@@ -198,10 +218,16 @@ class CrudeOilEstimator(
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
             // 汇率拿不到就不给假值：乘 0 会把幅度静默算成 0，比不显示更糟
-            val fx = fxRepository.rateFor(today) ?: return null
-            val deltaP = tencent.first - tencent.second
-            return CrudeOilEstimate(deltaP * BARRELS_PER_TON * fx, "腾讯")
+            val fx = fxRepository.rateFor(today)
+            if (fx == null) {
+                fxFailed = true
+            } else {
+                val deltaP = tencent.first - tencent.second
+                return EstimateOutcome.Success(CrudeOilEstimate(deltaP * BARRELS_PER_TON * fx, "腾讯"))
+            }
         }
-        return null
+        // 汇率确实尝试过且失败的，报 FxUnavailable（这是能自动恢复的那种失败，空态文案不同）；
+        // 其余（腾讯也挂了/EIA 序列断档）报 Unavailable。两者都拿不到数，但 UI 表述要分开。
+        return if (fxFailed) EstimateOutcome.FxUnavailable else EstimateOutcome.Unavailable
     }
 }

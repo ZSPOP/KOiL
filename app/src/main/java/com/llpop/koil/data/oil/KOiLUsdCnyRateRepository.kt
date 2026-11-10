@@ -94,7 +94,7 @@ data class KOiLUsdCnyRateSnapshot(
  * 白天拿到的永远是前一日汇率。对油价测算无实质影响（汇率偏 0.3% ≈ 2 元/吨），
  * 但 [KOiLUsdCnyRateSnapshot.dataThrough] 必须如实反映。
  */
-class KOiLUsdCnyRateRepository(
+open class KOiLUsdCnyRateRepository(
     private val context: Context,
     engine: HttpClientEngine? = null,
 ) {
@@ -183,7 +183,7 @@ class KOiLUsdCnyRateRepository(
      * 缓存优先：有缓存立刻返回并在后台刷新；无缓存才同步拉一次（首次安装路径）。
      * 全部失败返回 null —— 调用方应显示「汇率获取中」，不得用 0/NaN 冒充。
      */
-    suspend fun rateFor(date: String): Double? {
+    open suspend fun rateFor(date: String): Double? {
         val cached = loadSnapshot()
         if (cached != null) {
             refreshInBackground()
@@ -195,6 +195,13 @@ class KOiLUsdCnyRateRepository(
     /** 缓存是否已过期（超过 [STALE_DAYS] 天）：仍可用，但 UI 可据此弱化表述 */
     fun isStale(snapshot: KOiLUsdCnyRateSnapshot, now: Long = System.currentTimeMillis()): Boolean =
         now - snapshot.fetchedAt > STALE_DAYS * 24 * 60 * 60 * 1000
+
+    /**
+     * 当前缓存快照（内存 → DataStore，不触发网络、不后台刷新）。
+     * [snapshot] 只在后台刷新成功时发布，读缓存路径不发布——UI 要判断「汇率是否就绪 /
+     * 是否过期」必须走这里，否则「有缓存但没刷新过」会被误判为「汇率未就绪」。
+     */
+    open suspend fun currentSnapshot(): KOiLUsdCnyRateSnapshot? = loadSnapshot()
 
     /**
      * 按已裁决口径选值：

@@ -99,6 +99,7 @@ import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
+import com.llpop.koil.ui.component.MiniSwitch
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -2150,36 +2151,6 @@ private fun SettingRow(
 /** 油价涨跌色（与明细页口径一致：涨红 / 跌绿） */
 private val PriceUpColor = Color(0xFFE53935)
 private val PriceDownColor = Color(0xFF43A047)
-
-/**
- * 迷你开关（34×20dp）：用于「自动更新」按钮内部。
- * 不用 Material Switch 是因为它自带 52×32dp 尺寸与最小触摸区，塞进按钮要么撑高行高、
- * 要么得靠 scale 缩放（缩放后点击区仍是原尺寸，位置会偏）。
- */
-@Composable
-private fun MiniSwitch(
-    checked: Boolean,
-    trackOn: Color,
-    trackOff: Color,
-) {
-    val knobOffset by animateDpAsState(if (checked) 15.dp else 0.dp, label = "miniSwitchKnob")
-    Box(
-        modifier = Modifier
-            .size(width = 34.dp, height = 20.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (checked) trackOn else trackOff),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Box(
-            modifier = Modifier
-                .padding(start = 2.dp)
-                .offset { IntOffset(knobOffset.roundToPx(), 0) }
-                .size(16.dp)
-                .clip(CircleShape)
-                .background(Color.White),
-        )
-    }
-}
 
 @Composable
 private fun StatQuadItem(
