@@ -6,6 +6,7 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.CrudeOilEstimator
+import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.OilPriceDbSyncer
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -100,6 +102,7 @@ class AddViewModel(
     private val locationHelper: LocationHelper,
     private val syncer: OilPriceDbSyncer,
     private val estimator: CrudeOilEstimator,
+    private val fxRepository: KOiLUsdCnyRateRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddUiState())
@@ -129,6 +132,16 @@ class AddViewModel(
         val today = LocalDate.now().format(dateFormatter)
         _uiState.update { it.copy(date = today) }
         scheduleDayRefresh()
+
+        // 汇率改为运行时获取（缓存优先 + 后台刷新）后，预测可能先于新汇率算完：
+        // 后台刷新回来必须重算一次，否则用户看到的是用旧汇率算出的幅度，要等下一次
+        // 8 小时周期刷新才更新。drop(1) 跳过 StateFlow 的初始值——那是内存缓存恢复，不是新数据。
+        viewModelScope.launch {
+            fxRepository.snapshot.drop(1).collect {
+                lastForecastAt = 0L // 解除 10 分钟节流，让汇率变化立刻反映到预测
+                refreshForecast()
+            }
+        }
 
         // 预检去抖执行（runPrecheck 只发信号）
         viewModelScope.launch {
