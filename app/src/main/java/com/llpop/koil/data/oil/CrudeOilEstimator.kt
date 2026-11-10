@@ -31,8 +31,12 @@ internal data class CrudeOilCalcResult(
  * - 基准均值 = EIA 中【上一期窗口跨度】(上一窗口日, 基准窗口日] 内交易日均价（不是固定前取 10 个交易日——
  *   跨国庆/春节的周期有 11~15 个交易日，固定前取会丢掉周期头部，把基准挪向周期末段）
  * - 本窗口均值 = (上一窗口日, 今天] 内的 EIA 交易日均价，**只取窗口内，不足 10 天不回补**
- * - 变化率 = (本窗口均值 − 基准均值) ÷ 基准均值 × 100
- * - 系数：1% ≈ 56.5 元/吨（新闻实证：变化率 5.4% → 约 305 元/吨）
+ * - 幅度 = (本窗口均价 − 基准均价) × 7.33(桶/吨) × 汇率(CNY/USD) × k
+ * 旧实现用「变化率 × 56.5 元/吨」：56.5 其实是（布伦特 108 美元、汇率 7.14）那天的快照
+ * （`56.5 = 0.01 × 7.33 × 7.14 × 108`），把汇率与油价一起冻在快照里，一漂移就失真——实测隐含系数
+ * 在 23.4~69.5 之间波动，固定 56.5 与单位换算口径差均值 74.9、最大 362.4 元/吨。现改为显式单位换算。
+ * passthrough 系数 k 经 23 轮公告回测（最小二乘）为 0.978≈1，故取 1，不引入拟合参数：
+ * 加任何动态/滚动/分段拟合都让 MAE 变差（194.2 → 153.0 是 k=1 带来的，再乘中位 k=1.17 会回退到 176.2）。
  * 基准缺失（库里暂无任何非搁浅调价）→ 回退「本窗口 vs 上窗口」环比（仅作兜底方向参考）。
  *
  * 【源】主源 EIA 官方（布伦特现货 RBRTE，免费 Key 内置默认）；降级腾讯实时（单日方向，UI 标「单日参考」）。
@@ -45,8 +49,6 @@ class CrudeOilEstimator(
 ) {
 
     companion object {
-        /** 元/吨 每 1% 变化率（经验系数，官方机制为三地原油均值挂靠，本地仅布伦特单源近似） */
-        const val COEFF_PER_PERCENT = 56.5
         /** EIA 需要至少 20 条日度数据才够 10+10 均值比较 */
         private const val MIN_EIA_POINTS = 20
         /** 官方口径：一个计价期 = 10 个工作日（UI 用它判断是否标注「已计入 N 个交易日」，故对外可见） */
@@ -76,7 +78,8 @@ class CrudeOilEstimator(
          *
          * 【本窗口】严格只取 (上一窗口日, 今天] 内的交易日，**不足 10 天绝不回补上一窗口**：
          * 旧实现是「在全序列里往前取 10 个交易日」，调价后头几天会把上一窗口的走势混进本窗口，
-         * 把幅度稀释到接近 0（实测某窗口本窗口仅 2 天、混入 8 天旧数据，输出 -91.5，仅窗口内为 -647.8）。
+         * 把幅度稀释到接近 0（实测某窗口本窗口仅 2 天，混入 8 天旧数据后幅度只剩十分之一左右，
+         * 而仅用窗口内两天为 -678.6 元/吨）。
          * 官方口径随窗口推进从 N 天收敛到 10 天，样本天数由 [CrudeOilEstimate.sampleDays] 透出，
          * 由 UI 标注「已计入 N 个交易日」，不假装是完整窗口。
          *
@@ -87,12 +90,14 @@ class CrudeOilEstimator(
          * 窗口日历未就绪 → 回退「最近 10 vs 前 10」硬切。
          *
          * @param today 传入当天日期（默认系统日期），便于单测固定时间轴
+         * @param fxRate 汇率（CNY/USD）；null 时按 [latest] 所在月份从 [UsdCnyMonthly] 取，单测可注入固定值
          */
         internal fun calcFromEiaSeries(
             points: List<Pair<String, Double>>,
             adjustDates: List<String>,
             baseDate: String?,
             today: String = LocalDate.now().toString(),
+            fxRate: Double? = null,
         ): CrudeOilCalcResult? {
             if (points.size < MIN_EIA_POINTS) return null
             val prevWindow = adjustDates.filter { it < today }.lastOrNull()
@@ -133,9 +138,12 @@ class CrudeOilEstimator(
 
             val baseAvg = base.average()
             if (baseAvg <= 0) return null
-            val changePct = (recent.average() - baseAvg) / baseAvg * 100.0
             val latest = points.lastOrNull { it.first <= today }?.first ?: return null
-            return CrudeOilCalcResult(changePct * COEFF_PER_PERCENT, latest, recent.size)
+            // 元/吨 = 原油价差(USD/bbl) × 桶吨换算 × 汇率(CNY/USD)，k=1
+            // 不再走「变化率 × 56.5」：那个系数把油价与汇率一起冻在快照上，油价中枢一偏就系统性失真
+            val deltaP = recent.average() - baseAvg
+            val fx = fxRate ?: UsdCnyMonthly.rateFor(latest)
+            return CrudeOilCalcResult(deltaP * UsdCnyMonthly.BARRELS_PER_TON * fx, latest, recent.size)
         }
     }
 
@@ -162,8 +170,9 @@ class CrudeOilEstimator(
         // 降级/直选：腾讯布伦特期货实时（单日涨跌，仅方向参考——UI 按来源标注「单日参考」，不冒充窗口幅度）
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
-            val pct = (tencent.first - tencent.second) / tencent.second
-            return CrudeOilEstimate(pct * 100 * COEFF_PER_PERCENT, "腾讯")
+            val deltaP = tencent.first - tencent.second
+            val fx = UsdCnyMonthly.rateFor(LocalDate.now().toString())
+            return CrudeOilEstimate(deltaP * UsdCnyMonthly.BARRELS_PER_TON * fx, "腾讯")
         }
         return null
     }
