@@ -23,10 +23,13 @@ import java.util.Locale
  */
 internal object KOiLEiaSpotTableParser {
 
-    /** 页面内部端点：788 B、application/json、无需 key、无 WAF（实测直连 200） */
+    /** 页面内部端点：约 2 KB、application/json、无需 key、无 WAF（实测直连 200） */
     const val URL = "https://www.eia.gov/petroleum/prices/data/12_series/D/PET_PRI_SPT_S1_D.json"
 
     private const val SERIES_KEY = "RBRTE"
+
+    /** 价格列之前的固定描述列：indent 类名、展示名、年份范围 */
+    private const val DESC_COLUMNS = 3
 
     /** thead 是 `MM/dd/yy`；两位年份按 2000 起算（EIA 这份数据从 1987 起，不会撞到 19xx） */
     private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy", Locale.US)
@@ -52,14 +55,18 @@ internal object KOiLEiaSpotTableParser {
         // 行首 3 项是 [indent 类名, 展示名, 年份范围]，价格在其后。
         // 不硬编码 3，改成「右侧对齐」：取尾部 thead.size 个元素。
         // 对齐后必须**全是数字或空串**——描述列（indent 类名、年份范围）一旦被算进价格区，
-        // 就说明列数已经对不上；此时宁可不补，错位一格会安静地算出个像模像样的错数。
-        if (row.size < thead.size) return emptyList()
-        val values = row.subList(row.size - thead.size, row.size)
-        val aligned = values.all { cell ->
-            val text = (cell as? JsonPrimitive)?.content ?: return@all false
-            text.isBlank() || text.toDoubleOrNull() != null
+        // 结构判断只看「形状」，不看「值」——这是上一版的 bug 所在：
+        // 曾用「尾部 N 个全部可解析」判断对齐，结果 6 天里只要有一天是 `n/a`，
+        // 整条 RBRTE 行就被当成结构错位丢掉，App 仍然停在旧日期，比不修还差（少一天 ≠ 全丢）。
+        // 现在改成：描述列固定 3 列（indent 类名 / 展示名 / 年份范围），价格列数必须与 thead 相等。
+        if (row.size != DESC_COLUMNS + thead.size) return emptyList()
+        // 前 3 列必须都不是价格。若连「indent_0 / Brent - Europe / 1987 - 2026」都变成数字，
+        // 说明列序已经变了，此时按位置取值必然错位，整条丢弃
+        val descIsText = row.subList(0, DESC_COLUMNS).none { cell ->
+            (cell as? JsonPrimitive)?.content?.toDoubleOrNull() != null
         }
-        if (!aligned) return emptyList()
+        if (!descIsText) return emptyList()
+        val values = row.subList(DESC_COLUMNS, row.size)
 
         return thead.indices
             .mapNotNull { i ->

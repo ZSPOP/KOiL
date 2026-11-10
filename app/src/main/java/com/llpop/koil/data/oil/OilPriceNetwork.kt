@@ -364,8 +364,11 @@ open class OilPriceNetwork {
 
     /**
      * EIA 官方布伦特现货日度价（RBRTE 系列，美元/桶，交易日数据，含完整历史）。
-     * 返回按日期升序的 (date, price) 列表（最多 length 条）；Key 无效/接口失败返回空列表。
-     * 实测：免费注册 Key 即用，配额 1000 次/日。
+     * 返回按日期升序的 (date, price) 列表：v2 的 `length` 条 + WPSR 增量（最多 6 条）按日期合并，
+     * 重叠日期以增量为准，所以条数可能超过 `length`（默认最多 30 + 6）。
+     * 不做 `takeLast(length)` 截断——被截掉的正是最老那几天，而基准窗口就落在最老端，
+     * 截一刀会让基准样本不足，整块预测直接消失。
+     * Key 无效/接口失败返回空列表。
      *
      * 数据取自两条同源链路的并集：v2 API 拿历史（实测比 WPSR 价格表慢 3 天），
      * WPSR 价格表 JSON 补最近 6 个交易日（见 [KOiLEiaSpotTableParser]）。

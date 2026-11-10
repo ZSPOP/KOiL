@@ -17,7 +17,7 @@ import org.junit.Test
  *
  * fixture 是 2026-11-10 从
  * `https://www.eia.gov/petroleum/prices/data/12_series/D/PET_PRI_SPT_S1_D.json`
- * 原样抓下来的 788 字节响应（未修剪），其中 `RWTC` 排在 `RBRTE` 前面——
+ * 原样抓下来的响应（约 2 KB，未修剪），其中 `RWTC` 排在 `RBRTE` 前面——
  * 正好用来证明代码是按 key 找行，不是按数组下标。
  */
 class KOiLEiaSpotTableParserTest {
@@ -62,19 +62,28 @@ class KOiLEiaSpotTableParserTest {
     }
 
     @Test
-    fun `行元素少于表头数量时整条丢弃`() {
-        // 5 个元素配 6 个日期，尾部对齐也无从谈起
+    fun `价格列少于表头数量时整条丢弃`() {
+        // 3 个描述列 + 2 个价格 = 5，配 6 个日期，列数对不上
         val body = """{"thead":["11/06/26","11/05/26","11/04/26","11/03/26","11/02/26","10/30/26"],""" +
             """"tbody":[{"data":{"RBRTE":["indent_0","Brent - Europe","1987 - 2026","97.83","97.96"]}}]}"""
         assertTrue(KOiLEiaSpotTableParser.parse(body).isEmpty())
     }
 
     @Test
-    fun `尾部对齐后混进描述列时整条丢弃`() {
-        // 7 个元素配 6 个日期：尾部 6 个会把「Brent - Europe」和年份范围算进价格区，
-        // 这种错位不会抛异常，只会把日期和价格整体错开一格
+    fun `价格列多于表头数量时整条丢弃`() {
+        // 3 + 4 = 7 配 6 个日期：多出来的那一格会让日期和价格整体错开，
+        // 这种错位不抛异常、只算错，必须整条丢弃而不是「尾部对齐凑合用」
         val body = """{"thead":["11/06/26","11/05/26","11/04/26","11/03/26","11/02/26","10/30/26"],""" +
             """"tbody":[{"data":{"RBRTE":["indent_0","Brent - Europe","1987 - 2026","97.83","97.96","91.84","107.03"]}}]}"""
+        assertTrue(KOiLEiaSpotTableParser.parse(body).isEmpty())
+    }
+
+    @Test
+    fun `描述列位置出现数字时整条丢弃`() {
+        // 前 3 列本该是 indent 类名 / 展示名 / 年份范围；一旦它们是数字，
+        // 说明列序变了，按位置取到的「价格」其实是别的东西
+        val body = """{"thead":["11/06/26","11/05/26"],""" +
+            """"tbody":[{"data":{"RBRTE":["1","2","3","97.83","97.96"]}}]}"""
         assertTrue(KOiLEiaSpotTableParser.parse(body).isEmpty())
     }
 
@@ -89,15 +98,16 @@ class KOiLEiaSpotTableParserTest {
     }
 
     @Test
-    fun `单日非正数或非数字跳过当天`() {
-        val zero = realResponse.replace(""""91.84"""", """"0"""")
-        assertNull(KOiLEiaSpotTableParser.parse(zero).firstOrNull { it.first == "2026-11-04" })
-
-        val negative = realResponse.replace(""""91.84"""", """"-3.2"""")
-        assertNull(KOiLEiaSpotTableParser.parse(negative).firstOrNull { it.first == "2026-11-04" })
-
-        val junk = realResponse.replace(""""91.84"""", """"n/a"""")
-        assertNull(KOiLEiaSpotTableParser.parse(junk).firstOrNull { it.first == "2026-11-04" })
+    fun `单日非正数或非数字只跳过当天`() {
+        // 这里的关键断言是 size == 5 且其余日期仍在。只断言「11-04 不存在」的话，
+        // 整条被丢弃（返回空表）也能通过——上一版就是这么假绿的
+        listOf("0", "-3.2", "n/a", "null").forEach { bad ->
+            val points = KOiLEiaSpotTableParser.parse(realResponse.replace("\"91.84\"", "\"$bad\""))
+            assertEquals("值 $bad 应只跳过 11-04，不该丢整条", 5, points.size)
+            assertNull(points.firstOrNull { it.first == "2026-11-04" })
+            assertEquals("2026-11-03" to 107.03, points.firstOrNull { it.first == "2026-11-03" })
+            assertEquals("2026-11-06" to 97.83, points.firstOrNull { it.first == "2026-11-06" })
+        }
     }
 
     @Test
