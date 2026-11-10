@@ -61,6 +61,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.data.oil.CrudeOilEstimator
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
@@ -681,7 +682,21 @@ private fun OilPriceCard(
                                                 "(" + stringResource(
                                                     R.string.koil_add_forecast_as_of,
                                                     uiState.forecastDataDate.takeLast(5),
-                                                ) + ")"
+                                                ) +
+                                                    // 窗口未走满 10 个交易日时标注实际样本天数——幅度随样本增加而收敛，
+                                                    // 不标注会让「调价后头几天的小样本估算」被误读为完整窗口结论。
+                                                    // 只写「已计入 N 个交易日」不写 /10：EIA 交易日数与国内工作日数本来就不等
+                                                    // （30 个窗口里 11 个 ≠10），写死 /10 会让用户以为数据缺失。
+                                                    (uiState.forecastSampleDays
+                                                        ?.takeIf { it < CrudeOilEstimator.WINDOW_DAYS }
+                                                        ?.let {
+                                                            " " + stringResource(
+                                                                R.string.koil_add_forecast_sample,
+                                                                it,
+                                                            )
+                                                        }
+                                                        ?: "") +
+                                                    ")"
                                             } else {
                                                 ""
                                             } +

@@ -59,6 +59,7 @@ data class AddUiState(
     val forecastAmount: Double? = null,          // 预计调整 元/吨（正涨负跌，恒来自 EIA/腾讯本地估算）
     val forecastSource: String? = null,          // 估算来源："EIA"（窗口幅度估算）/ "腾讯"（单日方向参考）
     val forecastDataDate: String? = null,        // EIA 数据截至日期（T+1 滞后，窗口日当天缺末段），腾讯=null
+    val forecastSampleDays: Int? = null,         // EIA 本窗口已计入的交易日数（官方口径 10 天），腾讯=null
     val perLiterEquivalent: Double? = null,      // 折合 元/升（按当前油号密度折算）
     val showPriceAdjust: Boolean = false,        // 油价调整窗口提醒板块（由设置页开关控制）
     /** 满箱标记：本次加油结束油箱是满的（跳枪），与加油量无关；油耗按满箱区间结算 */
@@ -433,6 +434,7 @@ class AddViewModel(
             forecastAmount = forecastAmount,
             forecastSource = estimate?.sourceLabel,
             forecastDataDate = estimate?.dataDate,
+            forecastSampleDays = estimate?.sampleDays,
             perLiterEquivalent = perLiterEquivalent,
         )
     }

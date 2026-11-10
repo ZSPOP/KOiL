@@ -4,21 +4,33 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.settings.AppSettings
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+import kotlin.math.abs
 
 /** 原油估算结果：有符号元/吨（正涨负跌）+ 来源说明 + 数据截至日期（EIA 为 T+1，窗口日当天缺末段） */
 data class CrudeOilEstimate(
     val amountPerTon: Double,
     val sourceLabel: String,
     val dataDate: String? = null,   // "yyyy-MM-dd"；EIA 路径=已用到的最后交易日，腾讯路径=null（实时）
+    val sampleDays: Int? = null,    // EIA 路径=本窗口已计入的交易日数（官方口径 10 天）；腾讯路径=null
+)
+
+/** 内部计算结果：幅度 + 数据截至日期 + 本窗口样本天数（internal 仅为单测可达，外部不应依赖） */
+internal data class CrudeOilCalcResult(
+    val amountPerTon: Double,
+    val dataDate: String,
+    val sampleDays: Int,
 )
 
 /**
  * 原油价格本地估算器 —— 预测幅度兜底（apizero forecast 收费/不可用，App 不依赖付费接口）。
  *
- * 【机制】成品油调价变化率 = (本计价期 10 日均价 − 上次调价落地基准价) ÷ 基准价：
+ * 【机制】成品油调价变化率 = (本计价期均价 − 上次调价落地基准价) ÷ 基准价：
  * - 基准日 = 库内最近一条【非搁浅调价】的生效日（10-15 搁浅轮不重置基准——官方规则，基准仍锚 9-24 调价）
- * - 基准均值 = EIA 中基准日及其往前 10 个交易日的均价（模拟官方「调价落地时的参考油价」）
- * - 本窗口均值 = (上一窗口日, 今天] 的 EIA 交易日均价
+ * - 基准日先吸附到窗口网格（生效日 = 窗口日 + 1 天，且 abapi 锚点可能「生效日 − 3 天」，不能硬减 1 天）
+ * - 基准均值 = EIA 中【上一期窗口跨度】(上一窗口日, 基准窗口日] 内交易日均价（不是固定前取 10 个交易日——
+ *   跨国庆/春节的周期有 11~15 个交易日，固定前取会丢掉周期头部，把基准挪向周期末段）
+ * - 本窗口均值 = (上一窗口日, 今天] 内的 EIA 交易日均价，**只取窗口内，不足 10 天不回补**
  * - 变化率 = (本窗口均值 − 基准均值) ÷ 基准均值 × 100
  * - 系数：1% ≈ 56.5 元/吨（新闻实证：变化率 5.4% → 约 305 元/吨）
  * 基准缺失（库里暂无任何非搁浅调价）→ 回退「本窗口 vs 上窗口」环比（仅作兜底方向参考）。
@@ -37,10 +49,95 @@ class CrudeOilEstimator(
         const val COEFF_PER_PERCENT = 56.5
         /** EIA 需要至少 20 条日度数据才够 10+10 均值比较 */
         private const val MIN_EIA_POINTS = 20
-    }
+        /** 官方口径：一个计价期 = 10 个工作日（UI 用它判断是否标注「已计入 N 个交易日」，故对外可见） */
+        const val WINDOW_DAYS = 10
+        /** 基准锚点吸附容差（天）：生效日 = 窗口日 + 1，abapi 锚点又是「生效日 − 3 天」，故留 3 天余量 */
+        private const val WINDOW_SNAP_DAYS = 3L
+        /** 基准期最少交易日数：一个完整周期 ≈ 9~15 个交易日，少于 5 个说明序列断档，宁可不显示 */
+        private const val MIN_BASE_DAYS = 5
 
-    /** 内部计算结果：幅度 + 数据截至日期 */
-    private data class CalcResult(val amountPerTon: Double, val dataDate: String)
+        /**
+         * 把生效日吸附到窗口网格上最近的窗口日。
+         *
+         * 生效日 = 窗口日 + 1 天，直接拿生效日当基准锚点会让基准期整体前移一天（实测 30 个窗口里
+         * 24 个的生效日本身就是 EIA 交易日）。也不能硬减 1 天：abapi 锚点是「生效日 − 3 天」，
+         * 那些记录减 1 天仍偏。故取「±3 天内最近的窗口日」；网格没覆盖该日期时保留原值交给调用方兜底。
+         */
+        private fun snapToWindow(raw: String, adjustDates: List<String>): String? {
+            val rawDate = runCatching { LocalDate.parse(raw) }.getOrNull() ?: return null
+            val within = adjustDates
+                .mapNotNull { d -> runCatching { LocalDate.parse(d) }.getOrNull()?.let { d to it } }
+                .filter { (_, d) -> abs(ChronoUnit.DAYS.between(d, rawDate)) <= WINDOW_SNAP_DAYS }
+            return within.minByOrNull { (_, d) -> abs(ChronoUnit.DAYS.between(d, rawDate)) }?.first ?: raw
+        }
+
+        /**
+         * EIA 布伦特现货日度序列（升序）→ 估算幅度（元/吨）。
+         *
+         * 【本窗口】严格只取 (上一窗口日, 今天] 内的交易日，**不足 10 天绝不回补上一窗口**：
+         * 旧实现是「在全序列里往前取 10 个交易日」，调价后头几天会把上一窗口的走势混进本窗口，
+         * 把幅度稀释到接近 0（实测某窗口本窗口仅 2 天、混入 8 天旧数据，输出 -91.5，仅窗口内为 -647.8）。
+         * 官方口径随窗口推进从 N 天收敛到 10 天，样本天数由 [CrudeOilEstimate.sampleDays] 透出，
+         * 由 UI 标注「已计入 N 个交易日」，不假装是完整窗口。
+         *
+         * 【基准】先把基准日吸附到窗口网格，再取**上一期窗口跨度** (上一窗口日, 基准窗口日] 的交易日均价。
+         * 不用「往前数 10 个交易日」：跨国庆/春节的周期有 11~15 个交易日，固定前取会丢掉周期头部，
+         * 把基准挪向周期末段（实测跨假期窗口基准偏差最大 90.3 元/吨）。
+         * 网格里没有更早的窗口（基准期即最早一期）→ 退回「往前数 10 个交易日」。
+         * 窗口日历未就绪 → 回退「最近 10 vs 前 10」硬切。
+         *
+         * @param today 传入当天日期（默认系统日期），便于单测固定时间轴
+         */
+        internal fun calcFromEiaSeries(
+            points: List<Pair<String, Double>>,
+            adjustDates: List<String>,
+            baseDate: String?,
+            today: String = LocalDate.now().toString(),
+        ): CrudeOilCalcResult? {
+            if (points.size < MIN_EIA_POINTS) return null
+            val prevWindow = adjustDates.filter { it < today }.lastOrNull()
+
+            // 基准日：锚点优先「最近非搁浅调价生效日」（缺失时退上一窗口），再吸附到窗口网格
+            val rawAnchor = baseDate ?: prevWindow
+            val baseWindow = rawAnchor?.let { snapToWindow(it, adjustDates) }
+            val basePrev = baseWindow?.let { w -> adjustDates.getOrNull(adjustDates.indexOf(w) - 1) }
+
+            val base: List<Double> = when {
+                // 正路：基准期 = 上一期窗口跨度，按跨度取交易日（国内假期内的交易日照常计入）
+                baseWindow != null && basePrev != null ->
+                    points.filter { it.first > basePrev && it.first <= baseWindow }.map { it.second }
+
+                // 基准期就是网格里最早的一期，没有「上一窗口日」→ 退回往前数 10 个交易日
+                baseWindow != null -> {
+                    val idx0 = points.indexOfLast { it.first <= baseWindow }
+                    if (idx0 < 0) return null
+                    points.subList(maxOf(0, idx0 - (WINDOW_DAYS - 1)), idx0 + 1).map { it.second }
+                }
+
+                // 库内无任何调价记录 → 最近 10 vs 前 10 硬切（纯兜底，仅方向参考）
+                else -> points.drop((points.size - WINDOW_DAYS * 2).coerceAtLeast(0))
+                    .take(WINDOW_DAYS).map { it.second }
+            }
+            // 基准样本过少说明 EIA 序列在基准期断档，与完整窗口不可比，宁可不显示
+            if (base.size < MIN_BASE_DAYS) return null
+
+            // 本窗口：从上一窗口日（当日 24 时生效）之后到今天，只取窗口内交易日
+            val recent: List<Double> = if (prevWindow != null) {
+                points.filter { it.first > prevWindow && it.first <= today }.map { it.second }
+            } else {
+                // 无窗口日历 → 用最近 10 个交易日（此时没有「窗口内」概念，只能整段比较）
+                points.takeLast(WINDOW_DAYS).map { it.second }
+            }
+            if (recent.isEmpty()) return null
+            if (prevWindow == null && recent.size < WINDOW_DAYS) return null
+
+            val baseAvg = base.average()
+            if (baseAvg <= 0) return null
+            val changePct = (recent.average() - baseAvg) / baseAvg * 100.0
+            val latest = points.lastOrNull { it.first <= today }?.first ?: return null
+            return CrudeOilCalcResult(changePct * COEFF_PER_PERCENT, latest, recent.size)
+        }
+    }
 
     suspend fun estimate(): CrudeOilEstimate? {
         // 数据源开关——关 = 直接用腾讯（不请求 EIA）；开 = EIA 主源 → 失败降级腾讯
@@ -56,7 +153,9 @@ class CrudeOilEstimator(
                     // 基准日 = 库内最近非搁浅调价生效日（10-15 搁浅不重置基准）
                     val baseDate = priceDao.getLatestNonStrandedEffectiveDates().firstOrNull()
                     val calc = calcFromEiaSeries(eia, adjustDates, baseDate)
-                    if (calc != null) return CrudeOilEstimate(calc.amountPerTon, "EIA", calc.dataDate)
+                    if (calc != null) {
+                        return CrudeOilEstimate(calc.amountPerTon, "EIA", calc.dataDate, calc.sampleDays)
+                    }
                 }
             }
         }
@@ -67,51 +166,5 @@ class CrudeOilEstimator(
             return CrudeOilEstimate(pct * 100 * COEFF_PER_PERCENT, "腾讯")
         }
         return null
-    }
-
-    /**
-     * EIA 布伦特现货日度序列（升序）→ 估算幅度（元/吨）。
-     * 基准锚定：本窗口 = (上一窗口日, 今天]；基准 = 基准日（最近非搁浅调价生效日）往前 10 个 EIA 交易日。
-     * 基准日为空（库内无任何调价记录）→ 回退「本窗口 vs 上窗口」环比（纯兜底）。
-     * 窗口日历未就绪 → 回退「最近 10 vs 前 10」硬切。
-     */
-    private fun calcFromEiaSeries(
-        points: List<Pair<String, Double>>,
-        adjustDates: List<String>,
-        baseDate: String?,
-    ): CalcResult? {
-        if (points.size < MIN_EIA_POINTS) return null
-        val today = LocalDate.now().toString()
-        val prevWindow = adjustDates.filter { it < today }.lastOrNull()
-        val recent: List<Double>
-        val base: List<Double>
-        if (prevWindow != null) {
-            val idx1 = points.indexOfLast { it.first > prevWindow && it.first <= today }
-            if (idx1 < 0) return null
-            recent = points.subList(maxOf(0, idx1 - 9), idx1 + 1).map { it.second }
-            if (baseDate != null) {
-                // 基准 = 最近非搁浅调价生效日及其前 9 个交易日（官方「调价落地参考油价」近似）
-                val idx0 = points.indexOfLast { it.first <= baseDate }
-                if (idx0 < 0) return null
-                base = points.subList(maxOf(0, idx0 - 9), idx0 + 1).map { it.second }
-            } else {
-                // 无基准 → 回退环比上窗口
-                val idx0 = points.indexOfLast { it.first <= prevWindow }
-                if (idx0 < 0) return null
-                base = points.subList(maxOf(0, idx0 - 9), idx0 + 1).map { it.second }
-            }
-        } else {
-            recent = points.takeLast(10).map { it.second }
-            base = points.drop(points.size - 20).take(10).map { it.second }
-        }
-        // 官方口径是「10 个交易日」均价。窗口刚开始/基准日贴近序列头部时，可用交易日不足 10 天，
-        // 此时与完整 10 日均值比较会显著放大或低估幅度——宁可不显示（UI 显示「待检测」），
-        // 也不输出失真估算。
-        if (recent.size < 10 || base.size < 10) return null
-        val baseAvg = base.average()
-        if (baseAvg <= 0) return null
-        val changePct = (recent.average() - baseAvg) / baseAvg * 100.0
-        val latest = points.lastOrNull { it.first <= today }?.first ?: return null
-        return CalcResult(changePct * COEFF_PER_PERCENT, latest)
     }
 }
