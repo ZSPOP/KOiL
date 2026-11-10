@@ -443,14 +443,15 @@ class AddViewModel(
         if (lastForecastAt != 0L && now - lastForecastAt < FORECAST_MIN_INTERVAL_MS) return
         val outcome = runCatching { estimator.estimateDetailed() }
             .getOrNull() ?: CrudeOilEstimator.EstimateOutcome.Unavailable
-        val estimate = (outcome as? CrudeOilEstimator.EstimateOutcome.Success)?.estimate
+        val success = outcome as? CrudeOilEstimator.EstimateOutcome.Success
+        val estimate = success?.estimate
         if (estimate != null) lastForecastAt = now
         val forecastAmount = estimate?.amountPerTon
         val litersPerTon = if (_uiState.value.oilGrade == "0") 1205.0 else 1316.0
         val perLiterEquivalent = forecastAmount?.let { Math.round(it / litersPerTon * 100) / 100.0 }
-        // stale 只对「本次预测真用了缓存快照」有意义：estimate 走 rateFor 时 loadSnapshot
-        // 会把缓存发布进内存，这里再读一次拿到的是同一份
-        val fxSnapshot = fxRepository.currentSnapshot()
+        // stale 判定用「本次预测实际依据的快照」（estimateDetailed 随 Success 带回），
+        // 不事后重读 currentSnapshot：rateFor 命中旧缓存会触发后台刷新，若刷新先于重读
+        // 完成，重读会把旧值误判为新数据
         _uiState.value = _uiState.value.copy(
             forecastAmount = forecastAmount,
             forecastSource = estimate?.sourceLabel,
@@ -459,7 +460,7 @@ class AddViewModel(
             forecastSampleDays = estimate?.sampleDays,
             perLiterEquivalent = perLiterEquivalent,
             forecastFxMissing = outcome is CrudeOilEstimator.EstimateOutcome.FxUnavailable,
-            forecastFxStale = estimate != null && fxSnapshot != null && fxRepository.isStale(fxSnapshot),
+            forecastFxStale = success?.let { fxRepository.isStale(it.fxSnapshot) } == true,
         )
     }
 

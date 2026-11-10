@@ -25,7 +25,8 @@ import kotlin.math.roundToInt
  * 要么得靠 scale 缩放（缩放后点击区仍是原尺寸，位置会偏）。
  *
  * [onCheckedChange] 传 null 则纯展示（状态由外层可点击容器驱动，如设置页按钮）；
- * 传入则整个开关可点。34×20dp 小于标准触摸区，调用方若独立成行需自行保证行高可点。
+ * 传入则整个开关可点。34×20dp 小于 48dp 标准触摸区——独立成行的调用方（如
+ * [FullTankSwitchRow]）应让整行 clickable 并把本组件当纯展示，不要直接传 onCheckedChange。
  */
 @Composable
 fun MiniSwitch(

@@ -167,7 +167,11 @@ class CrudeOilEstimator(
      * 用户分不清是卡死还是真的没数据。
      */
     sealed interface EstimateOutcome {
-        data class Success(val estimate: CrudeOilEstimate) : EstimateOutcome
+        data class Success(
+            val estimate: CrudeOilEstimate,
+            /** 本次预测实际依据的汇率快照：UI 据此判 stale，不事后重读（重读会与后台刷新竞态） */
+            val fxSnapshot: KOiLUsdCnyRateSnapshot,
+        ) : EstimateOutcome
 
         /** 汇率不可用：无缓存且所有汇率源取数失败。快照到位后 [KOiLUsdCnyRateRepository.snapshot] 会触发重算 */
         data object FxUnavailable : EstimateOutcome
@@ -194,9 +198,9 @@ class CrudeOilEstimator(
                     // 汇率按「数据最后一天」所属月份取，不是按今天：EIA 数据常停在上一月时，
                     // 用今天所属月份会拿到一个还没数据的新月份，与窗口内油价不同期
                     val latest = eia.points.lastOrNull { it.first <= today }?.first ?: today
-                    val fx = fxRepository.rateFor(latest)
+                    val fx = fxRepository.rateForDetailed(latest)
                     if (fx != null) {
-                        val calc = calcFromEiaSeries(eia.points, adjustDates, baseDate, today, fx)
+                        val calc = calcFromEiaSeries(eia.points, adjustDates, baseDate, today, fx.rate)
                         if (calc != null) {
                             return EstimateOutcome.Success(
                                 CrudeOilEstimate(
@@ -206,6 +210,7 @@ class CrudeOilEstimator(
                                     sampleDays = calc.sampleDays,
                                     sourceReleaseDate = eia.releaseDate,
                                 ),
+                                fxSnapshot = fx.snapshot,
                             )
                         }
                     } else {
@@ -217,13 +222,20 @@ class CrudeOilEstimator(
         // 降级/直选：腾讯布伦特期货实时（单日涨跌，仅方向参考——UI 按来源标注「单日参考」，不冒充窗口幅度）
         val tencent = runCatching { network.fetchTencentBrent() }.getOrNull()
         if (tencent != null) {
+            // EIA 路径刚经历一轮全源同步取数失败且未落缓存（rateForDetailed 返回 null 只可能是
+            // 无缓存且 fetchFirstAvailable 全失败）：同一快照池立刻重试只会再等一轮 15s，
+            // 结果几乎必然还是失败——直接复用同一次失败，守住「首次同步等待 ≤ 15s」的预算。
+            if (fxFailed) return EstimateOutcome.FxUnavailable
             // 汇率拿不到就不给假值：乘 0 会把幅度静默算成 0，比不显示更糟
-            val fx = fxRepository.rateFor(today)
+            val fx = fxRepository.rateForDetailed(today)
             if (fx == null) {
                 fxFailed = true
             } else {
                 val deltaP = tencent.first - tencent.second
-                return EstimateOutcome.Success(CrudeOilEstimate(deltaP * BARRELS_PER_TON * fx, "腾讯"))
+                return EstimateOutcome.Success(
+                    CrudeOilEstimate(deltaP * BARRELS_PER_TON * fx.rate, "腾讯"),
+                    fxSnapshot = fx.snapshot,
+                )
             }
         }
         // 汇率确实尝试过且失败的，报 FxUnavailable（这是能自动恢复的那种失败，空态文案不同）；

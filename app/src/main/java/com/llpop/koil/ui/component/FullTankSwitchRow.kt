@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,8 +26,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 加 60L 也可能未满；判定权完全在用户，不做任何基于油量的自动推断。
  * 油耗只在「满箱 → 满箱」区间结算，未满记录待下次加满后一次结算。
  *
- * 开关用 [MiniSwitch]（34×20dp，与设置页「自动更新」一致），不用默认 Miuix Switch
+ * 开关用 [MiniSwitch]（34×20dp 视觉，与设置页「自动更新」一致），不用默认 Miuix Switch
  * （52×32dp 会把这一行撑得比其他表单行高出一截）。
+ *
+ * 可点区是**整行**（带 [Role.Switch] 语义）：34×20dp 远小于 48dp 触摸区标准，若只有
+ * 开关本身可点，录入页高频操作会很难点中。故 [MiniSwitch] 传 `onCheckedChange = null`
+ * 纯展示，点击响应统一由本行的 clickable 上报。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -34,7 +40,12 @@ fun FullTankSwitchRow(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Switch) { onCheckedChange(!checked) },
+        ) {
             Text(
                 text = stringResource(R.string.koil_add_full_tank),
                 fontSize = 14.sp,
@@ -45,7 +56,7 @@ fun FullTankSwitchRow(
             Spacer(Modifier.width(8.dp))
             MiniSwitch(
                 checked = checked,
-                onCheckedChange = onCheckedChange,
+                onCheckedChange = null, // 展示态；点击由整行 clickable 接管
                 trackOn = KOiLColors.Primary,
                 trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
             )

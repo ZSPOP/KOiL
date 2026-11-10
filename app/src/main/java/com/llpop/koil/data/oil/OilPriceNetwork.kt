@@ -387,7 +387,8 @@ open class OilPriceNetwork {
      * WPSR 价格表 JSON 补最近 6 个交易日（见 [KOiLEiaSpotTableParser]）。
      * 增量失败一律静默降级为纯 v2——功能不挂，只是数据旧几天、且没有发布日可显示。
      */
-    suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): KOiLEiaBrentSeries {
+    // open：单测需要注入假 EIA 曲线（验证「EIA 汇率失败后腾讯路径不再重复同步取数」）
+    open suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): KOiLEiaBrentSeries {
         if (apiKey.isBlank()) return KOiLEiaBrentSeries(emptyList())
         val url = "https://api.eia.gov/v2/petroleum/pri/spt/data/" +
             "?frequency=daily" +
