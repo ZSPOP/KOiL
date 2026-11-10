@@ -36,16 +36,17 @@
     <item quantity="one"> · %1$d day left</item>
     <item quantity="other"> · %1$d days left</item>
     </plurals>
-    <string name="koil_add_forecast_up">%1$s up</string>
-    <string name="koil_add_forecast_down">%1$s down</string>
-    <string name="koil_add_forecast_per_ton">¥/ton</string>
-    <string name="koil_add_forecast_estimated">Est.</string>
-    <string name="koil_add_forecast_single_day">1-day ref.</string>
+    <string name="koil_add_forecast_mech_up">Mechanism est.: up about %1$s ¥/ton</string>
+    <string name="koil_add_forecast_mech_down">Mechanism est.: down about %1$s ¥/ton</string>
+    <string name="koil_add_forecast_mech_stranded">Mechanism est.: no change expected (about %1$s ¥/ton)</string>
+    <string name="koil_add_forecast_single_up">1-day ref.: up about %1$s ¥/ton</string>
+    <string name="koil_add_forecast_single_down">1-day ref.: down about %1$s ¥/ton</string>
+    <string name="koil_add_forecast_per_liter">" (≈ ¥%1$.2f/L)"</string>
+    <string name="koil_add_forecast_caveat">Actual result may differ due to price controls and estimation error; refer to the NDRC announcement</string>
     <string name="koil_add_forecast_as_of">as of %1$s</string>
     <string name="koil_add_forecast_sample">trading days counted: %1$d</string>
-    <string name="koil_add_forecast_sep">, </string>
-    <string name="koil_add_approx_per_liter_up">≈ up ¥%1$.2f/L</string>
-    <string name="koil_add_approx_per_liter_down">≈ down ¥%1$.2f/L</string>
+    <string name="koil_add_forecast_history_err">error vs announcements ±%1$d (P90 ±%2$d)</string>
+    <string name="koil_add_forecast_meta_sep">" · "</string>
     <string name="koil_add_unit_per_liter">¥/L</string>
     <string name="koil_add_last_refuel">Last fill-up</string>
     <string name="koil_add_no_record">No records yet</string>
