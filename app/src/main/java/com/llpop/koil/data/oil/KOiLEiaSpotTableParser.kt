@@ -34,39 +34,66 @@ internal object KOiLEiaSpotTableParser {
     /** thead 是 `MM/dd/yy`；两位年份按 2000 起算（EIA 这份数据从 1987 起，不会撞到 19xx） */
     private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MM/dd/yy", Locale.US)
 
+    /** 顶层 `release_date` 是 `M/d/yyyy`，月日不补零（实测 `11/9/2026`，不是 `11/09/2026`） */
+    private val RELEASE_DATE_FORMAT: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("M/d/yyyy", Locale.US)
+
+    /**
+     * 增量数据 + 官方发布日。
+     *
+     * [releaseDate] 是 EIA **发布这批数据**的日期，不是「数据截至日」——两者常差几天：
+     * 11-09 那批发布的数据，最后一天是 11-06。分开给，UI 才能写「截至 11-06 · 源端 11-09 发布」，
+     * 让用户分清「源端就是这么慢」和「App 卡住了」。
+     */
+    data class EiaSpotTable(
+        val points: List<Pair<String, Double>>,
+        val releaseDate: String? = null,
+    )
+
     /**
      * 解析 JSON。任何结构异常都返回空表，不抛异常、不返回错位数据——
      * 返回错位的日期-价格对会让预测悄悄算错，比不补数据危险得多。
      */
-    fun parse(body: String): List<Pair<String, Double>> {
+    fun parse(body: String): List<Pair<String, Double>> = parseWithMeta(body).points
+
+    /**
+     * 同 [parse]，额外给出官方发布日。
+     *
+     * 发布日过不了下面三关就置 null —— 只丢这个字段，绝不因此丢数据：
+     * 1. 字段缺失 / 不是合法 `M/d/yyyy`；
+     * 2. 一个价格点都没解析出来（「这批数据」不存在，发布日没有指代对象）；
+     * 3. 发布日早于数据最后一天（发布不可能早于数据日；出现即说明字段语义已被改掉，
+     *    照原样显示等于把一个未知说成一个具体日期）。
+     */
+    fun parseWithMeta(body: String): EiaSpotTable {
         val root = runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject
-            ?: return emptyList()
+            ?: return EiaSpotTable(emptyList())
         val thead = (root["thead"] as? JsonArray)
             ?.mapNotNull { (it as? JsonPrimitive)?.content }
             .orEmpty()
-        if (thead.isEmpty()) return emptyList()
+        if (thead.isEmpty()) return EiaSpotTable(emptyList())
 
         // 按 key 找行，不按数组下标：EIA 调整 tbody 行序（按 section 分组）就会取到 WTI 那行
         val row = (root["tbody"] as? JsonArray)
             ?.mapNotNull { it as? JsonObject }
             ?.firstNotNullOfOrNull { (it["data"] as? JsonObject)?.get(SERIES_KEY) as? JsonArray }
-            ?: return emptyList()
+            ?: return EiaSpotTable(emptyList())
 
         // 行首 DESC_COLUMNS 项固定是 [indent 类名, 展示名, 年份范围]，价格在其后，
         // 故价格列数必须与 thead 相等。
         // 结构判断只看「形状」，不看「值」——这是上一版的 bug 所在：
         // 曾用「尾部 N 个全部可解析」判断对齐，结果 6 天里只要有一天是 `n/a`，
         // 整条 RBRTE 行就被当成结构错位丢掉，App 仍然停在旧日期，比不修还差（少一天 ≠ 全丢）。
-        if (row.size != DESC_COLUMNS + thead.size) return emptyList()
+        if (row.size != DESC_COLUMNS + thead.size) return EiaSpotTable(emptyList())
         // 描述列必须都不是价格。若连「indent_0 / Brent - Europe / 1987 - 2026」都变成数字，
         // 说明列序已经变了，此时按位置取值必然错位，整条丢弃
         val descIsText = row.subList(0, DESC_COLUMNS).none { cell ->
             (cell as? JsonPrimitive)?.content?.toDoubleOrNull() != null
         }
-        if (!descIsText) return emptyList()
+        if (!descIsText) return EiaSpotTable(emptyList())
         val values = row.subList(DESC_COLUMNS, row.size)
 
-        return thead.indices
+        val points = thead.indices
             .mapNotNull { i ->
                 val date = runCatching { LocalDate.parse(thead[i].trim(), DATE_FORMAT).toString() }
                     .getOrNull() ?: return@mapNotNull null
@@ -77,6 +104,20 @@ internal object KOiLEiaSpotTableParser {
             }
             .distinctBy { it.first }
             .sortedBy { it.first }
+
+        return EiaSpotTable(points, releaseDateOf(root, points))
+    }
+
+    /** 取顶层 `release_date`，按上面三条不变量校验；不满足返回 null */
+    private fun releaseDateOf(
+        root: JsonObject,
+        points: List<Pair<String, Double>>,
+    ): String? {
+        if (points.isEmpty()) return null
+        val raw = (root["release_date"] as? JsonPrimitive)?.content?.trim().orEmpty()
+        val released = runCatching { LocalDate.parse(raw, RELEASE_DATE_FORMAT).toString() }
+            .getOrNull() ?: return null
+        return released.takeIf { it >= points.last().first }
     }
 
     /**

@@ -725,6 +725,16 @@ private fun OilPriceCard(
                                                 it.takeLast(5),
                                             ),
                                         )
+                                        // 发布日紧跟在「截至」后面：它是对这个日期的解释（源端就是慢 3 天），
+                                        // 单拎出来「源端 11-09 发布」用户不知道在解释什么，所以嵌在这一层
+                                        uiState.forecastReleaseDate?.let { released ->
+                                            add(
+                                                stringResource(
+                                                    R.string.koil_add_forecast_released,
+                                                    released.takeLast(5),
+                                                ),
+                                            )
+                                        }
                                     }
                                     uiState.forecastSampleDays?.let {
                                         add(stringResource(R.string.koil_add_forecast_sample, it))
