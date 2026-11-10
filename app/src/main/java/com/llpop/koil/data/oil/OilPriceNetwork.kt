@@ -365,7 +365,11 @@ open class OilPriceNetwork {
     /**
      * EIA 官方布伦特现货日度价（RBRTE 系列，美元/桶，交易日数据，含完整历史）。
      * 返回按日期升序的 (date, price) 列表（最多 length 条）；Key 无效/接口失败返回空列表。
-     * 实测：免费注册 Key 即用，配额 1000 次/日；数据 T+1 更新（美国能源署）。
+     * 实测：免费注册 Key 即用，配额 1000 次/日。
+     *
+     * 数据取自两条同源链路的并集：v2 API 拿历史（实测比 WPSR 价格表慢 3 天），
+     * WPSR 价格表 JSON 补最近 6 个交易日（见 [KOiLEiaSpotTableParser]）。
+     * 增量失败一律静默降级为纯 v2——功能不挂，只是数据旧几天。
      */
     suspend fun fetchEiaBrentDaily(apiKey: String, length: Int = 30): List<Pair<String, Double>> {
         if (apiKey.isBlank()) return emptyList()
@@ -375,22 +379,36 @@ open class OilPriceNetwork {
             "&facets%5Bseries%5D%5B%5D=RBRTE" +
             "&sort%5B0%5D%5Bcolumn%5D=period&sort%5B0%5D%5Bdirection%5D=desc" +
             "&length=$length&api_key=$apiKey"
-        return try {
+        val base = try {
             val body = client.get(url).bodyAsText()
             val resp = json.decodeFromString<EiaSeriesResponse>(body)
-            if (resp.error != null || resp.response == null) return emptyList()
-            resp.response.data
-                .mapNotNull { p ->
-                    val period = p.period?.takeIf { it.length >= 10 } ?: return@mapNotNull null
-                    val value = p.value?.takeIf { it.isFinite() && it > 0 } ?: return@mapNotNull null
-                    period to value
-                }
-                .sortedBy { it.first }
+            if (resp.error != null || resp.response == null) {
+                emptyList()
+            } else {
+                resp.response.data
+                    .mapNotNull { p ->
+                        val period = p.period?.takeIf { it.length >= 10 } ?: return@mapNotNull null
+                        val value = p.value?.takeIf { it.isFinite() && it > 0 } ?: return@mapNotNull null
+                        period to value
+                    }
+                    .sortedBy { it.first }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             emptyList()
         }
+        // v2 没拿到任何点就不补增量：只有 6 个点也过不了 MIN_EIA_POINTS，
+        // 反而会把「主源失败」伪装成「拿到了数据」
+        if (base.isEmpty()) return emptyList()
+        val overrides = try {
+            KOiLEiaSpotTableParser.parse(client.get(KOiLEiaSpotTableParser.URL).bodyAsText())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return KOiLEiaSpotTableParser.merge(base, overrides)
     }
 
     /**

@@ -10,7 +10,7 @@
 | 1 | **主源（价格曲线）** | youjia.abapi.cn（阿巴匹） | `/api/chart-data.php?province=<省名URL编码>&range=year` | GET | 历史价格曲线：`dates[]` + `p92[]/p95[]/p98[]/p0[]`（元/升），最新价；**`range=year` 实测返回近一年约 220~222 个点**（缺省不带该参数仅近 30 天）；⚠️ **曲线日期滞后真实调价日约 3 天**（9-24 生效在 9-27 才变价） | ✅ |
 | 2 | **锚点窗口日（灌库归并基准）** | v2.xxapi.cn（优信 API）→ api.ruseo.cn（如梭 API）同源互备 | `/api/oilPrice`（xxapi）`/api/oilprice`（ruseo） | GET | 全国最新价快照（region/date/gasoline_92 等）；取 `date`（最近窗口生效日）− 1 = 真实窗口日（含搁浅窗口） | ✅ |
 | 3 | **节假日源** | cdn.jsdelivr.net（npm 包 `chinese-days`） | `/npm/chinese-days/dist/years/{年}.json` | GET | **当年节假日 + 调休补班日**：`{"holidays":{日期:信息}, "workdays":{日期:信息}, "inLieuDays":{...}}`；holidays=放假日，workdays=调休补班日（周末上班算工作日）；jsDelivr CDN + npm 分发、GitHub Action 自动抓取国务院通知 → 稳定、长期维护、免 key | ✅ |
-| 4 | **原油价格** | api.eia.gov（美国能源信息署官方） | `v2/petroleum/pri/spt/data/?frequency=daily&facets[series][]=RBRTE...&api_key=<注册Key>` | GET | 布伦特原油日度结算价（RBRTE）历史（实测 total 10003 条）；窗口内均价 vs 基准均价 × 7.33 桶/吨 × 月度汇率 → 元/吨 | ⚠️ 需免费注册 Key（设置页可改；默认内置免费 Key，见 `AppSettings.DEFAULT_EIA_API_KEY`，公开仓库可见，额度耗尽自动降级腾讯） |
+| 4 | **原油价格** | api.eia.gov（美国能源信息署官方）+ www.eia.gov 的 WPSR 价格表（同一官方数据、另一条发布链路） | ①`v2/petroleum/pri/spt/data/?frequency=daily&facets[series][]=RBRTE...&api_key=<注册Key>`（历史）②`petroleum/prices/data/12_series/D/PET_PRI_SPT_S1_D.json`（最近 6 个交易日，免 Key） | GET | 布伦特原油日度结算价（RBRTE）历史；窗口内均价 vs 基准均价 × 7.33 桶/吨 × 月度汇率 → 元/吨。**① 与 ② 是同系列、同单位，但 ② 比 ① 快约 3 天**，按日期合并取较新值 | ⚠️ ① 需免费注册 Key（设置页可改；默认内置免费 Key，见 `AppSettings.DEFAULT_EIA_API_KEY`，公开仓库可见，额度耗尽自动降级腾讯）；② 免 Key，解析失败静默退回 ① |
 | 5 | **原油降级源** | qt.gtimg.cn（腾讯财经） | `/q=hf_OIL`（需 Referer `https://gu.qq.com/` + UA） | GET | 布伦特实时现价/昨收 → 当日涨跌幅 → 元/吨（粗估） | ✅ |
 
 
@@ -26,6 +26,11 @@
 
 // EIA 原油 GET https://api.eia.gov/v2/petroleum/pri/spt/data/?frequency=daily&data[0]=value&facets[series][]=RBRTE&sort[0][column]=period&sort[0][direction]=desc&length=30&api_key=<Key>
 // 返回 { "response": { "total": 10003, "data": [{ "period": "2026-10-20", "value": 115.22, ... }] } }
+
+// EIA 增量 GET https://www.eia.gov/petroleum/prices/data/12_series/D/PET_PRI_SPT_S1_D.json（无需 Key）
+// 返回 { "release_date": "11/9/2026", "next_release_date": "11/10/2026",
+//        "thead": ["11/06/26", ...], "tbody": [{ "section": "Crude Oil", "data": { "RBRTE": ["indent_0", "Brent - Europe", "1987 - 2026", "97.83", ...] } }] }
+// 与上一条同 series（RBRTE）、同单位（USD/bbl），但 v2 比它慢约 3 天；只取最近 6 个交易日按日期覆盖
 
 // 腾讯降级 GET https://qt.gtimg.cn/q=hf_OIL（Header Referer: https://gu.qq.com/）
 // 返回 v_hf_OIL="110.45,-1.12,...,111.70,...,2026-10-26,布伦特原油"（index0=现价、index7=昨收）
