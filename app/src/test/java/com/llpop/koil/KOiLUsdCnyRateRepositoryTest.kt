@@ -328,4 +328,28 @@ class KOiLUsdCnyRateRepositoryTest {
         // 两边都留出近 1s 余量，避免 CI 抖动造成假红。
         assertTrue("总耗时 ${cost}ms 超出 800ms 总预算过多（旧实现为每源各 800ms）", cost < 1_800)
     }
+
+    /**
+     * 预算必须优先给主源。ECB 首连实测 11.5s：均分三份时主源只得 5s，冷启动必然
+     * 被砍掉、落到「只给一天」的 XML，「主源是 SDMX」就成了空话。
+     * 旧分配（均分）实测此用例返回 ECB_XML；预留式分配给主源 12s，足以覆盖 11.5s。
+     */
+    @Test
+    fun `首载预算优先给主源而不是平均三份`() = runBlocking {
+        val engine = MockEngine { request ->
+            when {
+                request.url.toString().contains("data-api.ecb.europa.eu") -> {
+                    delay(11_500)
+                    respond(sdmxCsv, HttpStatusCode.OK)
+                }
+                request.url.toString().contains("eurofxref") -> respond(ecbXml, HttpStatusCode.OK)
+                else -> respond("", HttpStatusCode.NotFound)
+            }
+        }
+        val repo = KOiLUsdCnyRateRepository(context, engine)
+        val snap = repo.refreshNow(KOiLUsdCnyRateRepository.FIRST_LOAD_TIMEOUT_MS)
+        assertNotNull(snap)
+        assertEquals(KOiLUsdCnyRateSource.SDMX, snap!!.source)
+        assertEquals(3, snap.sampleDays)
+    }
 }

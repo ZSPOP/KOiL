@@ -288,11 +288,13 @@ class KOiLUsdCnyRateRepository(
         )
         val startedAt = System.currentTimeMillis()
         for (i in attempts.indices) {
-            // 每源分到「剩余预算 ÷ 剩余源数」：前一个源失败后仍有余量给下一个，
-            // 而整条链的耗时总和不超过 timeoutMs（三个源各 15s = 45s 是错的）
+            // 优先把预算给当前源，只为后续源预留最低兜底（MIN_PER_SOURCE_MS × 剩余数）。
+            // 不能平均分：均分时主源 15s 只得 5s，而 ECB 首连实测 11.5s，冷启动必然
+            // 砍掉主源落到「只给一天」的 XML——总预算形同虚设。
             val remaining = timeoutMs - (System.currentTimeMillis() - startedAt)
             if (remaining <= 0) return@withTimeoutOrNull null
-            val share = maxOf(remaining / (attempts.size - i), MIN_PER_SOURCE_MS)
+            val reserve = MIN_PER_SOURCE_MS * (attempts.size - i - 1)
+            val share = maxOf(remaining - reserve, MIN_PER_SOURCE_MS)
             val points = attemptOrNull(attempts[i], share) ?: continue
             val snapshot = aggregate(points, sources[i], previous) ?: continue
             return@withTimeoutOrNull snapshot
