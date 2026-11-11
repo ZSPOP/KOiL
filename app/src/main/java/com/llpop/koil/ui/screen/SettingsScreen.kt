@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -109,7 +108,7 @@ import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
-import com.llpop.koil.ui.component.KOiLMiniSwitch
+import com.llpop.koil.ui.component.KOiLCheckMark
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -1247,11 +1246,15 @@ private fun PriceDbSection(
                             color = if (autoOn) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
                         )
-                        Spacer(Modifier.width(8.dp))
-                        KOiLMiniSwitch(
+                        Spacer(Modifier.width(6.dp))
+                        // 纯状态标记：点击由整个按钮驱动，这里只表达「开 / 关」
+                        KOiLCheckMark(
                             checked = autoOn,
-                            trackOn = KOiLColors.Primary,
-                            trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
+                            activeColor = KOiLColors.Primary,
+                            inactiveColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f),
+                            // 13sp 按钮文字旁边取 16dp：视觉高度与文字齐平；20dp 会顶满 pill 高度、
+                            // 显得比文字重一级
+                            iconSize = 16.dp,
                         )
                     }
                     Row(
@@ -2430,6 +2433,10 @@ private fun SettingSwitchRow(
                         )
                         if (trailingContent != null) {
                             Spacer(Modifier.width(8.dp))
+                            // 纯状态展示，不拦触摸：徽章不是按钮，它所在的行整体才是按钮，
+                            // 点在这里等于点行、切开关，符合「整行可点」的一致心智。
+                            // 反过来（把徽章做成哑区）会让徽章变成一个没有反馈的洞，
+                            // 用户分不清是自己没点准还是行不响应。
                             trailingContent()
                         }
                     }
