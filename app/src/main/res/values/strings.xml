@@ -33,7 +33,7 @@
     <string name="koil_add_suggest_wait">建议降价后加油</string>
     <string name="koil_add_suggest_stranded">本轮预计搁浅</string>
     <string name="koil_add_window_prefix">下个调价窗口 %1$s 24:00</string>
-    <!-- 预测幅度：头行「机制预测：上调约 170 元/吨」+「最终调控以发改委公告为准」（右侧建议徽章）+ 次级「截至 · 源端发布 · 已计入 N 个交易日」 -->
+    <!-- 预测幅度：头行「机制预测：上调约 170 元/吨」+ 次级「截至 · 源端发布 · 已计入 N 个交易日（以发改委公告为准）」；建议徽章在窗口日行右侧 -->
     <string name="koil_add_forecast_mech_up">机制预测：上调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_mech_down">机制预测：下调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_mech_stranded">机制预测：搁浅（幅度约 %1$s 元/吨）</string>
