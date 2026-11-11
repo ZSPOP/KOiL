@@ -40,9 +40,13 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
  * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
  *
  * 布局契约：[insideMargin] 横向固定 16dp —— 调用方必须把它放在**零横向内距**容器里，外层
- * 再加 `padding(horizontal)` 会双重缩进、高亮跟着缩窄。纵向只给 8dp，**上下留白由调用方在
- * 高亮之外补够**（录入卡与两个弹窗都是 13dp）：按压指示覆盖的是行自身边界，纵向留白若塞进
+ * 再加 `padding(horizontal)` 会双重缩进、高亮跟着缩窄。纵向只给 8dp，**上方的留白由调用方在
+ * 高亮之外补**（录入卡 13dp、两个弹窗 8dp）：按压指示覆盖的是行自身边界，纵向留白若塞进
  * `insideMargin`，高亮矩形就会一路铺到上一字段下方，视觉上「贴住」上一行。
+ * 底部留白分两种：录入卡里本行是卡片最后一行，**底部不再留高亮外空白**，高亮一直铺到卡片
+ * 底边（用户要求按压时底部不留没覆盖的空隙）；两个弹窗里行下方还有按钮区，空白按「下面的块
+ * 是否真的渲染」给 8dp（见 `OverviewScreen` 的 `hasPaymentSummary` / `hasPrecheckHint`），
+ * 无数据时不留空档。
  *
  * 无障碍：开关状态用行级 `semantics { toggleableState }` 声明；内层 `Switch` 不再单独清理
  * 语义 —— 它与行 `clickable` 的 `mergeDescendants = true` 合并成同一个节点，TalkBack 读一行

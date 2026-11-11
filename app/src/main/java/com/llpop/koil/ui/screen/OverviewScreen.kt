@@ -723,16 +723,36 @@ fun OverviewScreen(
                     checked = dlg.backfillIsFullTank,
                     onCheckedChange = viewModel::setBackfillFullTank,
                 )
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
-                Spacer(Modifier.height(10.dp))
+                // 跳枪行下方间距按「块是否真的渲染」分配：信息块与校验条在无数据时整块 return 不绘制，
+                // 间距写死会留下两层空 Spacer（实付未填时高亮底边到按钮曾累计到 13+10+8+20=51dp）。
+                val hasSummary = hasPaymentSummary(
+                    dlg.backfillPayableAmount.toDoubleOrNull(),
+                    dlg.backfillActualAmount.toDoubleOrNull(),
+                    dlg.backfillOilAmount.toDoubleOrNull(),
+                    dlg.backfillReferencePrice,
+                )
+                val hasHint = hasPrecheckHint(
+                    beforeFirst = dlg.backfillBeforeFirst,
+                    sameDayExists = dlg.backfillSameDayExists,
+                    mileageConflictType = dlg.backfillMileageConflictType,
+                    deviationExceeded = dlg.backfillDeviationExceeded,
+                    overPayable = dlg.backfillOverPayable,
+                    overTank = dlg.backfillOverTank,
+                    ready = dlg.backfillReady,
+                )
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)) {
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
+                if (hasSummary) {
                 PaymentSummaryCard(
                     payable = dlg.backfillPayableAmount.toDoubleOrNull(),
                     actual = dlg.backfillActualAmount.toDoubleOrNull(),
                     fuelAmount = dlg.backfillOilAmount.toDoubleOrNull(),
                     referencePrice = dlg.backfillReferencePrice,
                 )
-                Spacer(Modifier.height(8.dp))
+                }
+                if (hasHint) {
+                // 只有卡片真的画过，这段 8dp 才需要存在
+                if (hasSummary) Spacer(Modifier.height(8.dp))
                 // 补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
                 BackfillPrecheckHint(
                     beforeFirst = dlg.backfillBeforeFirst,
@@ -748,6 +768,7 @@ fun OverviewScreen(
                     ready = dlg.backfillReady,
                     readyText = stringResource(R.string.koil_ov_bf_ready),
                 )
+                }
                 // 保存失败提示（如唯一约束冲突等）
                 if (dlg.saveError) {
                     Spacer(Modifier.height(8.dp))
@@ -2101,16 +2122,36 @@ private fun EditRecordDialog(
                 checked = uiState.editIsFullTank,
                 onCheckedChange = onFullTankChange,
             )
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
-            Spacer(Modifier.height(10.dp))
+            // 跳枪行下方间距按「块是否真的渲染」分配：信息块与校验条在无数据时整块 return 不绘制，
+            // 间距写死会留下两层空 Spacer（实付未填时高亮底边到按钮曾累计到 13+10+8+20=51dp）。
+            val hasSummary = hasPaymentSummary(
+                uiState.editPayableAmount.toDoubleOrNull(),
+                uiState.editActualAmount.toDoubleOrNull(),
+                uiState.editOilAmount.toDoubleOrNull(),
+                uiState.editReferencePrice,
+            )
+            val hasHint = hasPrecheckHint(
+                beforeFirst = uiState.editBeforeFirst,
+                sameDayExists = uiState.editSameDayExists,
+                mileageConflictType = uiState.editMileageConflictType,
+                deviationExceeded = uiState.editDeviationExceeded,
+                overPayable = uiState.editOverPayable,
+                overTank = uiState.editOverTank,
+                ready = uiState.editReady,
+            )
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)) {
             // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
+            if (hasSummary) {
             PaymentSummaryCard(
                 payable = uiState.editPayableAmount.toDoubleOrNull(),
                 actual = uiState.editActualAmount.toDoubleOrNull(),
                 fuelAmount = uiState.editOilAmount.toDoubleOrNull(),
                 referencePrice = uiState.editReferencePrice,
             )
-            Spacer(Modifier.height(8.dp))
+            }
+            if (hasHint) {
+            // 只有卡片真的画过，这段 8dp 才需要存在
+            if (hasSummary) Spacer(Modifier.height(8.dp))
             // 编辑校验提示条（复刻补录卡：日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色）
             BackfillPrecheckHint(
                 beforeFirst = uiState.editBeforeFirst,
@@ -2126,6 +2167,7 @@ private fun EditRecordDialog(
                 ready = uiState.editReady,
                 readyText = stringResource(R.string.koil_ov_edit_ready),
             )
+            }
             // 保存失败提示（如唯一约束冲突等）
             if (uiState.saveError) {
                 Spacer(Modifier.height(8.dp))
@@ -2414,6 +2456,30 @@ private fun PaymentSummaryCard(
         }
     }
 }
+
+/**
+ * 与 [PaymentSummaryCard] 的渲染条件保持一致：两行都无内容时它整体 return、不占高度。
+ * 调用方要在它前面加分间距，必须先用同一个条件判断，否则空数据时会留下空 Spacer。
+ */
+private fun hasPaymentSummary(payable: Double?, actual: Double?, fuelAmount: Double?, referencePrice: Double?): Boolean {
+    val hasPayable = payable != null && payable > 0
+    val hasActual = actual != null && actual > 0
+    val hasFuel = fuelAmount != null && fuelAmount > 0
+    val hasReference = referencePrice != null && referencePrice > 0
+    return (hasPayable && hasActual) || (hasFuel && hasActual && hasReference)
+}
+
+/** 与 [BackfillPrecheckHint] 的渲染条件保持一致（无任何提示且未通过时不占高度） */
+private fun hasPrecheckHint(
+    beforeFirst: Boolean,
+    sameDayExists: Boolean,
+    mileageConflictType: String,
+    deviationExceeded: Boolean,
+    overPayable: Boolean,
+    overTank: Boolean,
+    ready: Boolean,
+): Boolean = beforeFirst || sameDayExists || mileageConflictType.isNotBlank() ||
+    deviationExceeded || overPayable || overTank || ready
 
 /** 补录弹窗字段（对齐首页录入卡 FormField：图标 + 标签行，红色错误态边框/图标/标签） */
 @Composable
