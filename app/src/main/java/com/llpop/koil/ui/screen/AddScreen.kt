@@ -188,10 +188,10 @@ fun AddScreen(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
         ) {
-            Column(modifier = Modifier) {
-                // 只补 start/end/top：底部留给下面的跳枪行，行内 top 13dp 即它与上一字段的间距，
-                // 与补录/编辑弹窗、设置页开关行三者一致。
-                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+            // 上下各留 13dp 空白在高亮之外：高亮只覆盖行自身，若把留白塞进行内 insideMargin，
+            // 高亮矩形会一路铺到上一字段下方、看起来「贴住」上一行（v6 实机反馈）。
+            Column(modifier = Modifier.padding(bottom = 13.dp)) {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
                 // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
                 FormRow {
                     com.llpop.koil.ui.component.KOiLDateField(

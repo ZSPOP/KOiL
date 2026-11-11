@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
@@ -40,10 +39,14 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
  * 按压反馈对齐 Miuix `BasicComponent` / `SwitchPreference`：整行可点，开关本身不消费
  * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
  *
- * 前置条件：[insideMargin] 在本组件内部固定为「横向 16dp / 纵向 13dp」（与设置页
- * `SettingSwitchRow`、EIA 行同值），调用方必须把它放在**零横向内距**的容器里——外层再加
- * `padding(horizontal)` 会双重缩进，按压高亮也会跟着缩窄；纵向同理，上距/底距只由行内
- * 13dp 承担，调用方不要再补 `Spacer` 或 `padding(bottom)`。
+ * 布局契约：[insideMargin] 横向固定 16dp —— 调用方必须把它放在**零横向内距**容器里，外层
+ * 再加 `padding(horizontal)` 会双重缩进、高亮跟着缩窄。纵向只给 8dp，**上下留白由调用方在
+ * 高亮之外补够**（录入卡与两个弹窗都是 13dp）：按压指示覆盖的是行自身边界，纵向留白若塞进
+ * `insideMargin`，高亮矩形就会一路铺到上一字段下方，视觉上「贴住」上一行。
+ *
+ * 无障碍：开关状态用行级 `semantics { toggleableState }` 声明；内层 `Switch` 不再单独清理
+ * 语义 —— 它与行 `clickable` 的 `mergeDescendants = true` 合并成同一个节点，TalkBack 读一行
+ * 即可拿到「标题 + 副标题 + 开关 + 已开启/已关闭」。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -56,17 +59,17 @@ fun FullTankSwitchRow(
         BasicComponent(
             modifier = modifier
                 .semantics {
-                    // 开/关状态挂在整行上，配合内层 Switch 的 clearAndSetSemantics：
-                    // TalkBack 只聚焦整行一个节点，仍能读出「已开启 / 已关闭」。
+                    // 状态挂在行上；与内层 Switch 的同一节点语义合并后，TalkBack 停在行一次即可
+                    // 读出「已开启 / 已关闭」，不会多一个开关焦点。
                     toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
                 }
                 .indication(
                     interactionSource = interactionSource,
                     indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
                 ),
-            // 上下 13dp 与设置页 SettingSwitchRow / EIA 行同值：行内距之外不再由外层补间距，
-            // 避免 56dp 最小行高把「标题 + 小字」居中悬空、看起来离卡片底边太远。
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 13.dp),
+            // 纵向只留 8dp：内容约 37dp + 16dp 仍低于 BasicComponent 的 56dp 最小行高，
+            // 上下留白由调用方在高亮之外补 13dp（见 KDoc）。
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             onClick = { onCheckedChange(!checked) },
             role = Role.Switch,
             interactionSource = interactionSource,
@@ -91,8 +94,6 @@ fun FullTankSwitchRow(
                 Switch(
                     checked = checked,
                     onCheckedChange = null,
-                    // 只做图形：语义已由整行承载，避免 TalkBack 在「行」和「开关」上各停一次。
-                    modifier = Modifier.clearAndSetSemantics {},
                 )
             }
         }

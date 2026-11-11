@@ -643,7 +643,7 @@ fun OverviewScreen(
             widthFraction = 0.90f,
         ) {
             Column {
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
                 Text(stringResource(R.string.koil_ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 // 加油省份（与设置页同款下拉列表）
@@ -723,7 +723,7 @@ fun OverviewScreen(
                     checked = dlg.backfillIsFullTank,
                     onCheckedChange = viewModel::setBackfillFullTank,
                 )
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
                 Spacer(Modifier.height(10.dp))
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
                 PaymentSummaryCard(
@@ -2011,7 +2011,7 @@ private fun EditRecordDialog(
         widthFraction = 0.90f,
     ) {
         Column {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
             Text(
                 text = stringResource(R.string.koil_ov_edit_title),
                 fontSize = 18.sp,
@@ -2101,7 +2101,7 @@ private fun EditRecordDialog(
                 checked = uiState.editIsFullTank,
                 onCheckedChange = onFullTankChange,
             )
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
             Spacer(Modifier.height(10.dp))
             // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
             PaymentSummaryCard(
