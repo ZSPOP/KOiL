@@ -31,6 +31,7 @@
     <string name="koil_add_locate_switched">Switched to %1$s</string>
     <string name="koil_add_suggest_early">Suggest filling up soon</string>
     <string name="koil_add_suggest_wait">Wait for a price drop</string>
+    <string name="koil_add_suggest_stranded">Expected stranded</string>
     <string name="koil_add_window_prefix">Next adjustment window %1$s 24:00</string>
     <plurals name="koil_add_window_days">
     <item quantity="one"> · %1$d day left</item>

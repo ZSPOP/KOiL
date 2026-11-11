@@ -31,6 +31,7 @@
     <string name="koil_add_locate_switched">已切換到%1$s</string>
     <string name="koil_add_suggest_early">建議提前加油</string>
     <string name="koil_add_suggest_wait">建議等降價後再加</string>
+    <string name="koil_add_suggest_stranded">本輪預計擱淺</string>
     <string name="koil_add_window_prefix">下個調價窗口日 %1$s 24:00</string>
     <plurals name="koil_add_window_days">
     <item quantity="other"> · 還有 %1$d 天</item>
