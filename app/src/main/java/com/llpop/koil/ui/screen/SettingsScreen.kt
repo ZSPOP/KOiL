@@ -2443,12 +2443,21 @@ private fun SettingSwitchRow(
                             // 也不用 clickable{} 包一层——那会给徽章多挂一个按钮语义节点，
                             // TalkBack 会把它当可点元素读出来。
                             Box(
-                                modifier = Modifier.pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        awaitFirstDown(requireUnconsumed = false).consume()
-                                        waitForUpOrCancellation()?.consume()
+                                modifier = Modifier
+                                    // 徽章本体只有约 49×20dp，而手指落点的偏差有 ±10-15dp：垂直方向
+                                    // 一共才 20dp，稍微偏一点就落到整行上，把云同步开关切掉。这里把
+                                    // 命中区撑到 48dp 高、左右各 4dp（Material 触摸目标下限），视觉尺寸
+                                    // 不变、内容居中，行高仍是 56dp。留白放在 pointerInput 之内，命中区才
+                                    // 跟着变大；反过来命中区就只有文字那一块。
+                                    .pointerInput(Unit) {
+                                        awaitEachGesture {
+                                            awaitFirstDown(requireUnconsumed = false).consume()
+                                            waitForUpOrCancellation()?.consume()
+                                        }
                                     }
-                                },
+                                    .heightIn(min = 48.dp)
+                                    .padding(horizontal = 4.dp),
+                                contentAlignment = Alignment.Center,
                             ) { trailingContent() }
                         }
                     }
