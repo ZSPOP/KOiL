@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -75,6 +77,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -483,6 +486,13 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            // 与 SettingSwitchRow 一致：整行 56dp 可点，输入框不参与点击
+                            .heightIn(min = 56.dp)
+                            .toggleable(
+                                value = eiaEnabled,
+                                role = Role.Switch,
+                                onValueChange = viewModel::setEiaEnabled,
+                            )
                             .padding(top = 13.dp, bottom = if (eiaEnabled) 13.dp else 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -504,7 +514,8 @@ fun SettingsScreen(
                         }
                         Switch(
                             checked = eiaEnabled,
-                            onCheckedChange = viewModel::setEiaEnabled,
+                            // 展示态：点击由整行 toggleable 接管
+                            onCheckedChange = null,
                         )
                     }
                     if (!eiaEnabled) {
@@ -2376,6 +2387,14 @@ private fun SettingSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // 对齐 Miuix BasicComponent / SwitchPreference：整行至少 56dp 高、整行可点，
+            // 点击/按压反馈覆盖「标题 + 副标题」整块，而不是只有右侧开关能点。
+            .heightIn(min = 56.dp)
+            .toggleable(
+                value = checked,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -2403,7 +2422,8 @@ private fun SettingSwitchRow(
         }
         Switch(
             checked = checked,
-            onCheckedChange = onCheckedChange,
+            // 展示态：点击由整行 toggleable 接管，避免开关和整行各自触发一次
+            onCheckedChange = null,
         )
     }
 }
