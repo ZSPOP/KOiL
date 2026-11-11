@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -2436,29 +2435,11 @@ private fun SettingSwitchRow(
                         )
                         if (trailingContent != null) {
                             Spacer(Modifier.width(8.dp))
-                            // 纯状态展示：吃掉落在徽章上的点击，避免「想看一眼连接状态、手一偏
-                            // 按在徽章上就把云同步关了」。整行其余区域照常可点，触摸区不缩。
-                            // 这里必须消费 down 本身：detectTapGestures 只在 up 阶段消费，
-                            // 父级 clickable 已经拿到 down、会闪一下按压高亮，看起来像能点。
-                            // 也不用 clickable{} 包一层——那会给徽章多挂一个按钮语义节点，
-                            // TalkBack 会把它当可点元素读出来。
-                            Box(
-                                modifier = Modifier
-                                    // 徽章本体只有约 49×20dp，而手指落点的偏差有 ±10-15dp：垂直方向
-                                    // 一共才 20dp，稍微偏一点就落到整行上，把云同步开关切掉。这里把
-                                    // 命中区撑到 48dp 高、左右各 4dp（Material 触摸目标下限），视觉尺寸
-                                    // 不变、内容居中，行高仍是 56dp。留白放在 pointerInput 之内，命中区才
-                                    // 跟着变大；反过来命中区就只有文字那一块。
-                                    .pointerInput(Unit) {
-                                        awaitEachGesture {
-                                            awaitFirstDown(requireUnconsumed = false).consume()
-                                            waitForUpOrCancellation()?.consume()
-                                        }
-                                    }
-                                    .heightIn(min = 48.dp)
-                                    .padding(horizontal = 4.dp),
-                                contentAlignment = Alignment.Center,
-                            ) { trailingContent() }
+                            // 纯状态展示，不拦触摸：徽章不是按钮，它所在的行整体才是按钮，
+                            // 点在这里等于点行、切开关，符合「整行可点」的一致心智。
+                            // 反过来（把徽章做成哑区）会让徽章变成一个没有反馈的洞，
+                            // 用户分不清是自己没点准还是行不响应。
+                            trailingContent()
                         }
                     }
                     Spacer(Modifier.height(2.dp))
