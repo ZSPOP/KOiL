@@ -166,11 +166,10 @@ class AddViewModel(
                 val last = lastD.await()
                 val grade = if (keepGrade && last?.oilGrade != null) last.oilGrade else defaultGrade
                 _uiState.update {
-                    it.copy(
+                    it.withGrade(grade).copy(
                         province = province,
                         viewProvince = province,
                         lastRecord = last,
-                        oilGrade = grade,
                         tankCapacity = tank,
                     )
                 }
@@ -184,7 +183,7 @@ class AddViewModel(
                     val keep = settings.keepLastGrade.first()
                     val lastGrade = last?.oilGrade?.takeIf { it in GRADE_LABELS }
                     if (keep && lastGrade != null && _uiState.value.oilGrade != lastGrade) {
-                        _uiState.value = _uiState.value.copy(lastRecord = last, oilGrade = lastGrade)
+                        _uiState.value = _uiState.value.withGrade(lastGrade).copy(lastRecord = last)
                         runPrecheck()
                     } else {
                         _uiState.update { it.copy(lastRecord = last) }
@@ -223,7 +222,7 @@ class AddViewModel(
                     val last = _uiState.value.lastRecord
                     val grade = if (keep && last?.oilGrade != null) last.oilGrade else def
                     if (_uiState.value.oilGrade != grade) {
-                        _uiState.value = _uiState.value.copy(oilGrade = grade)
+                        _uiState.value = _uiState.value.withGrade(grade)
                         runPrecheck()
                     }
                 }
@@ -454,7 +453,7 @@ class AddViewModel(
                     forecastDataDate = snap.dataDate,
                     forecastReleaseDate = snap.sourceReleaseDate,
                     forecastSampleDays = snap.sampleDays,
-                    perLiterEquivalent = perLiterOf(snap.amountPerTon, it.oilGrade),
+                    perLiterEquivalent = perLiterPerTon(snap.amountPerTon, it.oilGrade),
                     // 汇率新鲜度不落盘：先显示时按「未超期」处理，等后台刷新再按真实快照更新
                     forecastFxMissing = false,
                     forecastFxStale = false,
@@ -463,11 +462,15 @@ class AddViewModel(
         }
     }
 
-    /** 元/吨 → 元/升：92/95/98 汽油按 1316 升/吨，0# 柴油按 1205 升/吨 */
-    private fun perLiterOf(amountPerTon: Double, oilGrade: String): Double {
-        val litersPerTon = if (oilGrade == "0") 1205.0 else 1316.0
-        return Math.round(amountPerTon / litersPerTon * 100) / 100.0
-    }
+    /**
+     * 设油号并按新密度重算「折合约 X 元/升」。
+     * 所有「油号自动跟随」的路径（初始化、跟随上一条记录、跟随设置默认油号、手动切换）都走这里，
+     * 漏一处就会让折合值停在旧油号的数，直到下一次网络刷新。
+     */
+    private fun AddUiState.withGrade(grade: String): AddUiState = copy(
+        oilGrade = grade,
+        perLiterEquivalent = forecastAmount?.let { amount -> perLiterPerTon(amount, grade) },
+    )
 
     /**
      * 刷新预测幅度（EIA 窗口幅度估算 / 腾讯单日方向参考）+ 折合元/升。
@@ -487,7 +490,7 @@ class AddViewModel(
         val estimate = success?.estimate
         if (estimate != null) lastForecastAt = now
         val forecastAmount = estimate?.amountPerTon
-        val perLiterEquivalent = forecastAmount?.let { perLiterOf(it, _uiState.value.oilGrade) }
+        val perLiterEquivalent = forecastAmount?.let { perLiterPerTon(it, _uiState.value.oilGrade) }
         if (estimate != null) {
             // 落盘：下次冷启动先用这条快照占位，网络回来再覆盖（口径不变，只是把上次结果留下来）
             settings.setForecastSnapshot(ForecastSnapshot.encode(estimate))
@@ -511,14 +514,7 @@ class AddViewModel(
     fun dismissProvincePicker() { _uiState.value = _uiState.value.copy(showProvincePicker = false) }
 
     fun setOilGrade(grade: String) {
-        _uiState.update {
-            // 折合元/升按油号密度决定（汽油 1316 升/吨、0# 柴油 1205 升/吨），
-            // 换油号必须跟着重算，否则「折合约 X 元/升」会停在旧油号的值直到下次刷新
-            it.copy(
-                oilGrade = grade,
-                perLiterEquivalent = it.forecastAmount?.let { amount -> perLiterOf(amount, grade) },
-            )
-        }
+        _uiState.update { it.withGrade(grade) }
         runPrecheck()
     }
 
@@ -829,4 +825,13 @@ class AddViewModel(
             }
         }
     }
+}
+
+/**
+ * 元/吨 → 元/升：92/95/98 汽油按 1316 升/吨、0# 柴油按 1205 升/吨，保留两位小数。
+ * 抽成顶层函数是为了让密度口径只有一个定义点，也便于单测直接覆盖。
+ */
+internal fun perLiterPerTon(amountPerTon: Double, oilGrade: String): Double {
+    val litersPerTon = if (oilGrade == "0") 1205.0 else 1316.0
+    return Math.round(amountPerTon / litersPerTon * 100) / 100.0
 }
