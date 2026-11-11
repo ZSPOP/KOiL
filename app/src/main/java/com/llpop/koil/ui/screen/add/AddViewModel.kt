@@ -6,6 +6,7 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.CrudeOilEstimator
+import com.llpop.koil.data.oil.ForecastSnapshot
 import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.location.LocationHelper
@@ -362,6 +363,8 @@ class AddViewModel(
     private fun loadPriceAdjustInfo() {
         // 第一段：窗口日 + 版本号（纯本地，秒显）
         viewModelScope.launch {
+            // 预测幅度紧跟其后先显示上次的快照（DataStore 读取，毫秒级），不必等第二段网络
+            applyForecastSnapshot()
             val province = _uiState.value.province
             val todayStr = todayFlow.value
             val p = priceDao.getLatestPrice(province, "92号汽油", todayStr)
@@ -430,6 +433,36 @@ class AddViewModel(
     }
 
     /**
+     * 冷启动占位：把上次成功的预测快照先写进 UI，后台 [refreshForecast] 拿到新值后覆盖。
+     * 只认 [FORECAST_SNAPSHOT_MAX_AGE_MS] 以内的快照；已有数值时不覆盖（防止把刚算好的结果冲掉）。
+     * 折合元/升按当前油号现场折算，所以快照只存「元/吨」，换油号不会算错。
+     */
+    private suspend fun applyForecastSnapshot() {
+        if (_uiState.value.forecastAmount != null) return
+        val (raw, at) = settings.forecastSnapshotOnce()
+        val snap = ForecastSnapshot.decode(raw, at) ?: return
+        _uiState.update {
+            it.copy(
+                forecastAmount = snap.amountPerTon,
+                forecastSource = snap.sourceLabel,
+                forecastDataDate = snap.dataDate,
+                forecastReleaseDate = snap.sourceReleaseDate,
+                forecastSampleDays = snap.sampleDays,
+                perLiterEquivalent = perLiterOf(snap.amountPerTon, it.oilGrade),
+                // 汇率新鲜度不落盘：先显示时按「未超期」处理，等后台刷新再按真实快照更新
+                forecastFxMissing = false,
+                forecastFxStale = false,
+            )
+        }
+    }
+
+    /** 元/吨 → 元/升：92/95/98 汽油按 1316 升/吨，0# 柴油按 1205 升/吨 */
+    private fun perLiterOf(amountPerTon: Double, oilGrade: String): Double {
+        val litersPerTon = if (oilGrade == "0") 1205.0 else 1316.0
+        return Math.round(amountPerTon / litersPerTon * 100) / 100.0
+    }
+
+    /**
      * 刷新预测幅度（EIA 窗口幅度估算 / 腾讯单日方向参考）+ 折合元/升。
      * 折合按当前油号密度折算——92/95/98 汽油 0.76 → 1316 升/吨；0# 柴油 0.83 → 1205 升/吨；
      * 来源写入 forecastSource，UI 按来源标注「估算」/「单日参考」。
@@ -447,8 +480,11 @@ class AddViewModel(
         val estimate = success?.estimate
         if (estimate != null) lastForecastAt = now
         val forecastAmount = estimate?.amountPerTon
-        val litersPerTon = if (_uiState.value.oilGrade == "0") 1205.0 else 1316.0
-        val perLiterEquivalent = forecastAmount?.let { Math.round(it / litersPerTon * 100) / 100.0 }
+        val perLiterEquivalent = forecastAmount?.let { perLiterOf(it, _uiState.value.oilGrade) }
+        if (estimate != null) {
+            // 落盘：下次冷启动先用这条快照占位，网络回来再覆盖（口径不变，只是把上次结果留下来）
+            settings.setForecastSnapshot(ForecastSnapshot.encode(estimate))
+        }
         // stale 判定用「本次预测实际依据的快照」（estimateDetailed 随 Success 带回），
         // 不事后重读 currentSnapshot：rateFor 命中旧缓存会触发后台刷新，若刷新先于重读
         // 完成，重读会把旧值误判为新数据
