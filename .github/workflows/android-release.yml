@@ -106,14 +106,20 @@ jobs:
             echo "::error::Release 列表返回内容为空（gh api 退出 0 但无 body），无法推算 versionCode"
             exit 1
           fi
+          # 不写 `add // []`：字面量 null 会被兜成空数组，REL_COUNT 与 MAX 双双归 0，
+          # 与空 body 同一个后果（Release 号可能撞上下一次 Build 的号）。
+          # 这里要求 add 的结果必须是数组，null / 对象 / 字符串一律失败。
           if ! RELEASES=$(printf '%s' "$RELEASE_PAGES" \
-               | jq -s -e 'add // [] | map(select(.draft == false and .prerelease == false))'); then
-            echo "::error::解析 Release 列表失败（返回内容不是预期的 JSON 数组），无法推算 versionCode"
+               | jq -s -e 'add | if type == "array" then . else error("not an array") end | map(select(.draft == false and .prerelease == false))'); then
+            echo "::error::解析 Release 列表失败（返回内容不是 JSON 数组，或为 null），无法推算 versionCode"
             exit 1
           fi
           REL_COUNT=$(printf '%s' "$RELEASES" | jq 'length')
           # 取附件 name 而不是整个 asset 对象：browser_download_url 也含 -vcN，附件改名后会给出不同的号。
           # 解析失败不能静默——读成 0 等于闸门失效；「没有带 -vcN 的附件」才该是 0。
+          # 注意：附件存在但缺 name 时同样归 0、不报错（jq 输出字面量 "null"，不含 -vcN）。
+          # GitHub 的 asset 必有 name，缺 name 只可能来自裁剪过的构造响应，这里按「无可解析号」
+          # 处理——与上面的「解析失败」刻意区分，避免把结构异常和「没有附件」混为一类。
           if ! ASSET_NAMES=$(printf '%s' "$RELEASES" | jq -r '.[] | (.assets // [])[].name'); then
             echo "::error::解析 Release 附件名失败（assets 字段结构异常），无法推算已发布最大 versionCode"
             exit 1
