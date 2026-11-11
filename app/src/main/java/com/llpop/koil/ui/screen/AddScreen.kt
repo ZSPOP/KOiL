@@ -647,9 +647,10 @@ private fun OilPriceCard(
                             )
                         }
                         if (forecast != null) {
-                            // 三段式：头行给结论（「机制预测：上调约 X 元/吨」），第二行左侧提示以公告为准、
-                            // 右侧放建议徽章（两者贴在一起读），第三行给数据时点。原先徽章放在窗口日行
-                            // 右侧、与免责句分离，用户看到「建议提前加油」时不知道它跟哪个结论绑定。
+                            // 头行给结论（「机制预测：上调约 X 元/吨」），随后是数据时点行，
+                            // 最后一行左侧提示以公告为准、右侧放建议徽章（两者贴在一起读）。
+                            // 原先徽章放在窗口日行右侧、与免责句分离，用户看到「建议提前加油」
+                            // 时不知道它跟哪个结论绑定。
                             val eiaSource = uiState.forecastSource != "腾讯"
                             // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
                             // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
@@ -679,36 +680,6 @@ private fun OilPriceCard(
                                 fontWeight = FontWeight.Medium,
                                 color = textColor,
                             )
-                            Spacer(Modifier.height(3.dp))
-                            // 这句不是免责套话：25 轮公告里有 4 轮被行政压价（且只压不托底），
-                            // 机制算出来的数和公告本来就会不一样。建议徽章跟这行同一行右侧——
-                            // 「最终调控以发改委公告为准 · 建议提前加油」是一组话，不该拆到两行
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = stringResource(R.string.koil_add_forecast_caveat),
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.65f),
-                                    modifier = Modifier.weight(1f),
-                                )
-                                if (suggestion.isNotEmpty()) {
-                                    Spacer(Modifier.width(6.dp))
-                                    AdjustBadge(
-                                        text = suggestion,
-                                        color = if (urgent) urgentColor else accent,
-                                        bold = true,
-                                    )
-                                }
-                            }
-                            if (uiState.forecastFxStale) {
-                                // 汇率缓存超 90 天：数值仍给出（有边界比没有好），但如实告知数据旧，
-                                // 提示用户这次误差可能比平时大
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = stringResource(R.string.koil_add_forecast_fx_stale),
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.65f),
-                                )
-                            }
                             if (eiaSource) {
                                 // 样本天数改成恒显示：满窗口也写「已计入 10 个交易日」，
                                 // 只在 <10 时显示会让满窗口看起来像没标样本的最终值。
@@ -737,11 +708,41 @@ private fun OilPriceCard(
                                         add(stringResource(R.string.koil_add_forecast_sample, it))
                                     }
                                 }
-                                Spacer(Modifier.height(2.dp))
+                                Spacer(Modifier.height(3.dp))
                                 Text(
                                     text = meta.joinToString(
                                         stringResource(R.string.koil_add_forecast_meta_sep),
                                     ),
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.65f),
+                                )
+                            }
+                            Spacer(Modifier.height(3.dp))
+                            // 这句不是免责套话：25 轮公告里有 4 轮被行政压价（且只压不托底），
+                            // 机制算出来的数和公告本来就会不一样。建议徽章跟这行同一行右侧——
+                            // 「最终调控以发改委公告为准 · 建议提前加油」是一组话，不该拆到两行
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = stringResource(R.string.koil_add_forecast_caveat),
+                                    fontSize = 11.sp,
+                                    color = textColor.copy(alpha = 0.65f),
+                                    modifier = Modifier.weight(1f),
+                                )
+                                if (suggestion.isNotEmpty()) {
+                                    Spacer(Modifier.width(6.dp))
+                                    AdjustBadge(
+                                        text = suggestion,
+                                        color = if (urgent) urgentColor else accent,
+                                        bold = true,
+                                    )
+                                }
+                            }
+                            if (uiState.forecastFxStale) {
+                                // 汇率缓存超 90 天：数值仍给出（有边界比没有好），但如实告知数据旧，
+                                // 提示用户这次误差可能比平时大
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.koil_add_forecast_fx_stale),
                                     fontSize = 11.sp,
                                     color = textColor.copy(alpha = 0.65f),
                                 )
