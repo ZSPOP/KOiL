@@ -438,21 +438,28 @@ class AddViewModel(
      * 折合元/升按当前油号现场折算，所以快照只存「元/吨」，换油号不会算错。
      */
     private suspend fun applyForecastSnapshot() {
+        // 快路径：已经有值就不读盘
         if (_uiState.value.forecastAmount != null) return
         val (raw, at) = settings.forecastSnapshotOnce()
         val snap = ForecastSnapshot.decode(raw, at) ?: return
         _uiState.update {
-            it.copy(
-                forecastAmount = snap.amountPerTon,
-                forecastSource = snap.sourceLabel,
-                forecastDataDate = snap.dataDate,
-                forecastReleaseDate = snap.sourceReleaseDate,
-                forecastSampleDays = snap.sampleDays,
-                perLiterEquivalent = perLiterOf(snap.amountPerTon, it.oilGrade),
-                // 汇率新鲜度不落盘：先显示时按「未超期」处理，等后台刷新再按真实快照更新
-                forecastFxMissing = false,
-                forecastFxStale = false,
-            )
+            // 判空放在 update 内部再查一次：读盘期间网络可能已经回来并写好结果，
+            // 这里原子地跳过，避免把刚算好的新值用旧快照冲掉
+            if (it.forecastAmount != null) {
+                it
+            } else {
+                it.copy(
+                    forecastAmount = snap.amountPerTon,
+                    forecastSource = snap.sourceLabel,
+                    forecastDataDate = snap.dataDate,
+                    forecastReleaseDate = snap.sourceReleaseDate,
+                    forecastSampleDays = snap.sampleDays,
+                    perLiterEquivalent = perLiterOf(snap.amountPerTon, it.oilGrade),
+                    // 汇率新鲜度不落盘：先显示时按「未超期」处理，等后台刷新再按真实快照更新
+                    forecastFxMissing = false,
+                    forecastFxStale = false,
+                )
+            }
         }
     }
 
@@ -504,7 +511,14 @@ class AddViewModel(
     fun dismissProvincePicker() { _uiState.value = _uiState.value.copy(showProvincePicker = false) }
 
     fun setOilGrade(grade: String) {
-        _uiState.update { it.copy(oilGrade = grade) }
+        _uiState.update {
+            // 折合元/升按油号密度决定（汽油 1316 升/吨、0# 柴油 1205 升/吨），
+            // 换油号必须跟着重算，否则「折合约 X 元/升」会停在旧油号的值直到下次刷新
+            it.copy(
+                oilGrade = grade,
+                perLiterEquivalent = it.forecastAmount?.let { amount -> perLiterOf(amount, grade) },
+            )
+        }
         runPrecheck()
     }
 
