@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.llpop.koil.data.sync.RecordMerger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.KOiLDataStore by preferencesDataStore(name = "KOiL_settings")
@@ -83,6 +84,8 @@ class AppSettings(private val context: Context) {
         // ---- 原油估算（本地兜底，不依赖收费的第三方 forecast）：EIA 官方布伦特现货日度 ----
         private val KEY_EIA_API_KEY = stringPreferencesKey("KOiL-eia-api-key")
         private val KEY_EIA_ENABLED = booleanPreferencesKey("KOiL-eia-enabled")
+        private val KEY_FORECAST_SNAPSHOT = stringPreferencesKey("KOiL-forecast-snapshot")
+        private val KEY_FORECAST_SNAPSHOT_AT = longPreferencesKey("KOiL-forecast-snapshot-at")
 
         // ---- 云同步（坚果云 WebDAV：私有数据备份/恢复，见 docs/KOiL云同步设计.md）----
         private val KEY_SYNC_ENABLED = booleanPreferencesKey("KOiL-sync-enabled")
@@ -372,6 +375,23 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_EIA_API_KEY] ?: DEFAULT_EIA_API_KEY }
     suspend fun setEiaApiKey(key: String) {
         context.KOiLDataStore.edit { it[KEY_EIA_API_KEY] = key }
+    }
+
+    /**
+     * 上次成功预测的幅度快照，格式 `amount|source|dataDate|releaseDate|sampleDays`，附带写入时间（毫秒）。
+     * 冷启动时先拿它占位（进程重启后内存里的结果已经没了），后台 refreshForecast 拿到新值再覆盖。
+     * 返回 Pair 而不是两条 Flow：调用点只需要一次读取。
+     */
+    suspend fun forecastSnapshotOnce(): Pair<String, Long> {
+        val prefs = context.KOiLDataStore.data.first()
+        return (prefs[KEY_FORECAST_SNAPSHOT] ?: "") to (prefs[KEY_FORECAST_SNAPSHOT_AT] ?: 0L)
+    }
+
+    suspend fun setForecastSnapshot(snapshot: String) {
+        context.KOiLDataStore.edit {
+            it[KEY_FORECAST_SNAPSHOT] = snapshot
+            it[KEY_FORECAST_SNAPSHOT_AT] = System.currentTimeMillis()
+        }
     }
 
     /** EIA 原油估算源启用开关（默认开=用 EIA；关=直接用腾讯，输入框显示供修改） */

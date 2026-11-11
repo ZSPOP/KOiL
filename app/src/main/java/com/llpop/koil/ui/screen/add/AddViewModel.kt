@@ -6,6 +6,7 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.CrudeOilEstimator
+import com.llpop.koil.data.oil.ForecastSnapshot
 import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.location.LocationHelper
@@ -165,11 +166,10 @@ class AddViewModel(
                 val last = lastD.await()
                 val grade = if (keepGrade && last?.oilGrade != null) last.oilGrade else defaultGrade
                 _uiState.update {
-                    it.copy(
+                    it.withGrade(grade).copy(
                         province = province,
                         viewProvince = province,
                         lastRecord = last,
-                        oilGrade = grade,
                         tankCapacity = tank,
                     )
                 }
@@ -183,7 +183,7 @@ class AddViewModel(
                     val keep = settings.keepLastGrade.first()
                     val lastGrade = last?.oilGrade?.takeIf { it in GRADE_LABELS }
                     if (keep && lastGrade != null && _uiState.value.oilGrade != lastGrade) {
-                        _uiState.value = _uiState.value.copy(lastRecord = last, oilGrade = lastGrade)
+                        _uiState.value = _uiState.value.withGrade(lastGrade).copy(lastRecord = last)
                         runPrecheck()
                     } else {
                         _uiState.update { it.copy(lastRecord = last) }
@@ -222,7 +222,7 @@ class AddViewModel(
                     val last = _uiState.value.lastRecord
                     val grade = if (keep && last?.oilGrade != null) last.oilGrade else def
                     if (_uiState.value.oilGrade != grade) {
-                        _uiState.value = _uiState.value.copy(oilGrade = grade)
+                        _uiState.value = _uiState.value.withGrade(grade)
                         runPrecheck()
                     }
                 }
@@ -362,6 +362,8 @@ class AddViewModel(
     private fun loadPriceAdjustInfo() {
         // 第一段：窗口日 + 版本号（纯本地，秒显）
         viewModelScope.launch {
+            // 预测幅度紧跟其后先显示上次的快照（DataStore 读取，毫秒级），不必等第二段网络
+            applyForecastSnapshot()
             val province = _uiState.value.province
             val todayStr = todayFlow.value
             val p = priceDao.getLatestPrice(province, "92号汽油", todayStr)
@@ -430,6 +432,47 @@ class AddViewModel(
     }
 
     /**
+     * 冷启动占位：把上次成功的预测快照先写进 UI，后台 [refreshForecast] 拿到新值后覆盖。
+     * 只认 [FORECAST_SNAPSHOT_MAX_AGE_MS] 以内的快照；已有数值时不覆盖（防止把刚算好的结果冲掉）。
+     * 折合元/升按当前油号现场折算，所以快照只存「元/吨」，换油号不会算错。
+     */
+    private suspend fun applyForecastSnapshot() {
+        // 快路径：已经有值就不读盘
+        if (_uiState.value.forecastAmount != null) return
+        val (raw, at) = settings.forecastSnapshotOnce()
+        val snap = ForecastSnapshot.decode(raw, at) ?: return
+        _uiState.update {
+            // 判空放在 update 内部再查一次：读盘期间网络可能已经回来并写好结果，
+            // 这里原子地跳过，避免把刚算好的新值用旧快照冲掉
+            if (it.forecastAmount != null) {
+                it
+            } else {
+                it.copy(
+                    forecastAmount = snap.amountPerTon,
+                    forecastSource = snap.sourceLabel,
+                    forecastDataDate = snap.dataDate,
+                    forecastReleaseDate = snap.sourceReleaseDate,
+                    forecastSampleDays = snap.sampleDays,
+                    perLiterEquivalent = perLiterPerTon(snap.amountPerTon, it.oilGrade),
+                    // 汇率新鲜度不落盘：先显示时按「未超期」处理，等后台刷新再按真实快照更新
+                    forecastFxMissing = false,
+                    forecastFxStale = false,
+                )
+            }
+        }
+    }
+
+    /**
+     * 设油号并按新密度重算「折合约 X 元/升」。
+     * 所有「油号自动跟随」的路径（初始化、跟随上一条记录、跟随设置默认油号、手动切换）都走这里，
+     * 漏一处就会让折合值停在旧油号的数，直到下一次网络刷新。
+     */
+    private fun AddUiState.withGrade(grade: String): AddUiState = copy(
+        oilGrade = grade,
+        perLiterEquivalent = forecastAmount?.let { amount -> perLiterPerTon(amount, grade) },
+    )
+
+    /**
      * 刷新预测幅度（EIA 窗口幅度估算 / 腾讯单日方向参考）+ 折合元/升。
      * 折合按当前油号密度折算——92/95/98 汽油 0.76 → 1316 升/吨；0# 柴油 0.83 → 1205 升/吨；
      * 来源写入 forecastSource，UI 按来源标注「估算」/「单日参考」。
@@ -447,8 +490,11 @@ class AddViewModel(
         val estimate = success?.estimate
         if (estimate != null) lastForecastAt = now
         val forecastAmount = estimate?.amountPerTon
-        val litersPerTon = if (_uiState.value.oilGrade == "0") 1205.0 else 1316.0
-        val perLiterEquivalent = forecastAmount?.let { Math.round(it / litersPerTon * 100) / 100.0 }
+        val perLiterEquivalent = forecastAmount?.let { perLiterPerTon(it, _uiState.value.oilGrade) }
+        if (estimate != null) {
+            // 落盘：下次冷启动先用这条快照占位，网络回来再覆盖（口径不变，只是把上次结果留下来）
+            settings.setForecastSnapshot(ForecastSnapshot.encode(estimate))
+        }
         // stale 判定用「本次预测实际依据的快照」（estimateDetailed 随 Success 带回），
         // 不事后重读 currentSnapshot：rateFor 命中旧缓存会触发后台刷新，若刷新先于重读
         // 完成，重读会把旧值误判为新数据
@@ -468,7 +514,7 @@ class AddViewModel(
     fun dismissProvincePicker() { _uiState.value = _uiState.value.copy(showProvincePicker = false) }
 
     fun setOilGrade(grade: String) {
-        _uiState.update { it.copy(oilGrade = grade) }
+        _uiState.update { it.withGrade(grade) }
         runPrecheck()
     }
 
@@ -550,9 +596,9 @@ class AddViewModel(
      *  不沿用上次里程——沿用旧值必触发"里程递减"拦截，置空由用户输入本次新里程。 */
     fun applyLastRecord() {
         val last = _uiState.value.lastRecord ?: return
+        val grade = last.oilGrade ?: "92"
         _uiState.update {
-            it.copy(
-                oilGrade = last.oilGrade ?: "92",
+            it.withGrade(grade).copy(
                 mileage = "",
                 // Double.toString 会写成 "45.0"，输入框里带个多余的小数点，采用整数/小数自适应
                 oilAmount = last.oilAmount.editText(),
@@ -779,4 +825,13 @@ class AddViewModel(
             }
         }
     }
+}
+
+/**
+ * 元/吨 → 元/升：92/95/98 汽油按 1316 升/吨、0# 柴油按 1205 升/吨，保留两位小数。
+ * 抽成顶层函数是为了让密度口径只有一个定义点，也便于单测直接覆盖。
+ */
+internal fun perLiterPerTon(amountPerTon: Double, oilGrade: String): Double {
+    val litersPerTon = if (oilGrade == "0") 1205.0 else 1316.0
+    return Math.round(amountPerTon / litersPerTon * 100) / 100.0
 }
