@@ -723,53 +723,74 @@ fun OverviewScreen(
                     checked = dlg.backfillIsFullTank,
                     onCheckedChange = viewModel::setBackfillFullTank,
                 )
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
-                Spacer(Modifier.height(10.dp))
-                // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
-                PaymentSummaryCard(
-                    payable = dlg.backfillPayableAmount.toDoubleOrNull(),
-                    actual = dlg.backfillActualAmount.toDoubleOrNull(),
-                    fuelAmount = dlg.backfillOilAmount.toDoubleOrNull(),
-                    referencePrice = dlg.backfillReferencePrice,
-                )
-                Spacer(Modifier.height(8.dp))
-                // 补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
-                BackfillPrecheckHint(
-                    beforeFirst = dlg.backfillBeforeFirst,
-                    sameDayExists = dlg.backfillSameDayExists,
-                    mileageConflictType = dlg.backfillMileageConflictType,
-                    mileageConflictDate = dlg.backfillMileageConflictDate,
-                    mileageConflictValue = dlg.backfillMileageConflictValue,
-                    deviationPct = dlg.backfillDeviationPct,
-                    deviationExceeded = dlg.backfillDeviationExceeded,
-                    overPayable = dlg.backfillOverPayable,
-                    overTank = dlg.backfillOverTank,
-                    tankCapacity = dlg.backfillTankCapacity,
-                    ready = dlg.backfillReady,
-                    readyText = stringResource(R.string.koil_ov_bf_ready),
-                )
-                // 保存失败提示（如唯一约束冲突等）
-                if (dlg.saveError) {
-                    Spacer(Modifier.height(8.dp))
-                    SaveErrorHint()
-                }
-                Spacer(Modifier.height(20.dp))
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
-                    Spacer(Modifier.width(12.dp))
-                    Button(
-                        onClick = viewModel::saveBackfill,
-                        modifier = Modifier.weight(1f).height(44.dp),
-                        enabled = dlg.backfillReady && !dlg.isSavingBackfill,
-                        // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
-                        colors = ButtonDefaults.buttonColors(
-                            color = KOiLColors.Primary,
-                            contentColor = Color.White,
-                            disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
-                        ),
-                    ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
-                }
+                // 跳枪行下方间距按「块是否真的渲染」分配：是否绘制只由下面两个谓词决定，
+                // 卡片和提示条内部不再各判一次（否则改一处忘另一处就会「留了空档但没内容」）。
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)) {
+                    val hasSummary = hasPaymentSummary(
+                        dlg.backfillPayableAmount.toDoubleOrNull(),
+                        dlg.backfillActualAmount.toDoubleOrNull(),
+                        dlg.backfillOilAmount.toDoubleOrNull(),
+                        dlg.backfillReferencePrice,
+                    )
+                    val hasHint = hasPrecheckHint(
+                        beforeFirst = dlg.backfillBeforeFirst,
+                        sameDayExists = dlg.backfillSameDayExists,
+                        mileageConflictType = dlg.backfillMileageConflictType,
+                        deviationExceeded = dlg.backfillDeviationExceeded,
+                        overPayable = dlg.backfillOverPayable,
+                        overTank = dlg.backfillOverTank,
+                        ready = dlg.backfillReady,
+                    )
+                    // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
+                    if (hasSummary) {
+                        PaymentSummaryCard(
+                            payable = dlg.backfillPayableAmount.toDoubleOrNull(),
+                            actual = dlg.backfillActualAmount.toDoubleOrNull(),
+                            fuelAmount = dlg.backfillOilAmount.toDoubleOrNull(),
+                            referencePrice = dlg.backfillReferencePrice,
+                        )
+                        // 只有卡片真的画过，这段 8dp 才需要存在
+                        if (hasHint) Spacer(Modifier.height(8.dp))
+                    }
+                    if (hasHint) {
+                        // 补录校验提示（用户确认规则：日期边界/重复/里程链/偏差A+B/实付>应付/油箱容量）
+                        BackfillPrecheckHint(
+                            beforeFirst = dlg.backfillBeforeFirst,
+                            sameDayExists = dlg.backfillSameDayExists,
+                            mileageConflictType = dlg.backfillMileageConflictType,
+                            mileageConflictDate = dlg.backfillMileageConflictDate,
+                            mileageConflictValue = dlg.backfillMileageConflictValue,
+                            deviationPct = dlg.backfillDeviationPct,
+                            deviationExceeded = dlg.backfillDeviationExceeded,
+                            overPayable = dlg.backfillOverPayable,
+                            overTank = dlg.backfillOverTank,
+                            tankCapacity = dlg.backfillTankCapacity,
+                            ready = dlg.backfillReady,
+                            readyText = stringResource(R.string.koil_ov_bf_ready),
+                        )
+                    }
+                    // 保存失败提示（如唯一约束冲突等）
+                    if (dlg.saveError) {
+                        Spacer(Modifier.height(8.dp))
+                        SaveErrorHint()
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
+                        Spacer(Modifier.width(12.dp))
+                        Button(
+                            onClick = viewModel::saveBackfill,
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            enabled = dlg.backfillReady && !dlg.isSavingBackfill,
+                            // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
+                            colors = ButtonDefaults.buttonColors(
+                                color = KOiLColors.Primary,
+                                contentColor = Color.White,
+                                disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                                disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
+                            ),
+                        ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                    }
                 }
             }
         }
@@ -2101,56 +2122,77 @@ private fun EditRecordDialog(
                 checked = uiState.editIsFullTank,
                 onCheckedChange = onFullTankChange,
             )
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 13.dp, bottom = 16.dp)) {
-            Spacer(Modifier.height(10.dp))
-            // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
-            PaymentSummaryCard(
-                payable = uiState.editPayableAmount.toDoubleOrNull(),
-                actual = uiState.editActualAmount.toDoubleOrNull(),
-                fuelAmount = uiState.editOilAmount.toDoubleOrNull(),
-                referencePrice = uiState.editReferencePrice,
-            )
-            Spacer(Modifier.height(8.dp))
-            // 编辑校验提示条（复刻补录卡：日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色）
-            BackfillPrecheckHint(
-                beforeFirst = uiState.editBeforeFirst,
-                sameDayExists = uiState.editSameDayExists,
-                mileageConflictType = uiState.editMileageConflictType,
-                mileageConflictDate = uiState.editMileageConflictDate,
-                mileageConflictValue = uiState.editMileageConflictValue,
-                deviationPct = uiState.editDeviationPct,
-                deviationExceeded = uiState.editDeviationExceeded,
-                overPayable = uiState.editOverPayable,
-                overTank = uiState.editOverTank,
-                tankCapacity = uiState.editTankCapacity,
-                ready = uiState.editReady,
-                readyText = stringResource(R.string.koil_ov_edit_ready),
-            )
-            // 保存失败提示（如唯一约束冲突等）
-            if (uiState.saveError) {
-                Spacer(Modifier.height(8.dp))
-                SaveErrorHint()
-            }
-            Spacer(Modifier.height(20.dp))
-            Row(modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f).height(44.dp),
-                ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
-                Spacer(Modifier.width(12.dp))
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier.weight(1f).height(44.dp),
-                    enabled = uiState.editReady && !uiState.isSavingEdit,
-                    // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐补录卡/首页录入卡）
-                    colors = ButtonDefaults.buttonColors(
-                        color = KOiLColors.Primary,
-                        contentColor = Color.White,
-                        disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
-                    ),
-                ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
-            }
+            // 跳枪行下方间距按「块是否真的渲染」分配：是否绘制只由下面两个谓词决定，
+            // 卡片和提示条内部不再各判一次（否则改一处忘另一处就会「留了空档但没内容」）。
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)) {
+                val hasSummary = hasPaymentSummary(
+                    uiState.editPayableAmount.toDoubleOrNull(),
+                    uiState.editActualAmount.toDoubleOrNull(),
+                    uiState.editOilAmount.toDoubleOrNull(),
+                    uiState.editReferencePrice,
+                )
+                val hasHint = hasPrecheckHint(
+                    beforeFirst = uiState.editBeforeFirst,
+                    sameDayExists = uiState.editSameDayExists,
+                    mileageConflictType = uiState.editMileageConflictType,
+                    deviationExceeded = uiState.editDeviationExceeded,
+                    overPayable = uiState.editOverPayable,
+                    overTank = uiState.editOverTank,
+                    ready = uiState.editReady,
+                )
+                // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
+                if (hasSummary) {
+                    PaymentSummaryCard(
+                        payable = uiState.editPayableAmount.toDoubleOrNull(),
+                        actual = uiState.editActualAmount.toDoubleOrNull(),
+                        fuelAmount = uiState.editOilAmount.toDoubleOrNull(),
+                        referencePrice = uiState.editReferencePrice,
+                    )
+                    // 只有卡片真的画过，这段 8dp 才需要存在
+                    if (hasHint) Spacer(Modifier.height(8.dp))
+                }
+                if (hasHint) {
+                    // 编辑校验提示条（复刻补录卡：日期边界/同日重复/里程链/偏差A+B/实付>应付/油箱容量，通过绿色）
+                    BackfillPrecheckHint(
+                        beforeFirst = uiState.editBeforeFirst,
+                        sameDayExists = uiState.editSameDayExists,
+                        mileageConflictType = uiState.editMileageConflictType,
+                        mileageConflictDate = uiState.editMileageConflictDate,
+                        mileageConflictValue = uiState.editMileageConflictValue,
+                        deviationPct = uiState.editDeviationPct,
+                        deviationExceeded = uiState.editDeviationExceeded,
+                        overPayable = uiState.editOverPayable,
+                        overTank = uiState.editOverTank,
+                        tankCapacity = uiState.editTankCapacity,
+                        ready = uiState.editReady,
+                        readyText = stringResource(R.string.koil_ov_edit_ready),
+                    )
+                }
+                // 保存失败提示（如唯一约束冲突等）
+                if (uiState.saveError) {
+                    Spacer(Modifier.height(8.dp))
+                    SaveErrorHint()
+                }
+                Spacer(Modifier.height(20.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f).height(44.dp),
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
+                    Spacer(Modifier.width(12.dp))
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        enabled = uiState.editReady && !uiState.isSavingEdit,
+                        // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐补录卡/首页录入卡）
+                        colors = ButtonDefaults.buttonColors(
+                            color = KOiLColors.Primary,
+                            contentColor = Color.White,
+                            disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                            disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
+                        ),
+                    ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                }
             }
         }
     }
@@ -2172,6 +2214,8 @@ private fun BackfillPrecheckHint(
     ready: Boolean,
     readyText: String,
 ) {
+    // 「是否绘制」由调用方的 hasPrecheckHint 决定，这里不再前置判一次；
+    // 下面 when 的 else 只是兜底（谓词已保证至少一条命中）
     val text = when {
         beforeFirst -> stringResource(R.string.koil_ov_bf_before_first)
         sameDayExists -> stringResource(R.string.koil_ov_bf_dup)
@@ -2333,6 +2377,8 @@ private fun PaymentSummaryCard(
     fuelAmount: Double?,
     referencePrice: Double?,
 ) {
+    // 「是否绘制」由调用方的 hasPaymentSummary 决定：两行都没有内容时调用方根本不会调它，
+    // 这里不再自己判一次（否则就是同一条件抄两份，改一处忘另一处）。
     val hasPayable = payable != null && payable > 0
     val hasActual = actual != null && actual > 0
     val hasFuel = fuelAmount != null && fuelAmount > 0
@@ -2368,8 +2414,6 @@ private fun PaymentSummaryCard(
             else -> { unitDiffText = stringResource(R.string.koil_ps_match_ref); unitDiffColor = gray }
         }
     }
-
-    if (savingsText == null && unitDiffText == null) return
 
     Box(
         modifier = Modifier
@@ -2414,6 +2458,30 @@ private fun PaymentSummaryCard(
         }
     }
 }
+
+/**
+ * 「卡片是否绘制」的唯一判据，调用方据此决定要不要画卡片、要不要补 8dp 间距。
+ * 条件内部与 `BackfillPrecheckHint` 使用同一套字段，卡片本身不再重复判断。
+ */
+private fun hasPaymentSummary(payable: Double?, actual: Double?, fuelAmount: Double?, referencePrice: Double?): Boolean {
+    val hasPayable = payable != null && payable > 0
+    val hasActual = actual != null && actual > 0
+    val hasFuel = fuelAmount != null && fuelAmount > 0
+    val hasReference = referencePrice != null && referencePrice > 0
+    return (hasPayable && hasActual) || (hasFuel && hasActual && hasReference)
+}
+
+/** 与 [BackfillPrecheckHint] 的渲染条件保持一致（无任何提示且未通过时不占高度） */
+private fun hasPrecheckHint(
+    beforeFirst: Boolean,
+    sameDayExists: Boolean,
+    mileageConflictType: String,
+    deviationExceeded: Boolean,
+    overPayable: Boolean,
+    overTank: Boolean,
+    ready: Boolean,
+): Boolean = beforeFirst || sameDayExists || mileageConflictType.isNotBlank() ||
+    deviationExceeded || overPayable || overTank || ready
 
 /** 补录弹窗字段（对齐首页录入卡 FormField：图标 + 标签行，红色错误态边框/图标/标签） */
 @Composable
