@@ -192,69 +192,69 @@ fun AddScreen(
             // 高亮矩形会一路铺到上一字段下方、看起来「贴住」上一行（v6 实机反馈）。
             Column(modifier = Modifier.padding(bottom = 13.dp)) {
                 Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
-                // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
-                FormRow {
-                    com.llpop.koil.ui.component.KOiLDateField(
-                        modifier = Modifier.weight(1f),
-                        date = uiState.date,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    GradeField(
-                        modifier = Modifier.weight(1f),
-                        grade = uiState.oilGrade,
-                        priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
-                        onGradeSelected = viewModel::setOilGrade,
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
+                    // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
+                    FormRow {
+                        com.llpop.koil.ui.component.KOiLDateField(
+                            modifier = Modifier.weight(1f),
+                            date = uiState.date,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        GradeField(
+                            modifier = Modifier.weight(1f),
+                            grade = uiState.oilGrade,
+                            priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
+                            onGradeSelected = viewModel::setOilGrade,
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
 
-                // 第二行：里程 + 油量
-                FormRow {
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.Speed,
-                        label = stringResource(R.string.koil_add_field_mileage),
-                        value = uiState.mileage,
-                        onValueChange = viewModel::setMileage,
-                        keyboardType = KeyboardType.Number,
-                        error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.WaterDrop,
-                        label = stringResource(R.string.koil_add_field_oil_amount),
-                        value = uiState.oilAmount,
-                        onValueChange = viewModel::setOilAmount,
-                        keyboardType = KeyboardType.Decimal,
-                        error = uiState.precheck.oilOverTank,
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
+                    // 第二行：里程 + 油量
+                    FormRow {
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.Speed,
+                            label = stringResource(R.string.koil_add_field_mileage),
+                            value = uiState.mileage,
+                            onValueChange = viewModel::setMileage,
+                            keyboardType = KeyboardType.Number,
+                            error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.WaterDrop,
+                            label = stringResource(R.string.koil_add_field_oil_amount),
+                            value = uiState.oilAmount,
+                            onValueChange = viewModel::setOilAmount,
+                            keyboardType = KeyboardType.Decimal,
+                            error = uiState.precheck.oilOverTank,
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
 
-                // 第三行：应付 + 实付
-                FormRow {
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.Money,
-                        label = stringResource(R.string.koil_add_field_payable),
-                        value = uiState.payableAmount,
-                        onValueChange = {},
-                        keyboardType = KeyboardType.Decimal,
-                        readOnly = true,
-                        placeholder = stringResource(R.string.koil_ov_payable_pending),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.Money,
-                        label = stringResource(R.string.koil_add_field_actual),
-                        value = uiState.actualAmount,
-                        onValueChange = viewModel::setActualAmount,
-                        keyboardType = KeyboardType.Decimal,
-                        error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
-                    )
-                }
+                    // 第三行：应付 + 实付
+                    FormRow {
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.Money,
+                            label = stringResource(R.string.koil_add_field_payable),
+                            value = uiState.payableAmount,
+                            onValueChange = {},
+                            keyboardType = KeyboardType.Decimal,
+                            readOnly = true,
+                            placeholder = stringResource(R.string.koil_ov_payable_pending),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.Money,
+                            label = stringResource(R.string.koil_add_field_actual),
+                            value = uiState.actualAmount,
+                            onValueChange = viewModel::setActualAmount,
+                            keyboardType = KeyboardType.Decimal,
+                            error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
+                        )
+                    }
                 }
                 // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽，
                 // 横向 16dp / 纵向 13dp 都由行内 insideMargin 提供，与上一字段的间距也只由行内上距承担。

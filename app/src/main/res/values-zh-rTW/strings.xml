@@ -366,9 +366,7 @@
     <string name="koil_sync_switch">雲端同步</string>
     <string name="koil_sync_switch_sub">自動備份加油記錄到 WebDAV 雲端</string>
     <string name="koil_sync_url">WebDAV 位址</string>
-    <string name="koil_sync_username">帳號</string>
-    <string name="koil_sync_app_password">應用程式密碼</string>
-    <string name="koil_sync_app_password_unset">未設定</string>
+    <string name="koil_sync_username">帳號</string>    <string name="koil_sync_app_password_unset">未設定</string>
     <string name="koil_sync_app_password_set">已設定，輸入新值以修改</string>
     <string name="koil_sync_password_plain_warn">應用程式密碼未加密儲存（裝置不支援 Keystore）</string>
     <string name="koil_sync_password_clear">清除</string>

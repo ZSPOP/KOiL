@@ -59,8 +59,10 @@ fun FullTankSwitchRow(
         BasicComponent(
             modifier = modifier
                 .semantics {
-                    // 状态挂在行上；与内层 Switch 的同一节点语义合并后，TalkBack 停在行一次即可
-                    // 读出「已开启 / 已关闭」，不会多一个开关焦点。
+                    // 双保险：内层 Switch 在 onCheckedChange = null 时自身已挂
+                    // semantics { role = Switch; toggleableState }（Miuix 0.9.4 Switch.kt 的 else 分支），
+                    // 经 clickable 的 mergeDescendants 合并进行节点，状态本已可读。这里再挂一份是同值覆盖，
+                    // 只为防御 Miuix 内部实现变化；不要据此认为「状态可读性由本行负责」。
                     toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
                 }
                 .indication(
