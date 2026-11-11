@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,8 +30,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 开关用 Miuix 默认 [Switch]（49×28dp），与设置页开关/`SwitchPreference` 的选中态一致；
  * 左侧「标题 + 小字」作为一个整体与开关垂直居中，两行间距压到 2dp。
  *
- * 可点区是**整行**（带 [Role.Switch] 语义）：开关传 `onCheckedChange = null` 纯展示，
- * 点击响应统一由本行的 toggleable 上报。
+ * 整行和开关本身都可点，采用 Miuix `SwitchPreference` 的嵌套写法：
+ * 行用 [clickable] + [Role.Switch]，[Switch] 自己保留 `onCheckedChange`。
+ * 嵌套点击由 Switch 消费，点开关和点整行都只触发一次，不会双触发。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -45,10 +46,9 @@ fun FullTankSwitchRow(
             .fillMaxWidth()
             // 与 Miuix BasicComponent/SwitchPreference 的 56dp 行高对齐，整行可点
             .heightIn(min = 56.dp)
-            .toggleable(
-                value = checked,
+            .clickable(
                 role = Role.Switch,
-                onValueChange = onCheckedChange,
+                onClick = { onCheckedChange(!checked) },
             ),
     ) {
         Column(Modifier.weight(1f)) {
@@ -69,7 +69,7 @@ fun FullTankSwitchRow(
         Spacer(Modifier.width(8.dp))
         Switch(
             checked = checked,
-            onCheckedChange = null, // 展示态；点击由整行 toggleable 接管
+            onCheckedChange = onCheckedChange,
         )
     }
 }

@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -488,10 +487,9 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             // 与 SettingSwitchRow 一致：整行 56dp 可点，输入框不参与点击
                             .heightIn(min = 56.dp)
-                            .toggleable(
-                                value = eiaEnabled,
+                            .clickable(
                                 role = Role.Switch,
-                                onValueChange = viewModel::setEiaEnabled,
+                                onClick = { viewModel.setEiaEnabled(!eiaEnabled) },
                             )
                             .padding(top = 13.dp, bottom = if (eiaEnabled) 13.dp else 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -514,8 +512,7 @@ fun SettingsScreen(
                         }
                         Switch(
                             checked = eiaEnabled,
-                            // 展示态：点击由整行 toggleable 接管
-                            onCheckedChange = null,
+                            onCheckedChange = viewModel::setEiaEnabled,
                         )
                     }
                     if (!eiaEnabled) {
@@ -2390,10 +2387,9 @@ private fun SettingSwitchRow(
             // 对齐 Miuix BasicComponent / SwitchPreference：整行至少 56dp 高、整行可点，
             // 点击/按压反馈覆盖「标题 + 副标题」整块，而不是只有右侧开关能点。
             .heightIn(min = 56.dp)
-            .toggleable(
-                value = checked,
+            .clickable(
                 role = Role.Switch,
-                onValueChange = onCheckedChange,
+                onClick = { onCheckedChange(!checked) },
             )
             .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2422,8 +2418,7 @@ private fun SettingSwitchRow(
         }
         Switch(
             checked = checked,
-            // 展示态：点击由整行 toggleable 接管，避免开关和整行各自触发一次
-            onCheckedChange = null,
+            onCheckedChange = onCheckedChange,
         )
     }
 }
