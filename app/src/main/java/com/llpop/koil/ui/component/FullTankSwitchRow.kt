@@ -35,6 +35,11 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
  *
  * 按压反馈对齐 Miuix `BasicComponent` / `SwitchPreference`：整行可点，开关本身不消费
  * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
+ *
+ * 前置条件：[insideMargin] 在本组件内部固定为「横向 16dp / 纵向 13dp」（与设置页
+ * `SettingSwitchRow`、EIA 行同值），调用方必须把它放在**零横向内距**的容器里——外层再加
+ * `padding(horizontal)` 会双重缩进，按压高亮也会跟着缩窄；纵向同理，上距/底距只由行内
+ * 13dp 承担，调用方不要再补 `Spacer` 或 `padding(bottom)`。
  */
 @Composable
 fun FullTankSwitchRow(
