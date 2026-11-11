@@ -81,6 +81,10 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
@@ -492,10 +496,14 @@ fun SettingsScreen(
                     val eiaInteractionSource = remember { MutableInteractionSource() }
                     CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
                         BasicComponent(
-                            modifier = Modifier.indication(
-                                interactionSource = eiaInteractionSource,
-                                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
-                            ),
+                            modifier = Modifier
+                                .semantics {
+                                    toggleableState = if (eiaEnabled) ToggleableState.On else ToggleableState.Off
+                                }
+                                .indication(
+                                    interactionSource = eiaInteractionSource,
+                                    indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
+                                ),
                             insideMargin = PaddingValues(
                                 start = 16.dp,
                                 end = 16.dp,
@@ -526,6 +534,7 @@ fun SettingsScreen(
                                 Switch(
                                     checked = eiaEnabled,
                                     onCheckedChange = null,
+                                    modifier = Modifier.clearAndSetSemantics {},
                                 )
                             }
                         }
@@ -2401,10 +2410,14 @@ private fun SettingSwitchRow(
     val interactionSource = remember { MutableInteractionSource() }
     CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
         BasicComponent(
-            modifier = Modifier.indication(
-                interactionSource = interactionSource,
-                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
-            ),
+            modifier = Modifier
+                .semantics {
+                    toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
+                }
+                .indication(
+                    interactionSource = interactionSource,
+                    indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
+                ),
             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 13.dp),
             onClick = { onCheckedChange(!checked) },
             role = Role.Switch,
@@ -2436,6 +2449,8 @@ private fun SettingSwitchRow(
                 Switch(
                     checked = checked,
                     onCheckedChange = null,
+                    // 只做图形：开关状态由整行语义承载，避免 TalkBack 在行与开关上各停一次。
+                    modifier = Modifier.clearAndSetSemantics {},
                 )
             }
         }

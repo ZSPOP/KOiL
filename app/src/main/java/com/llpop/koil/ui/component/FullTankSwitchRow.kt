@@ -17,6 +17,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,10 +54,16 @@ fun FullTankSwitchRow(
     val interactionSource = remember { MutableInteractionSource() }
     CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
         BasicComponent(
-            modifier = modifier.indication(
-                interactionSource = interactionSource,
-                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
-            ),
+            modifier = modifier
+                .semantics {
+                    // 开/关状态挂在整行上，配合内层 Switch 的 clearAndSetSemantics：
+                    // TalkBack 只聚焦整行一个节点，仍能读出「已开启 / 已关闭」。
+                    toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
+                }
+                .indication(
+                    interactionSource = interactionSource,
+                    indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
+                ),
             // 上下 13dp 与设置页 SettingSwitchRow / EIA 行同值：行内距之外不再由外层补间距，
             // 避免 56dp 最小行高把「标题 + 小字」居中悬空、看起来离卡片底边太远。
             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 13.dp),
@@ -81,6 +91,8 @@ fun FullTankSwitchRow(
                 Switch(
                     checked = checked,
                     onCheckedChange = null,
+                    // 只做图形：语义已由整行承载，避免 TalkBack 在「行」和「开关」上各停一次。
+                    modifier = Modifier.clearAndSetSemantics {},
                 )
             }
         }
