@@ -105,19 +105,44 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          REL_COUNT=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
-            --jq '[.[] | select(.draft == false and .prerelease == false)] | length' 2>/dev/null \
-            | awk '{s+=$1} END {print s+0}')
-          MAX_PUBLISHED=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate \
-            --jq '.[] | select(.draft == false and .prerelease == false) | .assets[].name' 2>/dev/null \
+          # 一次取回 Release 列表再本地解析：读取失败必须显式失败 ——
+          # 读不到列表时若按「0 个已发布版本」继续，RAW 会算成裸 run_number 并通过后面的比较，
+          # 「run_number 归零」这类事故就被静默放行了。
+          # 分页取回后统一用 jq -s 'add' 合并：gh 对数组端点的多页输出形态随版本而变
+          # （2.86 直接把多页并成一个数组；带 --jq 时是逐页各打一个数组、首尾相接），
+          # slurp 再 add 对两种形态都成立，不依赖 gh 的实现细节。
+          # stderr 单独收进文件：失败时要把 gh 的真实原因（403 / 502 / 网络）一起打出来，
+          # 只报「读取失败」看不出该重试还是该改权限。
+          ERR=$(mktemp)
+          if ! RELEASE_PAGES=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" --paginate 2>"$ERR"); then
+            echo "::error::读取 Release 列表失败（gh api 退出非 0）：$(tr '\n' ' ' < "$ERR" | head -c 500)"
+            exit 1
+          fi
+          if ! RELEASES=$(printf '%s' "$RELEASE_PAGES" \
+               | jq -s -e 'add // [] | map(select(.draft == false and .prerelease == false))'); then
+            echo "::error::解析 Release 列表失败（返回内容不是预期的 JSON 数组），无法推算 versionCode"
+            exit 1
+          fi
+          REL_COUNT=$(printf '%s' "$RELEASES" | jq 'length')
+          MAX_PUBLISHED=$(printf '%s' "$RELEASES" | jq -r '.[].assets[]' 2>/dev/null \
             | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
-          NEXT=$(( ${{ github.run_number }} + REL_COUNT ))
-          if [ "$NEXT" -le "${MAX_PUBLISHED:-0}" ]; then
-            echo "::warning::推算号 $NEXT 未超过已发布最大 ${MAX_PUBLISHED}（Release 列表与版本号不一致），回退到 ${MAX_PUBLISHED}+1"
+          # 列表可读但没有已发布版本时才是 0；读不到的情况已在上面直接失败。
+          MAX_PUBLISHED=${MAX_PUBLISHED:-0}
+          RAW=$(( ${{ github.run_number }} + REL_COUNT ))
+          NEXT=$RAW
+          if [ "$NEXT" -le "$MAX_PUBLISHED" ]; then
+            echo "::warning::推算号 $NEXT 未超过已发布最大 $MAX_PUBLISHED（Release 列表与版本号不一致），回退到 $MAX_PUBLISHED+1"
             NEXT=$(( MAX_PUBLISHED + 1 ))
           fi
+          # 兜底只改注入号、不改 RAW：Verify 的「RAW > 快照 MAX」断言仍会失败，
+          # 所以号段真的不一致时构建会红，不会拿一个可能撞号的号继续发布。
+          # 把两个基准快照给 Verify 步骤复用：Verify 不再现场重查 Release 列表 ——
+          # 与本次构建并发发版时（同一个 commit 上 push main 与 push V 标签），
+          # 正式包会先发布出去、号比这次 Build 高 1，现场重查会把正常的构建误判成「versionCode 回退」。
           echo "KOIL_CI_VERSION_CODE=$NEXT" >> "$GITHUB_ENV"
-          echo "versionCode = run_number ${{ github.run_number }} + 已发布 $REL_COUNT 版 = $NEXT（已发布最大 ${MAX_PUBLISHED:-无}）"
+          echo "KOIL_CI_VERSION_CODE_RAW=$RAW" >> "$GITHUB_ENV"
+          echo "KOIL_CI_MAX_PUBLISHED=$MAX_PUBLISHED" >> "$GITHUB_ENV"
+          echo "versionCode = run_number ${{ github.run_number }} + 已发布 $REL_COUNT 版 = $NEXT（原始规划号 $RAW，构建开始时已发布最大 $MAX_PUBLISHED）"
 
       # 发布闸门①：两个签名 Secret 必须同时存在且可恢复，缺失即失败，
       # 避免签名材料不全时静默回落 debug 签名后照常发 Release。
@@ -146,10 +171,11 @@ jobs:
       - name: Build Release APK
         run: ./gradlew assembleRelease --no-daemon --console=plain
 
-      # 发布闸门②：产物必须是正式证书签名，且 versionCode 不得低于已发布最大值。
+      # 发布闸门②：产物必须是正式证书签名，且 versionCode 必须等于规划号、且规划号高于构建开始时的
+      # 已发布最大值（两个基准都来自 Resolve 步骤的快照，见下方说明）。
       # tag 专属校验（tag 格式/与 versionName 一致/版本单调/main 祖先/同名 Release 查重）
       # 已随 tag 触发一并移入 android-release.yml，避免两套发布逻辑并存。
-      - name: Verify release signing and tag
+      - name: Verify release signing and versionCode
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -180,17 +206,31 @@ jobs:
           fi
           echo "签名指纹校验通过：$ACTUAL"
 
-          # versionCode 只许向前：以已发布 Release 附件名里的 -vcN 为基准，本次必须严格更高。
-          # 拦住 run_number 归零（换仓库 / 换 CI）、本地手动指号、号段改动写错这三类事故 ——
-          # 它们的共同特征是「构建成功但用户装不上」。
-          MAX_PUBLISHED=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-            --jq '.[] | select(.draft == false and .prerelease == false) | .assets[].name' 2>/dev/null \
-            | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
-          if [ -n "${MAX_PUBLISHED:-}" ] && [ "$VC" -le "$MAX_PUBLISHED" ]; then
-            echo "::error::versionCode 回退：本次 $VC ≤ 已发布最大 $MAX_PUBLISHED（run_number 是否归零？）"
+          # versionCode 双断言。两个基准都取 Resolve 步骤的快照，本步骤不再现场重查 Release 列表：
+          #   ① APK 里的号必须等于 Resolve 规划号 —— 拦 git 里手工指号、env 未注入、aapt 读错；
+          #   ② 原始规划号（抬号之前的 RAW）必须高于构建开始时的已发布最大 —— 拦 run_number 归零
+          #      （换仓库 / 换 CI）与号段规则写错。
+          # ② 之所以比 RAW 而不是比 NEXT：Resolve 的兜底会把异常号直接抬到 MAX+1，
+          # 若拿抬号后的值来比，该断言恒成立、形同没有断言，正是本闸门要拦的那类事故反而漏过。
+          # 正常流程 RAW 恒等于「已发布最大 + 1」（Release 号 = build_max + N + 1），不会误报；
+          # 判定基准固定，并发发版也不再影响结果。
+          PLANNED="${KOIL_CI_VERSION_CODE:-}"
+          RAW="${KOIL_CI_VERSION_CODE_RAW:-}"
+          SNAPSHOT_MAX="${KOIL_CI_MAX_PUBLISHED:-}"
+          if [ -z "$PLANNED" ] || [ -z "$RAW" ] || [ -z "$SNAPSHOT_MAX" ]; then
+            echo "::error::versionCode 快照未注入（PLANNED=${PLANNED:-<空>} RAW=${RAW:-<空>} MAX=${SNAPSHOT_MAX:-<空>}），Resolve 步骤是否被跳过？"
             exit 1
           fi
-          echo "versionCode 校验通过：$VC（已发布最大 ${MAX_PUBLISHED:-无}）"
+          if [ "$VC" != "$PLANNED" ]; then
+            echo "::error::APK versionCode $VC ≠ 规划号 $PLANNED（app/build.gradle.kts 是否被手工指号，或 aapt 读取异常）"
+            exit 1
+          fi
+          echo "versionCode 与规划号一致：$VC"
+          if [ "$RAW" -le "$SNAPSHOT_MAX" ]; then
+            echo "::error::原始规划号 $RAW ≤ 构建开始时已发布最大 $SNAPSHOT_MAX（run_number 是否归零？号段规则是否被改动？）"
+            exit 1
+          fi
+          echo "versionCode 校验通过：$VC（原始规划号 $RAW > 构建开始时已发布最大 $SNAPSHOT_MAX）"
 
 
       - name: Upload APK (artifact 供日常查看，下载为原文件)
