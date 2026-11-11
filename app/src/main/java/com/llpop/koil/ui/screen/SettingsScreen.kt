@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -109,7 +110,7 @@ import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
-import com.llpop.koil.ui.component.KOiLMiniSwitch
+import com.llpop.koil.ui.component.KOiLCheckMark
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -1250,10 +1251,11 @@ private fun PriceDbSection(
                             maxLines = 1,
                         )
                         Spacer(Modifier.width(8.dp))
-                        KOiLMiniSwitch(
+                        // 纯状态标记：点击由整个按钮驱动，这里只表达「开 / 关」
+                        KOiLCheckMark(
                             checked = autoOn,
-                            trackOn = KOiLColors.Primary,
-                            trackOff = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.35f),
+                            activeColor = KOiLColors.Primary,
+                            inactiveColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f),
                         )
                     }
                     Row(
@@ -2432,7 +2434,13 @@ private fun SettingSwitchRow(
                         )
                         if (trailingContent != null) {
                             Spacer(Modifier.width(8.dp))
-                            trailingContent()
+                            // 纯状态展示：吃掉落在徽章上的点击，避免「想看一眼连接状态、手一偏
+                            // 按在徽章上就把云同步关了」。整行其余区域照常可点，触摸区不缩。
+                            Box(
+                                modifier = Modifier.pointerInput(Unit) {
+                                    detectTapGestures(onTap = {})
+                                },
+                            ) { trailingContent() }
                         }
                     }
                     Spacer(Modifier.height(2.dp))
