@@ -30,13 +30,9 @@
     <string name="koil_add_locate_cd">Locate</string>
     <string name="koil_add_locate_switched">Switched to %1$s</string>
     <string name="koil_add_suggest_early">Suggest filling up soon</string>
-    <string name="koil_add_suggest_wait">Wait for a price drop</string>
+    <string name="koil_add_suggest_wait">Fill up after the drop</string>
     <string name="koil_add_suggest_stranded">Expected stranded</string>
-    <string name="koil_add_window_prefix">Next adjustment window %1$s 24:00</string>
-    <plurals name="koil_add_window_days">
-    <item quantity="one"> · %1$d day left</item>
-    <item quantity="other"> · %1$d days left</item>
-    </plurals>
+    <string name="koil_add_window_prefix">Next window %1$s 24:00</string>
     <string name="koil_add_forecast_mech_up">Mechanism forecast: up about %1$s ¥/ton</string>
     <string name="koil_add_forecast_mech_down">Mechanism forecast: down about %1$s ¥/ton</string>
     <string name="koil_add_forecast_mech_stranded">Mechanism forecast: no change expected (about %1$s ¥/ton)</string>
@@ -44,6 +40,7 @@
     <string name="koil_add_forecast_single_down">1-day ref.: down about %1$s ¥/ton</string>
     <string name="koil_add_forecast_per_liter">" (≈ ¥%1$.2f/L)"</string>
     <string name="koil_add_forecast_caveat">Final adjustment is subject to the NDRC announcement</string>
+    <string name="koil_add_forecast_caveat_inline">" (subject to NDRC)"</string>
     <string name="koil_add_forecast_as_of">as of %1$s</string>
     <string name="koil_add_forecast_released">source released %1$s</string>
     <string name="koil_add_forecast_sample">trading days counted: %1$d</string>

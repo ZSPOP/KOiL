@@ -52,7 +52,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -594,7 +593,6 @@ private fun OilPriceCard(
             if (uiState.showPriceAdjust) uiState.nextAdjustDate?.let { nextDate ->
                 Spacer(Modifier.height(12.dp))
                 val urgent = uiState.adjustUrgent
-                val days = uiState.daysUntilAdjust
                 val forecast = uiState.forecastAmount
                 val perLiter = uiState.perLiterEquivalent
                 val rising = forecast != null && forecast > 0
@@ -648,10 +646,10 @@ private fun OilPriceCard(
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                text = buildString {
-                                    append(stringResource(R.string.koil_add_window_prefix, nextDate.let { if (it.length >= 5) it.substring(5) else it }))
-                                    if (days >= 0) append(pluralStringResource(R.plurals.koil_add_window_days, days, days))
-                                },
+                                text = stringResource(
+                                    R.string.koil_add_window_prefix,
+                                    nextDate.let { if (it.length >= 5) it.substring(5) else it },
+                                ),
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = textColor,
@@ -659,12 +657,20 @@ private fun OilPriceCard(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f),
                             )
+                            // 建议徽章贴在窗口日行右侧：它是对「这一轮调价」的结论，跟日期同屏最直观
+                            if (suggestion.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+                                AdjustBadge(
+                                    text = suggestion,
+                                    color = suggestionColor,
+                                    bold = true,
+                                )
+                            }
                         }
                         if (forecast != null) {
-                            // 头行给结论（「机制预测：上调约 X 元/吨」），随后是数据时点行，
-                            // 最后一行左侧提示以公告为准、右侧放建议徽章（两者贴在一起读）。
-                            // 原先徽章放在窗口日行右侧、与免责句分离，用户看到「建议提前加油」
-                            // 时不知道它跟哪个结论绑定。
+                            // 头行给结论（「机制预测：上调约 X 元/吨」），随后是数据时点行。
+                            // 建议徽章放在最上面的窗口日行右侧（与「这一轮调什么」同屏），
+                            // 免责句则并进数据时点行末尾的括号里，不再单独占一行。
                             // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
                             // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
                             val headRes = when {
@@ -723,30 +729,18 @@ private fun OilPriceCard(
                                 Text(
                                     text = meta.joinToString(
                                         stringResource(R.string.koil_add_forecast_meta_sep),
-                                    ),
+                                    ) + stringResource(R.string.koil_add_forecast_caveat_inline),
                                     fontSize = 11.sp,
                                     color = textColor.copy(alpha = 0.65f),
                                 )
-                            }
-                            Spacer(Modifier.height(3.dp))
-                            // 这句不是免责套话：25 轮公告里有 4 轮被行政压价（且只压不托底），
-                            // 机制算出来的数和公告本来就会不一样。建议徽章跟这行同一行右侧——
-                            // 「最终调控以发改委公告为准 · 建议提前加油」是一组话，不该拆到两行
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            } else {
+                                // 无 EIA 时没有「截至」行，免责句仍需出现，单独作末段
+                                Spacer(Modifier.height(3.dp))
                                 Text(
                                     text = stringResource(R.string.koil_add_forecast_caveat),
                                     fontSize = 11.sp,
                                     color = textColor.copy(alpha = 0.65f),
-                                    modifier = Modifier.weight(1f),
                                 )
-                                if (suggestion.isNotEmpty()) {
-                                    Spacer(Modifier.width(6.dp))
-                                    AdjustBadge(
-                                        text = suggestion,
-                                        color = suggestionColor,
-                                        bold = true,
-                                    )
-                                }
                             }
                             if (uiState.forecastFxStale) {
                                 // 汇率缓存超 90 天：数值仍给出（有边界比没有好），但如实告知数据旧，

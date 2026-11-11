@@ -30,12 +30,9 @@
     <string name="koil_add_locate_cd">定位</string>
     <string name="koil_add_locate_switched">已切換到%1$s</string>
     <string name="koil_add_suggest_early">建議提前加油</string>
-    <string name="koil_add_suggest_wait">建議等降價後再加</string>
+    <string name="koil_add_suggest_wait">建議降價後加油</string>
     <string name="koil_add_suggest_stranded">本輪預計擱淺</string>
-    <string name="koil_add_window_prefix">下個調價窗口日 %1$s 24:00</string>
-    <plurals name="koil_add_window_days">
-    <item quantity="other"> · 還有 %1$d 天</item>
-    </plurals>
+    <string name="koil_add_window_prefix">下個調價窗口 %1$s 24:00</string>
     <string name="koil_add_forecast_mech_up">機制預測：上調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_mech_down">機制預測：下調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_mech_stranded">機制預測：擱淺（幅度約 %1$s 元/噸）</string>
@@ -43,6 +40,7 @@
     <string name="koil_add_forecast_single_down">單日參考：下調約 %1$s 元/噸</string>
     <string name="koil_add_forecast_per_liter">（折合約 %1$.2f 元/升）</string>
     <string name="koil_add_forecast_caveat">最終調控以發改委公告為準</string>
+    <string name="koil_add_forecast_caveat_inline">（以發改委公告為準）</string>
     <string name="koil_add_forecast_as_of">截至 %1$s</string>
     <string name="koil_add_forecast_released">源端 %1$s 發布</string>
     <string name="koil_add_forecast_sample">已計入 %1$d 個交易日</string>
