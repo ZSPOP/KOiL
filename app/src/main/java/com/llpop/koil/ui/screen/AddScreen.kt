@@ -187,82 +187,87 @@ fun AddScreen(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
         ) {
-            // 行只在「上方」留 13dp 高亮外空白（内层的 bottom 13）：上距若塞进行内 insideMargin，
-            // 高亮会一路铺到上一字段下方、看起来「贴住」上一行（v6 实机反馈）。
-            // 底部不再留高亮外空白——整行是卡片最后一行，高亮一直铺到卡片底边（圆角由
-            // KOiLBlurBackground 的 clip 收边），否则按压时底部会缺一块没覆盖的空白。
-            Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
-                // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
-                FormRow {
-                    com.llpop.koil.ui.component.KOiLDateField(
-                        modifier = Modifier.weight(1f),
-                        date = uiState.date,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    GradeField(
-                        modifier = Modifier.weight(1f),
-                        grade = uiState.oilGrade,
-                        priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
-                        onGradeSelected = viewModel::setOilGrade,
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
+            // KOiLBlurBackground 的内容槽是 @Composable BoxScope（内部就是 Box），多个平级子项会按
+            // TopStart 逐个叠放、彼此覆盖。所以纵向堆叠必须交给这一层不带 padding 的 Column：
+            // 它只负责顺序，横向 16dp 由内层表单 Column 提供；跳枪行的横向 16dp 由它自己的
+            // insideMargin 承担（FullTankSwitchRow 契约要求调用方零横向内距），因此它与内层平级。
+            Column {
+                // 表单三行：行只在「上方」留 13dp 高亮外空白（内层 bottom 13）——上距若塞进行内
+                // insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行（v6 实机反馈）。
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
+                    // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
+                    FormRow {
+                        com.llpop.koil.ui.component.KOiLDateField(
+                            modifier = Modifier.weight(1f),
+                            date = uiState.date,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        GradeField(
+                            modifier = Modifier.weight(1f),
+                            grade = uiState.oilGrade,
+                            priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
+                            onGradeSelected = viewModel::setOilGrade,
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
 
-                // 第二行：里程 + 油量
-                FormRow {
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.Speed,
-                        label = stringResource(R.string.koil_add_field_mileage),
-                        value = uiState.mileage,
-                        onValueChange = viewModel::setMileage,
-                        keyboardType = KeyboardType.Number,
-                        error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.WaterDrop,
-                        label = stringResource(R.string.koil_add_field_oil_amount),
-                        value = uiState.oilAmount,
-                        onValueChange = viewModel::setOilAmount,
-                        keyboardType = KeyboardType.Decimal,
-                        error = uiState.precheck.oilOverTank,
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
+                    // 第二行：里程 + 油量
+                    FormRow {
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.Speed,
+                            label = stringResource(R.string.koil_add_field_mileage),
+                            value = uiState.mileage,
+                            onValueChange = viewModel::setMileage,
+                            keyboardType = KeyboardType.Number,
+                            error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.WaterDrop,
+                            label = stringResource(R.string.koil_add_field_oil_amount),
+                            value = uiState.oilAmount,
+                            onValueChange = viewModel::setOilAmount,
+                            keyboardType = KeyboardType.Decimal,
+                            error = uiState.precheck.oilOverTank,
+                        )
+                    }
+                    Spacer(Modifier.height(14.dp))
 
-                // 第三行：应付 + 实付
-                FormRow {
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.Money,
-                        label = stringResource(R.string.koil_add_field_payable),
-                        value = uiState.payableAmount,
-                        onValueChange = {},
-                        keyboardType = KeyboardType.Decimal,
-                        readOnly = true,
-                        placeholder = stringResource(R.string.koil_ov_payable_pending),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    FormField(
-                        modifier = Modifier.weight(1f),
-                        icon = Icons.Filled.Money,
-                        label = stringResource(R.string.koil_add_field_actual),
-                        value = uiState.actualAmount,
-                        onValueChange = viewModel::setActualAmount,
-                        keyboardType = KeyboardType.Decimal,
-                        error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
-                    )
+                    // 第三行：应付 + 实付
+                    FormRow {
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.Money,
+                            label = stringResource(R.string.koil_add_field_payable),
+                            value = uiState.payableAmount,
+                            onValueChange = {},
+                            keyboardType = KeyboardType.Decimal,
+                            readOnly = true,
+                            placeholder = stringResource(R.string.koil_ov_payable_pending),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        FormField(
+                            modifier = Modifier.weight(1f),
+                            icon = Icons.Filled.Money,
+                            label = stringResource(R.string.koil_add_field_actual),
+                            value = uiState.actualAmount,
+                            onValueChange = viewModel::setActualAmount,
+                            keyboardType = KeyboardType.Decimal,
+                            error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
+                        )
+                    }
                 }
+                // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽，
+                // 横向 16dp 由行内 insideMargin 提供，与上一字段的 13dp 间距由行内上距承担；
+                // 它是外层 Column 的最后一项，下方不再补空白，高亮直接铺到卡片底边
+                //（圆角由 KOiLBlurBackground 的 clip 收边），否则按压时底部会缺一块没覆盖的空白。
+                com.llpop.koil.ui.component.FullTankSwitchRow(
+                    checked = uiState.isFullTank,
+                    onCheckedChange = viewModel::setFullTank,
+                )
             }
-            // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽，
-            // 横向 16dp 由行内 insideMargin 提供，与上一字段的 13dp 间距由行内上距承担；
-            // 行下方不再补空白，高亮直接铺到卡片底边。
-            com.llpop.koil.ui.component.FullTankSwitchRow(
-                checked = uiState.isFullTank,
-                onCheckedChange = viewModel::setFullTank,
-            )
         }
         // 区块间取 12dp
         Spacer(Modifier.height(12.dp))
@@ -643,7 +648,9 @@ private fun OilPriceCard(
                                 imageVector = if (urgent) Icons.Filled.Warning else Icons.Filled.Info,
                                 contentDescription = null,
                                 tint = if (urgent) urgentColor else accent,
-                                modifier = Modifier.size(14.dp),
+                                // 图标跟随本行字号：文字 12sp→13sp 后仍是 14dp 会显得偏小，
+                                // 与下方「机制预测」行的字重/字号也对不上（真机反馈两行大小不一）
+                                modifier = Modifier.size(15.dp),
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
@@ -651,7 +658,8 @@ private fun OilPriceCard(
                                     R.string.koil_add_window_prefix,
                                     nextDate.let { if (it.length >= 5) it.substring(5) else it },
                                 ),
-                                fontSize = 12.sp,
+                                // 与「機制預測」行同字号：两行是同一张卡里的并列结论，12sp 显得矮一截
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = textColor,
                                 maxLines = 1,
@@ -681,19 +689,29 @@ private fun OilPriceCard(
                                 rising -> R.string.koil_add_forecast_single_up
                                 else -> R.string.koil_add_forecast_single_down
                             }
+                            // 折合值的方向必须与 headRes 同源：EIA 源走向量 direction（含搁浅），
+                            // 腾讯源只有涨/跌两态。不能只看 rising（forecast > 0），否则搁浅时
+                            // 会出现「机制预测：搁浅」+「折合约涨」的自相矛盾。
+                            // 搁浅不显示折合：<50 元/吨 折不到 0.04 元/升，四舍五入常显示 0.00，
+                            // 反而让人以为「白算了一个数」。
+                            val perLiterRes = when {
+                                stranded -> null
+                                eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_per_liter_up
+                                eiaSource -> R.string.koil_add_forecast_per_liter_down
+                                rising -> R.string.koil_add_forecast_per_liter_up
+                                else -> R.string.koil_add_forecast_per_liter_down
+                            }
+                            val perLiterText = if (perLiterRes != null && perLiter != null) {
+                                stringResource(perLiterRes, kotlin.math.abs(perLiter))
+                            } else {
+                                ""
+                            }
                             Spacer(Modifier.height(6.dp))
-                            // 搁浅时不显示折合元/升：<50 元/吨 折不到 0.04 元/升，四舍五入常显示 0.00，
-                            // 反而让人以为「白算了一个数」
                             Text(
                                 text = stringResource(
                                     headRes,
                                     kotlin.math.abs(forecast).toInt().toString(),
-                                ) + (perLiter?.takeIf { !stranded }?.let {
-                                    stringResource(
-                                        R.string.koil_add_forecast_per_liter,
-                                        kotlin.math.abs(it),
-                                    )
-                                } ?: ""),
+                                ) + perLiterText,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = textColor,
