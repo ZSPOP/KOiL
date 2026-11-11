@@ -189,7 +189,9 @@ fun AddScreen(
             cornerRadius = 20f,
         ) {
             Column(modifier = Modifier) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                // 只补 start/end/top：底部留给下面的跳枪行，行内 top 13dp 即它与上一字段的间距，
+                // 与补录/编辑弹窗、设置页开关行三者一致。
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
                 // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
                 FormRow {
                     com.llpop.koil.ui.component.KOiLDateField(
