@@ -596,9 +596,9 @@ class AddViewModel(
      *  不沿用上次里程——沿用旧值必触发"里程递减"拦截，置空由用户输入本次新里程。 */
     fun applyLastRecord() {
         val last = _uiState.value.lastRecord ?: return
+        val grade = last.oilGrade ?: "92"
         _uiState.update {
-            it.copy(
-                oilGrade = last.oilGrade ?: "92",
+            it.withGrade(grade).copy(
                 mileage = "",
                 // Double.toString 会写成 "45.0"，输入框里带个多余的小数点，采用整数/小数自适应
                 oilAmount = last.oilAmount.editText(),
