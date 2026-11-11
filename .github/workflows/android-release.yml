@@ -100,14 +100,25 @@ jobs:
             echo "::error::读取 Release 列表失败（gh api 退出非 0）：$(tr '\n' ' ' < "$ERR" | head -c 500)"
             exit 1
           fi
+          # 空体也是「读不到」：gh 退出 0 但 body 为空时，jq -s 的 add 得 null、`// []` 变成空数组，
+          # REL_COUNT 与 MAX 双双退化成 0，Release 号会算成 BUILD_MAX + 0 + 1 并可能撞上 Build 的号。
+          if [ -z "$(printf '%s' "$RELEASE_PAGES" | tr -d '[:space:]')" ]; then
+            echo "::error::Release 列表返回内容为空（gh api 退出 0 但无 body），无法推算 versionCode"
+            exit 1
+          fi
           if ! RELEASES=$(printf '%s' "$RELEASE_PAGES" \
                | jq -s -e 'add // [] | map(select(.draft == false and .prerelease == false))'); then
             echo "::error::解析 Release 列表失败（返回内容不是预期的 JSON 数组），无法推算 versionCode"
             exit 1
           fi
           REL_COUNT=$(printf '%s' "$RELEASES" | jq 'length')
-          MAX_PUBLISHED=$(printf '%s' "$RELEASES" | jq -r '.[].assets[]' 2>/dev/null \
-            | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
+          # 取附件 name 而不是整个 asset 对象：browser_download_url 也含 -vcN，附件改名后会给出不同的号。
+          # 解析失败不能静默——读成 0 等于闸门失效；「没有带 -vcN 的附件」才该是 0。
+          if ! ASSET_NAMES=$(printf '%s' "$RELEASES" | jq -r '.[] | (.assets // [])[].name'); then
+            echo "::error::解析 Release 附件名失败（assets 字段结构异常），无法推算已发布最大 versionCode"
+            exit 1
+          fi
+          MAX_PUBLISHED=$(printf '%s\n' "$ASSET_NAMES" | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
           MAX_PUBLISHED=${MAX_PUBLISHED:-0}
 
           if ! RUN_NUMBERS=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" --paginate \
@@ -117,7 +128,8 @@ jobs:
           fi
           BUILD_MAX=$(printf '%s\n' "$RUN_NUMBERS" | grep -E '^[0-9]+$' | sort -n | tail -1 || true)
           if [ -z "$BUILD_MAX" ]; then
-            echo "::error::Build 运行记录里没有任何 run_number，无法推算 versionCode（workflow 名称是否被改过？）"
+            # 两种成因都要写出来：查错方向完全不同，只提示「workflow 名称被改」会把人带去改名字。
+            echo "::error::Build 运行记录里取不到 run_number。常见成因：① 本仓库从未跑过 Build 工作流（main 只推过被 paths-ignore 跳过的文档提交）；② Build 工作流名称被改过，name == \"Build\" 匹配不到。"
             exit 1
           fi
 

@@ -118,14 +118,27 @@ jobs:
             echo "::error::读取 Release 列表失败（gh api 退出非 0）：$(tr '\n' ' ' < "$ERR" | head -c 500)"
             exit 1
           fi
+          # 空体也是「读不到」：gh 退出 0 但 body 为空（代理回空体 / 连接被截断）时，
+          # jq -s 拿到空输入、add 得 null、`// []` 变成空数组，REL_COUNT 与 MAX 双双退化成 0，
+          # 后面的「RAW > 快照 MAX」就恒成立。这是与「退出非 0」并列的第二条泄漏路径。
+          if [ -z "$(printf '%s' "$RELEASE_PAGES" | tr -d '[:space:]')" ]; then
+            echo "::error::Release 列表返回内容为空（gh api 退出 0 但无 body），无法推算 versionCode"
+            exit 1
+          fi
           if ! RELEASES=$(printf '%s' "$RELEASE_PAGES" \
                | jq -s -e 'add // [] | map(select(.draft == false and .prerelease == false))'); then
             echo "::error::解析 Release 列表失败（返回内容不是预期的 JSON 数组），无法推算 versionCode"
             exit 1
           fi
           REL_COUNT=$(printf '%s' "$RELEASES" | jq 'length')
-          MAX_PUBLISHED=$(printf '%s' "$RELEASES" | jq -r '.[].assets[]' 2>/dev/null \
-            | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
+          # 取附件 name 而不是整个 asset 对象：对象里的 browser_download_url 也含 -vcN，
+          # 附件改名后两者会给出不同的号，sort | tail 取到哪个不确定。
+          # 解析失败不能静默——读成 0 等于闸门失效；「没有带 -vcN 的附件」才该是 0。
+          if ! ASSET_NAMES=$(printf '%s' "$RELEASES" | jq -r '.[] | (.assets // [])[].name'); then
+            echo "::error::解析 Release 附件名失败（assets 字段结构异常），无法推算已发布最大 versionCode"
+            exit 1
+          fi
+          MAX_PUBLISHED=$(printf '%s\n' "$ASSET_NAMES" | grep -oE -- '-vc[0-9]+' | sed 's/-vc//' | sort -n | tail -1 || true)
           # 列表可读但没有已发布版本时才是 0；读不到的情况已在上面直接失败。
           MAX_PUBLISHED=${MAX_PUBLISHED:-0}
           RAW=$(( ${{ github.run_number }} + REL_COUNT ))
