@@ -1,25 +1,34 @@
 package com.llpop.koil.ui.component
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.MiuixIndication
 
 /**
  * 「本次加满（跳枪）」开关行：录入页 / 编辑弹窗 / 补录弹窗三处共用。
@@ -27,12 +36,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 加 60L 也可能未满；判定权完全在用户，不做任何基于油量的自动推断。
  * 油耗只在「满箱 → 满箱」区间结算，未满记录待下次加满后一次结算。
  *
- * 开关用 Miuix 默认 [Switch]（49×28dp），与设置页开关/`SwitchPreference` 的选中态一致；
- * 左侧「标题 + 小字」作为一个整体与开关垂直居中，两行间距压到 2dp。
+ * 按压反馈对齐 Miuix `BasicComponent` / `SwitchPreference`：整行可点，开关本身不消费
+ * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
  *
- * 整行和开关本身都可点，采用 Miuix `SwitchPreference` 的嵌套写法：
- * 行用 [clickable] + [Role.Switch]，[Switch] 自己保留 `onCheckedChange`。
- * 嵌套点击由 Switch 消费，点开关和点整行都只触发一次，不会双触发。
+ * 布局契约：[insideMargin] 横向固定 16dp —— 调用方必须把它放在**零横向内距**容器里，外层
+ * 再加 `padding(horizontal)` 会双重缩进、高亮跟着缩窄。纵向只给 8dp，**上下留白由调用方在
+ * 高亮之外补够**（录入卡与两个弹窗都是 13dp）：按压指示覆盖的是行自身边界，纵向留白若塞进
+ * `insideMargin`，高亮矩形就会一路铺到上一字段下方，视觉上「贴住」上一行。
+ *
+ * 无障碍：开关状态用行级 `semantics { toggleableState }` 声明；内层 `Switch` 不再单独清理
+ * 语义 —— 它与行 `clickable` 的 `mergeDescendants = true` 合并成同一个节点，TalkBack 读一行
+ * 即可拿到「标题 + 副标题 + 开关 + 已开启/已关闭」。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -40,36 +54,48 @@ fun FullTankSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            // 与 Miuix BasicComponent/SwitchPreference 的 56dp 行高对齐，整行可点
-            .heightIn(min = 56.dp)
-            .clickable(
-                role = Role.Switch,
-                onClick = { onCheckedChange(!checked) },
-            ),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.koil_add_full_tank),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.koil_add_full_tank_hint),
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
-            )
+    val interactionSource = remember { MutableInteractionSource() }
+    CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
+        BasicComponent(
+            modifier = modifier
+                .semantics {
+                    // 状态挂在行上；与内层 Switch 的同一节点语义合并后，TalkBack 停在行一次即可
+                    // 读出「已开启 / 已关闭」，不会多一个开关焦点。
+                    toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
+                }
+                .indication(
+                    interactionSource = interactionSource,
+                    indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
+                ),
+            // 纵向只留 8dp：内容约 37dp + 16dp 仍低于 BasicComponent 的 56dp 最小行高，
+            // 上下留白由调用方在高亮之外补 13dp（见 KDoc）。
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            onClick = { onCheckedChange(!checked) },
+            role = Role.Switch,
+            interactionSource = interactionSource,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.koil_add_full_tank),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.koil_add_full_tank_hint),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Switch(
+                    checked = checked,
+                    onCheckedChange = null,
+                )
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
     }
 }
