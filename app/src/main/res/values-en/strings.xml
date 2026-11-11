@@ -377,7 +377,8 @@
     <string name="koil_sync_switch">Cloud Sync</string>
     <string name="koil_sync_switch_sub">Auto-backup fuel records to your WebDAV drive</string>
     <string name="koil_sync_url">WebDAV URL</string>
-    <string name="koil_sync_username">Account</string>    <string name="koil_sync_app_password_unset">Not set</string>
+    <string name="koil_sync_username">Account</string>
+    <string name="koil_sync_app_password_unset">Not set</string>
     <string name="koil_sync_app_password_set">Set — enter a new value to change</string>
     <string name="koil_sync_password_plain_warn">App password stored unencrypted (Keystore unavailable)</string>
     <string name="koil_sync_password_clear">Clear</string>
