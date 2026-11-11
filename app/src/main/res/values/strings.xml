@@ -368,7 +368,6 @@
     <string name="koil_sync_switch_sub">自动备份加油记录到 WebDAV 云端</string>
     <string name="koil_sync_url">WebDAV 地址</string>
     <string name="koil_sync_username">账号</string>
-    <string name="koil_sync_app_password">应用密码</string>
     <string name="koil_sync_app_password_unset">未设置</string>
     <string name="koil_sync_app_password_set">已设置，输入新值以修改</string>
     <string name="koil_sync_password_plain_warn">应用密码未加密存储（设备不支持 Keystore）</string>

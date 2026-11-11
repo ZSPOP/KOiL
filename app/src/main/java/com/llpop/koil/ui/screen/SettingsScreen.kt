@@ -491,91 +491,89 @@ fun SettingsScreen(
             if (eiaLoaded) {
                 // 与 SettingSwitchRow 同构：开关对「标题 + 副标题」整块垂直居中，而不是只对标题行居中
                 // （开关放在标题 Row 里会比其他开关高约 12dp）；输入框放在行下方，不参与居中计算
-                Column(modifier = Modifier) {
-                    val eiaInteractionSource = remember { MutableInteractionSource() }
-                    CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
-                        BasicComponent(
-                            modifier = Modifier
-                                .semantics {
-                                    toggleableState = if (eiaEnabled) ToggleableState.On else ToggleableState.Off
-                                }
-                                .indication(
-                                    interactionSource = eiaInteractionSource,
-                                    indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
-                                ),
-                            insideMargin = PaddingValues(
-                                start = 16.dp,
-                                end = 16.dp,
-                                top = 13.dp,
-                                bottom = if (eiaEnabled) 13.dp else 8.dp,
+                val eiaInteractionSource = remember { MutableInteractionSource() }
+                CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
+                    BasicComponent(
+                        modifier = Modifier
+                            .semantics {
+                                toggleableState = if (eiaEnabled) ToggleableState.On else ToggleableState.Off
+                            }
+                            .indication(
+                                interactionSource = eiaInteractionSource,
+                                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
                             ),
-                            onClick = { viewModel.setEiaEnabled(!eiaEnabled) },
-                            role = Role.Switch,
-                            interactionSource = eiaInteractionSource,
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        text = stringResource(R.string.koil_set_eia_key_title),
-                                        fontSize = 17.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MiuixTheme.colorScheme.onBackground,
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        text = stringResource(R.string.koil_set_eia_key_sub),
-                                        fontSize = 14.sp,
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                Switch(
-                                    checked = eiaEnabled,
-                                    onCheckedChange = null,
+                        insideMargin = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 13.dp,
+                            bottom = if (eiaEnabled) 13.dp else 8.dp,
+                        ),
+                        onClick = { viewModel.setEiaEnabled(!eiaEnabled) },
+                        role = Role.Switch,
+                        interactionSource = eiaInteractionSource,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(R.string.koil_set_eia_key_title),
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onBackground,
+                                )
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(R.string.koil_set_eia_key_sub),
+                                    fontSize = 14.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
+                            Switch(
+                                checked = eiaEnabled,
+                                onCheckedChange = null,
+                            )
                         }
                     }
-                    if (!eiaEnabled) {
-                        Spacer(Modifier.height(8.dp))
-                        var showEiaKey by remember { mutableStateOf(false) }
-                        TextField(
-                            value = eiaKey,
-                            onValueChange = { viewModel.setEiaApiKey(it) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Ascii,
-                                imeAction = androidx.compose.ui.text.input.ImeAction.Done,
-                            ),
-                            colors = TextFieldDefaults.textFieldColors(
-                                backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                                labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                                borderColor = Color.Transparent,
-                            ),
-                            cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                            visualTransformation = if (showEiaKey) {
-                                androidx.compose.ui.text.input.VisualTransformation.None
-                            } else {
-                                androidx.compose.ui.text.input.PasswordVisualTransformation()
-                            },
-                            trailingIcon = {
-                                IconButton(onClick = { showEiaKey = !showEiaKey }) {
-                                    Icon(
-                                        imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                        contentDescription = null,
-                                        tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                }
-                            },
-                        )
-                        // 行底部内距在展开态只给了 8dp（副标题与输入框之间），这里补足卡片行底距
-                        Spacer(Modifier.height(13.dp))
-                    }
+                }
+                if (!eiaEnabled) {
+                    Spacer(Modifier.height(8.dp))
+                    var showEiaKey by remember { mutableStateOf(false) }
+                    TextField(
+                        value = eiaKey,
+                        onValueChange = { viewModel.setEiaApiKey(it) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Ascii,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                        ),
+                        colors = TextFieldDefaults.textFieldColors(
+                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
+                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
+                            borderColor = Color.Transparent,
+                        ),
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        visualTransformation = if (showEiaKey) {
+                            androidx.compose.ui.text.input.VisualTransformation.None
+                        } else {
+                            androidx.compose.ui.text.input.PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = { showEiaKey = !showEiaKey }) {
+                                Icon(
+                                    imageVector = if (showEiaKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                    contentDescription = null,
+                                    tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        },
+                    )
+                    // 行底部内距在展开态只给了 8dp（副标题与输入框之间），这里补足卡片行底距
+                    Spacer(Modifier.height(13.dp))
                 }
             }
 
