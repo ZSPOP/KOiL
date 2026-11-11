@@ -594,13 +594,23 @@ private fun OilPriceCard(
                 val forecast = uiState.forecastAmount
                 val perLiter = uiState.perLiterEquivalent
                 val rising = forecast != null && forecast > 0
+                // 搁浅判定要先于建议计算：stranded 依赖 eiaSource + 方向，原先写在 forecast != null
+                // 块内，导致建议只能看到涨/跌两态，搁浅时误显示「建议等降价」。
+                val eiaSource = uiState.forecastSource != "腾讯"
+                val direction = forecast?.let { forecastDirection(it) }
+                val stranded = eiaSource && direction == ForecastDirection.STRANDED
                 // 估算失败时不驱动建议——历史涨跌不预示下一轮方向（因果不成立），不给任何建议徽章；
                 // forecast==null 时下方按原因分两种空态：汇率没取到显示「汇率获取中」，其余什么都不显示
                 val suggestion = when {
+                    forecast == null -> ""
+                    stranded -> stringResource(R.string.koil_add_suggest_stranded)
                     rising -> stringResource(R.string.koil_add_suggest_early)
-                    forecast != null -> stringResource(R.string.koil_add_suggest_wait)
-                    else -> ""
+                    else -> stringResource(R.string.koil_add_suggest_wait)
                 }
+                // 搁浅既不是「赶紧加」也不是「等降」，徽章用中性色；涨/跌仍沿用现有强调色
+                val suggestionColor = if (stranded) MiuixTheme.colorScheme.onBackgroundVariant
+                    else if (urgent) urgentColor
+                    else accent
                 val bgColor = if (dark) Color(0xFF17191D)
                     else if (urgent) urgentColor.copy(alpha = 0.16f)
                     else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
@@ -651,11 +661,9 @@ private fun OilPriceCard(
                             // 最后一行左侧提示以公告为准、右侧放建议徽章（两者贴在一起读）。
                             // 原先徽章放在窗口日行右侧、与免责句分离，用户看到「建议提前加油」
                             // 时不知道它跟哪个结论绑定。
-                            val eiaSource = uiState.forecastSource != "腾讯"
+                            //
                             // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
                             // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
-                            val direction = forecastDirection(forecast)
-                            val stranded = eiaSource && direction == ForecastDirection.STRANDED
                             val headRes = when {
                                 stranded -> R.string.koil_add_forecast_mech_stranded
                                 eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_mech_up
@@ -732,7 +740,7 @@ private fun OilPriceCard(
                                     Spacer(Modifier.width(6.dp))
                                     AdjustBadge(
                                         text = suggestion,
-                                        color = if (urgent) urgentColor else accent,
+                                        color = suggestionColor,
                                         bold = true,
                                     )
                                 }

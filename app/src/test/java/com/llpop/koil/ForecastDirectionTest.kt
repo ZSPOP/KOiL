@@ -19,6 +19,8 @@ class ForecastDirectionTest {
         assertEquals(ForecastDirection.STRANDED, forecastDirection(0.0))
         assertEquals(ForecastDirection.STRANDED, forecastDirection(49.9))
         assertEquals(ForecastDirection.STRANDED, forecastDirection(-49.9))
+        assertEquals(ForecastDirection.STRANDED, forecastDirection(47.0))
+        assertEquals(ForecastDirection.STRANDED, forecastDirection(-47.0))
         assertEquals(ForecastDirection.STRANDED, forecastDirection(1e-6))
     }
 
