@@ -637,12 +637,13 @@ fun OverviewScreen(
         com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
             onDismissRequest = viewModel::cancelBackfill,
-            contentPadding = 16.dp,
+            contentPadding = 0.dp,
             scrollable = true,
             maxHeight = maxH,
             widthFraction = 0.90f,
         ) {
             Column {
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
                 Text(stringResource(R.string.koil_ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 // 加油省份（与设置页同款下拉列表）
@@ -715,12 +716,14 @@ fun OverviewScreen(
                         modifier = Modifier.weight(1f),
                     )
                 }
-                Spacer(Modifier.height(14.dp))
-                // 满箱标记（跳枪）：补录历史记录同样可标，默认勾选
+                }
+                // 满箱标记（跳枪）：补录历史记录同样可标，默认勾选；整行铺满弹窗宽，
+                // 横向 16dp / 纵向 13dp 都由行内 insideMargin 提供，与上一字段的间距也只由行内上距承担。
                 com.llpop.koil.ui.component.FullTankSwitchRow(
                     checked = dlg.backfillIsFullTank,
                     onCheckedChange = viewModel::setBackfillFullTank,
                 )
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
                 Spacer(Modifier.height(10.dp))
                 // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
                 PaymentSummaryCard(
@@ -766,6 +769,7 @@ fun OverviewScreen(
                             disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
                         ),
                     ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                }
                 }
             }
         }
@@ -1999,7 +2003,7 @@ private fun EditRecordDialog(
     com.llpop.koil.ui.component.KOiLGlassDialog(
         show = true,
         onDismissRequest = onDismiss,
-        contentPadding = 16.dp,
+        contentPadding = 0.dp,
         scrollable = true,
         maxHeight = with(LocalDensity.current) {
             (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
@@ -2007,6 +2011,7 @@ private fun EditRecordDialog(
         widthFraction = 0.90f,
     ) {
         Column {
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
             Text(
                 text = stringResource(R.string.koil_ov_edit_title),
                 fontSize = 18.sp,
@@ -2089,12 +2094,14 @@ private fun EditRecordDialog(
                     modifier = Modifier.weight(1f),
                 )
             }
-            Spacer(Modifier.height(14.dp))
-            // 满箱标记（跳枪）：历史记录可逐条改，改后整链实时重算
+            }
+            // 满箱标记（跳枪）：历史记录可逐条改，改后整链实时重算；整行铺满弹窗宽，
+            // 横向 16dp / 纵向 13dp 都由行内 insideMargin 提供，与上一字段的间距也只由行内上距承担。
             com.llpop.koil.ui.component.FullTankSwitchRow(
                 checked = uiState.editIsFullTank,
                 onCheckedChange = onFullTankChange,
             )
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
             Spacer(Modifier.height(10.dp))
             // 实付综合信息块（对齐 Web PaymentSummaryCard：优惠概览/实际单价/参考价对比）
             PaymentSummaryCard(
@@ -2143,6 +2150,7 @@ private fun EditRecordDialog(
                         disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
                     ),
                 ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+            }
             }
         }
     }

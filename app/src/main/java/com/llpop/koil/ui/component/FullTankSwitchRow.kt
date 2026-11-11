@@ -1,25 +1,31 @@
 package com.llpop.koil.ui.component
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.MiuixIndication
 
 /**
  * 「本次加满（跳枪）」开关行：录入页 / 编辑弹窗 / 补录弹窗三处共用。
@@ -27,12 +33,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 加 60L 也可能未满；判定权完全在用户，不做任何基于油量的自动推断。
  * 油耗只在「满箱 → 满箱」区间结算，未满记录待下次加满后一次结算。
  *
- * 开关用 Miuix 默认 [Switch]（49×28dp），与设置页开关/`SwitchPreference` 的选中态一致；
- * 左侧「标题 + 小字」作为一个整体与开关垂直居中，两行间距压到 2dp。
- *
- * 整行和开关本身都可点，采用 Miuix `SwitchPreference` 的嵌套写法：
- * 行用 [clickable] + [Role.Switch]，[Switch] 自己保留 `onCheckedChange`。
- * 嵌套点击由 Switch 消费，点开关和点整行都只触发一次，不会双触发。
+ * 按压反馈对齐 Miuix `BasicComponent` / `SwitchPreference`：整行可点，开关本身不消费
+ * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -40,36 +42,42 @@ fun FullTankSwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .fillMaxWidth()
-            // 与 Miuix BasicComponent/SwitchPreference 的 56dp 行高对齐，整行可点
-            .heightIn(min = 56.dp)
-            .clickable(
-                role = Role.Switch,
-                onClick = { onCheckedChange(!checked) },
+    val interactionSource = remember { MutableInteractionSource() }
+    CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
+        BasicComponent(
+            modifier = modifier.indication(
+                interactionSource = interactionSource,
+                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
             ),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                text = stringResource(R.string.koil_add_full_tank),
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = stringResource(R.string.koil_add_full_tank_hint),
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-                color = MiuixTheme.colorScheme.onBackgroundVariant,
-            )
+            // 上下 13dp 与设置页 SettingSwitchRow / EIA 行同值：行内距之外不再由外层补间距，
+            // 避免 56dp 最小行高把「标题 + 小字」居中悬空、看起来离卡片底边太远。
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 13.dp),
+            onClick = { onCheckedChange(!checked) },
+            role = Role.Switch,
+            interactionSource = interactionSource,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.koil_add_full_tank),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = stringResource(R.string.koil_add_full_tank_hint),
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Switch(
+                    checked = checked,
+                    onCheckedChange = null,
+                )
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
     }
 }

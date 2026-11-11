@@ -188,7 +188,8 @@ fun AddScreen(
             modifier = Modifier.fillMaxWidth(),
             cornerRadius = 20f,
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier) {
+                Column(modifier = Modifier.padding(16.dp)) {
                 // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
                 FormRow {
                     com.llpop.koil.ui.component.KOiLDateField(
@@ -252,8 +253,9 @@ fun AddScreen(
                         error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
                     )
                 }
-                Spacer(Modifier.height(14.dp))
-                // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选
+                }
+                // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽，
+                // 横向 16dp / 纵向 13dp 都由行内 insideMargin 提供，与上一字段的间距也只由行内上距承担。
                 com.llpop.koil.ui.component.FullTankSwitchRow(
                     checked = uiState.isFullTank,
                     onCheckedChange = viewModel::setFullTank,
@@ -661,7 +663,6 @@ private fun OilPriceCard(
                             // 最后一行左侧提示以公告为准、右侧放建议徽章（两者贴在一起读）。
                             // 原先徽章放在窗口日行右侧、与免责句分离，用户看到「建议提前加油」
                             // 时不知道它跟哪个结论绑定。
-                            //
                             // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
                             // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
                             val headRes = when {

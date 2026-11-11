@@ -1,8 +1,11 @@
 package com.llpop.koil.ui.screen
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -10,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -95,6 +99,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.Provinces
@@ -120,6 +125,7 @@ import org.koin.core.context.GlobalContext
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.ranges.ClosedFloatingPointRange
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
@@ -128,6 +134,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.MiuixIndication
 import java.util.Locale
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.withContext
@@ -481,39 +488,47 @@ fun SettingsScreen(
             if (eiaLoaded) {
                 // 与 SettingSwitchRow 同构：开关对「标题 + 副标题」整块垂直居中，而不是只对标题行居中
                 // （开关放在标题 Row 里会比其他开关高约 12dp）；输入框放在行下方，不参与居中计算
-                Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            // 与 SettingSwitchRow 一致：整行 56dp 可点，输入框不参与点击
-                            .heightIn(min = 56.dp)
-                            .clickable(
-                                role = Role.Switch,
-                                onClick = { viewModel.setEiaEnabled(!eiaEnabled) },
-                            )
-                            .padding(top = 13.dp, bottom = if (eiaEnabled) 13.dp else 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.koil_set_eia_key_title),
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onBackground,
-                            )
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                text = stringResource(R.string.koil_set_eia_key_sub),
-                                fontSize = 14.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
+                Column(modifier = Modifier) {
+                    val eiaInteractionSource = remember { MutableInteractionSource() }
+                    CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
+                        BasicComponent(
+                            modifier = Modifier.indication(
+                                interactionSource = eiaInteractionSource,
+                                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
+                            ),
+                            insideMargin = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 13.dp,
+                                bottom = if (eiaEnabled) 13.dp else 8.dp,
+                            ),
+                            onClick = { viewModel.setEiaEnabled(!eiaEnabled) },
+                            role = Role.Switch,
+                            interactionSource = eiaInteractionSource,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = stringResource(R.string.koil_set_eia_key_title),
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MiuixTheme.colorScheme.onBackground,
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = stringResource(R.string.koil_set_eia_key_sub),
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Switch(
+                                    checked = eiaEnabled,
+                                    onCheckedChange = null,
+                                )
+                            }
                         }
-                        Switch(
-                            checked = eiaEnabled,
-                            onCheckedChange = viewModel::setEiaEnabled,
-                        )
                     }
                     if (!eiaEnabled) {
                         Spacer(Modifier.height(8.dp))
@@ -521,7 +536,9 @@ fun SettingsScreen(
                         TextField(
                             value = eiaKey,
                             onValueChange = { viewModel.setEiaApiKey(it) },
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
                                 keyboardType = KeyboardType.Ascii,
@@ -2381,45 +2398,47 @@ private fun SettingSwitchRow(
     /** 标题右侧的附加内容（云同步的「已连接/未配置」状态徽章挂这里） */
     trailingContent: (@Composable () -> Unit)? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            // 对齐 Miuix BasicComponent / SwitchPreference：整行至少 56dp 高、整行可点，
-            // 点击/按压反馈覆盖「标题 + 副标题」整块，而不是只有右侧开关能点。
-            .heightIn(min = 56.dp)
-            .clickable(
-                role = Role.Switch,
-                onClick = { onCheckedChange(!checked) },
-            )
-            .padding(horizontal = 16.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
+    val interactionSource = remember { MutableInteractionSource() }
+    CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
+        BasicComponent(
+            modifier = Modifier.indication(
+                interactionSource = interactionSource,
+                indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
+            ),
+            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 13.dp),
+            onClick = { onCheckedChange(!checked) },
+            role = Role.Switch,
+            interactionSource = interactionSource,
+        ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = title,
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                if (trailingContent != null) {
-                    Spacer(Modifier.width(8.dp))
-                    trailingContent()
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = title,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onBackground,
+                        )
+                        if (trailingContent != null) {
+                            Spacer(Modifier.width(8.dp))
+                            trailingContent()
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
+                Switch(
+                    checked = checked,
+                    onCheckedChange = null,
+                )
             }
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-        )
     }
 }
 
