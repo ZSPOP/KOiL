@@ -10,7 +10,6 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -1250,12 +1249,15 @@ private fun PriceDbSection(
                             color = if (autoOn) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(6.dp))
                         // 纯状态标记：点击由整个按钮驱动，这里只表达「开 / 关」
                         KOiLCheckMark(
                             checked = autoOn,
                             activeColor = KOiLColors.Primary,
                             inactiveColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f),
+                            // 13sp 按钮文字旁边取 16dp：视觉高度与文字齐平；20dp 会顶满 pill 高度、
+                            // 显得比文字重一级
+                            iconSize = 16.dp,
                         )
                     }
                     Row(
@@ -2436,9 +2438,16 @@ private fun SettingSwitchRow(
                             Spacer(Modifier.width(8.dp))
                             // 纯状态展示：吃掉落在徽章上的点击，避免「想看一眼连接状态、手一偏
                             // 按在徽章上就把云同步关了」。整行其余区域照常可点，触摸区不缩。
+                            // 这里必须消费 down 本身：detectTapGestures 只在 up 阶段消费，
+                            // 父级 clickable 已经拿到 down、会闪一下按压高亮，看起来像能点。
+                            // 也不用 clickable{} 包一层——那会给徽章多挂一个按钮语义节点，
+                            // TalkBack 会把它当可点元素读出来。
                             Box(
                                 modifier = Modifier.pointerInput(Unit) {
-                                    detectTapGestures(onTap = {})
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false).consume()
+                                        waitForUpOrCancellation()?.consume()
+                                    }
                                 },
                             ) { trailingContent() }
                         }
