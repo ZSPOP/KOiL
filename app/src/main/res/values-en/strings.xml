@@ -38,9 +38,10 @@
     <string name="koil_add_forecast_mech_stranded">Mechanism forecast: no change expected (about %1$s ¥/ton)</string>
     <string name="koil_add_forecast_single_up">1-day ref.: up about %1$s ¥/ton</string>
     <string name="koil_add_forecast_single_down">1-day ref.: down about %1$s ¥/ton</string>
-    <string name="koil_add_forecast_per_liter">" (≈ ¥%1$.2f/L)"</string>
-    <string name="koil_add_forecast_caveat">Final adjustment is subject to the NDRC announcement</string>
-    <string name="koil_add_forecast_caveat_inline">" (subject to NDRC)"</string>
+    <string name="koil_add_forecast_per_liter_up">" (≈ +¥%1$.2f/L)"</string>
+    <string name="koil_add_forecast_per_liter_down">" (≈ -¥%1$.2f/L)"</string>
+    <string name="koil_add_forecast_caveat">Final adjustment is subject to the official announcement</string>
+    <string name="koil_add_forecast_caveat_inline">" (subject to the official announcement)"</string>
     <string name="koil_add_forecast_as_of">as of %1$s</string>
     <string name="koil_add_forecast_released">source released %1$s</string>
     <string name="koil_add_forecast_sample">trading days counted: %1$d</string>
