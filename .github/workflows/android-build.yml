@@ -43,6 +43,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # 失败路径演练：gitee-mirror.sh 的全部价值都在「读不到列表 / 删不掉 tag」上，
+      # 那些分支正常发版永远跑不到（keep=5，要到第 6 个版本才真删）。这个脚本不跑，
+      # 等于把覆盖从 /tmp 挪进仓库躺着 —— S5 防的「把 --retry-all-errors 挪回 CURL」
+      # 又恰恰是最容易被「顺手统一一下」写出来的回归。
+      # 无 JDK/SDK 依赖，秒级，所以放在最前面，不必等 5 分钟的 Gradle。
+      - name: gitee-mirror 失败路径演练
+        run: bash .github/scripts/test-gitee-mirror.sh
+
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
