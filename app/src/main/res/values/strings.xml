@@ -349,9 +349,16 @@
     <string name="koil_update_fail_signature">安装包签名与本机不一致，已拒绝安装，请重新下载</string>
     <string name="koil_update_fail_permission">需要在系统设置里允许「安装未知应用」，已为你打开设置页</string>
     <string name="koil_update_fail_launch">无法打开系统安装界面，请稍后重试</string>
+    <string name="koil_update_cellular_title">当前不是 WiFi</string>
+    <string name="koil_update_cellular_msg">更新包约 6.6MB，将使用移动数据下载。</string>
+    <string name="koil_update_cellular_mobile">仍要下载</string>
+    <string name="koil_update_cellular_wait">等 WiFi</string>
+    <string name="koil_update_wifi_only_title">已设为仅 WiFi 下载</string>
+    <string name="koil_update_wifi_only_msg">你之前选择只用 WiFi 下载更新。现在仍要使用移动数据下载吗？</string>
     <string name="koil_update_progress">%1$s · %2$d%%</string>
     <string name="koil_update_progress_unknown">%1$s · …</string>
     <string name="koil_update_state_failed">失败</string>
+    <string name="koil_update_action_cancel">取消</string>
     <string name="koil_update_action_retry">重试</string>
     <string name="koil_set_about_check_failed">检查失败，点击重试</string>
     <string name="koil_set_about_terms">使用条款</string>

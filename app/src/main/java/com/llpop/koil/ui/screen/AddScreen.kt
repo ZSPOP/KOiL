@@ -43,6 +43,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.launch
+import com.llpop.koil.ui.component.UpdateCellularDialog
+import com.llpop.koil.data.update.blockedByWifiOnly
+import com.llpop.koil.data.update.needsCellularPrompt
+import com.llpop.koil.data.update.isCellularNetwork
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -152,6 +158,11 @@ fun AddScreen(
 
     // 首次打开：未授权定位时自动弹出定位权限提醒引导（仅一次，之后由用户主动点击定位按钮）
     val settings = org.koin.compose.koinInject<com.llpop.koil.data.settings.AppSettings>()
+    // 蜂窝门控：下载 6.6MB 前给流量计费用户一次明确知情
+    val updateScope = rememberCoroutineScope()
+    val cellularDecided by settings.updateCellularDecided.collectAsStateWithLifecycle(initialValue = false)
+    val wifiOnlyPref by settings.updateWifiOnly.collectAsStateWithLifecycle(initialValue = false)
+    var cellularGate by remember { mutableStateOf<CellularGate?>(null) }
     LaunchedEffect(Unit) {
         if (!locationHelper.hasPermission() && !settings.hasPromptedLocation.first()) {
             settings.setHasPromptedLocation(true)
@@ -222,31 +233,65 @@ fun AddScreen(
                 else -> baseVersion
             }
             val bannerFailed = st as? UpdateDownloadState.Failed
+            // 所有下载入口都走这里：蜂窝下的确认只做一次，且「挡住」时必须给强制下载出口
+            fun startDownload() {
+                val cellular = isCellularNetwork(context)
+                cellularGate = when {
+                    needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
+                    blockedByWifiOnly(cellular, cellularDecided, wifiOnlyPref) -> CellularGate.Blocked
+                    else -> null.also { apkUpdater.download(bannerTag, apkUrl) }
+                }
+            }
             UpdateBanner(
                 version = bannerVersion,
                 // 失败时用具体原因当主文案（签名不一致 ≠ 网络失败，不能一律让用户重试）
                 title = bannerFailed?.let { stringResource(it.reason.messageRes()) },
-                actionLabel = if (bannerFailed != null) {
-                    stringResource(R.string.koil_update_action_retry)
-                } else {
-                    stringResource(R.string.koil_ov_update_action)
+                actionLabel = when {
+                    // 下载中给取消入口：否则点错只能干等几十秒，scope 是应用级的杀 App才行
+                    st is UpdateDownloadState.Downloading -> stringResource(R.string.koil_update_action_cancel)
+                    bannerFailed != null -> stringResource(R.string.koil_update_action_retry)
+                    else -> stringResource(R.string.koil_ov_update_action)
                 },
                 onOpen = {
-                    // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
-                    // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
-                    // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
-                    // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
-                    if (apkUrl.isNotBlank()) {
-                        // 进度直接显示在横幅上，重复点击由 download() 自己挡（job 在跑就 return）
-                        apkUpdater.download(bannerTag, apkUrl)
-                    } else if (openExternalUrl(context, releasePageUrl(bannerTag))) {
-                        updateChecker.markSeen(bannerTag)
+                    when {
+                        // 下载中再点是「取消」，不是「重下」
+                        st is UpdateDownloadState.Downloading -> apkUpdater.cancel()
+                        // 失败后再点：走同一套网络门控重试
+                        bannerFailed != null -> startDownload()
+                        apkUrl.isNotBlank() -> startDownload()
+                        // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
+                        // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
+                        // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
+                        // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
+                        else -> if (openExternalUrl(context, releasePageUrl(bannerTag))) {
+                            updateChecker.markSeen(bannerTag)
+                        }
                     }
                 },
                 // 主动关掉 = 已知晓，同一版本不再提醒（不做「7 天后再提醒」）
                 onDismiss = { updateChecker.markSeen(bannerTag) },
             )
             Spacer(Modifier.height(12.dp))
+            cellularGate?.let { gate ->
+                UpdateCellularDialog(
+                    blocked = gate == CellularGate.Blocked,
+                    onDownload = {
+                        cellularGate = null
+                        // 首次表态「仍要下载」= 记住不限制网络；「仅 WiFi」被挡后强制下载则不改偏好
+                        if (gate == CellularGate.Ask) {
+                            updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = false) }
+                        }
+                        apkUpdater.download(bannerTag, apkUrl)
+                    },
+                    onWaitWifi = {
+                        cellularGate = null
+                        // 只在首次表态时记成「仅 WiFi」；已表态的挡住场景点「等 WiFi」不改任何东西
+                        if (gate == CellularGate.Ask) {
+                            updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
+                        }
+                    },
+                )
+            }
         }
 
         // 上次加油条
@@ -1185,3 +1230,6 @@ private fun PrecheckBanner(uiState: AddUiState) {
         }
     }
 }
+
+/** 蜂窝下载的两个门控形态 */
+internal enum class CellularGate { Ask, Blocked }

@@ -8,14 +8,17 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -86,9 +89,16 @@ class ApkUpdater(
         if (job?.isActive == true) return
 
         job = scope.launch {
-            val result = runCatching { fetch(url) }
-                .onFailure { Log.w("KOiL", "update download failed: ${it.message}") }
-                .getOrNull() ?: FetchResult.Bad(UpdateFailure.DOWNLOAD, "下载异常中断")
+            // 不能用 runCatching 包 fetch：它会把 CancellationException 也吞成 null，
+            // 于是「用户取消」被报成 DOWNLOAD 失败，横幅从「发现新版本」变成「下载失败」。
+            val result = try {
+                fetch(url)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("KOiL", "update download failed: ${e.message}")
+                FetchResult.Bad(UpdateFailure.DOWNLOAD, e.message ?: "下载异常中断")
+            }
             when (result) {
                 is FetchResult.Bad -> {
                     Log.w("KOiL", "update download aborted: ${result.detail}")
@@ -101,6 +111,25 @@ class ApkUpdater(
                 }
             }
         }
+    }
+
+    /**
+     * 取消正在进行的下载。
+     *
+     * 没有这个入口时，用户点错/后悔只能等几十秒或杀 App——`scope` 是应用级的，
+     * `job` 只会自然结束。取消后必须让 state 离开 `Downloading`：否则横幅停在
+     * 一个死掉的百分比上，看起来像「下载卡住了」，正是 ② 修掉的那个症状。
+     *
+     * `readyTag` 一并清空：半截包没通过校验，不能当作「已下好」。
+     */
+    fun cancel() {
+        val running = job ?: return
+        running.cancel()
+        job = null
+        readyTag = null
+        // 半截文件删掉，不白占几 MB；正在写的流被 cancel 后由协程侧兜异常
+        apkFile()?.delete()
+        _state.value = UpdateDownloadState.Idle
     }
 
     /**
@@ -167,13 +196,18 @@ class ApkUpdater(
         return File(base, "updates/$APK_NAME")
     }
 
-    private fun fetch(url: String): FetchResult {
+    private suspend fun fetch(url: String): FetchResult {
         val dest = apkFile() ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
         dest.parentFile?.mkdirs()
+        // 显式删掉上一版残留的包：现在是覆盖写，删不删都能跑，但语义上「这次下载不继承任何旧字节」
+        // 更清楚，也避免用户长期不更新时白占 6.6MB
+        dest.delete()
 
         var current = url
         var hops = 0
         while (true) {
+            // 取消是在阻塞读里生效的：每跳、每块都检查一次，否则要等 readTimeout(30s) 才停
+            coroutineContext.ensureActive()
             val conn = (URL(current).openConnection() as HttpURLConnection).apply {
                 // Gitee 的下载链接实测 302 → 302 → CDN，必须手动跟：
                 // 自动跟随时拿不到中间跳的 Location，出问题无法定位是哪一跳断的。
@@ -206,6 +240,7 @@ class ApkUpdater(
                     dest.outputStream().use { out ->
                         val buf = ByteArray(16 * 1024)
                         while (true) {
+                            coroutineContext.ensureActive()
                             val n = input.read(buf)
                             if (n < 0) break
                             out.write(buf, 0, n)
