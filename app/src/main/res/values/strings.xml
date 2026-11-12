@@ -32,8 +32,8 @@
     <string name="koil_add_suggest_early">建议提前加油</string>
     <string name="koil_add_suggest_wait">建议降价后加油</string>
     <string name="koil_add_suggest_stranded">本轮预计搁浅</string>
-    <string name="koil_add_window_prefix">下个调价窗口 %1$s 24:00</string>
-    <!-- 预测幅度：头行「机制预测：上调约 170 元/吨」+ 次级「截至 · 源端发布 · 已计入 N 个交易日（以发改委公告为准）」；建议徽章在窗口日行右侧 -->
+    <string name="koil_add_window_prefix">下轮调价窗口 %1$s 24:00</string>
+    <!-- 预测幅度：头行「机制预测：上调约 170 元/吨」+ 次级「数据截至 · 已计入 N 个交易日（以发改委公告为准）」，发布日期不再展示；建议徽章在窗口日行右侧 -->
     <string name="koil_add_forecast_mech_up">机制预测：上调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_mech_down">机制预测：下调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_mech_stranded">机制预测：搁浅（幅度约 %1$s 元/吨）</string>
@@ -41,10 +41,9 @@
     <string name="koil_add_forecast_single_down">单日参考：下调约 %1$s 元/吨</string>
     <string name="koil_add_forecast_per_liter_up">（折合约涨 %1$.2f 元/升）</string>
     <string name="koil_add_forecast_per_liter_down">（折合约降 %1$.2f 元/升）</string>
-    <string name="koil_add_forecast_caveat">最终调控以官方公告为准</string>
-    <string name="koil_add_forecast_caveat_inline">（以官方公告为准）</string>
-    <string name="koil_add_forecast_as_of">截至 %1$s</string>
-    <string name="koil_add_forecast_released">源端 %1$s 发布</string>
+    <string name="koil_add_forecast_caveat">最终调整以发改委公告为准</string>
+    <string name="koil_add_forecast_caveat_inline">（以发改委公告为准）</string>
+    <string name="koil_add_forecast_as_of">数据截至 %1$s</string>
     <string name="koil_add_forecast_sample">已计入 %1$d 个交易日</string>
     <string name="koil_add_forecast_meta_sep">" · "</string>
     <string name="koil_add_forecast_fx_pending">汇率获取中，暂无法测算</string>
