@@ -109,8 +109,8 @@ import com.llpop.koil.BuildConfig
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.update.UpdateChecker
-import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
+import com.llpop.koil.data.update.shouldBadgeUpdate
 import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
@@ -186,9 +186,10 @@ fun OverviewScreen(
     val latestTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     val context = LocalContext.current
-    // 与红点同源：「有更新版本 且 用户还没知晓」——isNewerRelease 是唯一判据，
-    // 不在这里另算一遍 compare，否则将来只改一处就会出现「横幅亮、红点不亮」
-    val bannerTag = latestTag.takeIf { isNewerRelease(it, BuildConfig.VERSION_NAME) && it != seenTag }
+    // 与红点同源：直接用红点那一个有单测的判据（shouldBadgeUpdate），不在这里手写内部逻辑。
+    // 手写的话，将来红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变，
+    // 分叉会从「比较逻辑」变成「判据语义」，更难排查
+    val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
 
     // snapshotFlow 监听 LazyList 滚动位置，仅在"是否显示返回顶部"翻转时更新状态，
     // 不用 LaunchedEffect(scrollState.value) 每次像素变化都触发
@@ -305,7 +306,7 @@ fun OverviewScreen(
             // 更新横幅：摘要卡之后。间距复用列表统一的 12dp item（横幅自己再补一个），
             // 最终是「摘要卡 → 12dp → 横幅 → 12dp → 异常/预测卡」，不是 24dp
             if (bannerTag != null) {
-                item {
+                item(key = "update-banner") {
                     UpdateBanner(
                         version = normalizeVersion(bannerTag),
                         onOpen = {
@@ -1443,7 +1444,7 @@ private fun ConsumptionSparkline(values: List<Double>, modifier: Modifier = Modi
 /**
  * 设置页红点之外的第二处提醒：首页摘要卡之后的整条横幅。
  *
- * 显示条件与红点完全同源（[isNewerRelease] + seenTag），所以不会出现「有一处亮、另一处不亮」。
+ * 显示条件与红点完全同源（同一个 [shouldBadgeUpdate]，有 6 条单测），所以不会出现「有一处亮、另一处不亮」。
  * 点「更新」跳 Release 页——④ 应用内下载落地后只改这里的 onOpen 回调，判据不用动；
  * 点 × 视为已知晓，写 seenTag 后同一版本不再出现（不做「7 天后再提醒」）。
  */
@@ -1460,6 +1461,9 @@ private fun UpdateBanner(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                // 整条可点（含左侧图标与留白）：用户对横幅的第一反应是点整行，
+                // 只把 clickable 套在文字上会让图标区域点了没反应；× 有自己的 clickable 会先消费
+                .clickable(onClick = onOpen)
                 .heightIn(min = 46.dp)
                 .padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1472,9 +1476,7 @@ private fun UpdateBanner(
             )
             Spacer(Modifier.width(10.dp))
             Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .clickable(onClick = onOpen),
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
