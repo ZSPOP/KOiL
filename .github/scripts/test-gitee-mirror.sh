@@ -6,8 +6,10 @@
 # 用法：bash .github/scripts/test-gitee-mirror.sh
 # 退出码 0 = 全部通过；非 0 = 有用例失败（会打印失败场景名）。
 #
-# 原理：造一个假的 curl 放 PATH 最前面，按 URL 形态返回固定响应；用 git 真身（只有
-# del_tag 会用到，且 stub 环境下大概率失败，落到 continue 分支，不影响计数断言）。
+# 原理：造假 curl + 假 git 放 PATH 最前面。假 curl 按 URL 形态返回固定响应（-w 的
+# 输出按格式串逐个替换，与真 curl 对齐）；假 git 只让 del_tag 成功，保证删除段真的
+# 跑到「先 tag 后 Release」，而不是 continue 掉。它不记录调用，「删 tag」看的是
+# gitee-mirror.sh 自己的日志。
 
 set -uo pipefail
 
@@ -54,6 +56,11 @@ elif [[ "$url" == *"releases?per_page"* ]]; then
 elif [[ "$url" == *"/attach_files"* ]]; then code=201; body='{"browser_download_url":"https://gitee.example/dl.apk"}'
 elif [[ "$url" == *"/releases" && "$method" == "POST" ]]; then code=201; body='{"id":99001,"tag_name":"V1.1.9"}'
 elif [[ "$url" == *"/releases/99001"* ]]; then code=200; body='{"assets":[]}'
+elif [ "$method" = "DELETE" ]; then
+  # Gitee 删 tag 会级联删 Release，所以「tag 删成功之后的 DELETE」实测是 404。
+  # 这条分支是全脚本注释最长、风险最高的地方（见 gitee-mirror.sh 的 404 分支），
+  # 默认给 200 就走不到，用开关文件单独验。
+  code=$(cat "$STUB_WORK/delcode" 2>/dev/null || echo 200); body=''
 else code=200; body='x'; fi
 
 [ -n "$out" ] && printf '%s' "$body" > "$out"
@@ -76,6 +83,7 @@ chmod +x "$WORK/bin/curl"
 # 只关心 ls-remote（孤儿交叉校验）与 push --delete（del_tag），一律成功。
 cat > "$WORK/bin/git" <<'GITSTUB'
 #!/usr/bin/env bash
+echo "$*" >> "$STUB_WORK/git.log"
 exit 0
 GITSTUB
 chmod +x "$WORK/bin/git"
@@ -106,8 +114,10 @@ W=$(grep -c '次失败' "$WORK/last.log" || true)
 [ "$W" -eq 2 ] && ok "2 条重试 warning" || bad "重试 warning 应为 2，实际 $W"
 grep -q '次失败（curl 退出码 56，返回 0 字节）' "$WORK/last.log" \
   && ok "warning 带得出退出码与字节数" || bad "warning 没带退出码/字节数"
-grep -q '保留版本号最高的 5 个' "$WORK/last.log" \
-  && ok "读到列表后继续走清理" || bad "没走到清理阶段"
+# 观测点必须是 ELIGIBLE 的结果，不能是「保留版本号最高的 5 个」——后者在
+# ELIGIBLE=0 时照样打印，上一版就是靠它绿着过去的（stub 附件名叫 a.apk）。
+grep -q '其中镜像版本 6 个' "$WORK/last.log" \
+  && ok "读到列表且 6 条都计入可清理" || bad "ELIGIBLE 不是 6（列表没读到或筛选口径坏了）"
 
 echo "S2 3 次全失败（dispatch, dry_run=false）"
 echo 9 > "$WORK/failcount"
@@ -140,6 +150,9 @@ run_mirror workflow_dispatch false 1; RC=$?
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
 grep -q '已删 tag V1.1.3（git push --delete）' "$WORK/last.log" \
   && ok "删 tag 成功" || bad "没删到 tag"
+# 光看日志不算：要确认 git 真收到了 --delete refs/tags/V1.1.3 这个动作
+grep -q -- '--delete refs/tags/V1.1.3' "$WORK/git.log" 2>/dev/null \
+  && ok "git 确实收到 --delete refs/tags/V1.1.3" || bad "git 没收到删 tag 指令"
 grep -q '已删 Release id=1（HTTP 200）' "$WORK/last.log" \
   && ok "删 Release 文案正确（200 命中 case 分支）" || bad "200 没被识别成成功"
 if grep -q '返回 HTTP 200 0.100' "$WORK/last.log"; then
@@ -149,6 +162,19 @@ else
 fi
 D=$(cat "$WORK/deletes.log" 2>/dev/null | wc -l)
 [ "$D" -ge 1 ] && ok "确实发出了 DELETE（$D 次）" || bad "没发 DELETE"
+
+echo "S7 404 分支：tag 删成功、Release 被 Gitee 级联带走"
+rm -f "$WORK/failcount" "$WORK/deletes.log"; echo 404 > "$WORK/delcode"
+run_mirror workflow_dispatch false 1; RC=$?
+[ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
+grep -q '已不存在（随 tag 一并删除），视为成功' "$WORK/last.log" \
+  && ok "404 被映射成成功" || bad "404 没走「视为成功」分支"
+if grep -q '::warning::删 Release' "$WORK/last.log"; then
+  bad "404 被当成了失败（打了 warning）"
+else
+  ok "404 没被当失败"
+fi
+rm -f "$WORK/delcode"
 
 echo "S5 非幂等请求不带 --retry-all-errors"
 grep -q 'GET_CURL=("${CURL\[@\]}" --retry-all-errors)' "$MIRROR" \
