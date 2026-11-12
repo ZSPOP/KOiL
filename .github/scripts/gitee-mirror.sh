@@ -38,6 +38,46 @@ fail() {
   exit 0
 }
 
+# 删 Gitee tag 只能走 git 协议：API 没有单 tag 接口 ——
+# GET /repos/{o}/{r}/tags/{name} 与 DELETE 同一路径都返回 HTML 404（实测），
+# 只有列表 GET /tags 和创建 POST /tags。原来用 DELETE API 的写法从未成功过，
+# 每次都 404 但只是 warning，日志看着像收尾正常，实际 tag 一个没删。
+#
+# token 走 http.extraHeader 而不是拼进 URL：拼 URL 时 git 出错会把带 token 的
+# remote 地址原样打进日志，而 secrets 一旦进日志就无法撤回。
+del_tag() {
+  # 前提：cwd 必须是 git 仓库（两条 workflow 都 checkout 了，满足）。
+  # 单独抽出来在本机跑会报 "not a git repository" —— 这是预期行为，不是脚本坏了。
+  local tag="$1" log=/tmp/gitee-deltag.log
+  # 单引号：凭据由 git 起 sh 时代展开，token 含 @ : / 等字符也不会破坏命令。
+  # 第一个空的 credential.helper= 是重置：否则全局或 checkout 留下的
+  # gh auth git-credential 会先被调用、把 GitHub 凭据交给 Gitee，认证必然失败。
+  local helper='!f() { echo "username=$GITEE_OWNER"; echo "password=$GITEE_TOKEN"; }; f'
+  if GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c credential.helper="$helper" \
+       push "https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git" \
+       --delete "refs/tags/${tag}" >"$log" 2>&1; then
+    echo "已删 tag ${tag}（git push --delete）"
+    return 0
+  fi
+  # 幂等：Release 删成功而 tag 删失败后重跑，会撞上「tag 已不存在」。
+  # 这不是失败，按成功处理，否则每轮清理都会刷一条假 warning。
+  if grep -q 'remote ref does not exist' "$log" 2>/dev/null; then
+    echo "tag ${tag} 已不存在（幂等跳过）"
+    return 0
+  fi
+  # 只对 token 值做兜底替换，再保留 remote: / fatal: 两类行 ——
+  # 原来整片 grep -v '^remote:' 把最该看的
+  # 「remote: ZSPOP: Incorrect username or password (access token)」也滤掉了。
+  # URL 里本来就没有凭据，remote 行也不含 token。
+  if [ -n "${GITEE_TOKEN:-}" ]; then
+    # 不加 .bak：备份里是替换前的原文，等于把 token 留在了同目录，脱敏就没意义了。
+    sed -i "s|${GITEE_TOKEN}|***|g" "$log" 2>/dev/null || true
+    rm -f "$log.bak"
+  fi
+  echo "::warning::删 tag ${tag} 失败：$(grep -E '^(remote:|fatal:)' "$log" | tail -3 | tr '\n' ' ' | head -c 300)"
+  return 1
+}
+
 APKF_PATH="${1:-}"
 TAG="${2:-${GITHUB_REF_NAME:-}}"
 APKF="$(basename "${APKF_PATH:-}")"
@@ -194,6 +234,39 @@ CAND=$(printf '%s' "$ALL" | jq -r '
   | .[] | "\(.id)\t\(.tag_name)"')
 ELIGIBLE=$(printf '%s\n' "$CAND" | grep -c . || true)
 echo "Gitee 现有 ${TOTAL} 个 Release，其中镜像版本 ${ELIGIBLE} 个，保留版本号最高的 ${GITEE_MIRROR_KEEP} 个（dry-run=${GITEE_MIRROR_DRY_RUN}）"
+# 孤儿 tag 点名清扫。
+#
+# 位置有两个约束：必须在拿到 ALL（/releases 列表）之后 —— 要自证「这个 tag 确实
+# 没有 Release」；又必须在 DEL_N 的「无需清理 -> exit 0」之前 —— 否则这一步永远跑不到。
+#
+# 为什么要点名：候选口径是从 /releases 构造的，没有 Release 的 tag 永远扫不到它。
+# 删除顺序对调后不会再新增孤儿，但历史遗留（V1.1.3 / V1.1.4）得点名清一次。
+#
+# 三道守卫都不是可选的。点错一个名字删掉当前正在补传的 TAG，会造出「有 Release
+# 无 tag」的反向残缺 —— 比孤儿更难查，因为 Release 列表看着还是对的。
+if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
+  REL_TAGS=$(printf '%s' "$ALL" | jq -r '.[].tag_name' 2>/dev/null || true)
+  for _t in ${GITEE_MIRROR_EXTRA_TAGS//,/ }; do
+    [ -z "$_t" ] && continue
+    if ! [[ "$_t" =~ ^V[0-9] ]]; then
+      echo "::warning::跳过非法 tag 名 ${_t}（必须匹配 ^V[0-9]，避免误删 main 之类）"
+      continue
+    fi
+    if [ "$_t" = "$TAG" ]; then
+      echo "::warning::跳过当前 TAG ${_t}（它正是本次补传的版本）"
+      continue
+    fi
+    if printf '%s\n' "$REL_TAGS" | grep -qxF "$_t"; then
+      echo "::warning::${_t} 仍有 Release，不是孤儿，跳过（请改用 keep 清理）"
+      continue
+    fi
+    if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
+      echo "[dry-run] 将删除孤儿 tag ${_t}（/releases 里已无此 Release）"
+    else
+      del_tag "$_t"
+    fi
+  done
+fi
 # LC_ALL=C：sort -V 的版本比较不受 locale 影响。-k2,2 只比 tag 字段，
 # 否则 id 的数字会先参与比较（"123\tV1.1.10" 与 "45\tV1.1.9"）。
 SORTED=$(printf '%s\n' "$CAND" | LC_ALL=C sort -V -t$'\t' -k2,2)
@@ -224,7 +297,21 @@ fi
 while IFS=$'\t' read -r rid rtag; do
   [ -z "${rid:-}" ] && continue
   if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
-    echo "[dry-run] 将删除 Release id=${rid} / tag=${rtag}（Release 与 tag 各一次调用，不是同一次）"
+    echo "[dry-run] 将删除 tag=${rtag} / Release id=${rid}（tag 走 git push --delete，Release 走 API；先 tag 后 Release）"
+    continue
+  fi
+  # 顺序：先删 tag、后删 Release。
+  #
+  # 反过来（先 Release 后 tag）是孤儿 tag 的成因：tag 删失败时 Release 已经没了，
+  # 留下的「有 tag 无 Release」对本脚本的候选口径（从 /releases 构造）永久不可见 ——
+  # 下一轮、下十轮都不会再被扫到，故障无法自愈。V1.1.3 / V1.1.4 就是这么攒下的。
+  #
+  # 对调后 tag 删失败 → Release 还在 → 下一轮仍是候选，自动重试。
+  # 代价是 Release 成功而 tag 失败时会多刷一轮 del_tag，已按幂等处理（见 del_tag）。
+  if ! del_tag "$rtag"; then
+    # 接住返回值是整个对调的意义所在。不接的话 del_tag 的 return 1 只是装饰性的
+    # （本脚本没开 set -e），下一行照样删 Release，孤儿 tag 一模一样地被重新造出来。
+    echo "::warning::删 tag ${rtag} 失败，保留 Release id=${rid} 供下一轮重试"
     continue
   fi
   # 不写 `|| echo 000`：与 UP_META 同一个坑 —— curl 失败时 -w 仍会输出 000，
@@ -234,11 +321,5 @@ while IFS=$'\t' read -r rid rtag; do
   case "$RC" in
     200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
-  esac
-  TC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || true)
-  TC=${TC:-000}
-  case "$TC" in
-    200|204) echo "已删 tag ${rtag}（HTTP ${TC}）" ;;
-    *) echo "::warning::删 tag ${rtag} 返回 HTTP ${TC}（继续，不阻断）" ;;
   esac
 done <<< "$TO_DEL"
