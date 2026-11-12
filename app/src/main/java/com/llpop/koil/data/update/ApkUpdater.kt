@@ -89,16 +89,26 @@ class ApkUpdater(
      * 文件名是常量（`KOiL-update.apk`），盘上没有任何信息能说明它对应哪个 tag，
      * 所以 tag 必须跟着落盘。
      */
+    /** 恢复是否已完成。`download()` 必须等它，否则恢复窗口内 `readyTag` 还是 null，
+     *  会把盘上已下好的包删掉重下（这正是 ① 要修的同一个后果，只是窗口短得多）。 */
+    private val restored = kotlinx.coroutines.CompletableDeferred<Unit>()
+
     init {
         scope.launch {
-            val saved = settings.updateReadyTag.first()
-            if (saved.isBlank()) return@launch
-            if (isReadyFor(saved, saved, apkFile())) {
-                readyTag = saved
-                _state.value = UpdateDownloadState.Ready(saved)
-            } else {
-                // 文件已被系统清掉（外部存储 evict / 清数据）→ 落盘 tag 一并失效
-                settings.setUpdateReadyTag(null)
+            try {
+                val saved = settings.updateReadyTag.first()
+                if (saved.isNotBlank()) {
+                    if (isReadyFor(saved, saved, apkFile())) {
+                        readyTag = saved
+                        _state.value = UpdateDownloadState.Ready(saved)
+                    } else {
+                        // 文件已被系统清掉（外部存储 evict / 清数据）→ 落盘 tag 一并失效
+                        settings.setUpdateReadyTag(null)
+                    }
+                }
+            } finally {
+                // 无论成功失败都要放行 download()：卡住它等于「点了更新没反应」
+                restored.complete(Unit)
             }
         }
     }
@@ -116,12 +126,26 @@ class ApkUpdater(
      */
     fun download(tag: String, url: String) {
         if (tag.isBlank() || url.isBlank()) return
-        // 已下好则直接拉起安装器；文件若被系统清理掉了（外部存储 evict），
-        // installReady 返回 false 时必须继续走下载，否则用户点第二次没反应。
-        if (isReady(tag) && installReady(tag)) return
         if (job?.isActive == true) return
 
         job = scope.launch {
+            // 先等落盘恢复：恢复窗口内 readyTag 尚为 null，直接判断会把好包删掉重下
+            restored.await()
+            // 已下好就**只**拉起安装器，绝不重新下载。
+            // 缺授权时 install() 会 fail(NO_PERMISSION) 并返回 false，
+            // 若这里继续往下走，就会为「没有安装权限」这件与包无关的事重下 6.7MB，
+            // 而 fetch() 还会先 `dest.delete()` 把已下好的包删掉。
+            if (isReady(tag)) {
+                if (!installReady(tag) &&
+                    (_state.value as? UpdateDownloadState.Failed)?.reason == UpdateFailure.LAUNCH
+                ) {
+                    // 只剩「文件在但拉不起安装器」：包不可用，删掉让下一次点击重下
+                    apkFile()?.delete()
+                    readyTag = null
+                    persistReadyTag(null)
+                }
+                return@launch
+            }
             // 不能用 runCatching 包 fetch：它会把 CancellationException 也吞成 null，
             // 于是「用户取消」被报成 DOWNLOAD 失败，横幅从「发现新版本」变成「下载失败」。
             val result = try {
@@ -160,10 +184,15 @@ class ApkUpdater(
         val running = job ?: return
         running.cancel()
         job = null
-        readyTag = null
-        persistReadyTag(null)
-        // 半截文件删掉，不白占几 MB；正在写的流被 cancel 后由协程侧兜异常
-        apkFile()?.delete()
+        // 只有真的处在下载中才清 readyTag、删文件。
+        // job 也可能停在「等恢复」或「准备拉起安装器」上，那时包是完好的，
+        // 一并删掉就等于用户点一次取消，6.7MB 白下。
+        if (_state.value is UpdateDownloadState.Downloading) {
+            readyTag = null
+            persistReadyTag(null)
+            // 半截文件删掉，不白占几 MB；正在写的流被 cancel 后由协程侧兜异常
+            apkFile()?.delete()
+        }
         _state.value = UpdateDownloadState.Idle
     }
 
