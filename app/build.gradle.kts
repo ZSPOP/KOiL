@@ -45,7 +45,7 @@ android {
         versionCode = System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull()
             ?: System.getenv("KOIL_CI_RUN_NUMBER")?.toIntOrNull() ?: 1
         // versionName 与 tag 严格对齐（CI 已有「tag 去 V == versionName」断言，不一致直接 fail）
-        versionName = "1.1.2"
+        versionName = "1.1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
