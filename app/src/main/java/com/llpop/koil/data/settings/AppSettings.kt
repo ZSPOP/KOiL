@@ -111,6 +111,12 @@ class AppSettings(private val context: Context) {
          *  只能每次检查时从 Release 的 assets 里取。 */
         private val KEY_UPDATE_APK_URL = stringPreferencesKey("KOiL-update-apk-url")
 
+        /** 蜂窝下载策略用户是否已表态（false=还没问过，点更新时弹一次确认） */
+        private val KEY_UPDATE_CELLULAR_DECIDED = booleanPreferencesKey("KOiL-update-cellular-decided")
+
+        /** 表态结果为「仅 WiFi」；蜂窝下点更新会挡住并给一次强制下载入口 */
+        private val KEY_UPDATE_WIFI_ONLY = booleanPreferencesKey("KOiL-update-wifi-only")
+
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
@@ -517,6 +523,25 @@ class AppSettings(private val context: Context) {
      */
     val updateSeenTag: Flow<String> =
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_SEEN_TAG] ?: "" }
+    /** 蜂窝策略是否已表态 */
+    val updateCellularDecided: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_CELLULAR_DECIDED] ?: false }
+
+    /** 已表态为「仅 WiFi」 */
+    val updateWifiOnly: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_WIFI_ONLY] ?: false }
+
+    /**
+     * 一次写两个 key：只有「已表态 + 选择」同时成立才有意义，
+     * 拆两次写会在中间留下「decided=true 但 wifiOnly 还是旧值」的状态。
+     */
+    suspend fun setUpdateCellularPolicy(wifiOnly: Boolean) {
+        context.KOiLDataStore.edit {
+            it[KEY_UPDATE_CELLULAR_DECIDED] = true
+            it[KEY_UPDATE_WIFI_ONLY] = wifiOnly
+        }
+    }
+
     suspend fun setUpdateSeenTag(tag: String) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_SEEN_TAG] = tag }
     }

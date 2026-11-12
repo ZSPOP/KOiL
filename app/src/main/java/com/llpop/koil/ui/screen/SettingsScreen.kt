@@ -1886,7 +1886,13 @@ private fun AboutSection(
     val downloadLabel = when (val st = downloadState) {
         is com.llpop.koil.data.update.UpdateDownloadState.Downloading ->
             if (st.percent >= 0) {
-                stringResource(com.llpop.koil.R.string.koil_update_progress, storedVersion, st.percent)
+                // 设置页这一行的点击在下载中是「取消」，必须写出来：
+                // 否则用户看到百分比想点进去看详情，一点下载就没了
+                stringResource(
+                    com.llpop.koil.R.string.koil_update_progress_tap_cancel,
+                    storedVersion,
+                    st.percent,
+                )
             } else {
                 stringResource(com.llpop.koil.R.string.koil_update_progress_unknown, storedVersion)
             }
@@ -1900,6 +1906,49 @@ private fun AboutSection(
         storedTag, com.llpop.koil.BuildConfig.VERSION_NAME,
     )
     var update by remember { mutableStateOf<UpdateCheck>(UpdateCheck.Idle) }
+    // 蜂窝门控：与首页共用同一套策略（一次表态，两处都生效）
+    val settings = remember { GlobalContext.get().get<AppSettings>() }
+    val cellularDecided by settings.updateCellularDecided.collectAsStateWithLifecycle(initialValue = false)
+    val wifiOnlyPref by settings.updateWifiOnly.collectAsStateWithLifecycle(initialValue = false)
+    var cellularGate by remember { mutableStateOf<CellularGate?>(null) }
+    var cellularPending by remember { mutableStateOf<Pair<String, String>?>(null) }
+    fun applyNetworkGate(tag: String, url: String) {
+        val cellular = com.llpop.koil.data.update.isCellularNetwork(context)
+        cellularGate = when {
+            com.llpop.koil.data.update.needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
+            com.llpop.koil.data.update.blockedByWifiOnly(
+                cellular, cellularDecided, wifiOnlyPref,
+            ) -> CellularGate.Blocked
+            else -> null.also { apkUpdater.download(tag, url) }
+        }
+        if (cellularGate != null) cellularPending = tag to url
+    }
+    cellularGate?.let { gate ->
+        val pending = cellularPending
+        com.llpop.koil.ui.component.UpdateCellularDialog(
+            blocked = gate == CellularGate.Blocked,
+            onDownload = {
+                cellularGate = null
+                if (gate == CellularGate.Ask) {
+                    scope.launch { settings.setUpdateCellularPolicy(wifiOnly = false) }
+                }
+                pending?.let { apkUpdater.download(it.first, it.second) }
+                cellularPending = null
+            },
+            onWaitWifi = {
+                cellularGate = null
+                if (gate == CellularGate.Ask) {
+                    scope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
+                }
+                cellularPending = null
+            },
+            // 误触外部只关弹窗，不写偏好、不消费「只问一次」
+            onDismiss = {
+                cellularGate = null
+                cellularPending = null
+            },
+        )
+    }
     var sheet by remember { mutableStateOf("") }
 
     // —— 诊断：崩溃日志/问题反馈。诊断独立成组并放在关于之前，
@@ -1971,6 +2020,9 @@ private fun AboutSection(
             onClick = {
                 val u = update
                 when {
+                    // 下载中再点这一行 = 取消，不是重下
+                    downloadState is com.llpop.koil.data.update.UpdateDownloadState.Downloading ->
+                        apkUpdater.cancel()
                     u is UpdateCheck.Newer -> {
                         // 应用内下载全程不写 seenTag（下载/安装失败、用户在系统确认页取消，红点与横幅都必须还在）。
                         // 只有回退浏览器这条路径会在**成功打开版本页**后标记已知晓 —— 那是用户主动表达知悉的动作。
@@ -1981,7 +2033,7 @@ private fun AboutSection(
                         // 若改成读 DataStore 的 apkUrl Flow，refresh() 刚返回时 Flow 还没 emit，
                         // 就会拿上一版的直链下包，装完仍是旧版还把新版标成已读。
                         if (u.url.isNotBlank()) {
-                            apkUpdater.download(u.tag, u.url)
+                            applyNetworkGate(u.tag, u.url)
                         } else if (openExternalUrl(
                                 context,
                                 com.llpop.koil.data.update.releasePageUrl(u.tag),
