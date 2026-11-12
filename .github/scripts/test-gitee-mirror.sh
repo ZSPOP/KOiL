@@ -47,7 +47,10 @@ code=200; body=""
 if   [[ "$url" == *"/releases/tags/"* ]]; then code=404; body='{"message":"Not Found"}'
 elif [[ "$url" == *"releases?per_page"* ]]; then
   code=200
-  body='[{"id":1,"tag_name":"V1.1.3","assets":[{"name":"a.apk"}]},{"id":2,"tag_name":"V1.1.4","assets":[{"name":"b.apk"}]},{"id":3,"tag_name":"V1.1.5","assets":[{"name":"c.apk"}]},{"id":4,"tag_name":"V1.1.6","assets":[{"name":"d.apk"}]},{"id":5,"tag_name":"V1.1.7","assets":[{"name":"e.apk"}]},{"id":6,"tag_name":"V1.1.8","assets":[{"name":"f.apk"}]}]'
+  # 附件名必须是真实形态：清理只对「assets 里有 KOiL- 开头的文件」的条目计数
+  # （见 CAND 的 jq 筛选），用 a.apk 这类假名会让 ELIGIBLE=0、永远走「无需清理」，
+  # 删除段根本执行不到。
+  body='[{"id":1,"tag_name":"V1.1.3","assets":[{"name":"KOiL-V1.1.3-vc90-release.apk"}]},{"id":2,"tag_name":"V1.1.4","assets":[{"name":"KOiL-V1.1.4-vc98-release.apk"}]},{"id":3,"tag_name":"V1.1.5","assets":[{"name":"KOiL-V1.1.5-vc105-release.apk"}]},{"id":4,"tag_name":"V1.1.6","assets":[{"name":"KOiL-V1.1.6-vc125-release.apk"}]},{"id":5,"tag_name":"V1.1.7","assets":[{"name":"KOiL-V1.1.7-vc130-release.apk"}]},{"id":6,"tag_name":"V1.1.8","assets":[{"name":"KOiL-V1.1.8-vc141-release.apk"}]}]'
 elif [[ "$url" == *"/attach_files"* ]]; then code=201; body='{"browser_download_url":"https://gitee.example/dl.apk"}'
 elif [[ "$url" == *"/releases" && "$method" == "POST" ]]; then code=201; body='{"id":99001,"tag_name":"V1.1.9"}'
 elif [[ "$url" == *"/releases/99001"* ]]; then code=200; body='{"assets":[]}'
@@ -55,10 +58,27 @@ else code=200; body='x'; fi
 
 [ -n "$out" ] && printf '%s' "$body" > "$out"
 if [ -n "$fmt" ]; then
-  if [[ "$fmt" == *size_download* ]]; then printf '200 1000'; else printf '%s 0.100' "$code"; fi
-else printf '%s' "$body"; fi
+  # 必须按格式串逐个替换，不能一律返回「code time」：脚本 :403 用的是 -w '%{http_code}'，
+  # 真 curl 只输出 200。返回 "200 0.100" 会让 case "$RC" 的 200|204 匹配不到，
+  # 于是删除成功被同一份代码打成「返回 HTTP 200 0.100」的假 warning —— 而「删除成功」
+  # 恰恰是这套演练要证明的东西。
+  s=${fmt//%\{http_code\}/$code}
+  s=${s//%\{size_download\}/1000}
+  s=${s//%\{time_total\}/0.100}
+  printf '%s' "$s"
+else
+  printf '%s' "$body"
+fi
 STUB
 chmod +x "$WORK/bin/curl"
+
+# 假 git：删除段要跑通，得先让 del_tag 成功，否则会 continue、删不到 Release。
+# 只关心 ls-remote（孤儿交叉校验）与 push --delete（del_tag），一律成功。
+cat > "$WORK/bin/git" <<'GITSTUB'
+#!/usr/bin/env bash
+exit 0
+GITSTUB
+chmod +x "$WORK/bin/git"
 
 # 假 APK：1000 字节，只用来跑 stat/size 那条路径。
 head -c 1000 /dev/urandom > "$WORK/KOiL-V1.1.9-vc150-release.apk"
@@ -69,12 +89,12 @@ bad()  { echo "  ❌ $1"; FAILED=1; }
 
 # run_mirror <event> <dry_run>  —— 输出写进 $WORK/last.log
 run_mirror() {
-  local event="$1" dry="$2"
+  local event="$1" dry="$2" keep="${3:-5}"
   PATH="$WORK/bin:$PATH" \
   STUB_WORK="$WORK" \
   GITEE_OWNER=ZSPOP GITEE_REPO=KOiL GITEE_TOKEN=FAKE \
   GITHUB_EVENT_NAME="$event" \
-  GITEE_MIRROR_KEEP=5 GITEE_MIRROR_DRY_RUN="$dry" \
+  GITEE_MIRROR_KEEP="$keep" GITEE_MIRROR_DRY_RUN="$dry" \
   bash "$MIRROR" "$WORK/KOiL-V1.1.9-vc150-release.apk" V1.1.9 > "$WORK/last.log" 2>&1
 }
 
@@ -113,6 +133,22 @@ run_mirror workflow_dispatch true; RC=$?
 W=$(grep -c '次失败' "$WORK/last.log" || true)
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
 [ "$W" -eq 0 ] && ok "0 条重试 warning（不刷噪声）" || bad "正常路径打了 $W 条 warning"
+
+echo "S6 删除段跑通（keep=1, dry_run=false）：200 必须被识别成成功"
+rm -f "$WORK/failcount" "$WORK/deletes.log"
+run_mirror workflow_dispatch false 1; RC=$?
+[ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
+grep -q '已删 tag V1.1.3（git push --delete）' "$WORK/last.log" \
+  && ok "删 tag 成功" || bad "没删到 tag"
+grep -q '已删 Release id=1（HTTP 200）' "$WORK/last.log" \
+  && ok "删 Release 文案正确（200 命中 case 分支）" || bad "200 没被识别成成功"
+if grep -q '返回 HTTP 200 0.100' "$WORK/last.log"; then
+  bad "假 warning：-w 没按真 curl 输出"
+else
+  ok "无假 warning"
+fi
+D=$(cat "$WORK/deletes.log" 2>/dev/null | wc -l)
+[ "$D" -ge 1 ] && ok "确实发出了 DELETE（$D 次）" || bad "没发 DELETE"
 
 echo "S5 非幂等请求不带 --retry-all-errors"
 grep -q 'GET_CURL=("${CURL\[@\]}" --retry-all-errors)' "$MIRROR" \
