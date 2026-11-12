@@ -867,11 +867,16 @@ private sealed interface UpdateCheck {
     data object Idle : UpdateCheck
     data object Checking : UpdateCheck
     data object Latest : UpdateCheck
-    data class Newer(val version: String, val url: String) : UpdateCheck
+    data class Newer(val tag: String, val version: String, val url: String) : UpdateCheck
     data object Failed : UpdateCheck
 }
 
-private fun openExternalUrl(context: Context, url: String) {
+/**
+ * 打开外部链接；返回是否真的拉起了处理程序。
+ * 调用方据此决定要不要把「已读」落库——startActivity 失败时用户什么都没看到，
+ * 此时标记已读会让红点白白消失且不再有第二次提醒。
+ */
+private fun openExternalUrl(context: Context, url: String): Boolean {
     val ok = runCatching {
         context.startActivity(
             Intent(Intent.ACTION_VIEW, url.toUri())
@@ -885,6 +890,7 @@ private fun openExternalUrl(context: Context, url: String) {
             android.widget.Toast.LENGTH_SHORT,
         ).show()
     }
+    return ok
 }
 
 /** 检查入口统一收在 data.update.UpdateChecker（冷启动静默检查与手动检查共用一条通道） */
@@ -1934,18 +1940,19 @@ private fun AboutSection(
                 is UpdateCheck.Newer -> stringResource(R.string.koil_set_about_newer, u.version)
                 UpdateCheck.Failed -> stringResource(R.string.koil_set_about_check_failed)
             },
-            // 红点：有新版本，且用户还没知晓过（storedTag != seenTag）。
-            // 点开后写入 seenTag，同一版本不再亮；发新版时 tag 变化，比较自然重新成立。
-            // 不再额外判 update is Newer：refresh() 查到新版本时已把 tag 落库，storedHasNewer 会同步变 true。
-            badgeDot = storedHasNewer && storedTag != seenTag,
+            // 红点：有新版本，且用户还没知晓过。判定抽到 shouldBadgeUpdate 以便单测；
+            // 不再额外判 update is Newer：refresh() 查到新版本时已把 tag 落库，判定会自动成立。
+            badgeDot = com.llpop.koil.data.update.shouldBadgeUpdate(
+                storedTag, seenTag, com.llpop.koil.BuildConfig.VERSION_NAME,
+            ),
             onClick = {
                 val u = update
                 when {
                     u is UpdateCheck.Newer -> {
-                        if (u.url.isNotBlank()) {
-                            openExternalUrl(context, u.url)
-                            // 用户主动打开 Release 页 = 已知悉
-                            scope.launch { updateChecker.markSeen(storedTag) }
+                        // 用 Newer 自带的 tag，不读 storedTag：refresh() 刚返回时 DataStore 的 Flow
+                        // 可能还没 emit 到 Compose，此时读 storedTag 会把上一个版本记成已读
+                        if (u.url.isNotBlank() && openExternalUrl(context, u.url)) {
+                            scope.launch { updateChecker.markSeen(u.tag) }
                         }
                     }
                     u == UpdateCheck.Checking -> Unit
@@ -1955,11 +1962,13 @@ private fun AboutSection(
                     // 必须用原始 storedTag（V1.1.3），不能用 normalizeVersion 后的 storedVersion（1.1.3）：
                     // releasePageUrl 拼的是 releases/tag/$tag，GitHub 上没有去掉 V 的 tag，会 404。
                     u == UpdateCheck.Idle && storedHasNewer -> {
-                        openExternalUrl(
-                            context,
-                            com.llpop.koil.data.update.releasePageUrl(storedTag),
-                        )
-                        scope.launch { updateChecker.markSeen(storedTag) }
+                        if (openExternalUrl(
+                                context,
+                                com.llpop.koil.data.update.releasePageUrl(storedTag),
+                            )
+                        ) {
+                            scope.launch { updateChecker.markSeen(storedTag) }
+                        }
                     }
                     else -> {
                         update = UpdateCheck.Checking
@@ -1971,6 +1980,7 @@ private fun AboutSection(
                                     com.llpop.koil.data.update.normalizeVersion(tag),
                                     com.llpop.koil.BuildConfig.VERSION_NAME,
                                 ) > 0 -> UpdateCheck.Newer(
+                                    tag,
                                     com.llpop.koil.data.update.normalizeVersion(tag),
                                     com.llpop.koil.data.update.releasePageUrl(tag),
                                 )

@@ -3,7 +3,9 @@ package com.llpop.koil
 import com.llpop.koil.data.update.compareVersionNames
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.releasePageUrl
+import com.llpop.koil.data.update.shouldBadgeUpdate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -55,5 +57,26 @@ class UpdateVersionTest {
             "https://github.com/ZSPOP/KOiL/releases/tag/V2.0.0",
             releasePageUrl("V2.0.0"),
         )
+    }
+
+    @Test
+    fun `shouldBadgeUpdate 只在有新版本且未知晓时成立`() {
+        val current = "1.1.3"
+
+        // 从未查到过 : 不亮
+        assertFalse(shouldBadgeUpdate("", "", current))
+        // 查到的 tag 不比本机新 : 不亮（防止把同版本或更低版本标成更新）
+        assertFalse(shouldBadgeUpdate("V1.1.2", "", current))
+        assertFalse(shouldBadgeUpdate("V1.1.3", "", current))
+
+        // 有更新且未知晓 : 亮
+        assertTrue(shouldBadgeUpdate("V1.1.4", "", current))
+        assertTrue(shouldBadgeUpdate("V1.1.4", "V1.1.3", current))
+
+        // 有更新但已知晓 : 不亮（点过之后同一版本不再重复提醒）
+        assertFalse(shouldBadgeUpdate("V1.1.4", "V1.1.4", current))
+
+        // 发了更新的版本 : seenTag 还停在旧版本也要重新亮
+        assertTrue(shouldBadgeUpdate("V1.1.5", "V1.1.4", current))
     }
 }

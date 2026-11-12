@@ -126,3 +126,18 @@ fun compareVersionNames(a: String, b: String): Int {
     }
     return 0
 }
+
+/**
+ * 红点判定：存在严格更新的正式 release，且用户还没知晓过这个版本。
+ *
+ * 抽成纯函数而不是留在 Composable 里的表达式——这段逻辑决定「要不要提醒」，
+ * 判错的后果是用户永远看不到新版本或每次都被重复提示，必须能单测（见 UpdateVersionTest）。
+ *
+ * @param latestTag DataStore 里最近一次查到的 tag（空串=从未查到）
+ * @param seenTag 用户已知晓的 tag（空串=从未知晓）
+ * @param currentVersion 本机 versionName，用于挡住「本地已是最新」的情况
+ */
+fun shouldBadgeUpdate(latestTag: String, seenTag: String, currentVersion: String): Boolean =
+    latestTag.isNotEmpty() &&
+        compareVersionNames(normalizeVersion(latestTag), currentVersion) > 0 &&
+        latestTag != seenTag
