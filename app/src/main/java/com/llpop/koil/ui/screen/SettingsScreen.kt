@@ -1872,10 +1872,11 @@ private fun AboutSection(
     val lastCheckAt by updateChecker.lastCheckAt().collectAsStateWithLifecycle(initialValue = 0L)
     val checkedAgo = checkedAgoText(lastCheckAt)
     val storedVersion = remember(storedTag) { com.llpop.koil.data.update.normalizeVersion(storedTag) }
-    val storedHasNewer = storedVersion.isNotEmpty() &&
-        com.llpop.koil.data.update.compareVersionNames(
-            storedVersion, com.llpop.koil.BuildConfig.VERSION_NAME,
-        ) > 0
+    // 与红点判定共用同一个判据（isNewerRelease）：两处各算一遍的话，将来只改一处就会分叉
+    // 成「首页横幅亮、红点不亮」这类最难排查的不一致（③ 的横幅也要复用这一判据）
+    val storedHasNewer = com.llpop.koil.data.update.isNewerRelease(
+        storedTag, com.llpop.koil.BuildConfig.VERSION_NAME,
+    )
     var update by remember { mutableStateOf<UpdateCheck>(UpdateCheck.Idle) }
     var sheet by remember { mutableStateOf("") }
 
@@ -1952,7 +1953,7 @@ private fun AboutSection(
                         // 用 Newer 自带的 tag，不读 storedTag：refresh() 刚返回时 DataStore 的 Flow
                         // 可能还没 emit 到 Compose，此时读 storedTag 会把上一个版本记成已读
                         if (u.url.isNotBlank() && openExternalUrl(context, u.url)) {
-                            scope.launch { updateChecker.markSeen(u.tag) }
+                            updateChecker.markSeen(u.tag)
                         }
                     }
                     u == UpdateCheck.Checking -> Unit
@@ -1967,7 +1968,7 @@ private fun AboutSection(
                                 com.llpop.koil.data.update.releasePageUrl(storedTag),
                             )
                         ) {
-                            scope.launch { updateChecker.markSeen(storedTag) }
+                            updateChecker.markSeen(storedTag)
                         }
                     }
                     else -> {

@@ -1,6 +1,7 @@
 package com.llpop.koil
 
 import com.llpop.koil.data.update.compareVersionNames
+import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.data.update.shouldBadgeUpdate
@@ -57,6 +58,15 @@ class UpdateVersionTest {
             "https://github.com/ZSPOP/KOiL/releases/tag/V2.0.0",
             releasePageUrl("V2.0.0"),
         )
+    }
+
+    @Test
+    fun `isNewerRelease 只看版本不看是否已读`() {
+        // 这是红点、横幅、行内文字共用的唯一判据，不能掺入"已读"状态
+        assertFalse(isNewerRelease("", "1.1.3"))
+        assertFalse(isNewerRelease("V1.1.3", "1.1.3"))
+        assertFalse(isNewerRelease("V1.1.2", "1.1.3"))
+        assertTrue(isNewerRelease("V1.1.4", "1.1.3"))
     }
 
     @Test

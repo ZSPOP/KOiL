@@ -3,9 +3,11 @@ package com.llpop.koil.data.update
 import android.util.Log
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.settings.AppSettings
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -36,12 +38,35 @@ class UpdateChecker(private val settings: AppSettings) {
     fun seenTag(): Flow<String> = settings.updateSeenTag
 
     /**
+     * 应用级 scope：由 Application 在 onCreate 注入（与 CloudSyncManager 同一先例）。
+     * [markSeen] 用它落库，不依赖页面生命周期。
+     */
+    private var appScope: CoroutineScope? = null
+    fun init(scope: CoroutineScope) {
+        appScope = scope
+    }
+
+    /**
      * 记录「用户已知晓此版本」。
      * 调用时机必须是用户主动表达知悉的动作：打开 Release 页、关闭更新横幅、成功拉起安装器。
      * **下载进行中、下载失败、用户取消都不要调用**——那会让红点与横幅同时消失，用户再也不会被提醒。
+     *
+     * 写入跑在应用级 scope：用户点开链接后立刻连续返回退出设置页时，页面 scope 会被取消，
+     * `DataStore.edit` 有概率没落库——红点不灭，再点还是同一个症状。
+     * ④ 的「成功拉起安装器后再标记」正好落在用户切走的时刻，风险更高。
      */
-    suspend fun markSeen(tag: String) {
-        if (tag.isNotBlank()) settings.setUpdateSeenTag(tag)
+    fun markSeen(tag: String) {
+        if (tag.isBlank()) return
+        val scope = appScope
+        if (scope == null) {
+            // 未注入就静默丢弃会让红点永远不灭，这里明确告警（Application.onCreate 已注入）
+            Log.w("KOiL", "markSeen before init, tag=$tag dropped")
+            return
+        }
+        scope.launch {
+            runCatching { settings.setUpdateSeenTag(tag) }
+                .onFailure { Log.w("KOiL", "persist seen tag failed: ${it.message}") }
+        }
     }
 
     /**
@@ -128,6 +153,15 @@ fun compareVersionNames(a: String, b: String): Int {
 }
 
 /**
+ * 是否比本机版本严格更新（不看用户是否已读）。
+ * 红点、首页横幅、设置页文字都必须走这一处判据——否则多处各算一遍，
+ * 将来只改一处就会分叉成「横幅亮、红点不亮」这类最难排查的不一致。
+ */
+fun isNewerRelease(latestTag: String, currentVersion: String): Boolean =
+    latestTag.isNotEmpty() &&
+        compareVersionNames(normalizeVersion(latestTag), currentVersion) > 0
+
+/**
  * 红点判定：存在严格更新的正式 release，且用户还没知晓过这个版本。
  *
  * 抽成纯函数而不是留在 Composable 里的表达式——这段逻辑决定「要不要提醒」，
@@ -138,6 +172,4 @@ fun compareVersionNames(a: String, b: String): Int {
  * @param currentVersion 本机 versionName，用于挡住「本地已是最新」的情况
  */
 fun shouldBadgeUpdate(latestTag: String, seenTag: String, currentVersion: String): Boolean =
-    latestTag.isNotEmpty() &&
-        compareVersionNames(normalizeVersion(latestTag), currentVersion) > 0 &&
-        latestTag != seenTag
+    isNewerRelease(latestTag, currentVersion) && latestTag != seenTag
