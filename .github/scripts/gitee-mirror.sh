@@ -213,7 +213,13 @@ fi
 # 真实删除和演练的观感几乎一样。
 if [ "$GITEE_MIRROR_DRY_RUN" != "true" ]; then
   DEL_COUNT=$(printf '%s\n' "$TO_DEL" | grep -c . || true)
-  echo "::warning::dry-run=false，本次将真实删除 ${DEL_COUNT} 个 Gitee Release（保留版本号最高的 ${GITEE_MIRROR_KEEP} 个）"
+  # keep=0 时「保留 0 个」是字面实话但会让人以为删干净了 —— 实际当前 TAG 被排除在
+  # 删除清单外，会留下一条。真删场景下这行是唯一确认信息，必须说准。
+  if [ "$GITEE_MIRROR_KEEP" = "0" ]; then
+    echo "::warning::dry-run=false，本次将真实删除 ${DEL_COUNT} 个 Gitee Release（仅保留当前 ${TAG}）"
+  else
+    echo "::warning::dry-run=false，本次将真实删除 ${DEL_COUNT} 个 Gitee Release（保留版本号最高的 ${GITEE_MIRROR_KEEP} 个）"
+  fi
 fi
 while IFS=$'\t' read -r rid rtag; do
   [ -z "${rid:-}" ] && continue
