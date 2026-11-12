@@ -28,10 +28,13 @@
 set -uo pipefail
 
 # 唯一的失败出口。$1 是给人的原因，写清楚「哪一步、什么状态」。
+# $2 可选：覆盖默认的 ::error 文案。默认那句说的是「镜像未完成」，但清理阶段的失败
+# （比如孤儿 tag 删不掉）发生时上传与校验都已经过了，照抄会把排查方向带偏 ——
+# 补传链的失败面不止「没传上去」一种。
 fail() {
   echo "::warning::$1"
   if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
-    echo "::error::Gitee 补传失败（${TAG:-<空>}）：镜像未完成，Gitee 上可能留下没有 APK 的 Release"
+    echo "::error::${2:-Gitee 补传失败（${TAG:-<空>}）：镜像未完成，Gitee 上可能留下没有 APK 的 Release}"
     exit 1
   fi
   echo "::warning::Gitee 镜像中止（不影响发版流程）"
@@ -249,7 +252,11 @@ ORPHAN_FAIL=0
 
 if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
   REL_TAGS=$(printf '%s' "$ALL" | jq -r '.[].tag_name' 2>/dev/null || true)
-  for _t in ${GITEE_MIRROR_EXTRA_TAGS//,/ }; do
+  # 不能写 `for _t in ${X//,/ }`：未加引号会做单词分裂 + pathname expansion，
+  # tag 名里带 * 或 ? 时会在下面的 ^V[0-9] 守卫之前就被展开成文件名，守卫形同虚设。
+  IFS=',' read -ra _tags <<< "$GITEE_MIRROR_EXTRA_TAGS"
+  for _t in "${_tags[@]}"; do
+    _t="${_t// /}"
     [ -z "$_t" ] && continue
     if ! [[ "$_t" =~ ^V[0-9] ]]; then
       echo "::warning::跳过非法 tag 名 ${_t}（必须匹配 ^V[0-9]，避免误删 main 之类）"
@@ -285,7 +292,8 @@ if [ "$DEL_N" -le 0 ]; then
   # 孤儿删除失败时这条「无需清理」会把失败吞掉：ELIGIBLE <= KEEP 是常态（Gitee 2~3 条、
   # keep=5），日志只剩一行好看的 exit 0。必须在退出口之前先缴失败。
   if [ "$ORPHAN_FAIL" = "1" ]; then
-    fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删"
+    fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删" \
+      "Gitee 清理失败（${TAG}）：镜像已完成，但孤儿 tag 未清干净"
   fi
   echo "无需清理"
   exit 0
@@ -293,7 +301,8 @@ fi
 TO_DEL=$(printf '%s\n' "$SORTED" | head -n "$DEL_N" | awk -F'\t' -v cur="$TAG" '$2 != cur')
 if [ -z "$TO_DEL" ]; then
   if [ "$ORPHAN_FAIL" = "1" ]; then
-    fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG"
+    fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG" \
+      "Gitee 清理失败（${TAG}）：镜像已完成，但孤儿 tag 未清干净"
   fi
   echo "无需清理（待删项只有当前 TAG）"
   exit 0
@@ -358,6 +367,7 @@ done <<< "$TO_DEL"
 # 的主路径会无条件红。前面两个出口用同样写法是安全的，只因为后面紧跟 exit 0；
 # 那个前提没写在任何地方，这里索性统一成 if。
 if [ "$ORPHAN_FAIL" = "1" ]; then
-  fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成"
+  fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成" \
+      "Gitee 清理失败（${TAG}）：镜像已完成，但孤儿 tag 未清干净"
 fi
 exit 0

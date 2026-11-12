@@ -33,6 +33,11 @@ jobs:
   release-apk:
     name: Build & Publish Release
     runs-on: ubuntu-latest
+    # 与 gitee-mirror.yml 的 45 刻意不同：这里还要跑 Gradle 构建。最坏路径 ≈
+    # 构建 5 分 + 上传 1200s(20 分) + 校验 600s(10 分) + 清理删除若干 ≈ 45，
+    # 给 60 让 curl / 清理自己先放弃并在日志里留下原因，而不是被 job 超时杀掉
+    # 只剩一个 cancelled —— 那种红查不出是哪一步慢。正常路径实测 11.5 分钟。
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -268,15 +273,15 @@ jobs:
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
           # 保留最近 N 个版本，超出的进清理候选。
           GITEE_MIRROR_KEEP: "5"
-          # 第一版固定 dry-run：DELETE 的真实行为在本地验证不了（令牌只在 Secrets 里），
-          # 先跑一轮看「待删清单」打印得对不对，确认无误后再改成 "false" 开真删。
+          # 清理已启用：keep=5，超出部分按版本号（sort -V）从旧到新删除。
           #
-          # 切换判据（别凭感觉）：Gitee 攒到第 6 条镜像、清理段第一次打印出非空的待删
-          # 清单、且清单里的版本号确实是按 sort -V 该删的那几个 —— 这时改成 "false"。
-          # 在那之前条数永远不足 5，恒「无需清理」，「自动清理」这件事其实从未生效过。
-          # 第 6 条大约是 V1.1.11。
+          # 为什么现在可以开：Gitee 目前 3 条（V1.1.6 / V1.1.7 / V1.1.8），
+          # DEL_N = 3 - 5 < 0，每次都会走「无需清理」早退，一条都不会删。
+          # 在这个窗口改，风险为零；等攒到第 6 条再改，就会让「第一次真删」和
+          # 「改参数」同时发生，出问题分不清是参数还是逻辑。
+          # 真正的删除行为还由脚本内的 dry_run 分支保护（先 tag 后 Release、幂等）。
           #
           # 注意：这是自动发版链的默认值；gitee-mirror.yml 的 inputs.dry_run 是手动
           # dispatch 的输入，语义不同，改一处不影响另一处。
-          GITEE_MIRROR_DRY_RUN: "true"
+          GITEE_MIRROR_DRY_RUN: "false"
         run: bash .github/scripts/gitee-mirror.sh "KOiL-${GITHUB_REF_NAME}-vc${VERSION_CODE}-release.apk" "${GITHUB_REF_NAME}"
