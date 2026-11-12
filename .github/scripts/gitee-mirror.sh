@@ -244,6 +244,9 @@ echo "Gitee 现有 ${TOTAL} 个 Release，其中镜像版本 ${ELIGIBLE} 个，�
 #
 # 三道守卫都不是可选的。点错一个名字删掉当前正在补传的 TAG，会造出「有 Release
 # 无 tag」的反向残缺 —— 比孤儿更难查，因为 Release 列表看着还是对的。
+# 孤儿清扫的失败标记。见下方 else 分支：这里的删除没有自愈路径，失败必须让整条链红。
+ORPHAN_FAIL=0
+
 if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
   REL_TAGS=$(printf '%s' "$ALL" | jq -r '.[].tag_name' 2>/dev/null || true)
   for _t in ${GITEE_MIRROR_EXTRA_TAGS//,/ }; do
@@ -263,7 +266,14 @@ if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
     if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
       echo "[dry-run] 将删除孤儿 tag ${_t}（/releases 里已无此 Release）"
     else
-      del_tag "$_t"
+      # 必须接住返回值。孤儿 tag 不在 /releases 里，清理段的候选口径永远扫不到它 ——
+      # 这里失败就没有第二次机会（重跑同一个 dispatch 才会重试），而裸调 del_tag
+      # 会把 return 1 丢掉，接着 DEL_N 算出「无需清理」exit 0，变成「专门来删孤儿、
+      # 删失败了还绿」。与 #38 定的「补传链不能绿着留残缺」是同一条原则。
+      if ! del_tag "$_t"; then
+        echo "::error::孤儿 tag ${_t} 删除失败且无自愈路径（/releases 里本就没有它），需手工 git push --delete refs/tags/${_t}"
+        ORPHAN_FAIL=1
+      fi
     fi
   done
 fi
@@ -272,11 +282,15 @@ fi
 SORTED=$(printf '%s\n' "$CAND" | LC_ALL=C sort -V -t$'\t' -k2,2)
 DEL_N=$(( ELIGIBLE - GITEE_MIRROR_KEEP ))
 if [ "$DEL_N" -le 0 ]; then
+  # 孤儿删除失败时这条「无需清理」会把失败吞掉：ELIGIBLE <= KEEP 是常态（Gitee 2~3 条、
+  # keep=5），日志只剩一行好看的 exit 0。必须在退出口之前先缴失败。
+  [ "$ORPHAN_FAIL" = "1" ] && fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删"
   echo "无需清理"
   exit 0
 fi
 TO_DEL=$(printf '%s\n' "$SORTED" | head -n "$DEL_N" | awk -F'\t' -v cur="$TAG" '$2 != cur')
 if [ -z "$TO_DEL" ]; then
+  [ "$ORPHAN_FAIL" = "1" ] && fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG"
   echo "无需清理（待删项只有当前 TAG）"
   exit 0
 fi
@@ -324,7 +338,14 @@ while IFS=$'\t' read -r rid rtag; do
     # 实测 Gitee 删 tag 会级联删掉挂在上面的 Release（反方向不成立：删 Release 不删 tag）。
     # 上面 del_tag 成功时，这里必然 404。判成失败会让日志看着像删 Release 没成功，
     # 而实际目标早就达成了，只能靠人肉对照 id 才敢确认。
+    #
+    # 本分支成立的前提是：上方 del_tag 失败会 continue —— 能走到这里只可能是 tag 已删、
+    # Release 被级联带走。若改回「先 Release 后 tag」或去掉那个 continue（见 #39），
+    # 404 就会重新变成「真失败被静默吞掉」。
     404) echo "Release id=${rid} 已不存在（随 tag 一并删除），视为成功" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
   esac
 done <<< "$TO_DEL"
+
+# 有 Release 真删的路径也要缴一次：否则孤儿失败会被后面的删除日志淹掉。
+[ "$ORPHAN_FAIL" = "1" ] && fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成"
