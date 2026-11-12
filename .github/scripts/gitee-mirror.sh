@@ -38,6 +38,29 @@ fail() {
   exit 0
 }
 
+# 删 Gitee tag 只能走 git 协议：API 没有单 tag 接口 ——
+# GET /repos/{o}/{r}/tags/{name} 与 DELETE 同一路径都返回 HTML 404（实测），
+# 只有列表 GET /tags 和创建 POST /tags。原来用 DELETE API 的写法从未成功过，
+# 每次都 404 但只是 warning，日志看着像收尾正常，实际 tag 一个没删。
+#
+# token 走 http.extraHeader 而不是拼进 URL：拼 URL 时 git 出错会把带 token 的
+# remote 地址原样打进日志，而 secrets 一旦进日志就无法撤回。
+del_tag() {
+  local tag="$1" log=/tmp/gitee-deltag.log
+  # 单引号：凭据由 git 起 sh 时代展开，不在本脚本里提前拼进字符串，
+  # token 里含特殊字符（@ : / 等）也不会破坏命令。
+  # 第一个空的 credential.helper= 是重置：否则全局或 checkout 留下的
+  # gh auth git-credential 会先被调用、把 GitHub 凭据交给 Gitee，认证必然失败。
+  local helper='!f() { echo "username=$GITEE_OWNER"; echo "password=$GITEE_TOKEN"; }; f'
+  if GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c credential.helper="$helper" \
+       push "https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git" \
+       --delete "refs/tags/${tag}" >"$log" 2>&1; then
+    echo "已删 tag ${tag}（git push --delete）"
+  else
+    echo "::warning::删 tag ${tag} 失败：$(grep -vE '^remote:' "$log" | tail -3 | tr '\n' ' ' | head -c 300)"
+  fi
+}
+
 APKF_PATH="${1:-}"
 TAG="${2:-${GITHUB_REF_NAME:-}}"
 APKF="$(basename "${APKF_PATH:-}")"
@@ -224,7 +247,7 @@ fi
 while IFS=$'\t' read -r rid rtag; do
   [ -z "${rid:-}" ] && continue
   if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
-    echo "[dry-run] 将删除 Release id=${rid} / tag=${rtag}（Release 与 tag 各一次调用，不是同一次）"
+    echo "[dry-run] 将删除 Release id=${rid} / tag=${rtag}（Release 走 API、tag 走 git push --delete，两次独立调用）"
     continue
   fi
   # 不写 `|| echo 000`：与 UP_META 同一个坑 —— curl 失败时 -w 仍会输出 000，
@@ -235,10 +258,5 @@ while IFS=$'\t' read -r rid rtag; do
     200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
   esac
-  TC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || true)
-  TC=${TC:-000}
-  case "$TC" in
-    200|204) echo "已删 tag ${rtag}（HTTP ${TC}）" ;;
-    *) echo "::warning::删 tag ${rtag} 返回 HTTP ${TC}（继续，不阻断）" ;;
-  esac
+  del_tag "$rtag"
 done <<< "$TO_DEL"
