@@ -1,9 +1,12 @@
 package com.llpop.koil
 
 import com.llpop.koil.data.update.compareVersionNames
+import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.releasePageUrl
+import com.llpop.koil.data.update.shouldBadgeUpdate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,6 +46,20 @@ class UpdateVersionTest {
     }
 
     @Test
+    fun `compareVersionNames 两侧都接受 V 前缀`() {
+        // versionName 一旦改成带 V（与 GitHub tag 同形），不 normalize 的一侧首段会被静默丢弃，
+        // 结果从「1.1.4 更新」翻转成「不更新」，且没有任何报错
+        assertEquals(1, compareVersionNames("V1.1.4", "V1.1.3"))
+        // 任一侧带/不带 V 都按数字段比，方向不能翻转
+        assertEquals(1, compareVersionNames("1.1.4", "V1.1.3"))
+        assertEquals(-1, compareVersionNames("V1.1.2", "1.1.3"))
+        assertEquals(0, compareVersionNames("V1.1.3", "1.1.3"))
+        // 只规范化一侧的情形（isNewerRelease 的实际调用形态）
+        assertTrue(isNewerRelease("V1.1.4", "V1.1.3"))
+        assertFalse(isNewerRelease("V1.1.3", "V1.1.3"))
+    }
+
+    @Test
     fun `compareVersionNames 忽略非数字后缀`() {
         // "-beta" 这类后缀不参与比较（GitHub 上偶尔会出现预发布标签）
         assertEquals(0, compareVersionNames("2.0.0-beta", "2.0.0"))
@@ -55,5 +72,35 @@ class UpdateVersionTest {
             "https://github.com/ZSPOP/KOiL/releases/tag/V2.0.0",
             releasePageUrl("V2.0.0"),
         )
+    }
+
+    @Test
+    fun `isNewerRelease 只看版本不看是否已读`() {
+        // 这是红点、横幅、行内文字共用的唯一判据，不能掺入"已读"状态
+        assertFalse(isNewerRelease("", "1.1.3"))
+        assertFalse(isNewerRelease("V1.1.3", "1.1.3"))
+        assertFalse(isNewerRelease("V1.1.2", "1.1.3"))
+        assertTrue(isNewerRelease("V1.1.4", "1.1.3"))
+    }
+
+    @Test
+    fun `shouldBadgeUpdate 只在有新版本且未知晓时成立`() {
+        val current = "1.1.3"
+
+        // 从未查到过 : 不亮
+        assertFalse(shouldBadgeUpdate("", "", current))
+        // 查到的 tag 不比本机新 : 不亮（防止把同版本或更低版本标成更新）
+        assertFalse(shouldBadgeUpdate("V1.1.2", "", current))
+        assertFalse(shouldBadgeUpdate("V1.1.3", "", current))
+
+        // 有更新且未知晓 : 亮
+        assertTrue(shouldBadgeUpdate("V1.1.4", "", current))
+        assertTrue(shouldBadgeUpdate("V1.1.4", "V1.1.3", current))
+
+        // 有更新但已知晓 : 不亮（点过之后同一版本不再重复提醒）
+        assertFalse(shouldBadgeUpdate("V1.1.4", "V1.1.4", current))
+
+        // 发了更新的版本 : seenTag 还停在旧版本也要重新亮
+        assertTrue(shouldBadgeUpdate("V1.1.5", "V1.1.4", current))
     }
 }

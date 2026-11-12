@@ -3,9 +3,11 @@ package com.llpop.koil.data.update
 import android.util.Log
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.settings.AppSettings
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -28,6 +30,44 @@ class UpdateChecker(private val settings: AppSettings) {
 
     /** 最近一次**成功**检查的时间戳（0=从未查过），设置页据此显示「上次检查」 */
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
+
+    /**
+     * 用户已知晓的版本 tag（原始形式）。与 [latestTag] 配合判定红点：
+     * 两者不等 = 有新版本且用户还没被告知过。写入时机见 AppSettings.updateSeenTag。
+     */
+    fun seenTag(): Flow<String> = settings.updateSeenTag
+
+    /**
+     * 应用级 scope：由 Application 在 onCreate 注入（与 CloudSyncManager 同一先例）。
+     * [markSeen] 用它落库，不依赖页面生命周期。
+     */
+    private var appScope: CoroutineScope? = null
+    fun init(scope: CoroutineScope) {
+        appScope = scope
+    }
+
+    /**
+     * 记录「用户已知晓此版本」。
+     * 调用时机必须是用户主动表达知悉的动作：打开 Release 页、关闭更新横幅、成功拉起安装器。
+     * **下载进行中、下载失败、用户取消都不要调用**——那会让红点与横幅同时消失，用户再也不会被提醒。
+     *
+     * 写入跑在应用级 scope：用户点开链接后立刻连续返回退出设置页时，页面 scope 会被取消，
+     * `DataStore.edit` 有概率没落库——红点不灭，再点还是同一个症状。
+     * ④ 的「成功拉起安装器后再标记」正好落在用户切走的时刻，风险更高。
+     */
+    fun markSeen(tag: String) {
+        if (tag.isBlank()) return
+        val scope = appScope
+        if (scope == null) {
+            // 未注入就静默丢弃会让红点永远不灭，这里明确告警（Application.onCreate 已注入）
+            Log.w("KOiL", "markSeen before init, tag=$tag dropped")
+            return
+        }
+        scope.launch {
+            runCatching { settings.setUpdateSeenTag(tag) }
+                .onFailure { Log.w("KOiL", "persist seen tag failed: ${it.message}") }
+        }
+    }
 
     /**
      * 冷启动 / 回前台静默检查：距上次**成功**检查不足 [INTERVAL_MS] 时直接返回 null（不发请求、不写库）。
@@ -100,10 +140,15 @@ fun normalizeVersion(tag: String): String = tag.trim().trimStart('V', 'v')
 
 /**
  * 语义版本比较：只比数字段，忽略 V/v 前缀与非数字后缀（如 -beta）。返回 >0 表示 a 更新。
+ *
+ * 两侧都在内部做 normalize，不依赖调用方先规范化：调用方常常只规范化了一侧
+ * （isNewerRelease 传进来的 latestTag 已 normalize，currentVersion 是原始的 VERSION_NAME），
+ * 若这里不再兜一次，"V1.1.3" 的首段 "V1" 会被 toIntOrNull 静默丢弃 → 得到 [1,3] 而不是 [1,1,3]，
+ * 表现为「V1.1.4 不比 V1.1.3 新」：红点永不亮、refresh() 永不落库，且不报错不崩溃。
  */
 fun compareVersionNames(a: String, b: String): Int {
-    val pa = a.split(".", "-").mapNotNull { it.toIntOrNull() }
-    val pb = b.split(".", "-").mapNotNull { it.toIntOrNull() }
+    val pa = normalizeVersion(a).split(".", "-").mapNotNull { it.toIntOrNull() }
+    val pb = normalizeVersion(b).split(".", "-").mapNotNull { it.toIntOrNull() }
     for (i in 0 until maxOf(pa.size, pb.size)) {
         val x = pa.getOrElse(i) { 0 }
         val y = pb.getOrElse(i) { 0 }
@@ -111,3 +156,25 @@ fun compareVersionNames(a: String, b: String): Int {
     }
     return 0
 }
+
+/**
+ * 是否比本机版本严格更新（不看用户是否已读）。
+ * 红点、首页横幅、设置页文字都必须走这一处判据——否则多处各算一遍，
+ * 将来只改一处就会分叉成「横幅亮、红点不亮」这类最难排查的不一致。
+ */
+fun isNewerRelease(latestTag: String, currentVersion: String): Boolean =
+    latestTag.isNotEmpty() &&
+        compareVersionNames(normalizeVersion(latestTag), currentVersion) > 0
+
+/**
+ * 红点判定：存在严格更新的正式 release，且用户还没知晓过这个版本。
+ *
+ * 抽成纯函数而不是留在 Composable 里的表达式——这段逻辑决定「要不要提醒」，
+ * 判错的后果是用户永远看不到新版本或每次都被重复提示，必须能单测（见 UpdateVersionTest）。
+ *
+ * @param latestTag DataStore 里最近一次查到的 tag（空串=从未查到）
+ * @param seenTag 用户已知晓的 tag（空串=从未知晓）
+ * @param currentVersion 本机 versionName，用于挡住「本地已是最新」的情况
+ */
+fun shouldBadgeUpdate(latestTag: String, seenTag: String, currentVersion: String): Boolean =
+    isNewerRelease(latestTag, currentVersion) && latestTag != seenTag

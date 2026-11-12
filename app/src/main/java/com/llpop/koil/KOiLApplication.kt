@@ -110,6 +110,10 @@ class KOiLApplication : Application() {
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
 
+        // 更新检查的「已读」落库交给应用级 scope：页面销毁不该让 markSeen 写不完
+        // （点开链接后立刻退出设置页时，页面 scope 会被取消，DataStore 可能没落库，红点不灭）
+        GlobalContext.get().get<UpdateChecker>().init(appScope)
+
         // 冷启动静默检查应用更新（45min 节流，回前台也查）——查到比本机更新的 release 就把 tag 落到 DataStore，
         // 设置页「检查更新」行据此挂红点，用户不用主动点也能知道有新版本。
         // 失败（离线 / 限流 / 超时）静默吞掉，保留上一次的 tag，不打扰、不显示假状态。
