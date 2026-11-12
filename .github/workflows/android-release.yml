@@ -26,6 +26,10 @@ permissions:
   contents: write
 
 jobs:
+  # 刻意不设 timeout-minutes。镜像步骤内部已有硬上限（UP_CURL 的 --max-time 1200，
+  # 上传整体不会超过约 20 分钟），而 job 默认的 360 分钟对「构建 + 上传」足够宽裕；
+  # 设成 45 反而可能砍掉一次慢构建。手动补传链 gitee-mirror.yml 设了 45，是因为它
+  # 没有构建步骤、只有一次上传 —— 这个不对称是有意的，不是漏写。
   release-apk:
     name: Build & Publish Release
     runs-on: ubuntu-latest
@@ -266,5 +270,13 @@ jobs:
           GITEE_MIRROR_KEEP: "5"
           # 第一版固定 dry-run：DELETE 的真实行为在本地验证不了（令牌只在 Secrets 里），
           # 先跑一轮看「待删清单」打印得对不对，确认无误后再改成 "false" 开真删。
+          #
+          # 切换判据（别凭感觉）：Gitee 攒到第 6 条镜像、清理段第一次打印出非空的待删
+          # 清单、且清单里的版本号确实是按 sort -V 该删的那几个 —— 这时改成 "false"。
+          # 在那之前条数永远不足 5，恒「无需清理」，「自动清理」这件事其实从未生效过。
+          # 第 6 条大约是 V1.1.11。
+          #
+          # 注意：这是自动发版链的默认值；gitee-mirror.yml 的 inputs.dry_run 是手动
+          # dispatch 的输入，语义不同，改一处不影响另一处。
           GITEE_MIRROR_DRY_RUN: "true"
         run: bash .github/scripts/gitee-mirror.sh "KOiL-${GITHUB_REF_NAME}-vc${VERSION_CODE}-release.apk" "${GITHUB_REF_NAME}"
