@@ -118,7 +118,22 @@ AUTH=(-H "Authorization: token ${GITEE_TOKEN}")
 # 所有请求都必须带超时。缺这个会踩过：GitHub runner 在海外，上传到 Gitee 可能长时间
 # 无响应，而 curl 默认无限等 —— 实测有一次 Mirror step 挂住 9 分钟仍未返回，
 # 只能手动 cancel，否则会一直占着 job（默认超时 360 分钟）。
-CURL=(--connect-timeout 10 --max-time 180 --retry 2)
+# --retry-all-errors 不能省：--retry 只重试白名单（5xx / 429 / 部分超时），
+# 「连接被重置 / 空响应」（curl exit 52/56）不在里面 —— 实测对「收到即断」的服务
+# 连发，--retry 2 只建立 1 条连接，一次都没重试。V1.1.8 的清理跳过就是这么来的
+# （日志 `Gitee Release 列表读取失败，跳过清理：` 冒号后为空，那唯一的退出码被
+#  2>/dev/null 吞掉了）。
+# 需要 curl >= 7.71，GitHub runner 是 8.x；本机老 curl 会报 unknown option，属预期。
+CURL=(--connect-timeout 10 --max-time 180 --retry 3 --retry-delay 5 --retry-max-time 90)
+# retry-all-errors 只能给幂等请求。它会连 POST 一起重发 —— 建 Release 是非幂等的，
+# 重发撞 400「已存在」→ 响应里没有 .id → fail → 落一个没有 APK 的空 Release 且
+# 自动发版路径仍是绿的。那正是脚本头注释点名要避免的状态。
+GET_CURL=("${CURL[@]}" --retry-all-errors)
+# 列表单独一套：--retry-max-time 90 挡不住 --max-time 180。规则是「重试窗口超过
+# retry-max-time 就不再重试」，而单次尝试本身就可能吃掉 180 秒 —— 一进去就已超窗，
+# curl 一次都不重试，恰好最该重试的超时场景不重试；再加上应用层 3 轮，最坏
+# 3×180 = 540 秒只为读几十 KB。一个 JSON 列表 30 秒足够，压到约 100 秒。
+LIST_CURL=("${CURL[@]}" --max-time 30 --retry-all-errors)
 # 上传单独一套参数：不开 --retry（POST 重试会重复上传整个文件）。
 # 两条放弃线，缺一条都会变成「静默慢等」：
 #   ①好消息线：30 秒内平均低于 4KB/s 就断 —— 这条路走不通，别占着 job。
@@ -134,11 +149,12 @@ CHECK_CURL=(--connect-timeout 10 --max-time 600 --speed-limit 2048 --speed-time 
 
 # ── ①建 Release。幂等：同名 tag 已有 Release 就复用，不重建。
 #    重建的唯一手段是整条删除（限制①），会让重跑变成破坏性操作。
-REL=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases/tags/${TAG}" 2>/dev/null || true)
+REL=$(curl -sS "${GET_CURL[@]}" "${AUTH[@]}" "${API}/releases/tags/${TAG}" 2>/dev/null || true)
 REL_ID=$(printf '%s' "$REL" | jq -r 'if type=="object" then (.id // empty) else empty end' 2>/dev/null || true)
 if [ -n "$REL_ID" ]; then
   echo "复用已存在的 Gitee Release：${TAG}（id=${REL_ID}）"
 else
+  # 建 Release 是非幂等的：这里刻意用 CURL（不带 --retry-all-errors）。
   REL=$(curl -sS "${CURL[@]}" -X POST "${AUTH[@]}" \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg t "$TAG" '{tag_name:$t, name:$t, target_commitish:"master", prerelease:false,
@@ -153,7 +169,7 @@ fi
 
 # ── ②上传附件。multipart + 字段名 file；Gitee 没有 GitHub 那种预签名上传流程。
 #    已有同名附件就跳过，保证重复 dispatch 幂等。
-EXIST=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
+EXIST=$(curl -sS "${GET_CURL[@]}" "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
   | jq -r '(.assets // [])[].name' 2>/dev/null | grep -x -- "$APKF" || true)
 UP_URL=""
 if [ -n "$EXIST" ]; then
@@ -180,7 +196,7 @@ else
   # 守卫②：上传响应里没有 browser_download_url 不代表上传失败 —— 可能只是字段名/结构
   # 与预期不同。此时回读 Release 确认附件是否真的落地，别把成功误判成失败。
   if [ -z "$UP_URL" ]; then
-    if curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
+    if curl -sS "${GET_CURL[@]}" "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
          | jq -e --arg n "$APKF" '(.assets // []) | map(.name) | index($n) != null' >/dev/null 2>&1; then
       echo "上传响应未含 browser_download_url，但回读确认附件已存在：${APKF}"
     else
@@ -227,10 +243,38 @@ echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
 #    created_at 在补传场景下会失真 —— 补传的旧版本是刚创建的，会被当成「最近发布」
 #    保护起来，而版本号更新的反而先被删（实测顺序：V1.1.5 先于 V1.1.3 被删）。
 #    sort -V 做版本排序，能正确处理 V1.9 / V1.10 跨位数，不必退回纯字符串排序。
-ALL=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases?per_page=100" 2>/dev/null || true)
-if ! printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
-  echo "::warning::Gitee Release 列表读取失败，跳过清理：$(printf '%s' "$ALL" | head -c 200)"
-  exit 0
+# 读列表最多试 3 次。--retry-all-errors 管不到「HTTP 200 + body 为空或被截断」，
+# 而限流场景常见的正是这种形态，所以重试与判据都放在应用层：判据是能否 jq 出数组。
+#
+# 不能用 `|| true` 取 RC：那样拿到的是 true 的 0，退出码这个唯一能定性的信息就没了；
+# 也不能 2>/dev/null —— V1.1.8 那次日志只剩「跳过清理：」后面一片空白，就是因为
+# stderr 被吞，看不出是 reset(56) 还是超时(28)。
+ALL=""; RC=0; BYTES=0
+for _try in 1 2 3; do
+  ERR=$(mktemp)
+  ALL=$(curl -sS "${LIST_CURL[@]}" "${AUTH[@]}" "${API}/releases?per_page=100" 2>"$ERR"); RC=$?
+  BYTES=$(printf '%s' "$ALL" | wc -c)
+  # 必须先看字节数再交给 jq。实测 jq 1.6 对【空输入】时 `-e 'type=="array"'` 返回 0
+  # （无输出也算通过），1.7 才正确返回 4；空 body 在 1.6 上会静默穿过守卫。
+  #
+  # 但这不是 V1.1.8 那次的原因：runner 是 jq 1.7，那次 warning 能打出来恰恰证明
+  # $ALL 真是 0 字节、守卫工作正常（1.6 反而会一声不响地过，然后在 `jq 'length'`
+  # 拿到空串）。这层防御针对的是旧镜像和本地开发环境。
+  if [ "$BYTES" -gt 0 ] && printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
+    rm -f "$ERR"
+    break
+  fi
+  echo "::warning::读 Gitee Release 列表第 ${_try}/3 次失败（curl 退出码 ${RC}，返回 ${BYTES} 字节）：$(head -c 200 "$ERR" 2>/dev/null | tr '\n' ' ')"
+  rm -f "$ERR"
+  if [ "$_try" -lt 3 ]; then sleep 5; fi
+done
+if [ "$BYTES" -eq 0 ] || ! printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
+  # （字节数判据同上：jq 1.6 会让空输入穿过，所以不能只靠 jq）
+  # 走 fail 而不是硬编码 exit 0：fail 按调用方分流 —— 自动发版只 warning + exit 0
+  # （Release 已发布，不能连累发版链），补传链 exit 1 让 job 变红。原来的 exit 0
+  # 让补传读不到列表也绿着过去，正是 #38 定的「补传链不能绿着留残缺」在别处复发。
+  fail "Gitee Release 列表三次读取均失败，本次未执行清理（上传与校验已完成，镜像可用）" \
+       "Gitee 补传失败（${TAG}）：清理阶段未执行 —— 列表读取三次都失败。APK 与 Release 已保留，重跑一次即可按当时列表重算（清理是幂等的）"
 fi
 TOTAL=$(printf '%s' "$ALL" | jq 'length')
 # 单独打印「镜像版本数」：清理只对满足 a/b 两道口径的条目计数，
@@ -359,7 +403,9 @@ while IFS=$'\t' read -r rid rtag; do
   fi
   # 不写 `|| echo 000`：与 UP_META 同一个坑 —— curl 失败时 -w 仍会输出 000，
   # 再追加一行会让 RC 变两行，`case` 匹配不到、还会被当成另一个错误码。
-  RC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || true)
+  # DELETE 放 GET_CURL 是安全的：404 已映射成「随 tag 一并删除，视为成功」，
+  # 重复删的观感和结果一致；这样「非幂等不重试」就只有建 Release 一个例外，好记。
+  RC=$(curl -sS -o /dev/null -w '%{http_code}' "${GET_CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || true)
   RC=${RC:-000}
   case "$RC" in
     200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
