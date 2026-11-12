@@ -717,15 +717,19 @@ fun OverviewScreen(
                     )
                 }
                 }
-                // 满箱标记（跳枪）：补录历史记录同样可标，默认勾选；整行铺满弹窗宽，
-                // 横向 16dp / 纵向 13dp 都由行内 insideMargin 提供，与上一字段的间距也只由行内上距承担。
+                // 满箱标记（跳枪）：补录历史记录同样可标，默认勾选；整行铺满弹窗宽。
+                // 块模型：上方 12dp = ①「上一字段 → 块上缘」，留在高亮之外（Spacer）；
+                // 块内上距 8dp 在行内；bottomInset 维持默认 8dp → 高亮停在块下缘，
+                // 块下缘 → 下方内容块的 16dp 由下面 Column 的 top 16dp 在高亮之外补。
+                Spacer(Modifier.height(12.dp))
                 com.llpop.koil.ui.component.FullTankSwitchRow(
                     checked = dlg.backfillIsFullTank,
                     onCheckedChange = viewModel::setBackfillFullTank,
                 )
                 // 跳枪行下方间距按「块是否真的渲染」分配：是否绘制只由下面两个谓词决定，
                 // 卡片和提示条内部不再各判一次（否则改一处忘另一处就会「留了空档但没内容」）。
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)) {
+                // top 16dp = 块模型 ③「块下缘 → 下方内容块」，在高亮之外（弹窗高亮停在块下缘）。
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)) {
                     val hasSummary = hasPaymentSummary(
                         dlg.backfillPayableAmount.toDoubleOrNull(),
                         dlg.backfillActualAmount.toDoubleOrNull(),
@@ -2116,15 +2120,19 @@ private fun EditRecordDialog(
                 )
             }
             }
-            // 满箱标记（跳枪）：历史记录可逐条改，改后整链实时重算；整行铺满弹窗宽，
-            // 横向 16dp / 纵向 13dp 都由行内 insideMargin 提供，与上一字段的间距也只由行内上距承担。
+            // 满箱标记（跳枪）：历史记录可逐条改，改后整链实时重算；整行铺满弹窗宽。
+            // 块模型：上方 12dp = ①「上一字段 → 块上缘」，留在高亮之外（Spacer）；
+            // 块内上距 8dp 在行内；bottomInset 维持默认 8dp → 高亮停在块下缘，
+            // 块下缘 → 下方内容块的 16dp 由下面 Column 的 top 16dp 在高亮之外补。
+            Spacer(Modifier.height(12.dp))
             com.llpop.koil.ui.component.FullTankSwitchRow(
                 checked = uiState.editIsFullTank,
                 onCheckedChange = onFullTankChange,
             )
             // 跳枪行下方间距按「块是否真的渲染」分配：是否绘制只由下面两个谓词决定，
             // 卡片和提示条内部不再各判一次（否则改一处忘另一处就会「留了空档但没内容」）。
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp)) {
+            // top 16dp = 块模型 ③「块下缘 → 下方内容块」，在高亮之外（弹窗高亮停在块下缘）。
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 16.dp)) {
                 val hasSummary = hasPaymentSummary(
                     uiState.editPayableAmount.toDoubleOrNull(),
                     uiState.editActualAmount.toDoubleOrNull(),
