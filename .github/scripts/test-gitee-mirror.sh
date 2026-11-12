@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# gitee-mirror.sh 的离线演练。CI 里 PR Check 只跑 Gradle，这个脚本一行都不会被执行，
-# 而这条链的全部价值都在【失败路径】上 —— 恰恰是正常发版永远跑不到的部分。
-# V1.1.9 发出去也只能验证「正常路径 0 条 warning」，重试逻辑本身仍然是零覆盖。
+# gitee-mirror.sh 的离线演练。PR Check（android-build.yml 的 pr-check job）每个 PR
+# 都跑它，因为它覆盖的全是【失败路径】—— 恰恰是正常发版永远跑不到的部分：列表读失败、
+# tag 删不掉只在故障时出现，keep=5 要到第 6 个版本才真删。
 #
 # 用法：bash .github/scripts/test-gitee-mirror.sh
 # 退出码 0 = 全部通过；非 0 = 有用例失败（会打印失败场景名）。
 #
 # 原理：造假 curl + 假 git 放 PATH 最前面。假 curl 按 URL 形态返回固定响应（-w 的
 # 输出按格式串逐个替换，与真 curl 对齐）；假 git 只让 del_tag 成功，保证删除段真的
-# 跑到「先 tag 后 Release」，而不是 continue 掉。它不记录调用，「删 tag」看的是
-# gitee-mirror.sh 自己的日志。
+# 跑到「先 tag 后 Release」，而不是 continue 掉。它把参数写进 git.log，S6 靠它断言
+# 「git 真的收到了 --delete refs/tags/V1.1.3」，而不是只看脚本自己打的日志。
 
 set -uo pipefail
 
@@ -145,7 +145,9 @@ W=$(grep -c '次失败' "$WORK/last.log" || true)
 [ "$W" -eq 0 ] && ok "0 条重试 warning（不刷噪声）" || bad "正常路径打了 $W 条 warning"
 
 echo "S6 删除段跑通（keep=1, dry_run=false）：200 必须被识别成成功"
-rm -f "$WORK/failcount" "$WORK/deletes.log"
+# git.log 也要清：否则以后若有人在 S6 前加一个会触发 del_tag 的用例，
+# 「git 确实收到 --delete V1.1.3」会被那个用例的残留顶上。
+rm -f "$WORK/failcount" "$WORK/deletes.log" "$WORK/git.log"
 run_mirror workflow_dispatch false 1; RC=$?
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
 grep -q '已删 tag V1.1.3（git push --delete）' "$WORK/last.log" \
