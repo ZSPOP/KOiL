@@ -192,9 +192,9 @@ fun AddScreen(
             // 它只负责顺序，横向 16dp 由内层表单 Column 提供；跳枪行的横向 16dp 由它自己的
             // insideMargin 承担（FullTankSwitchRow 契约要求调用方零横向内距），因此它与内层平级。
             Column {
-                // 表单三行：行只在「上方」留 13dp 高亮外空白（内层 bottom 13）——上距若塞进行内
-                // insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行（v6 实机反馈）。
-                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 13.dp)) {
+                // 表单三行：底部 12dp = 块模型 ①「上方内容 → 块上缘」，留在高亮之外——
+                // 上距若塞进行内 insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行。
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
                     // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
                     FormRow {
                         com.llpop.koil.ui.component.KOiLDateField(
@@ -259,13 +259,14 @@ fun AddScreen(
                         )
                     }
                 }
-                // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽，
-                // 横向 16dp 由行内 insideMargin 提供，与上一字段的 13dp 间距由行内上距承担；
-                // 它是外层 Column 的最后一项，下方不再补空白，高亮直接铺到卡片底边
-                //（圆角由 KOiLBlurBackground 的 clip 收边），否则按压时底部会缺一块没覆盖的空白。
+                // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽。
+                // 块模型：上距 12dp 在高亮外（上方表单 Column 的 bottom），块内上距 8dp 在行内；
+                // bottomInset = 16dp → 高亮从块上缘铺到卡片底边，块下缘→卡底的 16dp 在高亮之内
+                //（顶角直角、底角随卡片圆角收边，开发者定稿确认）。
                 com.llpop.koil.ui.component.FullTankSwitchRow(
                     checked = uiState.isFullTank,
                     onCheckedChange = viewModel::setFullTank,
+                    bottomInset = 16.dp,
                 )
             }
         }
@@ -717,10 +718,11 @@ private fun OilPriceCard(
                                 color = textColor,
                             )
                             if (eiaSource) {
-                                // 样本天数改成恒显示：满窗口也写「已计入 10 个交易日」，
+                                // 样本天数恒显示：满窗口也写「已计入 10 个交易日」，
                                 // 只在 <10 时显示会让满窗口看起来像没标样本的最终值。
-                                // 这行在 360dp 屏上会折两行，是有意接受的信息密度——
-                                // 压缩成单行要牺牲「已计入」或「截至」，不如让它自然折行。
+                                // 脚注只保留两段事实：数据截至哪天、算进了几个交易日，末尾拼免责句。
+                                // 发布日期不再展示——它只是对滞后的解释性信息，「数据截至」本身已能
+                                // 回答「数新不新」，砍掉后 360dp 窄屏也更容易单行放下。
                                 val meta = buildList {
                                     uiState.forecastDataDate?.let {
                                         add(
@@ -729,16 +731,6 @@ private fun OilPriceCard(
                                                 it.takeLast(5),
                                             ),
                                         )
-                                        // 发布日紧跟在「截至」后面：它是对这个日期的解释（源端就是慢 3 天），
-                                        // 单拎出来「源端 11-09 发布」用户不知道在解释什么，所以嵌在这一层
-                                        uiState.forecastReleaseDate?.let { released ->
-                                            add(
-                                                stringResource(
-                                                    R.string.koil_add_forecast_released,
-                                                    released.takeLast(5),
-                                                ),
-                                            )
-                                        }
                                     }
                                     uiState.forecastSampleDays?.let {
                                         add(stringResource(R.string.koil_add_forecast_sample, it))

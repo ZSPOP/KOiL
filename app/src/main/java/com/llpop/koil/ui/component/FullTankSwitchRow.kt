@@ -21,6 +21,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
@@ -39,15 +40,17 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
  * 按压反馈对齐 Miuix `BasicComponent` / `SwitchPreference`：整行可点，开关本身不消费
  * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
  *
- * 布局契约：[insideMargin] 横向固定 16dp —— 调用方必须把它放在**零横向内距**容器里，外层
- * 再加 `padding(horizontal)` 会双重缩进、高亮跟着缩窄。纵向只给 8dp，行**上方**的留白由调用方
- * 在高亮之外补（录入卡 13dp；两个弹窗里行上方没有额外留白，直接紧接上一个字段）：按压指示覆盖
- * 的是行自身边界，纵向留白若塞进 `insideMargin`，高亮矩形就会一路铺到上一字段下方，视觉上
- * 「贴住」上一行。
- * 底部留白分两种：录入卡里本行是卡片最后一行，**底部不留高亮外空白**，高亮一直铺到卡片底边
- * （用户要求按压时底部不留没覆盖的空隙）；两个弹窗里行下方还有按钮区，空白由下方 `Column`
- * 的 top 8dp 提供，且只在「信息块 / 校验条真的渲染」时才存在（见 `OverviewScreen` 的
- * `hasPaymentSummary` / `hasPrecheckHint`），无数据时不留空档。
+ * 布局契约（块模型，以「预测模块底部圆角矩形」为基准，跳枪行块照抄）：
+ * ① 上 12dp = 上方内容 → 块上缘，由调用方在**高亮之外**补（录入卡是表单 Column 的
+ * bottom 12dp，弹窗是行上方的 Spacer 12dp）——这段留白不进高亮，按压时高亮顶边与上一字段
+ * 之间保持 12dp 卡片底色；② 块内 8dp = 高亮顶边 → 标题文字（insideMargin top）；③ 下 16dp
+ * 由 [bottomInset] 决定语义归属：录入卡传 16dp——本行是卡片最后一项，高亮从块上缘一直铺到
+ * 卡片底边，这 16dp 在高亮**之内**（顶角直角、底角随卡片圆角收边）；两个弹窗维持默认 8dp
+ * ——高亮停在块下缘，块下缘 → 按钮行/信息块的 16dp 由调用方在高亮**之外**补（见
+ * `OverviewScreen` 下方 Column 的 top 16dp）。
+ * [insideMargin] 横向固定 16dp —— 调用方必须把它放在**零横向内距**容器里，外层再加
+ * `padding(horizontal)` 会双重缩进、高亮跟着缩窄。高亮只是覆盖在布局上的颜色，不参与布局：
+ * 所有间距都按上面 ①②③ 定死，不再出现「往高亮里塞间距」的补丁。
  *
  * 无障碍：开关状态用行级 `semantics { toggleableState }` 声明；内层 `Switch` 不再单独清理
  * 语义 —— 它与行 `clickable` 的 `mergeDescendants = true` 合并成同一个节点，TalkBack 读一行
@@ -58,6 +61,7 @@ fun FullTankSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    bottomInset: Dp = 8.dp,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     CompositionLocalProvider(LocalIndication provides MiuixIndication(Color.Transparent)) {
@@ -74,9 +78,10 @@ fun FullTankSwitchRow(
                     interactionSource = interactionSource,
                     indication = MiuixIndication(MiuixTheme.colorScheme.onBackground),
                 ),
-            // 纵向只留 8dp：内容约 37dp + 16dp 仍低于 BasicComponent 的 56dp 最小行高，
-            // 上下留白由调用方在高亮之外补 13dp（见 KDoc）。
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            // 块内上距固定 8dp（基准块口径）；块内下距由 [bottomInset] 决定：
+            // 录入卡 16dp（高亮铺到卡底，间距在高亮内）、弹窗 8dp（高亮停在块下缘，见 KDoc）。
+            // BasicComponent 的 56dp 最小行高只是下限，录入卡 8+37+16≈65dp 自然超过它。
+            insideMargin = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomInset),
             onClick = { onCheckedChange(!checked) },
             role = Role.Switch,
             interactionSource = interactionSource,
