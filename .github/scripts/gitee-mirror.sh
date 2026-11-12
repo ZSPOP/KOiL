@@ -49,15 +49,22 @@ fi
 
 # 令牌只走 header，绝不拼进 URL —— URL 会原样出现在 Actions 日志里。
 AUTH=(-H "Authorization: token ${GITEE_TOKEN}")
+# 所有请求都必须带超时。缺这个会踩过：GitHub runner 在海外，上传到 Gitee 可能长时间
+# 无响应，而 curl 默认无限等 —— 实测有一次 Mirror step 挂住 9 分钟仍未返回，
+# 只能手动 cancel，否则会一直占着 job（默认超时 360 分钟）。
+CURL=(--connect-timeout 10 --max-time 180 --retry 2)
+# 上传单独一套参数：不开 --retry（POST 重试会重复上传整个文件），改用限速放弃 ——
+# 30 秒内平均低于 4KB/s 就认为这条路走不通，直接断，不再苦等。
+UP_CURL=(--connect-timeout 10 --max-time 420 --speed-limit 4096 --speed-time 30)
 
 # ── ①建 Release。幂等：同名 tag 已有 Release 就复用，不重建。
 #    重建的唯一手段是整条删除（限制①），会让重跑变成破坏性操作。
-REL=$(curl -sS --retry 2 "${AUTH[@]}" "${API}/releases/tags/${TAG}" 2>/dev/null || true)
+REL=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases/tags/${TAG}" 2>/dev/null || true)
 REL_ID=$(printf '%s' "$REL" | jq -r 'if type=="object" then (.id // empty) else empty end' 2>/dev/null || true)
 if [ -n "$REL_ID" ]; then
   echo "复用已存在的 Gitee Release：${TAG}（id=${REL_ID}）"
 else
-  REL=$(curl -sS --retry 2 -X POST "${AUTH[@]}" \
+  REL=$(curl -sS "${CURL[@]}" -X POST "${AUTH[@]}" \
     -H "Content-Type: application/json" \
     -d "$(jq -n --arg t "$TAG" '{tag_name:$t, name:$t, target_commitish:"master", prerelease:false,
           body:("Gitee 镜像，正式签名包，源码与完整发布说明见 GitHub Release " + $t)}')" \
@@ -73,19 +80,25 @@ fi
 
 # ── ②上传附件。multipart + 字段名 file；Gitee 没有 GitHub 那种预签名上传流程。
 #    已有同名附件就跳过，保证重复 dispatch 幂等。
-EXIST=$(curl -sS --retry 2 "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
+EXIST=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
   | jq -r '(.assets // [])[].name' 2>/dev/null | grep -x -- "$APKF" || true)
 UP_URL=""
 if [ -n "$EXIST" ]; then
   echo "附件已存在，跳过上传（幂等重跑）"
 else
-  UP=$(curl -sS --retry 2 -X POST "${AUTH[@]}" \
-    -F "file=@${APKF_PATH}" "${API}/releases/${REL_ID}/attach_files" 2>/dev/null || true)
+  # 上传是整条链路唯一的长耗时操作，必须打出耗时与状态码：否则日志里只有「已建 Release」
+  # 和下一行输出，看不出它是慢、是超时、还是被限速断开。
+  echo "开始上传 ${APKF}（$(stat -c%s "${APKF_PATH}") 字节）"
+  UP_META=$(curl -sS "${UP_CURL[@]}" -X POST "${AUTH[@]}" \
+    -F "file=@${APKF_PATH}" -o /tmp/gitee-up.json -w '%{http_code} %{time_total}' \
+    "${API}/releases/${REL_ID}/attach_files" 2>/dev/null || echo "000 0")
+  UP=$(cat /tmp/gitee-up.json 2>/dev/null || true)
   UP_URL=$(printf '%s' "$UP" | jq -r '.browser_download_url // empty' 2>/dev/null || true)
+  echo "上传返回 HTTP ${UP_META%% *}，耗时 ${UP_META##* }s"
   # 守卫②：上传响应里没有 browser_download_url 不代表上传失败 —— 可能只是字段名/结构
   # 与预期不同。此时回读 Release 确认附件是否真的落地，别把成功误判成失败。
   if [ -z "$UP_URL" ]; then
-    if curl -sS --retry 2 "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
+    if curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
          | jq -e --arg n "$APKF" '(.assets // []) | map(.name) | index($n) != null' >/dev/null 2>&1; then
       echo "上传响应未含 browser_download_url，但回读确认附件已存在：${APKF}"
     else
@@ -103,13 +116,13 @@ fi
 #    "附件 URL = /releases/download/{tag}/{file}" 这个规律没有在本地验证过。
 CHECK_URL="${UP_URL:-$DOWN_URL}"
 LOCAL_SIZE=$(stat -c%s "$APKF_PATH")
-PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' --retry 2 "$CHECK_URL" 2>/dev/null || echo "000 0")
+PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CURL[@]}" "$CHECK_URL" 2>/dev/null || echo "000 0")
 CODE=${PROBE%% *}
 SIZE=${PROBE##* }
 if [ "$CODE" != "200" ] || [ "$SIZE" != "$LOCAL_SIZE" ]; then
   if [ "$CHECK_URL" != "$DOWN_URL" ]; then
     echo "::warning::用上传响应地址校验失败（HTTP ${CODE} / ${SIZE} 字节），回退自拼 URL 再试"
-    PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' --retry 2 "$DOWN_URL" 2>/dev/null || echo "000 0")
+    PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CURL[@]}" "$DOWN_URL" 2>/dev/null || echo "000 0")
     CODE=${PROBE%% *}
     SIZE=${PROBE##* }
   fi
@@ -132,7 +145,7 @@ echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
 #
 #    排序用 created_at 而不是 tag 名：要的是「最近发布」，与语义版本无关
 #    （tag 名排序在 V1.9 / V1.10 这类跨版本号上会错位）。
-ALL=$(curl -sS --retry 2 "${AUTH[@]}" "${API}/releases?per_page=100" 2>/dev/null || true)
+ALL=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases?per_page=100" 2>/dev/null || true)
 if ! printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
   echo "::warning::Gitee Release 列表读取失败，跳过清理：$(printf '%s' "$ALL" | head -c 200)"
   exit 0
@@ -163,12 +176,12 @@ while IFS=$'\t' read -r rid rtag; do
     echo "[dry-run] 将删除 Release id=${rid} / tag=${rtag}（Release 与 tag 各一次调用，不是同一次）"
     continue
   fi
-  RC=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || echo 000)
+  RC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || echo 000)
   case "$RC" in
     200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
   esac
-  TC=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || echo 000)
+  TC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || echo 000)
   case "$TC" in
     200|204) echo "已删 tag ${rtag}（HTTP ${TC}）" ;;
     *) echo "::warning::删 tag ${rtag} 返回 HTTP ${TC}（继续，不阻断）" ;;
