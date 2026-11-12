@@ -336,7 +336,7 @@
     <string name="koil_set_about">关于</string>
     <string name="koil_set_about_version">V%1$s（%2$d）</string>
     <string name="koil_set_about_check_update">检查更新</string>
-    <string name="koil_set_about_check_update_sub">从 GitHub Releases 获取最新版本</string>
+    <string name="koil_set_about_check_update_sub">从 Gitee Releases 获取最新版本</string>
     <string name="koil_set_about_checked_ago">上次检查 · %1$s</string>
     <string name="koil_set_check_just_now">刚刚</string>
     <string name="koil_set_check_min_ago">%1$d 分钟前</string>
@@ -349,6 +349,10 @@
     <string name="koil_update_fail_signature">安装包签名与本机不一致，已拒绝安装，请重新下载</string>
     <string name="koil_update_fail_permission">需要在系统设置里允许「安装未知应用」，已为你打开设置页</string>
     <string name="koil_update_fail_launch">无法打开系统安装界面，请稍后重试</string>
+    <string name="koil_update_progress">%1$s · %2$d%%</string>
+    <string name="koil_update_progress_unknown">%1$s · …</string>
+    <string name="koil_update_state_failed">失败</string>
+    <string name="koil_update_action_retry">重试</string>
     <string name="koil_set_about_check_failed">检查失败，点击重试</string>
     <string name="koil_set_about_terms">使用条款</string>
     <string name="koil_set_about_privacy">隐私政策</string>

@@ -97,6 +97,28 @@ class UpdateReleaseParseTest {
     }
 
     @Test
+    fun `全是 prerelease 时返回 null —— 没有正式版就什么都不提示`() {
+        val json = "[" + listOf(
+            release("V1.2.0", 9001, pre = true),
+            release("V1.1.9", 9002, pre = true),
+        ).joinToString(",") + "]"
+        assertNull(selectLatestRelease(json))
+    }
+
+    @Test
+    fun `多个 apk 时优先 KOiL- 前缀的包，不靠服务端顺序`() {
+        // keep=5 时每版只有一个包，这条是纯运气；把 KOiL 包排在**第二位**证明确实按名字挑
+        val json = """[{"id":9,"tag_name":"V1.1.10","prerelease":false,"assets":[
+            {"browser_download_url":"https://gitee.com/x/other.apk","name":"other.apk"},
+            {"browser_download_url":"https://gitee.com/x/KOiL-V1.1.10-vc161-release.apk","name":"KOiL-V1.1.10-vc161-release.apk"}
+        ]}]"""
+        assertEquals(
+            "https://gitee.com/x/KOiL-V1.1.10-vc161-release.apk",
+            selectLatestRelease(json)?.apkUrl,
+        )
+    }
+
+    @Test
     fun `下载进度 total 未知时 percent 为 -1 且不超过 100`() {
         assertEquals(-1, UpdateDownloadState.Downloading(1024, -1).percent)
         assertEquals(-1, UpdateDownloadState.Downloading(1024, 0).percent)

@@ -1866,23 +1866,34 @@ private fun AboutSection(
     val scope = rememberCoroutineScope()
     // 冷启动静默检查的结果落在 DataStore，进页面即可判红点（不用先点一次）
     val updateChecker = remember { GlobalContext.get().get<com.llpop.koil.data.update.UpdateChecker>() }
-    val storedTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
+    // 与首页同源：tag + 直链一次取出，不分别订阅（两帧之间会错位）
+    val updateTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
+    val storedTag = updateTarget?.tag.orEmpty()
     // 用户已知晓的 tag：与 storedTag 不等才挂红点。点过一次同一版本就不再提醒，发新版时 tag 变化自动重新亮
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     // 显示「上次检查」——静默检查没有可见反馈，用户会以为它从没跑过
     val lastCheckAt by updateChecker.lastCheckAt().collectAsStateWithLifecycle(initialValue = 0L)
     // 应用内更新：直链与 tag 同源（UpdateChecker.refresh 一次响应里取），设置页只搬运
     val apkUpdater = remember { GlobalContext.get().get<com.llpop.koil.data.update.ApkUpdater>() }
-    val apkUrl by updateChecker.latestApkUrl().collectAsStateWithLifecycle(initialValue = "")
+    val apkUrl = updateTarget?.apkUrl.orEmpty()
     val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
-    // 一次性事件，不读 state：否则进设置页首次组合就弹上一次的失败
-    LaunchedEffect(Unit) {
-        apkUpdater.failures.collect {
-            android.widget.Toast.makeText(context, it.messageRes(), android.widget.Toast.LENGTH_LONG).show()
-        }
-    }
+    // 下载状态就地显示在「检查更新」那一行的 value 里，不再用 Toast：
+    // "进页面弹旧失败"与"两个页面各弹一次"都是把状态当事件造成的。
+
     val checkedAgo = checkedAgoText(lastCheckAt)
     val storedVersion = remember(storedTag) { com.llpop.koil.data.update.normalizeVersion(storedTag) }
+    // 下载中显示百分比、失败显示原因；只有这块有内容时才覆盖「可更新 Vx.x.x」文案
+    val downloadLabel = when (val st = downloadState) {
+        is com.llpop.koil.data.update.UpdateDownloadState.Downloading ->
+            if (st.percent >= 0) {
+                stringResource(com.llpop.koil.R.string.koil_update_progress, storedVersion, st.percent)
+            } else {
+                stringResource(com.llpop.koil.R.string.koil_update_progress_unknown, storedVersion)
+            }
+        is com.llpop.koil.data.update.UpdateDownloadState.Failed ->
+            stringResource(st.reason.messageRes())
+        else -> null
+    }
     // 与红点判定共用同一个判据（isNewerRelease）：两处各算一遍的话，将来只改一处就会分叉
     // 成「首页横幅亮、红点不亮」这类最难排查的不一致（③ 的横幅也要复用这一判据）
     val storedHasNewer = com.llpop.koil.data.update.isNewerRelease(
@@ -1943,7 +1954,7 @@ private fun AboutSection(
             title = stringResource(R.string.koil_set_about_check_update),
             subtitle = checkedAgo?.let { stringResource(R.string.koil_set_about_checked_ago, it) }
                 ?: stringResource(R.string.koil_set_about_check_update_sub),
-            value = when (val u = update) {
+            value = downloadLabel ?: when (val u = update) {
                 // Idle 时回落到"上次静默检查"的结论：冷启动查到新版本，这一行直接显示「发现新版本」
                 UpdateCheck.Idle ->
                     if (storedHasNewer) stringResource(R.string.koil_set_about_newer, storedVersion) else ""
@@ -1998,19 +2009,17 @@ private fun AboutSection(
                     else -> {
                         update = UpdateCheck.Checking
                         scope.launch {
-                            // refresh 返回 tag + 直链的同一个快照，UI 不再分别去两个来源取
-                            val target = updateChecker.refresh()
-                            update = when {
-                                target == null -> UpdateCheck.Failed
-                                com.llpop.koil.data.update.compareVersionNames(
-                                    com.llpop.koil.data.update.normalizeVersion(target.tag),
-                                    com.llpop.koil.BuildConfig.VERSION_NAME,
-                                ) > 0 -> UpdateCheck.Newer(
-                                    target.tag,
-                                    com.llpop.koil.data.update.normalizeVersion(target.tag),
-                                    target.apkUrl,
-                                )
-                                else -> UpdateCheck.Latest
+                            // refresh 已经把「是否比本机新」算完了（判据只在 UpdateChecker 一处），
+                            // 这里按三态分支即可，不再拿 compareVersionNames 算第二遍
+                            update = when (val outcome = updateChecker.refresh()) {
+                                is com.llpop.koil.data.update.RefreshOutcome.Newer ->
+                                    UpdateCheck.Newer(
+                                        outcome.target.tag,
+                                        com.llpop.koil.data.update.normalizeVersion(outcome.target.tag),
+                                        outcome.target.apkUrl,
+                                    )
+                                com.llpop.koil.data.update.RefreshOutcome.Latest -> UpdateCheck.Latest
+                                com.llpop.koil.data.update.RefreshOutcome.Failed -> UpdateCheck.Failed
                             }
                         }
                     }

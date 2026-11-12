@@ -125,21 +125,20 @@ fun AddScreen(
     // 判据复用红点那一个有单测的 shouldBadgeUpdate，不在首页再手写一套 —— 否则将来
     // 红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变。
     val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
-    val latestTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
+    // tag 与直链必须来自**同一快照**：分别订阅是两条 collect，中间有一帧
+    // 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读
+    val updateTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
+    val latestTag = updateTarget?.tag.orEmpty()
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
     // 应用内更新：直链与 tag 来自同一次检查（见 UpdateChecker.refresh），这里只做搬运。
     // 下载/安装的状态由下载器自己管，失败原因用 Toast 回一次，不弹对话框（用户可能已经在别的页面）。
     val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
-    val apkUrl by updateChecker.latestApkUrl().collectAsStateWithLifecycle(initialValue = "")
+    val apkUrl = updateTarget?.apkUrl.orEmpty()
+    // 下载/安装状态就地展示（横幅上显示百分比、失败标记），不弹 Toast：
+    // Toast 是"一次事件"，首页与设置页同时组合会各弹一次；用 SharedFlow 又会在无人订阅时丢事件。
+    // 失败本身是持续状态，贴近"有更新但没装成"这个事实，所以让横幅自己说话。
     val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
-    // 失败是一次性事件（ApkUpdater.failures）：不能监听 state，否则从别的页面切回来时
-    // 首次组合会读到上一次残留的 Failed，凭空弹一句"更新包下载失败"。
-    LaunchedEffect(Unit) {
-        apkUpdater.failures.collect {
-            Toast.makeText(context, it.messageRes(), Toast.LENGTH_LONG).show()
-        }
-    }
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
     // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
     val locateToast = uiState.locateMessage?.let {
@@ -211,15 +210,28 @@ fun AddScreen(
         // 最终是「摘要卡 → 12dp → 横幅 → 12dp → 上次加油条」，不是 24dp。
         if (bannerTag != null) {
             // 下载中把进度接在版本文案上（"1.1.10 · 42%"）：6.6MB 在国内要几十秒，
-            // 没有可见进度就会变成"点了没反应"。Downloading 是状态，适合直接显示。
-            val bannerVersion = when (val st = downloadState) {
+            // 没有可见进度就会变成"点了没反应"。失败也走同一处，并把动作换成「重试」。
+            val baseVersion = normalizeVersion(bannerTag)
+            val st = downloadState
+            val bannerVersion = when (st) {
                 is UpdateDownloadState.Downloading ->
-                    if (st.percent >= 0) "${normalizeVersion(bannerTag)} · ${st.percent}%"
-                    else "${normalizeVersion(bannerTag)} · …"
-                else -> normalizeVersion(bannerTag)
+                    if (st.percent >= 0) {
+                        stringResource(R.string.koil_update_progress, baseVersion, st.percent)
+                    } else {
+                        stringResource(R.string.koil_update_progress_unknown, baseVersion)
+                    }
+                else -> baseVersion
             }
+            val bannerFailed = st as? UpdateDownloadState.Failed
             UpdateBanner(
                 version = bannerVersion,
+                // 失败时用具体原因当主文案（签名不一致 ≠ 网络失败，不能一律让用户重试）
+                title = bannerFailed?.let { stringResource(it.reason.messageRes()) },
+                actionLabel = if (bannerFailed != null) {
+                    stringResource(R.string.koil_update_action_retry)
+                } else {
+                    stringResource(R.string.koil_ov_update_action)
+                },
                 onOpen = {
                     // 应用内下载：拉起安装器成功时由 ApkUpdater 内部 markSeen，
                     // 这里不能提前标记 —— 下载失败/取消时横幅必须还在。

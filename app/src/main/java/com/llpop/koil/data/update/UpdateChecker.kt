@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
@@ -21,6 +22,17 @@ import java.net.URL
  * 而且下的是个真 APK，三条校验全过，用户装完仍是旧版还把新版标成已读。
  */
 data class UpdateTarget(val tag: String, val apkUrl: String)
+
+/**
+ * 一次检查的三态结果。
+ * 不能只用「有/无 target」表达：那样「确认没新版」和「网络失败」会被压成同一个 null，
+ * 设置页就分不出该显示「已是最新」还是「检查失败」。
+ */
+sealed interface RefreshOutcome {
+    data class Newer(val target: UpdateTarget) : RefreshOutcome
+    data object Latest : RefreshOutcome
+    data object Failed : RefreshOutcome
+}
 
 @Serializable
 private data class GiteeAsset(
@@ -39,7 +51,7 @@ private data class GiteeRelease(
  * 应用更新检查。
  *
  * 冷启动 / 回前台静默检查（[checkIfDue]，45 分钟节流）与设置页手动「检查更新」（[refresh]）共用同一条通道，
- * 结果落到 DataStore：`updateLatestTag` / `updateApkUrl` 供 UI 判断是否挂红点与发起下载、
+ * 结果落到 DataStore：`updateTargetPair` 供 UI 判断是否挂红点与发起下载、
  * `updateLastCheckAt` 作为节流依据。
  *
  * 设计取舍：
@@ -49,20 +61,24 @@ private data class GiteeRelease(
  */
 class UpdateChecker(private val settings: AppSettings) {
 
-    /** 最近一次查到的 Release tag（原始形式，如 "V1.0.0"；空串=从未查到过） */
-    fun latestTag(): Flow<String> = settings.updateLatestTag
-
     /** 最近一次**成功**检查的时间戳（0=从未查过），设置页据此显示「上次检查」 */
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
 
     /**
-     * 用户已知晓的版本 tag（原始形式）。与 [latestTag] 配合判定红点：
+     * 用户已知晓的版本 tag（原始形式）。与 [updateTarget] 配合判定红点：
      * 两者不等 = 有新版本且用户还没被告知过。写入时机见 AppSettings.updateSeenTag。
      */
     fun seenTag(): Flow<String> = settings.updateSeenTag
 
-    /** 最新版 APK 直链（Gitee 资产 URL，空串=没拿到直链）。下载器只认这一处，UI 不自己拼。 */
-    fun latestApkUrl(): Flow<String> = settings.updateApkUrl
+    /**
+     * tag 与直链的**单一快照**。UI 一律读这个，不分别订阅 latestTag / latestApkUrl：
+     * 两条 collect 是两帧，中间可能取到「新 tag + 旧 url」→ 下上一版的包、校验全过、
+     * 装完仍是旧版，还把新版标成已读。DataStore 一次 map 出来，就不存在这个窗口。
+     */
+    fun updateTarget(): Flow<UpdateTarget?> =
+        settings.updateTargetPair.map { (tag, url) ->
+            if (tag.isBlank()) null else UpdateTarget(tag, url)
+        }
 
     /**
      * 应用级 scope：由 Application 在 onCreate 注入（与 CloudSyncManager 同一先例）。
@@ -75,13 +91,13 @@ class UpdateChecker(private val settings: AppSettings) {
 
     /**
      * 记录「用户已知晓此版本」。
+     * 调用时机必须是用户主动表达知悉的动作：**打开版本页、关闭更新横幅**。
+     * **下载进行中、下载失败、拉起安装器但未装成都不要调用**
+     * ——那会让红点与横幅同时消失，用户再也不会被提醒。
+     * （装成功后 `isNewerRelease(latest, 当前版本)` 自然为 false，横幅自己就消失了，
+     * 不需要任何人提前写 seenTag 去兜。）
      *
-     * 口径由用户明确指定：**成功拉起系统安装器**即视为已知晓（不是"装完"）——
-     * 用户明确拒绝过"红点直到装上才灭"（那会让取消安装的人被反复打扰）。
-     * 因此这里写的是"已进入安装流程"，对应动作必须真的把安装器拉起来了；
-     * 下载进行中、下载失败、用户取消下载都不写。
-     *
-     * 写入跑在应用级 scope：用户点开安装器后立刻切走，页面 scope 会被取消，
+     * 写入跑在应用级 scope：用户点开版本页后立刻连续返回退出设置页时，页面 scope 会被取消，
      * `DataStore.edit` 有概率没落库——红点不灭，再点还是同一个症状。
      */
     fun markSeen(tag: String) {
@@ -111,18 +127,20 @@ class UpdateChecker(private val settings: AppSettings) {
         val last = settings.updateLastCheckAt.first()
         val elapsed = System.currentTimeMillis() - last
         if (last > 0 && elapsed in 0 until INTERVAL_MS) return null
-        return refresh()
+        return (refresh() as? RefreshOutcome.Newer)?.target
     }
 
     /**
      * 真实请求一次 Gitee Releases。
-     * @return 最新版本与它的 APK 直链；网络失败 / 非 2xx / 解析失败一律 null。
+     *
+     * 返回值已经把「是否比本机新」算完了，UI 直接按三态分支，不再自己 `compareVersionNames` 第二遍
+     * （[isNewerRelease] 的文档要求判据只此一处，两处各算一遍迟早分叉）。
      */
-    suspend fun refresh(): UpdateTarget? = withContext(Dispatchers.IO) {
+    suspend fun refresh(): RefreshOutcome = withContext(Dispatchers.IO) {
         val target = runCatching { fetchLatestTarget() }
             .onFailure { Log.w("KOiL", "update check failed: ${it.message}") }
             .getOrNull()
-            ?: return@withContext null
+            ?: return@withContext RefreshOutcome.Failed
 
         // 只认严格比本机更新的 Release：不更新的 tag 一律不落库，
         // 设置页因此不存在任何指向更低版本的提示/跳转入口
@@ -135,8 +153,12 @@ class UpdateChecker(private val settings: AppSettings) {
             )
             settings.setUpdateLastCheckAt(System.currentTimeMillis())
         }.onFailure { Log.w("KOiL", "persist update target failed: ${it.message}") }
-        Log.i("KOiL", "update check ok: latest=${target.tag} apk=${target.apkUrl.ifEmpty { "-" }}")
-        target
+        // 带上 newer：否则「确认没新版」和「查到新版」打出一模一样的日志，排查时分不清
+        Log.i(
+            "KOiL",
+            "update check ok: latest=${target.tag} apk=${target.apkUrl.ifEmpty { "-" }} newer=$newer",
+        )
+        if (newer) RefreshOutcome.Newer(target) else RefreshOutcome.Latest
     }
 
     /**
@@ -197,9 +219,11 @@ internal fun selectLatestRelease(json: String): UpdateTarget? {
 
     // assets 里除 APK 还有源码包（V1.x.zip / .tar.gz），只认 .apk；找不到直链时留空，
     // 让 UI 回退浏览器，而不是让整次检查失败（否则用户永远看不到"有新版本"）
-    val apkUrl = best.assets.firstOrNull {
-        it.name.endsWith(".apk") || it.url.endsWith(".apk")
-    }?.url.orEmpty()
+    // 多个 .apk 时优先 KOiL- 开头的那个（本项目的产物命名），避免源码包/附带包被选走；
+    // 顺序由服务端决定，不能靠"第一个"
+    val apkAssets = best.assets.filter { it.name.endsWith(".apk") || it.url.endsWith(".apk") }
+    val apkUrl = (apkAssets.firstOrNull { it.name.startsWith("KOiL-") } ?: apkAssets.firstOrNull())
+        ?.url.orEmpty()
     return UpdateTarget(best.tagName, apkUrl)
 }
 

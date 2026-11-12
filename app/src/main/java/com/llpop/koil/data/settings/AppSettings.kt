@@ -501,10 +501,6 @@ class AppSettings(private val context: Context) {
 
     // ---- 应用更新检查 ----
 
-    /** 最近一次查到的 Release tag（原始形式如 "V1.0.0"；空串=从未查到过）——设置页据此判断是否挂红点 */
-    val updateLatestTag: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LATEST_TAG] ?: "" }
-
     /** 最近一次「成功」检查的时间戳（毫秒，0=从未成功）——静默检查的 45 分钟节流依据 + 设置页「上次检查」 */
     val updateLastCheckAt: Flow<Long> =
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_CHECK_AT] ?: 0L }
@@ -525,9 +521,15 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_SEEN_TAG] = tag }
     }
 
-    /** 最新版 APK 直链（空串=不知道）。与 LATEST_TAG 在同一次 edit 写入，见 [setUpdateTarget] */
-    val updateApkUrl: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_APK_URL] ?: "" }
+    /**
+     * tag 与直链的**同一快照**（一次 map 出来）。
+     * UI 分别订阅 [updateLatestTag] 与 [updateApkUrl] 是两条 collect，中间会有一帧
+     * 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读。
+     */
+    val updateTargetPair: Flow<Pair<String, String>> =
+        context.KOiLDataStore.data.distinctValue {
+            (it[KEY_UPDATE_LATEST_TAG] ?: "") to (it[KEY_UPDATE_APK_URL] ?: "")
+        }
 
     /**
      * 一次性写入 tag 与直链。

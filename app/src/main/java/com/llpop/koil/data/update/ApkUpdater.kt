@@ -12,11 +12,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
@@ -64,33 +61,18 @@ private sealed interface FetchResult {
  */
 class ApkUpdater(
     private val app: Application,
-    private val checker: UpdateChecker,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _state = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val state: StateFlow<UpdateDownloadState> = _state.asStateFlow()
 
-    /**
-     * 失败是**一次性事件**，不是状态：用户从首页切到设置页时，两个页面各自的
-     * `LaunchedEffect` 首次组合都会读到同一个状态 → 明明这次什么都没做，却弹出上次的失败。
-     * 状态留给需要展示当前进度的地方，提示走这条流。
-     */
-    private val _failures = MutableSharedFlow<UpdateFailure>(extraBufferCapacity = 1)
-    val failures: SharedFlow<UpdateFailure> = _failures.asSharedFlow()
-
     private var job: Job? = null
 
     /** 已下好的 tag（用于「已下好就再拉一次安装器」，避免重复下载几 MB） */
     private var readyTag: String? = null
 
-    /**
-     * 判据看**文件**，不看 state：首次安装的用户必然经历
-     * 「下载完 → 没授权 → 跳设置页 → 授予 → 回来再点」，
-     * 此时 state 已被改成 Failed(NO_PERMISSION)，若拿 state 判断就会再下一遍 6.6MB。
-     */
-    private fun isReady(tag: String): Boolean =
-        readyTag == tag && apkFile()?.exists() == true
+    private fun isReady(tag: String): Boolean = isReadyFor(tag, readyTag, apkFile())
 
     /**
      * 开始下载。[url] 是 UpdateChecker 落库的 Gitee 资产直链。
@@ -122,24 +104,28 @@ class ApkUpdater(
     }
 
     /**
-     * 统一失败出口：改状态 + 发一次性事件。
-     * NO_PERMISSION 不清 readyTag（包已下好，授权回来应直接安装）；
-     * 其它失败清掉，下次点击从头下载。
+     * 统一失败出口：只改状态，不发事件。
+     *
+     * 失败是「有更新但这次没装成」的持续状态，不是一次性通知：
+     * - 用 Toast/SharedFlow 发送 → 首页与设置页同时组合时各收一次（双弹）；
+     *   无人订阅时 `tryEmit` 直接丢弃 → 用户切走后失败完全无提示。
+     * 展示交给 UI 就地读 state：横幅显示「· 失败」并把动作换成「重试」，设置页显示原因。
+     *
+     * NO_PERMISSION 不清 readyTag（包已下好，授权回来应直接安装）；其它失败清掉，下次从头下载。
      */
     private fun fail(reason: UpdateFailure, detail: String? = null) {
-        if (reason != UpdateFailure.NO_PERMISSION) readyTag = null
+        readyTag = nextReadyTag(readyTag, reason)
         _state.value = UpdateDownloadState.Failed(reason, detail)
-        _failures.tryEmit(reason)
     }
 
     /** 已下好则直接拉起安装器；返回 false 表示还没下好或没拉起来 */
     fun installReady(tag: String): Boolean {
         val file = apkFile() ?: return false
         if (!file.exists()) return false
-        return install(file, tag)
+        return install(file)
     }
 
-    private fun install(file: File, tag: String): Boolean {
+    private fun install(file: File): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !app.packageManager.canRequestPackageInstalls()
         ) {
@@ -165,9 +151,10 @@ class ApkUpdater(
         }
         return runCatching {
             app.startActivity(intent)
-            // seenTag 的写入时机是「成功拉起安装器」，不是「下载完成」：
-            // 卡在系统确认页、用户取消安装后，提醒仍应存在。
-            checker.markSeen(tag)
+            // 这里**不写 seenTag**。startActivity 返回只代表安装器弹出来了，用户可能点取消；
+            // 提前标记会让横幅与红点一起消失，他留在旧版且再也不会被提示。
+            // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失——
+            // 不需要任何人提前写入来兜这个场景。
             true
         }.onFailure {
             Log.w("KOiL", "launch installer failed: ${it.message}")
@@ -212,6 +199,9 @@ class ApkUpdater(
 
                 val total = conn.contentLengthLong
                 var received = 0L
+                // 6.6MB / 16KB ≈ 400 次读，逐块发 StateFlow 会推 400 次重组，
+                // 而 UI 只用 percent 一个整数：按 1% 步进即可，首块必须发一次（percent 可能恒为 0）
+                var lastPercent = Int.MIN_VALUE
                 conn.inputStream.use { input ->
                     dest.outputStream().use { out ->
                         val buf = ByteArray(16 * 1024)
@@ -220,7 +210,11 @@ class ApkUpdater(
                             if (n < 0) break
                             out.write(buf, 0, n)
                             received += n
-                            _state.value = UpdateDownloadState.Downloading(received, total)
+                            val percent = UpdateDownloadState.Downloading(received, total).percent
+                            if (percent != lastPercent) {
+                                lastPercent = percent
+                                _state.value = UpdateDownloadState.Downloading(received, total)
+                            }
                         }
                     }
                 }
@@ -290,3 +284,20 @@ class ApkUpdater(
         const val READ_TIMEOUT_MS = 30_000
     }
 }
+
+/**
+ * 「这个 tag 的包是否已经下好」。
+ * 判据是**文件在不在**，不是 state：首次安装必然经历
+ * 「下载完 → 没授权 → 跳设置页 → 授予 → 回来再点」，那时 state 已被改成
+ * Failed(NO_PERMISSION)，若拿 state 判断就会再下一遍 6.6MB。
+ * 抽成顶层纯函数是为了能单测（这条逻辑没有别的地方守着）。
+ */
+internal fun isReadyFor(tag: String, readyTag: String?, file: File?): Boolean =
+    readyTag == tag && file?.exists() == true
+
+/**
+ * 失败后 readyTag 的去留：只有「缺授权」保留（包已下好，授权回来应直接进安装器），
+ * 其它失败一律清空，让下次点击从头下载。
+ */
+internal fun nextReadyTag(current: String?, reason: UpdateFailure): String? =
+    if (reason == UpdateFailure.NO_PERMISSION) current else null
