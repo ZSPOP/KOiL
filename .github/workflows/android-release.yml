@@ -252,17 +252,10 @@ jobs:
           files: KOiL-*.apk
           generate_release_notes: true
 
-      # 镜像到 Gitee Release：给国内提供一个直连下载通道（APK 6.6MB，GitHub 直连慢）。
-      # 全程 best-effort —— 镜像任何一步失败都只打 warning 并 exit 0，绝不阻断上面的
-      # GitHub Release：主发版通道不能因为镜像挂了而变红，否则一个令牌过期就能停掉发版。
-      # 因此脚本内不开 set -e，每一步单独判错并给出可定位的 warning。
-      #
-      # 已知限制（都影响下面的实现，改之前先看完）：
-      #   ① Gitee 的 attach_files 删除接口实测返回 405，无法只删单个附件 ——
-      #      清理只能整条 Release 删，而删 Release 又不会连带删 tag，是两次调用。
-      #   ② target_commitish 只能写 "master"：Gitee 默认分支，与 GitHub 的 SHA 不同源，
-      #      写 SHA 会 404。
-      #   ③ 下载走 302 跳转，校验必须 -L，否则只看得到 302 而不是 200。
+      # 镜像到 Gitee Release：给国内提供直连下载通道。实现与清理策略全部在
+      # .github/scripts/gitee-mirror.sh —— 与 gitee-mirror.yml 的手动补传共用同一份，
+      # 避免自动镜像与补传两条路径各自漂移。脚本自身保证任何失败只 warning 不阻断，
+      # 所以这里不需要 continue-on-error。
       - name: Mirror APK to Gitee Release
         shell: bash
         env:
@@ -271,110 +264,7 @@ jobs:
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
           # 保留最近 N 个版本，超出的进清理候选。
           GITEE_MIRROR_KEEP: "5"
-          # 第一版固定 dry-run：DELETE 的真实行为没有在本地验证过（令牌只在 Secrets 里），
-          # 先在真机上跑一轮看「待删清单」打印得对不对，确认无误后再改成 "false" 开真删。
+          # 第一版固定 dry-run：DELETE 的真实行为在本地验证不了（令牌只在 Secrets 里），
+          # 先跑一轮看「待删清单」打印得对不对，确认无误后再改成 "false" 开真删。
           GITEE_MIRROR_DRY_RUN: "true"
-        run: |
-          set -uo pipefail
-          API="https://gitee.com/api/v5/repos/${GITEE_OWNER}/${GITEE_REPO}"
-          TAG="$GITHUB_REF_NAME"
-          APKF="KOiL-${TAG}-vc${VERSION_CODE}-release.apk"
-          DOWN_URL="https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}/releases/download/${TAG}/${APKF}"
-
-          if [ -z "${GITEE_TOKEN:-}" ] || [ -z "${GITEE_OWNER:-}" ] || [ -z "${GITEE_REPO:-}" ]; then
-            echo "::warning::Gitee 镜像跳过：GITEE_TOKEN / GITEE_OWNER / GITEE_REPO 未全部配置"
-            exit 0
-          fi
-          if [ ! -f "$APKF" ]; then
-            echo "::warning::Gitee 镜像跳过：找不到产物 ${APKF}"
-            exit 0
-          fi
-          # 令牌只走 header，绝不拼进 URL —— URL 会原样出现在 Actions 日志里。
-          AUTH=(-H "Authorization: token ${GITEE_TOKEN}")
-
-          # ①建 Release。幂等：同名 tag 已有 Release 就复用，不重建。
-          #   重建会先删掉旧附件（整条删是唯一可用手段），反而让重跑变成破坏性操作。
-          REL=$(curl -sS --retry 2 "${AUTH[@]}" "${API}/releases/tags/${TAG}" 2>/dev/null || true)
-          REL_ID=$(printf '%s' "$REL" | jq -r 'if type=="object" then (.id // empty) else empty end' 2>/dev/null || true)
-          if [ -n "$REL_ID" ]; then
-            echo "复用已存在的 Gitee Release：${TAG}（id=${REL_ID}）"
-          else
-            REL=$(curl -sS --retry 2 -X POST "${AUTH[@]}" \
-              -H "Content-Type: application/json" \
-              -d "$(jq -n --arg t "$TAG" '{tag_name:$t, name:$t, target_commitish:"master", prerelease:false,
-                    body:("Gitee 镜像，正式签名包，源码与完整发布说明见 GitHub Release " + $t)}')" \
-              "${API}/releases" 2>/dev/null || true)
-            REL_ID=$(printf '%s' "$REL" | jq -r 'if type=="object" then (.id // empty) else empty end' 2>/dev/null || true)
-            if [ -z "$REL_ID" ]; then
-              echo "::warning::Gitee 建 Release 失败：$(printf '%s' "$REL" | head -c 300)"
-              echo "::warning::Gitee 镜像中止（不影响 GitHub Release 已发布）"
-              exit 0
-            fi
-            echo "已建 Gitee Release：${TAG}（id=${REL_ID}）"
-          fi
-
-          # ②上传附件。multipart + 字段名 file；Gitee 没有 GitHub 那种 uploads 预签名流程。
-          #   已有同名附件就跳过，保证 workflow_dispatch 重跑幂等。
-          EXIST=$(curl -sS --retry 2 "${AUTH[@]}" "${API}/releases/${REL_ID}" 2>/dev/null \
-            | jq -r '(.assets // [])[].name' 2>/dev/null | grep -x -- "$APKF" || true)
-          if [ -n "$EXIST" ]; then
-            echo "附件已存在，跳过上传（幂等重跑）"
-          else
-            UP=$(curl -sS --retry 2 -X POST "${AUTH[@]}" \
-              -F "file=@${APKF}" "${API}/releases/${REL_ID}/attach_files" 2>/dev/null || true)
-            UP_URL=$(printf '%s' "$UP" | jq -r '.browser_download_url // empty' 2>/dev/null || true)
-            if [ -z "$UP_URL" ]; then
-              echo "::warning::Gitee 上传附件失败：$(printf '%s' "$UP" | head -c 300)"
-              echo "::warning::Gitee 镜像中止（不影响 GitHub Release 已发布）"
-              exit 0
-            fi
-            echo "已上传附件：${UP_URL}"
-          fi
-
-          # ③匿名下载校验。只 Trust「上传返回成功」证明不了「别人能下到正确文件」：
-          #   之前踩过 web_fetch 抓 Gitee 返回 link dead，所以这里用真实 GET 下载完整字节做比对。
-          LOCAL_SIZE=$(stat -c%s "$APKF")
-          PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' --retry 2 "$DOWN_URL" 2>/dev/null || echo "000 0")
-          CODE=${PROBE%% *}
-          SIZE=${PROBE##* }
-          if [ "$CODE" != "200" ] || [ "$SIZE" != "$LOCAL_SIZE" ]; then
-            echo "::warning::Gitee 镜像校验失败：HTTP ${CODE}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${DOWN_URL}）"
-            exit 0
-          fi
-          echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${DOWN_URL}"
-
-          # ④清理。Gitee 免费仓 1GB（代码+附件合并计算），单文件上限 100MB；
-          #   每版约 6.6MB，约 150 版才占满，短期不紧迫 —— 但手动清理必然会被忘记，
-          #   所以放进自动化里，失败只 warning。排序用 created_at 而不是 tag 名：
-          #   tag 排序在跨版本号时不可靠（V1.10.x 会排到 V1.9.x 前面是 sort -V 才解决，
-          #   而这里要的是「最近发布」，与语义版本无关）。
-          ALL=$(curl -sS --retry 2 "${AUTH[@]}" "${API}/releases?per_page=100" 2>/dev/null || true)
-          if ! printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
-            echo "::warning::Gitee Release 列表读取失败，跳过清理：$(printf '%s' "$ALL" | head -c 200)"
-            exit 0
-          fi
-          TOTAL=$(printf '%s' "$ALL" | jq 'length')
-          echo "Gitee 现有 ${TOTAL} 个 Release，保留最近 ${GITEE_MIRROR_KEEP} 个"
-          TO_DEL=$(printf '%s' "$ALL" | jq -r --argjson keep "$GITEE_MIRROR_KEEP" \
-            'sort_by(.created_at) | reverse | .[$keep:] | .[] | "\(.id)\t\(.tag_name)"')
-          if [ -z "$TO_DEL" ]; then
-            echo "无需清理"
-            exit 0
-          fi
-          while IFS=$'\t' read -r rid rtag; do
-            [ -z "${rid:-}" ] && continue
-            if [ "${GITEE_MIRROR_DRY_RUN}" = "true" ]; then
-              echo "[dry-run] 将删除 Release id=${rid} / tag=${rtag}（Release 与 tag 各一次调用，不是同一次）"
-              continue
-            fi
-            RC=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || echo 000)
-            case "$RC" in
-              200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
-              *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断清理后续项）" ;;
-            esac
-            TC=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || echo 000)
-            case "$TC" in
-              200|204) echo "已删 tag ${rtag}（HTTP ${TC}）" ;;
-              *) echo "::warning::删 tag ${rtag} 返回 HTTP ${TC}（继续，不阻断）" ;;
-            esac
-          done <<< "$TO_DEL"
+        run: bash .github/scripts/gitee-mirror.sh "KOiL-${GITHUB_REF_NAME}-vc${VERSION_CODE}-release.apk" "${GITHUB_REF_NAME}"
