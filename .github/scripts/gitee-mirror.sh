@@ -56,7 +56,11 @@ del_tag() {
   # 第一个空的 credential.helper= 是重置：否则全局或 checkout 留下的
   # gh auth git-credential 会先被调用、把 GitHub 凭据交给 Gitee，认证必然失败。
   local helper='!f() { echo "username=$GITEE_OWNER"; echo "password=$GITEE_TOKEN"; }; f'
-  if GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c credential.helper="$helper" \
+  # timeout 120：全脚本唯一没有上界的网络操作。curl 三套参数各自有 --max-time，
+  # 只有 git push 是裸的 —— 卡在认证握手 / DNS / TCP 黑洞时会一直挂到 job 被超时杀掉，
+  # 日志只剩 cancelled，看不出是谁的锅。tag 只有几十字节，120s 足够。
+  # 超时返回 124，落到下面的失败分支（return 1），下游的幂等与 continue 逻辑不变。
+  if GIT_TERMINAL_PROMPT=0 timeout 120 git -c credential.helper= -c credential.helper="$helper" \
        push "https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git" \
        --delete "refs/tags/${tag}" >"$log" 2>&1; then
     echo "已删 tag ${tag}（git push --delete）"
@@ -256,7 +260,7 @@ if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
   # tag 名里带 * 或 ? 时会在下面的 ^V[0-9] 守卫之前就被展开成文件名，守卫形同虚设。
   IFS=',' read -ra _tags <<< "$GITEE_MIRROR_EXTRA_TAGS"
   for _t in "${_tags[@]}"; do
-    _t="${_t// /}"
+    _t="${_t//[[:space:]]/}"
     [ -z "$_t" ] && continue
     if ! [[ "$_t" =~ ^V[0-9] ]]; then
       echo "::warning::跳过非法 tag 名 ${_t}（必须匹配 ^V[0-9]，避免误删 main 之类）"
@@ -293,7 +297,7 @@ if [ "$DEL_N" -le 0 ]; then
   # keep=5），日志只剩一行好看的 exit 0。必须在退出口之前先缴失败。
   if [ "$ORPHAN_FAIL" = "1" ]; then
     fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删" \
-      "Gitee 清理失败（${TAG}）：镜像已完成，但孤儿 tag 未清干净"
+      "Gitee 清理失败（${TAG}）：镜像已完成（上传与校验均通过），但孤儿 tag 清理失败，需手工 git push --delete"
   fi
   echo "无需清理"
   exit 0
@@ -302,11 +306,19 @@ TO_DEL=$(printf '%s\n' "$SORTED" | head -n "$DEL_N" | awk -F'\t' -v cur="$TAG" '
 if [ -z "$TO_DEL" ]; then
   if [ "$ORPHAN_FAIL" = "1" ]; then
     fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG" \
-      "Gitee 清理失败（${TAG}）：镜像已完成，但孤儿 tag 未清干净"
+      "Gitee 清理失败（${TAG}）：镜像已完成（上传与校验均通过），但孤儿 tag 清理失败，需手工 git push --delete"
   fi
   echo "无需清理（待删项只有当前 TAG）"
   exit 0
 fi
+# dry-run 且真的有待删项 —— 这是唯一需要人拍板的时刻。workflow 注释里写「约第 6 条时
+# 改成 false」只能靠人记，而那天大家看到的只是一行「无需清理」。让它自己进 annotations：
+# 平时不吵，一旦出现就挂在 run 列表上，翻一眼就能看到。
+if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
+  DEL_PREVIEW=$(printf '%s\n' "$TO_DEL" | grep -c . || true)
+  echo "::warning::dry-run：本次已列出 ${DEL_PREVIEW} 条待删项（清单见上方 [dry-run] 行）。确认无误后把 GITEE_MIRROR_DRY_RUN 改成 \"false\"，自动清理才会真正生效"
+fi
+
 # 真实删除前的显式声明。dry_run 原本要改两个文件的 env 才生效，现在开了 dispatch
 # 输入后点一下下拉框就能真删，配 keep=0 可以一次清空所有镜像 Release。
 # 原来那层摩擦是安全阀，撤掉后至少要保证日志里躲不过这一行 —— 否则扫日志时
@@ -368,6 +380,6 @@ done <<< "$TO_DEL"
 # 那个前提没写在任何地方，这里索性统一成 if。
 if [ "$ORPHAN_FAIL" = "1" ]; then
   fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成" \
-      "Gitee 清理失败（${TAG}）：镜像已完成，但孤儿 tag 未清干净"
+      "Gitee 清理失败（${TAG}）：镜像已完成（上传与校验均通过），但孤儿 tag 清理失败，需手工 git push --delete"
 fi
 exit 0
