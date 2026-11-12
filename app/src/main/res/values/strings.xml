@@ -355,6 +355,9 @@
     <string name="koil_set_about_diag">诊断</string>
     <string name="koil_set_about_open_failed">没有可打开该链接的应用</string>
     <string name="koil_common_close">关闭</string>
+    <string name="koil_ov_update_new">发现新版本 %1$s</string>
+    <string name="koil_ov_update_action">更新</string>
+    <string name="koil_ov_update_dismiss">关闭更新提示</string>
     <string name="koil_set_about_terms_body">KOiL 用于记录个人加油数据、查询公开的成品油调价信息。\n\n数据准确性：油价以加油站公示与官方调价公告为准，应用内的参考价、预测与折合仅作参考，不构成消费或投资建议。\n\n使用风险：因录入错误、数据源延迟或设备故障造成的记录偏差，由使用者自行承担。\n\n本应用为开源项目，按「现状」提供，不承诺无中断或无错误运行。</string>
     <string name="koil_set_about_privacy_body">本地优先：加油记录、车辆信息与设置项全部保存在设备本地，不上传任何服务器。\n\n定位权限：仅在开启「自动定位省份」时使用，结果只用于填充默认省份，不记录轨迹、不上传。\n\n云同步（可选）：开启后数据只备份到你自己的 WebDAV 服务器（如坚果云），账号与应用密码加密后存于本机，开发者无法访问。\n\n崩溃日志：只保存在本机，需手动导出，不会自动上报。</string>
     <string name="koil_set_about_licenses_body">Kotlin、Coroutines、kotlinx.serialization — Apache-2.0\nJetpack Compose、Room、DataStore、WorkManager — Apache-2.0\nMiuix（top.yukonga.miuix.kmp）— Apache-2.0\nKtor、OkHttp — Apache-2.0\nKoin — Apache-2.0\n\n完整依赖清单见仓库 gradle/libs.versions.toml，各库许可证原文见其发布页。</string>
