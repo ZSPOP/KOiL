@@ -235,6 +235,14 @@ fun AddScreen(
             val bannerFailed = st as? UpdateDownloadState.Failed
             // 所有下载入口都走这里：蜂窝下的确认只做一次，且「挡住」时必须给强制下载出口
             fun startDownload() {
+                // 缺安装授权时，这一下是去授权 / 重试安装，不是下载 ——
+                // 先弹「蜂窝下要下 6.7MB 吗」等于问一个不会发生的事。
+                if ((downloadState as? UpdateDownloadState.Failed)?.reason ==
+                    com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION
+                ) {
+                    apkUpdater.download(bannerTag, apkUrl)
+                    return
+                }
                 val cellular = isCellularNetwork(context)
                 cellularGate = when {
                     needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask

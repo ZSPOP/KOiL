@@ -1914,6 +1914,13 @@ private fun AboutSection(
     var cellularGate by remember { mutableStateOf<CellularGate?>(null) }
     var cellularPending by remember { mutableStateOf<Pair<String, String>?>(null) }
     fun applyNetworkGate(tag: String, url: String) {
+        // 缺安装授权时不会下载，只拉起安装器 / 跳授权页 —— 别先弹蜂窝流量确认
+        if ((downloadState as? com.llpop.koil.data.update.UpdateDownloadState.Failed)?.reason ==
+            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION
+        ) {
+            apkUpdater.download(tag, url)
+            return
+        }
         val cellular = com.llpop.koil.data.update.isCellularNetwork(context)
         cellularGate = when {
             com.llpop.koil.data.update.needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
