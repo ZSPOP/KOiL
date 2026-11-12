@@ -316,7 +316,11 @@ fi
 # 平时不吵，一旦出现就挂在 run 列表上，翻一眼就能看到。
 if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
   DEL_PREVIEW=$(printf '%s\n' "$TO_DEL" | grep -c . || true)
-  echo "::warning::dry-run：本次已列出 ${DEL_PREVIEW} 条待删项（清单见上方 [dry-run] 行）。确认无误后把 GITEE_MIRROR_DRY_RUN 改成 \"false\"，自动清理才会真正生效"
+  # 文案要说「你这一次」该怎么做。自动链默认已是 dry_run=false，所以能走到这里的
+  # 基本只有手动 dispatch（gitee-mirror.yml 的 inputs.dry_run 默认 true）——
+  # 对着一个 workflow 里明明写着 false 的人说「把 GITEE_MIRROR_DRY_RUN 改成 false」，
+  # 他只会不知道去哪改。
+  echo "::warning::dry-run：本次已列出 ${DEL_PREVIEW} 条待删项（清单见上方 [dry-run] 行），未执行删除。确认清单无误后重新 dispatch 并把 dry_run 设为 false"
 fi
 
 # 真实删除前的显式声明。dry_run 原本要改两个文件的 env 才生效，现在开了 dispatch
