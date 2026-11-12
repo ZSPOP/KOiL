@@ -355,6 +355,7 @@
     <string name="koil_update_wifi_only_title">已設為僅 WiFi 下載</string>
     <string name="koil_update_wifi_only_msg">你之前選擇只用 WiFi 下載更新。現在仍要使用行動網路下載嗎？</string>
     <string name="koil_update_progress">%1$s · %2$d%%</string>
+    <string name="koil_update_progress_tap_cancel">%1$s · %2$d%% · 點按取消</string>
     <string name="koil_update_progress_unknown">%1$s · …</string>
     <string name="koil_update_state_failed">失敗</string>
     <string name="koil_update_action_cancel">取消</string>

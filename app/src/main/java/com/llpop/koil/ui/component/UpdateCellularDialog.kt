@@ -21,10 +21,17 @@ internal fun UpdateCellularDialog(
     blocked: Boolean,
     onDownload: () -> Unit,
     onWaitWifi: () -> Unit,
+    /**
+     * 点弹窗外部 / 返回键。
+     *
+     * 必须与 [onWaitWifi] 分开：Ask 形态下「等 WiFi」会**写入持久偏好**，
+     * 误触弹窗外部就变成「以后蜂窝下永远被挡」，而没有任何 UI 能把偏好改回「不问」。
+     * 误触只应关掉弹窗——「只问一次」的那一次还没被消费掉，下次点更新再问。
+     */
+    onDismiss: () -> Unit,
 ) {
     AlertDialog(
-        // 点外部/返回键等同于「等 WiFi」：不下载就是不下载，不做隐式继续
-        onDismissRequest = onWaitWifi,
+        onDismissRequest = onDismiss,
         title = {
             Text(
                 stringResource(

@@ -1886,7 +1886,13 @@ private fun AboutSection(
     val downloadLabel = when (val st = downloadState) {
         is com.llpop.koil.data.update.UpdateDownloadState.Downloading ->
             if (st.percent >= 0) {
-                stringResource(com.llpop.koil.R.string.koil_update_progress, storedVersion, st.percent)
+                // 设置页这一行的点击在下载中是「取消」，必须写出来：
+                // 否则用户看到百分比想点进去看详情，一点下载就没了
+                stringResource(
+                    com.llpop.koil.R.string.koil_update_progress_tap_cancel,
+                    storedVersion,
+                    st.percent,
+                )
             } else {
                 stringResource(com.llpop.koil.R.string.koil_update_progress_unknown, storedVersion)
             }
@@ -1934,6 +1940,11 @@ private fun AboutSection(
                 if (gate == CellularGate.Ask) {
                     scope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
                 }
+                cellularPending = null
+            },
+            // 误触外部只关弹窗，不写偏好、不消费「只问一次」
+            onDismiss = {
+                cellularGate = null
                 cellularPending = null
             },
         )

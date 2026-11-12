@@ -290,6 +290,8 @@ fun AddScreen(
                             updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
                         }
                     },
+                    // 误触外部只关弹窗：不消费「只问一次」，也不写入任何偏好
+                    onDismiss = { cellularGate = null },
                 )
             }
         }
