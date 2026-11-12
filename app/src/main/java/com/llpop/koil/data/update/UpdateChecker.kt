@@ -30,6 +30,21 @@ class UpdateChecker(private val settings: AppSettings) {
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
 
     /**
+     * 用户已知晓的版本 tag（原始形式）。与 [latestTag] 配合判定红点：
+     * 两者不等 = 有新版本且用户还没被告知过。写入时机见 AppSettings.updateSeenTag。
+     */
+    fun seenTag(): Flow<String> = settings.updateSeenTag
+
+    /**
+     * 记录「用户已知晓此版本」。
+     * 调用时机必须是用户主动表达知悉的动作：打开 Release 页、关闭更新横幅、成功拉起安装器。
+     * **下载进行中、下载失败、用户取消都不要调用**——那会让红点与横幅同时消失，用户再也不会被提醒。
+     */
+    suspend fun markSeen(tag: String) {
+        if (tag.isNotBlank()) settings.setUpdateSeenTag(tag)
+    }
+
+    /**
      * 冷启动 / 回前台静默检查：距上次**成功**检查不足 [INTERVAL_MS] 时直接返回 null（不发请求、不写库）。
      * 时间戳取自机的墙上时钟；用户改系统时间导致差值异常时按"该查了"处理（宁多查一次，不漏提示）。
      *

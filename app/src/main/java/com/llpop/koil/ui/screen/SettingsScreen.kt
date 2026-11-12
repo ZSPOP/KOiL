@@ -1860,6 +1860,8 @@ private fun AboutSection(
     // 冷启动静默检查的结果落在 DataStore，进页面即可判红点（不用先点一次）
     val updateChecker = remember { GlobalContext.get().get<com.llpop.koil.data.update.UpdateChecker>() }
     val storedTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
+    // 用户已知晓的 tag：与 storedTag 不等才挂红点。点过一次同一版本就不再提醒，发新版时 tag 变化自动重新亮
+    val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     // 显示「上次检查」——静默检查没有可见反馈，用户会以为它从没跑过
     val lastCheckAt by updateChecker.lastCheckAt().collectAsStateWithLifecycle(initialValue = 0L)
     val checkedAgo = checkedAgoText(lastCheckAt)
@@ -1932,12 +1934,33 @@ private fun AboutSection(
                 is UpdateCheck.Newer -> stringResource(R.string.koil_set_about_newer, u.version)
                 UpdateCheck.Failed -> stringResource(R.string.koil_set_about_check_failed)
             },
-            // 红点：手动查到新版本，或冷启动静默检查已发现新版本（点一次即进入 Release 页后消失）
-            badgeDot = update is UpdateCheck.Newer || (update is UpdateCheck.Idle && storedHasNewer),
+            // 红点：有新版本，且用户还没知晓过（storedTag != seenTag）。
+            // 点开后写入 seenTag，同一版本不再亮；发新版时 tag 变化，比较自然重新成立。
+            // 不再额外判 update is Newer：refresh() 查到新版本时已把 tag 落库，storedHasNewer 会同步变 true。
+            badgeDot = storedHasNewer && storedTag != seenTag,
             onClick = {
-                when (val u = update) {
-                    is UpdateCheck.Newer -> if (u.url.isNotBlank()) openExternalUrl(context, u.url)
-                    UpdateCheck.Checking -> Unit
+                val u = update
+                when {
+                    u is UpdateCheck.Newer -> {
+                        if (u.url.isNotBlank()) {
+                            openExternalUrl(context, u.url)
+                            // 用户主动打开 Release 页 = 已知悉
+                            scope.launch { updateChecker.markSeen(storedTag) }
+                        }
+                    }
+                    u == UpdateCheck.Checking -> Unit
+                    // 冷启动静默检查早就发现了新版本：显示侧读 DataStore、点击侧读内存 update，
+                    // 两者不同步会让第一次点击落进下面的「重新检查」分支空转一次请求（最长 6 秒），
+                    // 用户看到的就是「点第一次没反应」。这里直接用已知 tag 跳转。
+                    // 必须用原始 storedTag（V1.1.3），不能用 normalizeVersion 后的 storedVersion（1.1.3）：
+                    // releasePageUrl 拼的是 releases/tag/$tag，GitHub 上没有去掉 V 的 tag，会 404。
+                    u == UpdateCheck.Idle && storedHasNewer -> {
+                        openExternalUrl(
+                            context,
+                            com.llpop.koil.data.update.releasePageUrl(storedTag),
+                        )
+                        scope.launch { updateChecker.markSeen(storedTag) }
+                    }
                     else -> {
                         update = UpdateCheck.Checking
                         scope.launch {
