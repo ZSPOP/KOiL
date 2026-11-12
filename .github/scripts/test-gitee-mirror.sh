@@ -45,6 +45,7 @@ if [[ "$url" == *"releases?per_page"* && -f "$STUB_WORK/failcount" ]]; then
   fi
 fi
 
+sz=1000
 code=200; body=""
 if   [[ "$url" == *"/releases/tags/"* ]]; then code=404; body='{"message":"Not Found"}'
 elif [[ "$url" == *"releases?per_page"* ]]; then
@@ -63,6 +64,19 @@ elif [ "$method" = "DELETE" ]; then
   code=$(cat "$STUB_WORK/delcode" 2>/dev/null || echo 200); body=''
 else code=200; body='x'; fi
 
+# 下载校验的瞬时失败：V1.1.11 那次 runner 侧拿到 000/0（实测 Gitee 直链 200/6725974）。
+# 用开关文件模拟「第一次探测就断」，脚本应重试并最终通过。
+# 用计数而不是一次性开关：正常实现下第一次 000、第二次就成功；把重试去掉之后
+# 首轮只有 1 次机会 → 回退到自拼 URL 再撞一次（计数正好用掉）→ 必然失败，
+# 这条用例才能区分「靠重试救回来」和「靠回退救回来」。
+if [ -f "$STUB_WORK/dl_fail_left" ] && [ "$out" = "/dev/null" ]; then
+  n=$(cat "$STUB_WORK/dl_fail_left" 2>/dev/null || echo 0)
+  if [ "$n" -gt 0 ]; then
+    echo $((n-1)) > "$STUB_WORK/dl_fail_left"
+    code=000; sz=0
+  fi
+fi
+
 [ -n "$out" ] && printf '%s' "$body" > "$out"
 if [ -n "$fmt" ]; then
   # 必须按格式串逐个替换，不能一律返回「code time」：脚本 :403 用的是 -w '%{http_code}'，
@@ -70,7 +84,7 @@ if [ -n "$fmt" ]; then
   # 于是删除成功被同一份代码打成「返回 HTTP 200 0.100」的假 warning —— 而「删除成功」
   # 恰恰是这套演练要证明的东西。
   s=${fmt//%\{http_code\}/$code}
-  s=${s//%\{size_download\}/1000}
+  s=${s//%\{size_download\}/$sz}
   s=${s//%\{time_total\}/0.100}
   printf '%s' "$s"
 else
@@ -192,6 +206,21 @@ grep -q 'REL=$(curl -sS "${CURL\[@\]}" -X POST' "$MIRROR" \
 grep -q 'LIST_CURL=("${CURL\[@\]}" --max-time 30' "$MIRROR" \
   && ok "列表用 LIST_CURL（30s，不被 retry-max-time 90 卡住）" || bad "缺 LIST_CURL"
 
+echo "S8 校验首次探测拿到 000/0（网络抖动）应重试，不能误报镜像失败"
+echo 2 > "$WORK/dl_fail_left"
+run_mirror workflow_dispatch false; RC=$?
+[ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
+grep -q 'Gitee 镜像校验通过' "$WORK/last.log" && ok "最终判定校验通过" || bad "没走通校验"
+# 关键：必须先确认「第一次真的拿到 000」，否则这条用例只是又跑了一遍正常路径。
+grep -q '镜像校验第 1 次未通过（HTTP 000 / 0 字节）' "$WORK/last.log" \
+  && ok "第一次探测确实拿到 000/0 并进入重试" || bad "第一次探测没触发 000/0，用例没覆盖到重试"
+if grep -q 'Gitee 镜像校验失败' "$WORK/last.log"; then
+  bad "网络抖动被误报成镜像失败"
+else
+  ok "未误报镜像失败"
+fi
+
 echo
 if [ "$FAILED" -eq 0 ]; then echo "全部通过"; else echo "有用例失败"; fi
 exit "$FAILED"
+
