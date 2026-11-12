@@ -320,6 +320,11 @@ while IFS=$'\t' read -r rid rtag; do
   RC=${RC:-000}
   case "$RC" in
     200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
+    # 404 不是失败。id 是刚从 /releases 读出来的，返回 404 只可能是它已经不在了 ——
+    # 实测 Gitee 删 tag 会级联删掉挂在上面的 Release（反方向不成立：删 Release 不删 tag）。
+    # 上面 del_tag 成功时，这里必然 404。判成失败会让日志看着像删 Release 没成功，
+    # 而实际目标早就达成了，只能靠人肉对照 id 才敢确认。
+    404) echo "Release id=${rid} 已不存在（随 tag 一并删除），视为成功" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
   esac
 done <<< "$TO_DEL"
