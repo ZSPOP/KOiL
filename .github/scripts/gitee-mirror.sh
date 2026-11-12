@@ -53,9 +53,16 @@ AUTH=(-H "Authorization: token ${GITEE_TOKEN}")
 # 无响应，而 curl 默认无限等 —— 实测有一次 Mirror step 挂住 9 分钟仍未返回，
 # 只能手动 cancel，否则会一直占着 job（默认超时 360 分钟）。
 CURL=(--connect-timeout 10 --max-time 180 --retry 2)
-# 上传单独一套参数：不开 --retry（POST 重试会重复上传整个文件），改用限速放弃 ——
-# 30 秒内平均低于 4KB/s 就认为这条路走不通，直接断，不再苦等。
-UP_CURL=(--connect-timeout 10 --max-time 420 --speed-limit 4096 --speed-time 30)
+# 上传单独一套参数：不开 --retry（POST 重试会重复上传整个文件）。
+# 两条放弃线，缺一条都会变成「静默慢等」：
+#   ①好消息线：30 秒内平均低于 4KB/s 就断 —— 这条路走不通，别占着 job。
+#   ②硬上限：600 秒。6.6MB 在 600 秒内传完需要 ≥11KB/s；低于这个速度即使不断，
+#     传上去也会拖住整条发版链，所以宁可失败（失败只 warning，不阻断发版）。
+UP_CURL=(--connect-timeout 10 --max-time 600 --speed-limit 4096 --speed-time 30)
+# 下载校验单独一套：海外 runner 从 Gitee 拉 6.6MB，180 秒对应 ≥37KB/s，
+# 慢链路会被误判成「镜像失败」并导致反复手查。放宽到 600 秒，
+# 但保留限速放弃（60 秒内低于 2KB/s 才是真的死链）。
+CHECK_CURL=(--connect-timeout 10 --max-time 600 --speed-limit 2048 --speed-time 60)
 
 # ── ①建 Release。幂等：同名 tag 已有 Release 就复用，不重建。
 #    重建的唯一手段是整条删除（限制①），会让重跑变成破坏性操作。
@@ -91,7 +98,11 @@ else
   echo "开始上传 ${APKF}（$(stat -c%s "${APKF_PATH}") 字节）"
   UP_META=$(curl -sS "${UP_CURL[@]}" -X POST "${AUTH[@]}" \
     -F "file=@${APKF_PATH}" -o /tmp/gitee-up.json -w '%{http_code} %{time_total}' \
-    "${API}/releases/${REL_ID}/attach_files" 2>/dev/null || echo "000 0")
+    "${API}/releases/${REL_ID}/attach_files" 2>/dev/null || true)
+  # 不写 `|| echo "000 0"`：curl 失败时 -w 仍然输出（形如 "000 0.000000"），
+  # 再追加一行会让 UP_META 变两行、`${UP_META##* }` 取到后面那个 0。
+  # 只有 curl 完全无输出时才兜底。
+  UP_META=${UP_META:-000 0}
   UP=$(cat /tmp/gitee-up.json 2>/dev/null || true)
   UP_URL=$(printf '%s' "$UP" | jq -r '.browser_download_url // empty' 2>/dev/null || true)
   echo "上传返回 HTTP ${UP_META%% *}，耗时 ${UP_META##* }s"
@@ -116,13 +127,15 @@ fi
 #    "附件 URL = /releases/download/{tag}/{file}" 这个规律没有在本地验证过。
 CHECK_URL="${UP_URL:-$DOWN_URL}"
 LOCAL_SIZE=$(stat -c%s "$APKF_PATH")
-PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CURL[@]}" "$CHECK_URL" 2>/dev/null || echo "000 0")
+PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CHECK_CURL[@]}" "$CHECK_URL" 2>/dev/null || true)
+PROBE=${PROBE:-000 0}
 CODE=${PROBE%% *}
 SIZE=${PROBE##* }
 if [ "$CODE" != "200" ] || [ "$SIZE" != "$LOCAL_SIZE" ]; then
   if [ "$CHECK_URL" != "$DOWN_URL" ]; then
     echo "::warning::用上传响应地址校验失败（HTTP ${CODE} / ${SIZE} 字节），回退自拼 URL 再试"
-    PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CURL[@]}" "$DOWN_URL" 2>/dev/null || echo "000 0")
+    PROBE=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CHECK_CURL[@]}" "$DOWN_URL" 2>/dev/null || true)
+    PROBE=${PROBE:-000 0}
     CODE=${PROBE%% *}
     SIZE=${PROBE##* }
   fi
