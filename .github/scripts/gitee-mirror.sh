@@ -233,7 +233,10 @@ check_url() {
     if [ "$CODE" = "200" ] && [ "$SIZE" = "$LOCAL_SIZE" ]; then
       return 0
     fi
-    echo "::warning::镜像校验第 ${attempt} 次未通过（HTTP ${CODE} / ${SIZE} 字节），$( [ "$attempt" -lt 3 ] && echo '稍后重试' || echo '已用尽重试' )"
+    # 中间尝试用普通 echo：重试成功时 run 是绿的，不该在日志里留 ::warning::
+    # 污染「运行输出 0 条 warning」这个发版核对信号（告警疲劳）。
+    # 真正判定失败时才由 fail() 打 ::warning::。
+    echo "镜像校验第 ${attempt} 次未通过（HTTP ${CODE} / ${SIZE} 字节），$( [ "$attempt" -lt 3 ] && echo '稍后重试' || echo '已用尽重试' )"
     if [ "$attempt" -lt 3 ]; then
       sleep $((attempt * 5))
     fi

@@ -219,6 +219,13 @@ if grep -q 'Gitee 镜像校验失败' "$WORK/last.log"; then
 else
   ok "未误报镜像失败"
 fi
+# 重试成功时 run 是绿的，日志里不该留 ::warning::：发版核对里「0 条 warning」
+# 是判断「这次要不要人工看」的信号，重试残渣会把信号稀释成噪音。
+if grep -q '::warning::镜像校验' "$WORK/last.log"; then
+  bad "重试成功仍在日志里打了 ::warning::"
+else
+  ok "重试成功不留 ::warning::（不污染发版 warning 信号）"
+fi
 
 echo
 if [ "$FAILED" -eq 0 ]; then echo "全部通过"; else echo "有用例失败"; fi
