@@ -336,7 +336,7 @@
     <string name="koil_set_about_version">V%1$s（%2$d）</string>
     <string name="koil_set_about_check_update">檢查更新</string>
     <string name="koil_set_about_check_update_sub">從 Gitee Releases 取得最新版本</string>
-    <string name="koil_set_about_checked_ago">上次檢查 · %1$s</string>
+    <string name="koil_set_about_checked_ago">從 Gitee 取得 · 上次檢查 %1$s</string>
     <string name="koil_set_check_just_now">剛剛</string>
     <string name="koil_set_check_min_ago">%1$d 分鐘前</string>
     <string name="koil_set_check_hour_ago">%1$d 小時前</string>

@@ -346,7 +346,7 @@
     <string name="koil_set_about_version">V%1$s (%2$d)</string>
     <string name="koil_set_about_check_update">Check for updates</string>
     <string name="koil_set_about_check_update_sub">Fetch the latest release from Gitee</string>
-    <string name="koil_set_about_checked_ago">Last checked · %1$s</string>
+    <string name="koil_set_about_checked_ago">From Gitee · last checked %1$s</string>
     <string name="koil_set_check_just_now">just now</string>
     <string name="koil_set_check_min_ago">%1$d min ago</string>
     <string name="koil_set_check_hour_ago">%1$d h ago</string>
