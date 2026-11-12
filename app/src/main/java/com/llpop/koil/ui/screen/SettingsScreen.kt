@@ -876,7 +876,7 @@ private sealed interface UpdateCheck {
  * 调用方据此决定要不要把「已读」落库——startActivity 失败时用户什么都没看到，
  * 此时标记已读会让红点白白消失且不再有第二次提醒。
  */
-private fun openExternalUrl(context: Context, url: String): Boolean {
+internal fun openExternalUrl(context: Context, url: String): Boolean {
     val ok = runCatching {
         context.startActivity(
             Intent(Intent.ACTION_VIEW, url.toUri())

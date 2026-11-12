@@ -354,6 +354,9 @@
     <string name="koil_set_about_diag">診斷</string>
     <string name="koil_set_about_open_failed">沒有可開啟此連結的應用</string>
     <string name="koil_common_close">關閉</string>
+    <string name="koil_ov_update_new">發現新版本 %1$s</string>
+    <string name="koil_ov_update_action">更新</string>
+    <string name="koil_ov_update_dismiss">關閉更新提示</string>
     <string name="koil_set_about_terms_body">KOiL 用於記錄個人加油資料、查詢公開的成品油調價資訊。\n\n資料準確性：油價以加油站公示與官方調價公告為準，應用內的參考價、預測與折合僅供參考，不構成消費或投資建議。\n\n使用風險：因錄入錯誤、資料源延遲或裝置故障造成的記錄偏差，由使用者自行承擔。\n\n本應用為開源專案，依「現狀」提供，不承諾無中斷或無錯誤運行。</string>
     <string name="koil_set_about_privacy_body">本機優先：加油記錄、車輛資訊與設定項全部保存在裝置本機，不上傳任何伺服器。\n\n定位權限：僅在開啟「自動定位省份」時使用，結果只用於填入預設省份，不記錄軌跡、不上傳。\n\n雲端同步（選用）：開啟後資料只備份到你自己的 WebDAV 伺服器，帳號與應用密碼加密後存於本機，開發者無法存取。\n\n崩潰日誌：只保存在本機，需手動匯出，不會自動上報。</string>
     <string name="koil_set_about_licenses_body">Kotlin、Coroutines、kotlinx.serialization — Apache-2.0\nJetpack Compose、Room、DataStore、WorkManager — Apache-2.0\nMiuix（top.yukonga.miuix.kmp）— Apache-2.0\nKtor、OkHttp — Apache-2.0\nKoin — Apache-2.0\n\n完整相依清單見倉庫 gradle/libs.versions.toml，各函式庫授權原文見其發佈頁。</string>
