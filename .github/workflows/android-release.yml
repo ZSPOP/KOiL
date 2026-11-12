@@ -251,3 +251,20 @@ jobs:
         with:
           files: KOiL-*.apk
           generate_release_notes: true
+
+      # 镜像到 Gitee Release：给国内提供直连下载通道。实现与清理策略全部在
+      # .github/scripts/gitee-mirror.sh —— 与 gitee-mirror.yml 的手动补传共用同一份，
+      # 避免自动镜像与补传两条路径各自漂移。脚本自身保证任何失败只 warning 不阻断，
+      # 所以这里不需要 continue-on-error。
+      - name: Mirror APK to Gitee Release
+        shell: bash
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: ${{ secrets.GITEE_OWNER }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
+          # 保留最近 N 个版本，超出的进清理候选。
+          GITEE_MIRROR_KEEP: "5"
+          # 第一版固定 dry-run：DELETE 的真实行为在本地验证不了（令牌只在 Secrets 里），
+          # 先跑一轮看「待删清单」打印得对不对，确认无误后再改成 "false" 开真删。
+          GITEE_MIRROR_DRY_RUN: "true"
+        run: bash .github/scripts/gitee-mirror.sh "KOiL-${GITHUB_REF_NAME}-vc${VERSION_CODE}-release.apk" "${GITHUB_REF_NAME}"

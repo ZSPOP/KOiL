@@ -1,0 +1,65 @@
+# Gitee Mirror —— 手动补传
+#
+# 把已经发布在 GitHub 的 Release 附件，镜像到 Gitee。
+#
+# 为什么不复用 android-release.yml 的 workflow_dispatch：
+#   那条链在 Verify 步骤有「同名 Release 已存在即失败」的闸门，dispatch 到已有 tag
+#   （比如 V1.1.5）会在构建闸门就 exit 1，根本走不到镜像步骤；而且它会重新构建、
+#   重新推导 versionCode —— 那叫重发一版，不是补传。
+#   补传需要的是「拿已有产物再传一次」，所以独立成一条 chain，只下载 + 镜像。
+#
+# 镜像实现与 android-release.yml 共用 .github/scripts/gitee-mirror.sh。
+#
+# 用法：Actions → Gitee Mirror → Run workflow → 填 tag（如 V1.1.5）。
+name: Gitee Mirror
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要补传到 Gitee 的 GitHub Release 标签（如 V1.1.5）'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "gitee-mirror-${{ inputs.tag }}"
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      # 固定从 main 取脚本：补传用的必须是被合并、被评审过的实现，
+      # 而不是 dispatch 时随手选中的分支。
+      - name: Checkout scripts from main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Download published APK from GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if [[ ! "$TAG" =~ ^V[0-9]+ ]]; then
+            echo "::error::tag 必须是 V 标签（Vx.y.z），实际是 ${TAG}"; exit 1
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'KOiL-*.apk' --dir .
+          ls -l KOiL-*.apk
+          APKF=$(ls KOiL-*.apk | head -1)
+          echo "KOIL_MIRROR_APK=$APKF" >> "$GITHUB_ENV"
+
+      - name: Mirror to Gitee
+        shell: bash
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+          GITEE_OWNER: ${{ secrets.GITEE_OWNER }}
+          GITEE_REPO: ${{ secrets.GITEE_REPO }}
+          GITEE_MIRROR_KEEP: "5"
+          GITEE_MIRROR_DRY_RUN: "true"
+          TAG: ${{ inputs.tag }}
+        run: bash .github/scripts/gitee-mirror.sh "$KOIL_MIRROR_APK" "$TAG"
