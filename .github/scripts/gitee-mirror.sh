@@ -284,13 +284,17 @@ DEL_N=$(( ELIGIBLE - GITEE_MIRROR_KEEP ))
 if [ "$DEL_N" -le 0 ]; then
   # 孤儿删除失败时这条「无需清理」会把失败吞掉：ELIGIBLE <= KEEP 是常态（Gitee 2~3 条、
   # keep=5），日志只剩一行好看的 exit 0。必须在退出口之前先缴失败。
-  [ "$ORPHAN_FAIL" = "1" ] && fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删"
+  if [ "$ORPHAN_FAIL" = "1" ]; then
+    fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删"
+  fi
   echo "无需清理"
   exit 0
 fi
 TO_DEL=$(printf '%s\n' "$SORTED" | head -n "$DEL_N" | awk -F'\t' -v cur="$TAG" '$2 != cur')
 if [ -z "$TO_DEL" ]; then
-  [ "$ORPHAN_FAIL" = "1" ] && fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG"
+  if [ "$ORPHAN_FAIL" = "1" ]; then
+    fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG"
+  fi
   echo "无需清理（待删项只有当前 TAG）"
   exit 0
 fi
@@ -348,4 +352,12 @@ while IFS=$'\t' read -r rid rtag; do
 done <<< "$TO_DEL"
 
 # 有 Release 真删的路径也要缴一次：否则孤儿失败会被后面的删除日志淹掉。
-[ "$ORPHAN_FAIL" = "1" ] && fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成"
+#
+# 必须写成 if + 显式 exit 0。`[ ... ] && fail` 在 ORPHAN_FAIL=0 时短路返回 1，
+# 而这已经是脚本最后一句 —— 进程退出码就是 1，于是「清理成功、没有任何孤儿失败」
+# 的主路径会无条件红。前面两个出口用同样写法是安全的，只因为后面紧跟 exit 0；
+# 那个前提没写在任何地方，这里索性统一成 if。
+if [ "$ORPHAN_FAIL" = "1" ]; then
+  fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成"
+fi
+exit 0
