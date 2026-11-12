@@ -8,8 +8,13 @@
 #   - android-release.yml：push V* 标签时自动镜像
 #   - gitee-mirror.yml：workflow_dispatch 补传历史版本
 #
-# 全程 best-effort：任何一步失败只 ::warning 并 exit 0，不阻断调用方。
-# 因此本脚本刻意不开 set -e —— 镜像挂了不该让正式发版变红。
+# 失败语义按调用方区分（见下方 fail 函数）：
+#   - android-release.yml（push 标签，自动发版）：只 ::warning + exit 0。
+#     GitHub Release 已经发布了，镜像挂了不能连累正式发版。
+#   - gitee-mirror.yml（workflow_dispatch，补传）：exit 1，让 job 变红。
+#     补传链上没有需要保护的已发布产物，绿着留一个没有 APK 的空 Release
+#     比红更糟 —— 静默缺失只能靠人工翻日志发现。
+# 因此本脚本刻意不开 set -e，失败一律走 fail 显式出口。
 #
 # 已知限制（改之前先看完）：
 #   ① attach_files 的删除接口实测返回 405，删不了单个附件。清理只能整条 Release 删，
@@ -21,6 +26,17 @@
 #      所以补传不能靠事件触发，只能手动 dispatch。
 
 set -uo pipefail
+
+# 唯一的失败出口。$1 是给人的原因，写清楚「哪一步、什么状态」。
+fail() {
+  echo "::warning::$1"
+  if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
+    echo "::error::Gitee 补传失败（${TAG:-<空>}）：镜像未完成，Gitee 上可能留下没有 APK 的 Release"
+    exit 1
+  fi
+  echo "::warning::Gitee 镜像中止（不影响 GitHub Release 已发布）"
+  exit 0
+}
 
 APKF_PATH="${1:-}"
 TAG="${2:-${GITHUB_REF_NAME:-}}"
@@ -35,16 +51,13 @@ DOWN_URL="https://gitee.com/${GITEE_OWNER:-}/${GITEE_REPO:-}/releases/download/$
 # 守卫①：ref 必须是 V 标签。dispatch 时 ref 是必选项，选到分支会拿 "main" 当 tag，
 # 在 Gitee 建出一条叫 main 的 Release。
 if [[ ! "$TAG" =~ ^V[0-9]+ ]]; then
-  echo "::warning::Gitee 镜像跳过：ref 不是 V 标签（${TAG:-<空>}）"
-  exit 0
+  fail "Gitee 镜像跳过：ref 不是 V 标签（${TAG:-<空>}）"
 fi
 if [ -z "${GITEE_TOKEN:-}" ] || [ -z "${GITEE_OWNER:-}" ] || [ -z "${GITEE_REPO:-}" ]; then
-  echo "::warning::Gitee 镜像跳过：GITEE_TOKEN / GITEE_OWNER / GITEE_REPO 未全部配置"
-  exit 0
+  fail "Gitee 镜像跳过：GITEE_TOKEN / GITEE_OWNER / GITEE_REPO 未全部配置"
 fi
 if [ ! -f "${APKF_PATH}" ]; then
-  echo "::warning::Gitee 镜像跳过：找不到产物 ${APKF_PATH:-<空>}"
-  exit 0
+  fail "Gitee 镜像跳过：找不到产物 ${APKF_PATH:-<空>}"
 fi
 
 # 令牌只走 header，绝不拼进 URL —— URL 会原样出现在 Actions 日志里。
@@ -80,9 +93,7 @@ else
     "${API}/releases" 2>/dev/null || true)
   REL_ID=$(printf '%s' "$REL" | jq -r 'if type=="object" then (.id // empty) else empty end' 2>/dev/null || true)
   if [ -z "$REL_ID" ]; then
-    echo "::warning::Gitee 建 Release 失败：$(printf '%s' "$REL" | head -c 300)"
-    echo "::warning::Gitee 镜像中止（不影响 GitHub Release 已发布）"
-    exit 0
+    fail "Gitee 建 Release 失败：$(printf '%s' "$REL" | head -c 300)"
   fi
   echo "已建 Gitee Release：${TAG}（id=${REL_ID}）"
 fi
@@ -107,7 +118,12 @@ else
   UP_META=${UP_META:-000 0}
   UP=$(cat /tmp/gitee-up.json 2>/dev/null || true)
   UP_URL=$(printf '%s' "$UP" | jq -r '.browser_download_url // empty' 2>/dev/null || true)
-  echo "上传返回 HTTP ${UP_META%% *}，耗时 ${UP_META##* }s"
+  # 吞吐量直接算进日志：调阈值时不用再人工拿「字节 ÷ 耗时」手算。
+  # 实测基线 14.5 / 35.2 / 14.8 KB/s（三个样本，2.4 倍波动）。
+  UP_SECS=${UP_META##* }
+  UP_BYTES=$(stat -c%s "${APKF_PATH}")
+  UP_KBPS=$(awk -v b="$UP_BYTES" -v s="$UP_SECS" 'BEGIN{ if (s+0 > 0) printf "%.1f", b/1024/s; else printf "n/a" }' 2>/dev/null || echo n/a)
+  echo "上传返回 HTTP ${UP_META%% *}，耗时 ${UP_SECS}s（${UP_KBPS} KB/s）"
   # 守卫②：上传响应里没有 browser_download_url 不代表上传失败 —— 可能只是字段名/结构
   # 与预期不同。此时回读 Release 确认附件是否真的落地，别把成功误判成失败。
   if [ -z "$UP_URL" ]; then
@@ -115,9 +131,7 @@ else
          | jq -e --arg n "$APKF" '(.assets // []) | map(.name) | index($n) != null' >/dev/null 2>&1; then
       echo "上传响应未含 browser_download_url，但回读确认附件已存在：${APKF}"
     else
-      echo "::warning::Gitee 上传附件失败：$(printf '%s' "$UP" | head -c 300)"
-      echo "::warning::Gitee 镜像中止（不影响 GitHub Release 已发布）"
-      exit 0
+      fail "Gitee 上传附件失败：$(printf '%s' "$UP" | head -c 300)"
     fi
   else
     echo "已上传附件：${UP_URL}"
@@ -143,9 +157,7 @@ if [ "$CODE" != "200" ] || [ "$SIZE" != "$LOCAL_SIZE" ]; then
   fi
 fi
 if [ "$CODE" != "200" ] || [ "$SIZE" != "$LOCAL_SIZE" ]; then
-  echo "::warning::Gitee 镜像校验失败：HTTP ${CODE}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${CHECK_URL}）"
-  echo "::warning::校验不通过，跳过清理（不确定远端状态时不动删除）"
-  exit 0
+  fail "Gitee 镜像校验失败：HTTP ${CODE}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${CHECK_URL}）；未通过校验故不执行清理"
 fi
 echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
 

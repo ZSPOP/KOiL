@@ -31,6 +31,10 @@ concurrency:
 jobs:
   mirror:
     runs-on: ubuntu-latest
+    # 上传上限 1200s + 校验 600s + 清理若干 DELETE（各自带 --retry 2）叠加，
+    # 最坏已能拖到半小时以上。默认 360 分钟等于没有上限——上次「挂住 9 分钟只能手动
+    # cancel」就是没有这一行的直接后果。实测正常路径最坏 12 分钟，30 分钟留足余量。
+    timeout-minutes: 30
     steps:
       # 固定从 main 取脚本：补传用的必须是被合并、被评审过的实现，
       # 而不是 dispatch 时随手选中的分支。
