@@ -1,6 +1,7 @@
 package com.llpop.koil.di
 
 import androidx.lifecycle.ViewModel
+import com.llpop.koil.data.update.ApkUpdater
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.sync.WebDavClient
 import com.llpop.koil.ui.MainViewModel
@@ -48,6 +49,9 @@ class AppModuleGraphTest {
         // 若有人改回 singleOf(::WebDavClient)，这里会先抛 NoDefinitionFoundException。
         assertTrue(koin.get<WebDavClient>() is WebDavClient)
         assertTrue(koin.get<CloudSyncManager>() is CloudSyncManager)
+        // ApkUpdater 是懒加载：第一次取用发生在用户点更新横幅那一刻。
+        // 缺注册 = 点更新闪退，而那时 CI 早已全绿——所以必须在这里显式取一次。
+        assertTrue(koin.get<ApkUpdater>() is ApkUpdater)
     }
 
     @Test

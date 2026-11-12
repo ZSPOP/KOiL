@@ -12,6 +12,12 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- 油价调整提醒（Android 13+ 运行时通知权限） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+      应用内更新：下载完 APK 后拉起系统安装器。Android 8+ 需要此权限，且用户仍要在
+      「安装未知应用」里手动授权本应用——ApkUpdater 会先检查 canRequestPackageInstalls()，
+      未授权就跳到授权页，而不是让系统安装器丢一句「未安装」。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!--
       Queries：SettingsScreen 跳"应用通知设置"前用 resolveActivity 预检处理者，
@@ -38,6 +44,20 @@
           （它就是 OnBackPressedDispatcher 的事件管道，已在 onCreate 与 window.onBackInvokedDispatcher 对接）。
           自建 dispatcher 会与平台返回链路隔离，让页面里的 BackHandler 收不到返回事件。
         -->
+
+        <!--
+          FileProvider：安装器需要读我们私有目录里的 APK，直接给 file:// 会在 Android 7+
+          抛 FileUriExposedException。authorities 用 ${applicationId}，debug/release 不冲突。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <activity
             android:name=".MainActivity"

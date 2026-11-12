@@ -107,6 +107,9 @@ class AppSettings(private val context: Context) {
         /** 用户已「知晓」的版本 tag：点开 Release 页 / 关闭首页横幅 / 成功拉起安装器时写入。
          *  与 LATEST_TAG 分开存，而不是清空 LATEST_TAG——清空会连行内「发现新版本」文字一起抹掉，用户想再点就没入口。 */
         private val KEY_UPDATE_SEEN_TAG = stringPreferencesKey("KOiL-update-seen-tag")
+        /** 最新版 APK 的直链（Gitee 资产）。APK 名带 versionCode，App 无法自己拼，
+         *  只能每次检查时从 Release 的 assets 里取。 */
+        private val KEY_UPDATE_APK_URL = stringPreferencesKey("KOiL-update-apk-url")
 
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
@@ -498,13 +501,6 @@ class AppSettings(private val context: Context) {
 
     // ---- 应用更新检查 ----
 
-    /** 最近一次查到的 Release tag（原始形式如 "V1.0.0"；空串=从未查到过）——设置页据此判断是否挂红点 */
-    val updateLatestTag: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LATEST_TAG] ?: "" }
-    suspend fun setUpdateLatestTag(tag: String) {
-        context.KOiLDataStore.edit { it[KEY_UPDATE_LATEST_TAG] = tag }
-    }
-
     /** 最近一次「成功」检查的时间戳（毫秒，0=从未成功）——静默检查的 45 分钟节流依据 + 设置页「上次检查」 */
     val updateLastCheckAt: Flow<Long> =
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_CHECK_AT] ?: 0L }
@@ -523,6 +519,29 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_SEEN_TAG] ?: "" }
     suspend fun setUpdateSeenTag(tag: String) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_SEEN_TAG] = tag }
+    }
+
+    /**
+     * tag 与直链的**同一快照**（一次 map 出来）。
+     * UI 分别订阅 [updateLatestTag] 与 [updateApkUrl] 是两条 collect，中间会有一帧
+     * 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读。
+     */
+    val updateTargetPair: Flow<Pair<String, String>> =
+        context.KOiLDataStore.data.distinctValue {
+            (it[KEY_UPDATE_LATEST_TAG] ?: "") to (it[KEY_UPDATE_APK_URL] ?: "")
+        }
+
+    /**
+     * 一次性写入 tag 与直链。
+     * 必须用一次 `edit`：拆成两次独立写入时，第二次失败或被进程杀掉会留下
+     * 「tag 已是新版、链接还指向上一版」的**持久**错位——下载的是一个真 APK，
+     * 三条校验全过，用户装完仍是旧版，还把新版标成已读。
+     */
+    suspend fun setUpdateTarget(tag: String, apkUrl: String) {
+        context.KOiLDataStore.edit {
+            it[KEY_UPDATE_LATEST_TAG] = tag
+            it[KEY_UPDATE_APK_URL] = apkUrl
+        }
     }
 
     // ---- 底部导航条（参考 Mishka 悬浮导航体系）----

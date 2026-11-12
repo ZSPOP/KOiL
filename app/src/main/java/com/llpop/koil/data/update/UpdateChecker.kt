@@ -7,35 +7,78 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
+
+/**
+ * 一次检查的结果。tag 与直链**必须来自同一个快照**：
+ * 分开两个变量传，就会出现「tag 是 V1.1.10、链接还是 V1.1.9」的错位下载，
+ * 而且下的是个真 APK，三条校验全过，用户装完仍是旧版还把新版标成已读。
+ */
+data class UpdateTarget(val tag: String, val apkUrl: String)
+
+/**
+ * 一次检查的三态结果。
+ * 不能只用「有/无 target」表达：那样「确认没新版」和「网络失败」会被压成同一个 null，
+ * 设置页就分不出该显示「已是最新」还是「检查失败」。
+ */
+sealed interface RefreshOutcome {
+    data class Newer(val target: UpdateTarget) : RefreshOutcome
+    data object Latest : RefreshOutcome
+    data object Failed : RefreshOutcome
+}
+
+@Serializable
+private data class GiteeAsset(
+    @SerialName("browser_download_url") val url: String = "",
+    val name: String = "",
+)
+
+@Serializable
+private data class GiteeRelease(
+    @SerialName("tag_name") val tagName: String = "",
+    val prerelease: Boolean = false,
+    val assets: List<GiteeAsset> = emptyList(),
+)
 
 /**
  * 应用更新检查。
  *
  * 冷启动 / 回前台静默检查（[checkIfDue]，45 分钟节流）与设置页手动「检查更新」（[refresh]）共用同一条通道，
- * 结果落到 DataStore：`updateLatestTag` 供 UI 判断是否挂红点、`updateLastCheckAt` 作为节流依据。
+ * 结果落到 DataStore：`updateTargetPair` 供 UI 判断是否挂红点与发起下载、
+ * `updateLastCheckAt` 作为节流依据。
  *
  * 设计取舍：
- * - **不引第三方库**（无 Retrofit/OkHttp）：一次 GET + 两个正则足够，6 秒超时；
- * - **失败绝不写假数据**：请求失败时保留上一次的 tag，只让调用方知道"这次没查到"（返回 null）；
+ * - **不引第三方 HTTP 库**：一次 GET 足够，6 秒超时；JSON 用工程已有的 kotlinx.serialization；
+ * - **失败绝不写假数据**：请求失败时保留上一次的 tag + 直链，只让调用方知道"这次没查到"（返回 null）；
  * - **45min 节流写在启动侧**：冷启动 / 回前台每次都调，但真正发请求的只有超出窗口的那一次，频繁启停几乎零流量。
  */
 class UpdateChecker(private val settings: AppSettings) {
-
-    /** 最近一次查到的 Release tag（原始形式，如 "V1.0.0"；空串=从未查到过） */
-    fun latestTag(): Flow<String> = settings.updateLatestTag
 
     /** 最近一次**成功**检查的时间戳（0=从未查过），设置页据此显示「上次检查」 */
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
 
     /**
-     * 用户已知晓的版本 tag（原始形式）。与 [latestTag] 配合判定红点：
+     * 用户已知晓的版本 tag（原始形式）。与 [updateTarget] 配合判定红点：
      * 两者不等 = 有新版本且用户还没被告知过。写入时机见 AppSettings.updateSeenTag。
      */
     fun seenTag(): Flow<String> = settings.updateSeenTag
+
+    /**
+     * tag 与直链的**单一快照**。UI 一律读这个，不分别订阅 latestTag / latestApkUrl：
+     * 两条 collect 是两帧，中间可能取到「新 tag + 旧 url」→ 下上一版的包、校验全过、
+     * 装完仍是旧版，还把新版标成已读。DataStore 一次 map 出来，就不存在这个窗口。
+     */
+    fun updateTarget(): Flow<UpdateTarget?> =
+        settings.updateTargetPair.map { (tag, url) ->
+            if (tag.isBlank()) null else UpdateTarget(tag, url)
+        }
 
     /**
      * 应用级 scope：由 Application 在 onCreate 注入（与 CloudSyncManager 同一先例）。
@@ -48,12 +91,14 @@ class UpdateChecker(private val settings: AppSettings) {
 
     /**
      * 记录「用户已知晓此版本」。
-     * 调用时机必须是用户主动表达知悉的动作：打开 Release 页、关闭更新横幅、成功拉起安装器。
-     * **下载进行中、下载失败、用户取消都不要调用**——那会让红点与横幅同时消失，用户再也不会被提醒。
+     * 调用时机必须是用户主动表达知悉的动作：**打开版本页、关闭更新横幅**。
+     * **下载进行中、下载失败、拉起安装器但未装成都不要调用**
+     * ——那会让红点与横幅同时消失，用户再也不会被提醒。
+     * （装成功后 `isNewerRelease(latest, 当前版本)` 自然为 false，横幅自己就消失了，
+     * 不需要任何人提前写 seenTag 去兜。）
      *
-     * 写入跑在应用级 scope：用户点开链接后立刻连续返回退出设置页时，页面 scope 会被取消，
+     * 写入跑在应用级 scope：用户点开版本页后立刻连续返回退出设置页时，页面 scope 会被取消，
      * `DataStore.edit` 有概率没落库——红点不灭，再点还是同一个症状。
-     * ④ 的「成功拉起安装器后再标记」正好落在用户切走的时刻，风险更高。
      */
     fun markSeen(tag: String) {
         if (tag.isBlank()) return
@@ -75,50 +120,67 @@ class UpdateChecker(private val settings: AppSettings) {
      *
      * 检查间隔 45 分钟：窗口过长会让刚装完包时那次冷启动把当时的 release 记为最新，
      * 之后发新版也要等满窗口才再查，表现为『好像从不自动检查』。
-     * 取 45 分钟（GitHub 匿名 API 限 60 次/小时，每分钟一次都够，不会触发限流），
+     * 取 45 分钟（Gitee 匿名读取的额度远高于这个频率，不会触发限流），
      * 并让「回前台」也走同一条通道，日常开 App 基本不会错过新版本。
      */
-    suspend fun checkIfDue(): String? {
+    suspend fun checkIfDue(): UpdateTarget? {
         val last = settings.updateLastCheckAt.first()
         val elapsed = System.currentTimeMillis() - last
         if (last > 0 && elapsed in 0 until INTERVAL_MS) return null
-        return refresh()
+        return (refresh() as? RefreshOutcome.Newer)?.target
     }
 
     /**
-     * 真实请求一次 GitHub Releases API。
-     * @return 最新 tag（如 "V1.0.0"）；网络失败 / 非 2xx / 解析失败一律 null。
+     * 真实请求一次 Gitee Releases。
+     *
+     * 返回值已经把「是否比本机新」算完了，UI 直接按三态分支，不再自己 `compareVersionNames` 第二遍
+     * （[isNewerRelease] 的文档要求判据只此一处，两处各算一遍迟早分叉）。
      */
-    suspend fun refresh(): String? = withContext(Dispatchers.IO) {
-        val tag = runCatching { fetchLatestTag() }
+    suspend fun refresh(): RefreshOutcome = withContext(Dispatchers.IO) {
+        val target = runCatching { fetchLatestTarget() }
             .onFailure { Log.w("KOiL", "update check failed: ${it.message}") }
             .getOrNull()
-            ?: return@withContext null
+            ?: return@withContext RefreshOutcome.Failed
+
         // 只认严格比本机更新的 Release：不更新的 tag 一律不落库，
         // 设置页因此不存在任何指向更低版本的提示/跳转入口
-        val newer = compareVersionNames(normalizeVersion(tag), BuildConfig.VERSION_NAME) > 0
-        // 先写 tag 再写时间戳：中途被杀也只会"多查一次"，不会出现"记了时间却没记 tag"的红点缺失
+        val newer = isNewerRelease(target.tag, BuildConfig.VERSION_NAME)
+        // tag 与直链在**同一次 edit** 里写入：两次独立写入会留下「tag 已更新、链接还是旧版」的持久错位
         runCatching {
-            settings.setUpdateLatestTag(if (newer) tag else "")
+            settings.setUpdateTarget(
+                tag = if (newer) target.tag else "",
+                apkUrl = if (newer) target.apkUrl else "",
+            )
             settings.setUpdateLastCheckAt(System.currentTimeMillis())
-        }.onFailure { Log.w("KOiL", "persist update tag failed: ${it.message}") }
-        Log.i("KOiL", "update check ok: latest=$tag")
-        tag
+        }.onFailure { Log.w("KOiL", "persist update target failed: ${it.message}") }
+        // 带上 newer：否则「确认没新版」和「查到新版」打出一模一样的日志，排查时分不清
+        Log.i(
+            "KOiL",
+            "update check ok: latest=${target.tag} apk=${target.apkUrl.ifEmpty { "-" }} newer=$newer",
+        )
+        if (newer) RefreshOutcome.Newer(target) else RefreshOutcome.Latest
     }
 
-    private fun fetchLatestTag(): String? {
+    /**
+     * 读 Gitee 的 release **列表**，自己挑版本号最大的那条。
+     *
+     * 为什么不用 `/releases/latest`：它的「最新」是「最新创建」，不是「版本号最大」。
+     * 补传一个旧版本（本仓库真发生过：1.1.7 之后决定"不补传 1.1.5 了"，但补传随时可能发生）
+     * 会拿到新 id + 新 created_at，于是 latest 返回 V1.1.5 →
+     * 与本机比较后 not newer → 清空落库 → **红点静默熄灭**，用户再也收不到提示。
+     * 列表接口一页 20 条（keep=5）足够覆盖，几 KB 的响应换掉一整类静默失败。
+     */
+    private fun fetchLatestTarget(): UpdateTarget? {
         var conn: HttpURLConnection? = null
         try {
-            conn = (URL(RELEASE_API).openConnection() as HttpURLConnection).apply {
+            conn = (URL(RELEASE_LIST_API).openConnection() as HttpURLConnection).apply {
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("User-Agent", "KOiL-Android")
-                setRequestProperty("Accept", "application/vnd.github+json")
             }
             if (conn.responseCode !in 200..299) return null
             val json = conn.inputStream.bufferedReader().use { it.readText() }
-            return Regex("\"tag_name\"\\s*:\\s*\"([^\"]+)\"")
-                .find(json)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+            return selectLatestRelease(json)
         } finally {
             runCatching { conn?.disconnect() }
         }
@@ -127,13 +189,46 @@ class UpdateChecker(private val settings: AppSettings) {
     companion object {
         /** 两次检查的最小间隔（45 分钟，见 [checkIfDue] 注释） */
         const val INTERVAL_MS = 45L * 60 * 1000
-        const val RELEASE_API = "https://api.github.com/repos/ZSPOP/KOiL/releases/latest"
+
+        /** 列表接口（不是 /latest，原因见 [fetchLatestTarget]） */
+        const val RELEASE_LIST_API =
+            "https://gitee.com/api/v5/repos/ZSPOP/KOiL/releases?per_page=20"
         private const val TIMEOUT_MS = 6000
     }
 }
 
-/** Release 页面地址（形如 https://github.com/ZSPOP/KOiL/releases/tag/V1.0.0） */
-fun releasePageUrl(tag: String): String = "https://github.com/ZSPOP/KOiL/releases/tag/$tag"
+/**
+ * 从 Gitee release **列表** JSON 里挑出版本号最大的一条，返回 tag 与 APK 直链。
+ *
+ * 抽成顶层纯函数是为了能单测：线上只跑"正常响应"一条路径，
+ * 而真正会翻车的是补传旧版、混进 prerelease、assets 里只有源码包这几种。
+ *
+ * 用 kotlinx.serialization 而不是正则扫全文：release 的 `body` 里若贴了下载链接，
+ * 正则会把正文里的 URL 当成 asset；按结构解析则只认 assets 数组，不受正文影响。
+ */
+internal fun selectLatestRelease(json: String): UpdateTarget? {
+    val releases = runCatching {
+        Json { ignoreUnknownKeys = true }.decodeFromString<List<GiteeRelease>>(json)
+    }.getOrNull() ?: return null
+
+    // 跳过 prerelease 与无 tag 的脏数据：预发布不该覆盖正式版的提示
+    val best = releases
+        .filter { !it.prerelease && it.tagName.isNotBlank() }
+        .maxWithOrNull { a, b -> compareVersionNames(a.tagName, b.tagName) }
+        ?: return null
+
+    // assets 里除 APK 还有源码包（V1.x.zip / .tar.gz），只认 .apk；找不到直链时留空，
+    // 让 UI 回退浏览器，而不是让整次检查失败（否则用户永远看不到"有新版本"）
+    // 多个 .apk 时优先 KOiL- 开头的那个（本项目的产物命名），避免源码包/附带包被选走；
+    // 顺序由服务端决定，不能靠"第一个"
+    val apkAssets = best.assets.filter { it.name.endsWith(".apk") || it.url.endsWith(".apk") }
+    val apkUrl = (apkAssets.firstOrNull { it.name.startsWith("KOiL-") } ?: apkAssets.firstOrNull())
+        ?.url.orEmpty()
+    return UpdateTarget(best.tagName, apkUrl)
+}
+
+/** 版本页地址。用 Gitee 而不是 GitHub：GitHub 在国内经常打不开，而这条只在「Gitee 没镜像好」时才走 */
+fun releasePageUrl(tag: String): String = "https://gitee.com/ZSPOP/KOiL/releases/tag/$tag"
 
 /** 去掉 V/v 前缀，得到可比较的版本号（"V1.0.0" → "1.0.0"） */
 fun normalizeVersion(tag: String): String = tag.trim().trimStart('V', 'v')

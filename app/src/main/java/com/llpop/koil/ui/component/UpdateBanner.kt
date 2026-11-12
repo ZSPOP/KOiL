@@ -40,6 +40,14 @@ internal fun UpdateBanner(
     version: String,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
+    /** 右侧动作文案：下载失败时换成「重试」，其余场景仍是「更新」 */
+    actionLabel: String = stringResource(R.string.koil_ov_update_action),
+    /**
+     * 自定义主文案；null 时用「发现新版本 %1$s」。
+     * 下载/安装失败时传具体原因（签名不一致、需要授权…），不这么做的话
+     * 所有失败都会被压成一句「下载失败，请重试」，签名不一致会被误报成网络问题并诱导反复重下。
+     */
+    title: String? = null,
 ) {
     KOiLBlurBackground(
         modifier = Modifier.fillMaxWidth(),
@@ -67,7 +75,7 @@ internal fun UpdateBanner(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = stringResource(R.string.koil_ov_update_new, version),
+                    text = title ?: stringResource(R.string.koil_ov_update_new, version),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
@@ -77,7 +85,7 @@ internal fun UpdateBanner(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = stringResource(R.string.koil_ov_update_action) + " ›",
+                    text = actionLabel + " ›",
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Medium,
                     color = KOiLColors.Primary,
