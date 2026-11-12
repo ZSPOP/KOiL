@@ -133,9 +133,11 @@ fun AddScreen(
     val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
     val apkUrl by updateChecker.latestApkUrl().collectAsStateWithLifecycle(initialValue = "")
     val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
-    LaunchedEffect(downloadState) {
-        (downloadState as? UpdateDownloadState.Failed)?.let {
-            Toast.makeText(context, it.reason.messageRes(), Toast.LENGTH_LONG).show()
+    // 失败是一次性事件（ApkUpdater.failures）：不能监听 state，否则从别的页面切回来时
+    // 首次组合会读到上一次残留的 Failed，凭空弹一句"更新包下载失败"。
+    LaunchedEffect(Unit) {
+        apkUpdater.failures.collect {
+            Toast.makeText(context, it.messageRes(), Toast.LENGTH_LONG).show()
         }
     }
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
@@ -208,20 +210,22 @@ fun AddScreen(
         // 更新横幅：首页摘要卡（油价四宫格卡）之后。间距沿用区块间的 12dp，
         // 最终是「摘要卡 → 12dp → 横幅 → 12dp → 上次加油条」，不是 24dp。
         if (bannerTag != null) {
+            // 下载中把进度接在版本文案上（"1.1.10 · 42%"）：6.6MB 在国内要几十秒，
+            // 没有可见进度就会变成"点了没反应"。Downloading 是状态，适合直接显示。
+            val bannerVersion = when (val st = downloadState) {
+                is UpdateDownloadState.Downloading ->
+                    if (st.percent >= 0) "${normalizeVersion(bannerTag)} · ${st.percent}%"
+                    else "${normalizeVersion(bannerTag)} · …"
+                else -> normalizeVersion(bannerTag)
+            }
             UpdateBanner(
-                version = normalizeVersion(bannerTag),
+                version = bannerVersion,
                 onOpen = {
                     // 应用内下载：拉起安装器成功时由 ApkUpdater 内部 markSeen，
                     // 这里不能提前标记 —— 下载失败/取消时横幅必须还在。
                     // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
                     if (apkUrl.isNotBlank()) {
-                        // 6.6 MB 在国内通常要几十秒，不先给一句反馈就会变成
-                        // 「点了没反应」——这正是 ② 修过的老毛病
-                        Toast.makeText(
-                            context,
-                            R.string.koil_update_download_started,
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        // 进度直接显示在横幅上，重复点击由 download() 自己挡（job 在跑就 return）
                         apkUpdater.download(bannerTag, apkUrl)
                     } else if (openExternalUrl(context, releasePageUrl(bannerTag))) {
                         updateChecker.markSeen(bannerTag)

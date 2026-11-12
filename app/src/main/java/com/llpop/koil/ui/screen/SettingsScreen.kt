@@ -1875,13 +1875,10 @@ private fun AboutSection(
     val apkUpdater = remember { GlobalContext.get().get<com.llpop.koil.data.update.ApkUpdater>() }
     val apkUrl by updateChecker.latestApkUrl().collectAsStateWithLifecycle(initialValue = "")
     val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
-    LaunchedEffect(downloadState) {
-        (downloadState as? com.llpop.koil.data.update.UpdateDownloadState.Failed)?.let {
-            android.widget.Toast.makeText(
-                context,
-                it.reason.messageRes(),
-                android.widget.Toast.LENGTH_LONG,
-            ).show()
+    // 一次性事件，不读 state：否则进设置页首次组合就弹上一次的失败
+    LaunchedEffect(Unit) {
+        apkUpdater.failures.collect {
+            android.widget.Toast.makeText(context, it.messageRes(), android.widget.Toast.LENGTH_LONG).show()
         }
     }
     val checkedAgo = checkedAgoText(lastCheckAt)
@@ -1968,14 +1965,16 @@ private fun AboutSection(
                         // 拿不到直链（Gitee 侧还没镜像完）才回退浏览器。
                         // 用 Newer 自带的 tag，不读 storedTag：refresh() 刚返回时 DataStore 的 Flow
                         // 可能还没 emit 到 Compose，此时读 storedTag 会把上一个版本记成已读
-                        if (apkUrl.isNotBlank()) {
-                            android.widget.Toast.makeText(
+                        // 直链只认 Newer 自带的那一个：它与 tag 出自同一次 refresh()。
+                        // 若改成读 DataStore 的 apkUrl Flow，refresh() 刚返回时 Flow 还没 emit，
+                        // 就会拿上一版的直链下包，装完仍是旧版还把新版标成已读。
+                        if (u.url.isNotBlank()) {
+                            apkUpdater.download(u.tag, u.url)
+                        } else if (openExternalUrl(
                                 context,
-                                com.llpop.koil.R.string.koil_update_download_started,
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
-                            apkUpdater.download(u.tag, apkUrl)
-                        } else if (u.url.isNotBlank() && openExternalUrl(context, u.url)) {
+                                com.llpop.koil.data.update.releasePageUrl(u.tag),
+                            )
+                        ) {
                             updateChecker.markSeen(u.tag)
                         }
                     }
@@ -1987,11 +1986,6 @@ private fun AboutSection(
                     // releasePageUrl 拼的是 releases/tag/$tag，GitHub 上没有去掉 V 的 tag，会 404。
                     u == UpdateCheck.Idle && storedHasNewer -> {
                         if (apkUrl.isNotBlank()) {
-                            android.widget.Toast.makeText(
-                                context,
-                                com.llpop.koil.R.string.koil_update_download_started,
-                                android.widget.Toast.LENGTH_SHORT,
-                            ).show()
                             apkUpdater.download(storedTag, apkUrl)
                         } else if (openExternalUrl(
                                 context,
@@ -2004,16 +1998,17 @@ private fun AboutSection(
                     else -> {
                         update = UpdateCheck.Checking
                         scope.launch {
-                            val tag = updateChecker.refresh()
+                            // refresh 返回 tag + 直链的同一个快照，UI 不再分别去两个来源取
+                            val target = updateChecker.refresh()
                             update = when {
-                                tag == null -> UpdateCheck.Failed
+                                target == null -> UpdateCheck.Failed
                                 com.llpop.koil.data.update.compareVersionNames(
-                                    com.llpop.koil.data.update.normalizeVersion(tag),
+                                    com.llpop.koil.data.update.normalizeVersion(target.tag),
                                     com.llpop.koil.BuildConfig.VERSION_NAME,
                                 ) > 0 -> UpdateCheck.Newer(
-                                    tag,
-                                    com.llpop.koil.data.update.normalizeVersion(tag),
-                                    com.llpop.koil.data.update.releasePageUrl(tag),
+                                    target.tag,
+                                    com.llpop.koil.data.update.normalizeVersion(target.tag),
+                                    target.apkUrl,
                                 )
                                 else -> UpdateCheck.Latest
                             }

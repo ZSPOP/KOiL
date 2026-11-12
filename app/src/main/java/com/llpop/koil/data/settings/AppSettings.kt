@@ -504,9 +504,6 @@ class AppSettings(private val context: Context) {
     /** 最近一次查到的 Release tag（原始形式如 "V1.0.0"；空串=从未查到过）——设置页据此判断是否挂红点 */
     val updateLatestTag: Flow<String> =
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LATEST_TAG] ?: "" }
-    suspend fun setUpdateLatestTag(tag: String) {
-        context.KOiLDataStore.edit { it[KEY_UPDATE_LATEST_TAG] = tag }
-    }
 
     /** 最近一次「成功」检查的时间戳（毫秒，0=从未成功）——静默检查的 45 分钟节流依据 + 设置页「上次检查」 */
     val updateLastCheckAt: Flow<Long> =
@@ -528,11 +525,21 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_SEEN_TAG] = tag }
     }
 
-    /** 最新版 APK 直链（空串=不知道）。与 LATEST_TAG 同时写入，避免"有 tag 没链接"的半状态 */
+    /** 最新版 APK 直链（空串=不知道）。与 LATEST_TAG 在同一次 edit 写入，见 [setUpdateTarget] */
     val updateApkUrl: Flow<String> =
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_APK_URL] ?: "" }
-    suspend fun setUpdateApkUrl(url: String) {
-        context.KOiLDataStore.edit { it[KEY_UPDATE_APK_URL] = url }
+
+    /**
+     * 一次性写入 tag 与直链。
+     * 必须用一次 `edit`：拆成两次独立写入时，第二次失败或被进程杀掉会留下
+     * 「tag 已是新版、链接还指向上一版」的**持久**错位——下载的是一个真 APK，
+     * 三条校验全过，用户装完仍是旧版，还把新版标成已读。
+     */
+    suspend fun setUpdateTarget(tag: String, apkUrl: String) {
+        context.KOiLDataStore.edit {
+            it[KEY_UPDATE_LATEST_TAG] = tag
+            it[KEY_UPDATE_APK_URL] = apkUrl
+        }
     }
 
     // ---- 底部导航条（参考 Mishka 悬浮导航体系）----

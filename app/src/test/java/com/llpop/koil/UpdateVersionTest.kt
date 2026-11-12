@@ -67,9 +67,9 @@ class UpdateVersionTest {
     }
 
     @Test
-    fun `releasePageUrl 拼出 tag 页地址`() {
+    fun `releasePageUrl 拼出 Gitee 的 tag 页地址`() {
         assertEquals(
-            "https://github.com/ZSPOP/KOiL/releases/tag/V2.0.0",
+            "https://gitee.com/ZSPOP/KOiL/releases/tag/V2.0.0",
             releasePageUrl("V2.0.0"),
         )
     }

@@ -345,7 +345,6 @@
     <string name="koil_set_about_checking">检查中…</string>
     <string name="koil_set_about_latest">已是最新</string>
     <string name="koil_set_about_newer">可更新 V%1$s</string>
-    <string name="koil_update_download_started">正在下载更新包，完成后会弹出安装界面</string>
     <string name="koil_update_fail_download">更新包下载失败，请重试</string>
     <string name="koil_update_fail_signature">安装包签名与本机不一致，已拒绝安装，请重新下载</string>
     <string name="koil_update_fail_permission">需要在系统设置里允许「安装未知应用」，已为你打开设置页</string>
