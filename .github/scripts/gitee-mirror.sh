@@ -70,7 +70,9 @@ del_tag() {
   # 「remote: ZSPOP: Incorrect username or password (access token)」也滤掉了。
   # URL 里本来就没有凭据，remote 行也不含 token。
   if [ -n "${GITEE_TOKEN:-}" ]; then
-    sed -i.bak "s|${GITEE_TOKEN}|***|g" "$log" 2>/dev/null || true
+    # 不加 .bak：备份里是替换前的原文，等于把 token 留在了同目录，脱敏就没意义了。
+    sed -i "s|${GITEE_TOKEN}|***|g" "$log" 2>/dev/null || true
+    rm -f "$log.bak"
   fi
   echo "::warning::删 tag ${tag} 失败：$(grep -E '^(remote:|fatal:)' "$log" | tail -3 | tr '\n' ' ' | head -c 300)"
   return 1
@@ -218,20 +220,6 @@ echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
 #    created_at 在补传场景下会失真 —— 补传的旧版本是刚创建的，会被当成「最近发布」
 #    保护起来，而版本号更新的反而先被删（实测顺序：V1.1.5 先于 V1.1.3 被删）。
 #    sort -V 做版本排序，能正确处理 V1.9 / V1.10 跨位数，不必退回纯字符串排序。
-# 孤儿 tag 点名清扫。必须放在读 /releases 之前 —— 下面「无需清理」会直接 exit 0，
-# 放在后面就永远跑不到。
-# 为什么需要这个入口：/releases 里已经没有对应 Release 的 tag，CAND 永远扫不到。
-# 放对删除顺序后不会再新增孤儿，但历史遗留（V1.1.3 / V1.1.4）还得点名清一次。
-if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
-  for _t in ${GITEE_MIRROR_EXTRA_TAGS//,/ }; do
-    [ -z "$_t" ] && continue
-    if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
-      echo "[dry-run] 将删除孤儿 tag ${_t}（/releases 里已无此 Release）"
-    else
-      del_tag "$_t"
-    fi
-  done
-fi
 ALL=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases?per_page=100" 2>/dev/null || true)
 if ! printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
   echo "::warning::Gitee Release 列表读取失败，跳过清理：$(printf '%s' "$ALL" | head -c 200)"
@@ -246,6 +234,39 @@ CAND=$(printf '%s' "$ALL" | jq -r '
   | .[] | "\(.id)\t\(.tag_name)"')
 ELIGIBLE=$(printf '%s\n' "$CAND" | grep -c . || true)
 echo "Gitee 现有 ${TOTAL} 个 Release，其中镜像版本 ${ELIGIBLE} 个，保留版本号最高的 ${GITEE_MIRROR_KEEP} 个（dry-run=${GITEE_MIRROR_DRY_RUN}）"
+# 孤儿 tag 点名清扫。
+#
+# 位置有两个约束：必须在拿到 ALL（/releases 列表）之后 —— 要自证「这个 tag 确实
+# 没有 Release」；又必须在 DEL_N 的「无需清理 -> exit 0」之前 —— 否则这一步永远跑不到。
+#
+# 为什么要点名：候选口径是从 /releases 构造的，没有 Release 的 tag 永远扫不到它。
+# 删除顺序对调后不会再新增孤儿，但历史遗留（V1.1.3 / V1.1.4）得点名清一次。
+#
+# 三道守卫都不是可选的。点错一个名字删掉当前正在补传的 TAG，会造出「有 Release
+# 无 tag」的反向残缺 —— 比孤儿更难查，因为 Release 列表看着还是对的。
+if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
+  REL_TAGS=$(printf '%s' "$ALL" | jq -r '.[].tag_name' 2>/dev/null || true)
+  for _t in ${GITEE_MIRROR_EXTRA_TAGS//,/ }; do
+    [ -z "$_t" ] && continue
+    if ! [[ "$_t" =~ ^V[0-9] ]]; then
+      echo "::warning::跳过非法 tag 名 ${_t}（必须匹配 ^V[0-9]，避免误删 main 之类）"
+      continue
+    fi
+    if [ "$_t" = "$TAG" ]; then
+      echo "::warning::跳过当前 TAG ${_t}（它正是本次补传的版本）"
+      continue
+    fi
+    if printf '%s\n' "$REL_TAGS" | grep -qxF "$_t"; then
+      echo "::warning::${_t} 仍有 Release，不是孤儿，跳过（请改用 keep 清理）"
+      continue
+    fi
+    if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
+      echo "[dry-run] 将删除孤儿 tag ${_t}（/releases 里已无此 Release）"
+    else
+      del_tag "$_t"
+    fi
+  done
+fi
 # LC_ALL=C：sort -V 的版本比较不受 locale 影响。-k2,2 只比 tag 字段，
 # 否则 id 的数字会先参与比较（"123\tV1.1.10" 与 "45\tV1.1.9"）。
 SORTED=$(printf '%s\n' "$CAND" | LC_ALL=C sort -V -t$'\t' -k2,2)
@@ -287,7 +308,12 @@ while IFS=$'\t' read -r rid rtag; do
   #
   # 对调后 tag 删失败 → Release 还在 → 下一轮仍是候选，自动重试。
   # 代价是 Release 成功而 tag 失败时会多刷一轮 del_tag，已按幂等处理（见 del_tag）。
-  del_tag "$rtag"
+  if ! del_tag "$rtag"; then
+    # 接住返回值是整个对调的意义所在。不接的话 del_tag 的 return 1 只是装饰性的
+    # （本脚本没开 set -e），下一行照样删 Release，孤儿 tag 一模一样地被重新造出来。
+    echo "::warning::删 tag ${rtag} 失败，保留 Release id=${rid} 供下一轮重试"
+    continue
+  fi
   # 不写 `|| echo 000`：与 UP_META 同一个坑 —— curl 失败时 -w 仍会输出 000，
   # 再追加一行会让 RC 变两行，`case` 匹配不到、还会被当成另一个错误码。
   RC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || true)
