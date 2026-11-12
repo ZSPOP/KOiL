@@ -84,6 +84,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -1896,8 +1897,8 @@ private fun AboutSection(
             } else {
                 stringResource(com.llpop.koil.R.string.koil_update_progress_unknown, storedVersion)
             }
-        is com.llpop.koil.data.update.UpdateDownloadState.Failed ->
-            stringResource(st.reason.messageRes())
+        // 失败原因不放在 value：那是一整句话，会把左边标题列压到零宽
+        // （实机表现为「檢 查 更 新」四字竖排）。原因走副标题，value 只留短动作词。
         else -> null
     }
     // 与红点判定共用同一个判据（isNewerRelease）：两处各算一遍的话，将来只改一处就会分叉
@@ -1999,11 +2000,23 @@ private fun AboutSection(
         }
         SettingDivider()
         // —— 检查更新：查到新版本后这一行直接变成「打开 Release 页」——
+        val failReason = (downloadState as? com.llpop.koil.data.update.UpdateDownloadState.Failed)?.reason
+        val failActionLabel = failReason?.let {
+            stringResource(
+                if (it == com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION) {
+                    R.string.koil_update_action_grant
+                } else {
+                    R.string.koil_update_action_retry
+                }
+            )
+        }
         SettingRow(
             title = stringResource(R.string.koil_set_about_check_update),
-            subtitle = checkedAgo?.let { stringResource(R.string.koil_set_about_checked_ago, it) }
+            subtitle = failReason?.let { stringResource(it.messageRes()) }
+                ?: checkedAgo?.let { stringResource(R.string.koil_set_about_checked_ago, it) }
                 ?: stringResource(R.string.koil_set_about_check_update_sub),
-            value = downloadLabel ?: when (val u = update) {
+            subtitleMaxLines = if (failReason != null) 2 else 1,
+            value = downloadLabel ?: failActionLabel ?: when (val u = update) {
                 // Idle 时回落到"上次静默检查"的结论：冷启动查到新版本，这一行直接显示「发现新版本」
                 UpdateCheck.Idle ->
                     if (storedHasNewer) stringResource(R.string.koil_set_about_newer, storedVersion) else ""
@@ -2244,6 +2257,8 @@ private fun SettingRow(
         Icons.AutoMirrored.Filled.KeyboardArrowRight,
     // value 前挂一个 6dp 红点，用于「有新版本」这类需要主动提醒的行
     badgeDot: Boolean = false,
+    // 失败原因这类状态句需要两行；默认一行，避免普通副标题把行高压高
+    subtitleMaxLines: Int = 1,
 ) {
     Row(
         modifier = Modifier
@@ -2267,7 +2282,7 @@ private fun SettingRow(
                     text = subtitle,
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    maxLines = 1,
+                    maxLines = subtitleMaxLines,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -2286,6 +2301,13 @@ private fun SettingRow(
             fontSize = 14.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
             fontWeight = FontWeight.Medium,
+            // 无约束的 value 会把左边 `Column(weight(1f))` 压到零宽：整句失败文案
+            // 排满三行，标题每行只装得下一个字（实机截图就是这个现象）。
+            // 右列最多占一半、只留一行、超出省略 —— 任何行、任何语言都不会再压垮标题。
+            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.End,
         )
         if (showArrow) {
             Spacer(Modifier.width(4.dp))

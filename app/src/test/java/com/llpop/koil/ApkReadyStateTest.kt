@@ -52,4 +52,21 @@ class ApkReadyStateTest {
             assertNull(nextReadyTag("V1.1.10", it))
         }
     }
+
+    @Test
+    fun `进程重启 —— 落盘 tag 与文件都在，恢复后不该重下`() {
+        // readyTag 只有内存副本时，「下完没装、退出应用、再进来」会丢掉唯一凭据：
+        val f = tmp.newFile("KOiL-update.apk")
+        val saved = "V1.1.10"
+        // 恢复就是拿落盘 tag 当内存 tag 再判一次
+        assertTrue(isReadyFor(saved, saved, f))
+    }
+
+    @Test
+    fun `进程重启 —— 文件已被系统清掉，落盘 tag 不能当已下好`() {
+        val f = tmp.newFile("KOiL-update.apk")
+        assertTrue(f.delete())
+        val saved = "V1.1.10"
+        assertFalse(isReadyFor(saved, saved, f))
+    }
 }

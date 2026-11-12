@@ -1,6 +1,7 @@
 package com.llpop.koil.data.update
 
 import android.app.Application
+import com.llpop.koil.data.settings.AppSettings
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -15,6 +16,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -64,6 +66,7 @@ private sealed interface FetchResult {
  */
 class ApkUpdater(
     private val app: Application,
+    private val settings: AppSettings,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -72,8 +75,38 @@ class ApkUpdater(
 
     private var job: Job? = null
 
-    /** 已下好的 tag（用于「已下好就再拉一次安装器」，避免重复下载几 MB） */
+    /** 已下好的 tag（用于「已下好就再拉一次安装器」，避免重复下载几 MB）
+     *  `@Volatile`：写盘恢复跑在 IO 上，下载判断在主线程读。 */
+    @Volatile
     private var readyTag: String? = null
+
+    /**
+     * 进程重启后的恢复。
+     *
+     * `readyTag` 只有内存副本时，「下完没装、退出应用、再进来」会丢掉唯一凭据：
+     * `updates/KOiL-update.apk` 明明还在，但 readyTag 是 null，
+     * 点横幅 → `isReadyFor` 为 false → `fetch()` 先 `dest.delete()` 再从头下 6.7MB。
+     * 文件名是常量（`KOiL-update.apk`），盘上没有任何信息能说明它对应哪个 tag，
+     * 所以 tag 必须跟着落盘。
+     */
+    init {
+        scope.launch {
+            val saved = settings.updateReadyTag.first()
+            if (saved.isBlank()) return@launch
+            if (isReadyFor(saved, saved, apkFile())) {
+                readyTag = saved
+                _state.value = UpdateDownloadState.Ready(saved)
+            } else {
+                // 文件已被系统清掉（外部存储 evict / 清数据）→ 落盘 tag 一并失效
+                settings.setUpdateReadyTag(null)
+            }
+        }
+    }
+
+    /** readyTag 落盘：只在内存改完之后调用，保证本进程立刻生效 */
+    private fun persistReadyTag(tag: String?) {
+        scope.launch { settings.setUpdateReadyTag(tag) }
+    }
 
     private fun isReady(tag: String): Boolean = isReadyFor(tag, readyTag, apkFile())
 
@@ -106,6 +139,7 @@ class ApkUpdater(
                 }
                 is FetchResult.Ok -> {
                     readyTag = tag
+                    persistReadyTag(tag)
                     _state.value = UpdateDownloadState.Ready(tag)
                     installReady(tag)
                 }
@@ -127,6 +161,7 @@ class ApkUpdater(
         running.cancel()
         job = null
         readyTag = null
+        persistReadyTag(null)
         // 半截文件删掉，不白占几 MB；正在写的流被 cancel 后由协程侧兜异常
         apkFile()?.delete()
         _state.value = UpdateDownloadState.Idle
@@ -144,6 +179,7 @@ class ApkUpdater(
      */
     private fun fail(reason: UpdateFailure, detail: String? = null) {
         readyTag = nextReadyTag(readyTag, reason)
+        persistReadyTag(readyTag)
         _state.value = UpdateDownloadState.Failed(reason, detail)
     }
 

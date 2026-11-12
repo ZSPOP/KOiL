@@ -368,6 +368,7 @@
     <string name="koil_update_progress_tap_cancel">%1$s · %2$d%% · tap to cancel</string>
     <string name="koil_update_progress_unknown">%1$s · …</string>
     <string name="koil_update_state_failed">failed</string>
+    <string name="koil_update_action_grant">Open settings</string>
     <string name="koil_update_action_cancel">Cancel</string>
     <string name="koil_update_action_retry">Retry</string>
     <string name="koil_set_about_check_failed">Check failed, tap to retry</string>
