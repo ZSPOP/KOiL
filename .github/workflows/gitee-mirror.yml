@@ -36,6 +36,15 @@ on:
           - 'true'
           - 'false'
         default: 'true'
+      # 孤儿 tag 清理入口。/releases 里已经没有对应 Release 的 tag，正常清理
+      # （候选从 /releases 构造）永远扫不到，只能点名。历史遗留的 V1.1.3 / V1.1.4
+      # 就是这么来的：先删 Release、后删 tag，而那条 tag 删除路径 100% 失败。
+      # 删除顺序已在脚本里对调（tag 先删），后续不会再新增孤儿。
+      extra_tags:
+        description: '额外点名删除的孤儿 tag，逗号分隔（如 V1.1.3,V1.1.4）；留空则跳过'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -83,5 +92,6 @@ jobs:
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
           GITEE_MIRROR_KEEP: ${{ inputs.keep }}
           GITEE_MIRROR_DRY_RUN: ${{ inputs.dry_run }}
+          GITEE_MIRROR_EXTRA_TAGS: ${{ inputs.extra_tags }}
           TAG: ${{ inputs.tag }}
         run: bash .github/scripts/gitee-mirror.sh "$KOIL_MIRROR_APK" "$TAG"
