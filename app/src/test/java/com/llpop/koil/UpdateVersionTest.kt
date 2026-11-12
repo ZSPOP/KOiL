@@ -46,6 +46,20 @@ class UpdateVersionTest {
     }
 
     @Test
+    fun `compareVersionNames 两侧都接受 V 前缀`() {
+        // versionName 一旦改成带 V（与 GitHub tag 同形），不 normalize 的一侧首段会被静默丢弃，
+        // 结果从「1.1.4 更新」翻转成「不更新」，且没有任何报错
+        assertEquals(1, compareVersionNames("V1.1.4", "V1.1.3"))
+        // 任一侧带/不带 V 都按数字段比，方向不能翻转
+        assertEquals(1, compareVersionNames("1.1.4", "V1.1.3"))
+        assertEquals(-1, compareVersionNames("V1.1.2", "1.1.3"))
+        assertEquals(0, compareVersionNames("V1.1.3", "1.1.3"))
+        // 只规范化一侧的情形（isNewerRelease 的实际调用形态）
+        assertTrue(isNewerRelease("V1.1.4", "V1.1.3"))
+        assertFalse(isNewerRelease("V1.1.3", "V1.1.3"))
+    }
+
+    @Test
     fun `compareVersionNames 忽略非数字后缀`() {
         // "-beta" 这类后缀不参与比较（GitHub 上偶尔会出现预发布标签）
         assertEquals(0, compareVersionNames("2.0.0-beta", "2.0.0"))

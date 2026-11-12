@@ -140,10 +140,15 @@ fun normalizeVersion(tag: String): String = tag.trim().trimStart('V', 'v')
 
 /**
  * 语义版本比较：只比数字段，忽略 V/v 前缀与非数字后缀（如 -beta）。返回 >0 表示 a 更新。
+ *
+ * 两侧都在内部做 normalize，不依赖调用方先规范化：调用方常常只规范化了一侧
+ * （isNewerRelease 传进来的 latestTag 已 normalize，currentVersion 是原始的 VERSION_NAME），
+ * 若这里不再兜一次，"V1.1.3" 的首段 "V1" 会被 toIntOrNull 静默丢弃 → 得到 [1,3] 而不是 [1,1,3]，
+ * 表现为「V1.1.4 不比 V1.1.3 新」：红点永不亮、refresh() 永不落库，且不报错不崩溃。
  */
 fun compareVersionNames(a: String, b: String): Int {
-    val pa = a.split(".", "-").mapNotNull { it.toIntOrNull() }
-    val pb = b.split(".", "-").mapNotNull { it.toIntOrNull() }
+    val pa = normalizeVersion(a).split(".", "-").mapNotNull { it.toIntOrNull() }
+    val pb = normalizeVersion(b).split(".", "-").mapNotNull { it.toIntOrNull() }
     for (i in 0 until maxOf(pa.size, pb.size)) {
         val x = pa.getOrElse(i) { 0 }
         val y = pb.getOrElse(i) { 0 }
