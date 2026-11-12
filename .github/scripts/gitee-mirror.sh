@@ -45,6 +45,12 @@ APKF="$(basename "${APKF_PATH:-}")"
 GITEE_MIRROR_KEEP="${GITEE_MIRROR_KEEP:-5}"
 GITEE_MIRROR_DRY_RUN="${GITEE_MIRROR_DRY_RUN:-true}"
 
+# 前置校验：KEEP 非法必须在任何网络请求之前拦住。否则要等上传跑完（实测最长 456s）
+# 才在清理段报错，等于白传一次整个 APK。
+if ! [[ "$GITEE_MIRROR_KEEP" =~ ^[0-9]+$ ]]; then
+  fail "GITEE_MIRROR_KEEP 必须是非负整数，实际是 ${GITEE_MIRROR_KEEP}"
+fi
+
 API="https://gitee.com/api/v5/repos/${GITEE_OWNER:-}/${GITEE_REPO:-}"
 DOWN_URL="https://gitee.com/${GITEE_OWNER:-}/${GITEE_REPO:-}/releases/download/${TAG}/${APKF}"
 
@@ -170,8 +176,10 @@ echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
 #      c. 排除当前 TAG          —— 补传旧版本时，该 Release 的 created_at 是旧的，
 #                                  可能排在 keep 之外；不排除就会「刚上传成功、接着被删」
 #
-#    排序用 created_at 而不是 tag 名：要的是「最近发布」，与语义版本无关
-#    （tag 名排序在 V1.9 / V1.10 这类跨版本号上会错位）。
+#    排序用版本号（sort -V），不用 created_at：清理的语义是「保留最新的几个版本」。
+#    created_at 在补传场景下会失真 —— 补传的旧版本是刚创建的，会被当成「最近发布」
+#    保护起来，而版本号更新的反而先被删（实测顺序：V1.1.5 先于 V1.1.3 被删）。
+#    sort -V 做版本排序，能正确处理 V1.9 / V1.10 跨位数，不必退回纯字符串排序。
 ALL=$(curl -sS "${CURL[@]}" "${AUTH[@]}" "${API}/releases?per_page=100" 2>/dev/null || true)
 if ! printf '%s' "$ALL" | jq -e 'type=="array"' >/dev/null 2>&1; then
   echo "::warning::Gitee Release 列表读取失败，跳过清理：$(printf '%s' "$ALL" | head -c 200)"
@@ -180,21 +188,23 @@ fi
 TOTAL=$(printf '%s' "$ALL" | jq 'length')
 # 单独打印「镜像版本数」：清理只对满足 a/b 两道口径的条目计数，
 # 直接拿 TOTAL 去对照保留数会让人误判 dry-run 清单（比如 8 条里只有 6 条可计）。
-ELIGIBLE=$(printf '%s' "$ALL" | jq -r '
+CAND=$(printf '%s' "$ALL" | jq -r '
   map(select(.tag_name | test("^V[0-9]")))
   | map(select(((.assets // []) | map(.name // "") | map(select(test("^KOiL-"))) | length) > 0))
-  | length')
-echo "Gitee 现有 ${TOTAL} 个 Release，其中镜像版本 ${ELIGIBLE} 个，保留最近 ${GITEE_MIRROR_KEEP} 个（dry-run=${GITEE_MIRROR_DRY_RUN}）"
-TO_DEL=$(printf '%s' "$ALL" | jq -r \
-  --argjson keep "$GITEE_MIRROR_KEEP" --arg cur "$TAG" '
-  sort_by(.created_at) | reverse
-  | map(select(.tag_name | test("^V[0-9]")))
-  | map(select(((.assets // []) | map(.name // "") | map(select(test("^KOiL-"))) | length) > 0))
-  | .[$keep:]
-  | map(select(.tag_name != $cur))
   | .[] | "\(.id)\t\(.tag_name)"')
-if [ -z "$TO_DEL" ]; then
+ELIGIBLE=$(printf '%s\n' "$CAND" | grep -c . || true)
+echo "Gitee 现有 ${TOTAL} 个 Release，其中镜像版本 ${ELIGIBLE} 个，保留版本号最高的 ${GITEE_MIRROR_KEEP} 个（dry-run=${GITEE_MIRROR_DRY_RUN}）"
+# LC_ALL=C：sort -V 的版本比较不受 locale 影响。-k2,2 只比 tag 字段，
+# 否则 id 的数字会先参与比较（"123\tV1.1.10" 与 "45\tV1.1.9"）。
+SORTED=$(printf '%s\n' "$CAND" | LC_ALL=C sort -V -t$'\t' -k2,2)
+DEL_N=$(( ELIGIBLE - GITEE_MIRROR_KEEP ))
+if [ "$DEL_N" -le 0 ]; then
   echo "无需清理"
+  exit 0
+fi
+TO_DEL=$(printf '%s\n' "$SORTED" | head -n "$DEL_N" | awk -F'\t' -v cur="$TAG" '$2 != cur')
+if [ -z "$TO_DEL" ]; then
+  echo "无需清理（待删项只有当前 TAG）"
   exit 0
 fi
 while IFS=$'\t' read -r rid rtag; do

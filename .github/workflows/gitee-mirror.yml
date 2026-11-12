@@ -20,6 +20,22 @@ on:
         description: '要补传到 Gitee 的 GitHub Release 标签（如 V1.1.5）'
         required: true
         type: string
+      # 下面两个默认值与 android-release.yml 保持一致，不填就完全维持原行为。
+      # 存在意义是能不改文件就验证清理：默认 keep=5 且 dry-run，攒不满 5 条时
+      # 删除路径永远不会被执行到，等于零覆盖。
+      keep:
+        description: '清理时保留的版本数（版本号最高的 N 个；0 = 只留当前补传的这个）'
+        required: false
+        default: '5'
+        type: string
+      dry_run:
+        description: '清理只演练不下手（true = 只打印将删清单）'
+        required: false
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+        default: 'true'
 
 permissions:
   contents: read
@@ -63,7 +79,7 @@ jobs:
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
           GITEE_OWNER: ${{ secrets.GITEE_OWNER }}
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
-          GITEE_MIRROR_KEEP: "5"
-          GITEE_MIRROR_DRY_RUN: "true"
+          GITEE_MIRROR_KEEP: ${{ inputs.keep }}
+          GITEE_MIRROR_DRY_RUN: ${{ inputs.dry_run }}
           TAG: ${{ inputs.tag }}
         run: bash .github/scripts/gitee-mirror.sh "$KOIL_MIRROR_APK" "$TAG"
