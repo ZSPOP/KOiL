@@ -207,18 +207,30 @@ if [ -z "$TO_DEL" ]; then
   echo "无需清理（待删项只有当前 TAG）"
   exit 0
 fi
+# 真实删除前的显式声明。dry_run 原本要改两个文件的 env 才生效，现在开了 dispatch
+# 输入后点一下下拉框就能真删，配 keep=0 可以一次清空所有镜像 Release。
+# 原来那层摩擦是安全阀，撤掉后至少要保证日志里躲不过这一行 —— 否则扫日志时
+# 真实删除和演练的观感几乎一样。
+if [ "$GITEE_MIRROR_DRY_RUN" != "true" ]; then
+  DEL_COUNT=$(printf '%s\n' "$TO_DEL" | grep -c . || true)
+  echo "::warning::dry-run=false，本次将真实删除 ${DEL_COUNT} 个 Gitee Release（保留版本号最高的 ${GITEE_MIRROR_KEEP} 个）"
+fi
 while IFS=$'\t' read -r rid rtag; do
   [ -z "${rid:-}" ] && continue
   if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
     echo "[dry-run] 将删除 Release id=${rid} / tag=${rtag}（Release 与 tag 各一次调用，不是同一次）"
     continue
   fi
-  RC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || echo 000)
+  # 不写 `|| echo 000`：与 UP_META 同一个坑 —— curl 失败时 -w 仍会输出 000，
+  # 再追加一行会让 RC 变两行，`case` 匹配不到、还会被当成另一个错误码。
+  RC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/releases/${rid}" 2>/dev/null || true)
+  RC=${RC:-000}
   case "$RC" in
     200|204) echo "已删 Release id=${rid}（HTTP ${RC}）" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
   esac
-  TC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || echo 000)
+  TC=$(curl -sS -o /dev/null -w '%{http_code}' "${CURL[@]}" -X DELETE "${AUTH[@]}" "${API}/tags/${rtag}" 2>/dev/null || true)
+  TC=${TC:-000}
   case "$TC" in
     200|204) echo "已删 tag ${rtag}（HTTP ${TC}）" ;;
     *) echo "::warning::删 tag ${rtag} 返回 HTTP ${TC}（继续，不阻断）" ;;
