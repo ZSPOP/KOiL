@@ -2296,15 +2296,21 @@ private fun SettingRow(
             )
             Spacer(Modifier.width(6.dp))
         }
+        val valueModifier = if (value.isEmpty()) {
+            // 空 value 的行（条款 / 隐私 / 反馈…）绝不能参与权重：Row 的权重是
+            // 预先切分的，右列一旦拿到 1f，左列就只剩一半，行尾箭头会停在屏幕中间。
+            Modifier
+        } else {
+            // 非空才分权重：无约束的 value 会把左列压到零宽（整句失败文案排三行、
+            // 标题每行一个字）。右列最多占一半、只留一行、超出省略。
+            Modifier.weight(1f, fill = false)
+        }
         Text(
             text = value,
             fontSize = 14.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
             fontWeight = FontWeight.Medium,
-            // 无约束的 value 会把左边 `Column(weight(1f))` 压到零宽：整句失败文案
-            // 排满三行，标题每行只装得下一个字（实机截图就是这个现象）。
-            // 右列最多占一半、只留一行、超出省略 —— 任何行、任何语言都不会再压垮标题。
-            modifier = Modifier.weight(1f, fill = false),
+            modifier = valueModifier,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.End,
