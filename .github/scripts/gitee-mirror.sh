@@ -34,7 +34,7 @@ fail() {
     echo "::error::Gitee 补传失败（${TAG:-<空>}）：镜像未完成，Gitee 上可能留下没有 APK 的 Release"
     exit 1
   fi
-  echo "::warning::Gitee 镜像中止（不影响 GitHub Release 已发布）"
+  echo "::warning::Gitee 镜像中止（不影响发版流程）"
   exit 0
 }
 
