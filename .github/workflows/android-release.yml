@@ -29,6 +29,11 @@ jobs:
   release-apk:
     name: Build & Publish Release
     runs-on: ubuntu-latest
+    # 每个子步骤都有自己的上界之后，这里只是兜底：构建实测 2.8 分（按 5 分计）+
+    # 上传 20 + 校验 10 + 清理 ≤20 + git push 2×N，60 有余量、砍不到构建。
+    # 与 gitee-mirror.yml 的 45 刻意不同：那个 job 没有构建步骤。
+    # 正常路径实测 11.5 分钟。
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -264,7 +269,17 @@ jobs:
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
           # 保留最近 N 个版本，超出的进清理候选。
           GITEE_MIRROR_KEEP: "5"
-          # 第一版固定 dry-run：DELETE 的真实行为在本地验证不了（令牌只在 Secrets 里），
-          # 先跑一轮看「待删清单」打印得对不对，确认无误后再改成 "false" 开真删。
-          GITEE_MIRROR_DRY_RUN: "true"
+          # 清理已启用：keep=5，超出部分按版本号（sort -V）从旧到新删除。
+          #
+          # 为什么现在就敢开：Gitee 目前 2 条（V1.1.6 / V1.1.7），本次发布后 3 条，
+          # DEL_N = 3 - 5 < 0，仍会走「无需清理」早退，一条都不会删。真正第一次删除
+          # 要等到第 6 条。在这个窗口改，风险为零 —— 删错也能 dispatch 补传（一次约
+          # 8 分钟上传，代价可控）。
+          #
+          # 反面：一直留 "true"，「自动清理」就永远不生效，每次都得人去改 workflow，
+          # 那不叫自动清理，叫手动任务。
+          #
+          # 注意：这是自动发版链的默认值；gitee-mirror.yml 的 inputs.dry_run 是手动
+          # dispatch 的输入（默认 true），两者语义不同，改一处不影响另一处。
+          GITEE_MIRROR_DRY_RUN: "false"
         run: bash .github/scripts/gitee-mirror.sh "KOiL-${GITHUB_REF_NAME}-vc${VERSION_CODE}-release.apk" "${GITHUB_REF_NAME}"

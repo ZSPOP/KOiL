@@ -28,10 +28,13 @@
 set -uo pipefail
 
 # 唯一的失败出口。$1 是给人的原因，写清楚「哪一步、什么状态」。
+# $2 可选：覆盖默认的 ::error 文案。默认那句说的是「镜像未完成」，但清理阶段的失败
+# （比如孤儿 tag 删不掉）发生时上传与校验都已经过了，照抄会把排查方向带偏 ——
+# 补传链的失败面不止「没传上去」一种。
 fail() {
   echo "::warning::$1"
   if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
-    echo "::error::Gitee 补传失败（${TAG:-<空>}）：镜像未完成，Gitee 上可能留下没有 APK 的 Release"
+    echo "::error::${2:-Gitee 补传失败（${TAG:-<空>}）：镜像未完成，Gitee 上可能留下没有 APK 的 Release}"
     exit 1
   fi
   echo "::warning::Gitee 镜像中止（不影响发版流程）"
@@ -53,7 +56,11 @@ del_tag() {
   # 第一个空的 credential.helper= 是重置：否则全局或 checkout 留下的
   # gh auth git-credential 会先被调用、把 GitHub 凭据交给 Gitee，认证必然失败。
   local helper='!f() { echo "username=$GITEE_OWNER"; echo "password=$GITEE_TOKEN"; }; f'
-  if GIT_TERMINAL_PROMPT=0 git -c credential.helper= -c credential.helper="$helper" \
+  # timeout 120：全脚本唯一没有上界的网络操作。curl 三套参数各自有 --max-time，
+  # 只有 git push 是裸的 —— 卡在认证握手 / DNS / TCP 黑洞时会一直挂到 job 被超时杀掉，
+  # 日志只剩 cancelled，看不出是谁的锅。tag 只有几十字节，120s 足够。
+  # 超时返回 124，落到下面的失败分支（return 1），下游的幂等与 continue 逻辑不变。
+  if GIT_TERMINAL_PROMPT=0 timeout 120 git -c credential.helper= -c credential.helper="$helper" \
        push "https://gitee.com/${GITEE_OWNER}/${GITEE_REPO}.git" \
        --delete "refs/tags/${tag}" >"$log" 2>&1; then
     echo "已删 tag ${tag}（git push --delete）"
@@ -244,9 +251,16 @@ echo "Gitee 现有 ${TOTAL} 个 Release，其中镜像版本 ${ELIGIBLE} 个，�
 #
 # 三道守卫都不是可选的。点错一个名字删掉当前正在补传的 TAG，会造出「有 Release
 # 无 tag」的反向残缺 —— 比孤儿更难查，因为 Release 列表看着还是对的。
+# 孤儿清扫的失败标记。见下方 else 分支：这里的删除没有自愈路径，失败必须让整条链红。
+ORPHAN_FAIL=0
+
 if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
   REL_TAGS=$(printf '%s' "$ALL" | jq -r '.[].tag_name' 2>/dev/null || true)
-  for _t in ${GITEE_MIRROR_EXTRA_TAGS//,/ }; do
+  # 不能写 `for _t in ${X//,/ }`：未加引号会做单词分裂 + pathname expansion，
+  # tag 名里带 * 或 ? 时会在下面的 ^V[0-9] 守卫之前就被展开成文件名，守卫形同虚设。
+  IFS=',' read -ra _tags <<< "$GITEE_MIRROR_EXTRA_TAGS"
+  for _t in "${_tags[@]}"; do
+    _t="${_t//[[:space:]]/}"
     [ -z "$_t" ] && continue
     if ! [[ "$_t" =~ ^V[0-9] ]]; then
       echo "::warning::跳过非法 tag 名 ${_t}（必须匹配 ^V[0-9]，避免误删 main 之类）"
@@ -263,7 +277,14 @@ if [ -n "${GITEE_MIRROR_EXTRA_TAGS:-}" ]; then
     if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
       echo "[dry-run] 将删除孤儿 tag ${_t}（/releases 里已无此 Release）"
     else
-      del_tag "$_t"
+      # 必须接住返回值。孤儿 tag 不在 /releases 里，清理段的候选口径永远扫不到它 ——
+      # 这里失败就没有第二次机会（重跑同一个 dispatch 才会重试），而裸调 del_tag
+      # 会把 return 1 丢掉，接着 DEL_N 算出「无需清理」exit 0，变成「专门来删孤儿、
+      # 删失败了还绿」。与 #38 定的「补传链不能绿着留残缺」是同一条原则。
+      if ! del_tag "$_t"; then
+        echo "::error::孤儿 tag ${_t} 删除失败且无自愈路径（/releases 里本就没有它），需手工 git push --delete refs/tags/${_t}"
+        ORPHAN_FAIL=1
+      fi
     fi
   done
 fi
@@ -272,14 +293,36 @@ fi
 SORTED=$(printf '%s\n' "$CAND" | LC_ALL=C sort -V -t$'\t' -k2,2)
 DEL_N=$(( ELIGIBLE - GITEE_MIRROR_KEEP ))
 if [ "$DEL_N" -le 0 ]; then
+  # 孤儿删除失败时这条「无需清理」会把失败吞掉：ELIGIBLE <= KEEP 是常态（Gitee 2~3 条、
+  # keep=5），日志只剩一行好看的 exit 0。必须在退出口之前先缴失败。
+  if [ "$ORPHAN_FAIL" = "1" ]; then
+    fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理也无对象可删" \
+      "Gitee 清理失败（${TAG}）：镜像已完成（上传与校验均通过），但孤儿 tag 清理失败，需手工 git push --delete"
+  fi
   echo "无需清理"
   exit 0
 fi
 TO_DEL=$(printf '%s\n' "$SORTED" | head -n "$DEL_N" | awk -F'\t' -v cur="$TAG" '$2 != cur')
 if [ -z "$TO_DEL" ]; then
+  if [ "$ORPHAN_FAIL" = "1" ]; then
+    fail "孤儿 tag 清扫失败（见上方 ::error），待删项只有当前 TAG" \
+      "Gitee 清理失败（${TAG}）：镜像已完成（上传与校验均通过），但孤儿 tag 清理失败，需手工 git push --delete"
+  fi
   echo "无需清理（待删项只有当前 TAG）"
   exit 0
 fi
+# dry-run 且真的有待删项 —— 这是唯一需要人拍板的时刻。workflow 注释里写「约第 6 条时
+# 改成 false」只能靠人记，而那天大家看到的只是一行「无需清理」。让它自己进 annotations：
+# 平时不吵，一旦出现就挂在 run 列表上，翻一眼就能看到。
+if [ "$GITEE_MIRROR_DRY_RUN" = "true" ]; then
+  DEL_PREVIEW=$(printf '%s\n' "$TO_DEL" | grep -c . || true)
+  # 文案要说「你这一次」该怎么做。自动链默认已是 dry_run=false，所以能走到这里的
+  # 基本只有手动 dispatch（gitee-mirror.yml 的 inputs.dry_run 默认 true）——
+  # 对着一个 workflow 里明明写着 false 的人说「把 GITEE_MIRROR_DRY_RUN 改成 false」，
+  # 他只会不知道去哪改。
+  echo "::warning::dry-run：本次已列出 ${DEL_PREVIEW} 条待删项（清单见上方 [dry-run] 行），未执行删除。确认清单无误后重新 dispatch 并把 dry_run 设为 false"
+fi
+
 # 真实删除前的显式声明。dry_run 原本要改两个文件的 env 才生效，现在开了 dispatch
 # 输入后点一下下拉框就能真删，配 keep=0 可以一次清空所有镜像 Release。
 # 原来那层摩擦是安全阀，撤掉后至少要保证日志里躲不过这一行 —— 否则扫日志时
@@ -324,7 +367,23 @@ while IFS=$'\t' read -r rid rtag; do
     # 实测 Gitee 删 tag 会级联删掉挂在上面的 Release（反方向不成立：删 Release 不删 tag）。
     # 上面 del_tag 成功时，这里必然 404。判成失败会让日志看着像删 Release 没成功，
     # 而实际目标早就达成了，只能靠人肉对照 id 才敢确认。
+    #
+    # 本分支成立的前提是：上方 del_tag 失败会 continue —— 能走到这里只可能是 tag 已删、
+    # Release 被级联带走。若改回「先 Release 后 tag」或去掉那个 continue（见 #39），
+    # 404 就会重新变成「真失败被静默吞掉」。
     404) echo "Release id=${rid} 已不存在（随 tag 一并删除），视为成功" ;;
     *) echo "::warning::删 Release id=${rid} 返回 HTTP ${RC}（继续，不阻断后续项）" ;;
   esac
 done <<< "$TO_DEL"
+
+# 有 Release 真删的路径也要缴一次：否则孤儿失败会被后面的删除日志淹掉。
+#
+# 必须写成 if + 显式 exit 0。`[ ... ] && fail` 在 ORPHAN_FAIL=0 时短路返回 1，
+# 而这已经是脚本最后一句 —— 进程退出码就是 1，于是「清理成功、没有任何孤儿失败」
+# 的主路径会无条件红。前面两个出口用同样写法是安全的，只因为后面紧跟 exit 0；
+# 那个前提没写在任何地方，这里索性统一成 if。
+if [ "$ORPHAN_FAIL" = "1" ]; then
+  fail "孤儿 tag 清扫失败（见上方 ::error），Release 清理已按计划完成" \
+      "Gitee 清理失败（${TAG}）：镜像已完成（上传与校验均通过），但孤儿 tag 清理失败，需手工 git push --delete"
+fi
+exit 0
