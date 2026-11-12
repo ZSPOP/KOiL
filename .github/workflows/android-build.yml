@@ -60,10 +60,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
-        run: chmod +x gradlew
+        run: chmod +x gradlew .github/scripts/gradle-with-retry.sh
 
+      # 包装脚本：依赖解析/网络抖动导致的失败自动重试一次（Build #73 事故的防再发），
+      # 编译/测试等真实失败不重试，边界见 .github/scripts/gradle-with-retry.sh 头注释
       - name: Compile + Unit tests + Lint
-        run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug --no-daemon --console=plain
+        run: .github/scripts/gradle-with-retry.sh ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug --no-daemon --console=plain
 
   build-apk:
     name: Build APK
@@ -92,7 +94,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
-        run: chmod +x gradlew
+        run: chmod +x gradlew .github/scripts/gradle-with-retry.sh
 
       # versionCode 分配：run_number + 已发布版本数。
       # 不能用裸 run_number——重建仓库 / 换 CI 后它从 1 重来，会落在已发布正式版之下，系统判降级。
@@ -184,11 +186,13 @@ jobs:
           fi
           echo "keystore 已从 Secrets 恢复"
 
+      # 两个构建步骤同样走重试包装（规则同上；依赖已在 setup-gradle 缓存，
+      # 抖动只发生在缓存未命中的冷启动，重试命中本地/上游缓存即恢复）
       - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon --console=plain
+        run: .github/scripts/gradle-with-retry.sh ./gradlew assembleDebug --no-daemon --console=plain
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon --console=plain
+        run: .github/scripts/gradle-with-retry.sh ./gradlew assembleRelease --no-daemon --console=plain
 
       # 发布闸门②：产物必须是正式证书签名，且 versionCode 必须等于规划号、且规划号高于构建开始时的
       # 已发布最大值（两个基准都来自 Resolve 步骤的快照，见下方说明）。
