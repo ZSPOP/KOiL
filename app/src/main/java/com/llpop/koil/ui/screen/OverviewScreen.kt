@@ -778,7 +778,12 @@ fun OverviewScreen(
                         Spacer(Modifier.height(8.dp))
                         SaveErrorHint()
                     }
-                    Spacer(Modifier.height(20.dp))
+                    // 这 20dp 是「内容块 → 按钮行」的间距：有块真的渲染才画。空态时块下缘
+                    // 已由上方列的 top 16dp 撑到位（块模型 ③），再加 20dp 就变成 36dp——
+                    // 正是开发者最初抱怨的松散值，条件化后空态 = 16dp，与定稿图一致。
+                    if (hasSummary || hasHint || dlg.saveError) {
+                        Spacer(Modifier.height(20.dp))
+                    }
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
                         Spacer(Modifier.width(12.dp))
@@ -2181,7 +2186,12 @@ private fun EditRecordDialog(
                     Spacer(Modifier.height(8.dp))
                     SaveErrorHint()
                 }
-                Spacer(Modifier.height(20.dp))
+                // 这 20dp 是「内容块 → 按钮行」的间距：有块真的渲染才画。空态时块下缘
+                // 已由上方列的 top 16dp 撑到位（块模型 ③），再加 20dp 就变成 36dp——
+                // 正是开发者最初抱怨的松散值，条件化后空态 = 16dp，与定稿图一致。
+                if (hasSummary || hasHint || uiState.saveError) {
+                    Spacer(Modifier.height(20.dp))
+                }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = onDismiss,
