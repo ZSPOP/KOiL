@@ -89,7 +89,6 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -105,13 +104,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.input.pointer.pointerInput
-import com.llpop.koil.BuildConfig
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.Provinces
-import com.llpop.koil.data.update.UpdateChecker
-import com.llpop.koil.data.update.normalizeVersion
-import com.llpop.koil.data.update.shouldBadgeUpdate
-import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
@@ -130,7 +124,6 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import org.koin.core.context.GlobalContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.basic.DropdownItem
@@ -181,15 +174,6 @@ fun OverviewScreen(
     // 待确认删除的记录（弹确认框后才真正删除）
     var pendingDelete by remember { mutableStateOf<RecordWithDerived?>(null) }
 
-    // 更新横幅：与设置页共用同一个 UpdateChecker（冷启动静默检查已把 tag 落到 DataStore）
-    val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
-    val latestTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
-    val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
-    val context = LocalContext.current
-    // 与红点同源：直接用红点那一个有单测的判据（shouldBadgeUpdate），不在这里手写内部逻辑。
-    // 手写的话，将来红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变，
-    // 分叉会从「比较逻辑」变成「判据语义」，更难排查
-    val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
 
     // snapshotFlow 监听 LazyList 滚动位置，仅在"是否显示返回顶部"翻转时更新状态，
     // 不用 LaunchedEffect(scrollState.value) 每次像素变化都触发
@@ -302,26 +286,6 @@ fun OverviewScreen(
                 )
             }
             item { Spacer(Modifier.height(12.dp)) }
-
-            // 更新横幅：摘要卡之后。间距复用列表统一的 12dp item（横幅自己再补一个），
-            // 最终是「摘要卡 → 12dp → 横幅 → 12dp → 异常/预测卡」，不是 24dp
-            if (bannerTag != null) {
-                item(key = "update-banner") {
-                    UpdateBanner(
-                        version = normalizeVersion(bannerTag),
-                        onOpen = {
-                            // 只有真拉起浏览器才记「已读」：startActivity 失败时用户什么都没看到，
-                            // 这时标记会让横幅与红点一起消失，且不会有第二次提醒
-                            if (openExternalUrl(context, releasePageUrl(bannerTag))) {
-                                updateChecker.markSeen(bannerTag)
-                            }
-                        },
-                        // 主动关掉 = 已知晓，同一版本不再提醒（不做「7 天后再提醒」）
-                        onDismiss = { updateChecker.markSeen(bannerTag) },
-                    )
-                }
-                item { Spacer(Modifier.height(12.dp)) }
-            }
 
             // 异常卡：只有真有异常才占位；整卡可点击查看明细
             if (uiState.abnormalRecords.isNotEmpty()) {
@@ -1437,78 +1401,6 @@ private fun ConsumptionSparkline(values: List<Double>, modifier: Modifier = Modi
             ),
         )
         drawCircle(color = lineColor, radius = 2.4.dp.toPx(), center = pts.last())
-    }
-}
-
-// ===== 首页更新横幅（摘要卡之后） =====
-/**
- * 设置页红点之外的第二处提醒：首页摘要卡之后的整条横幅。
- *
- * 显示条件与红点完全同源（同一个 [shouldBadgeUpdate]，有 6 条单测），所以不会出现「有一处亮、另一处不亮」。
- * 点「更新」跳 Release 页——④ 应用内下载落地后只改这里的 onOpen 回调，判据不用动；
- * 点 × 视为已知晓，写 seenTag 后同一版本不再出现（不做「7 天后再提醒」）。
- */
-@Composable
-private fun UpdateBanner(
-    version: String,
-    onOpen: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    KOiLBlurBackground(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                // 整条可点（含左侧图标与留白）：用户对横幅的第一反应是点整行，
-                // 只把 clickable 套在文字上会让图标区域点了没反应；× 有自己的 clickable 会先消费
-                .clickable(onClick = onOpen)
-                .heightIn(min = 46.dp)
-                .padding(start = 16.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.SystemUpdate,
-                contentDescription = null,
-                tint = KOiLColors.Primary,
-                modifier = Modifier.size(18.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.koil_ov_update_new, version),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = stringResource(R.string.koil_ov_update_action) + " ›",
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = KOiLColors.Primary,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-            // 关闭：36dp 可点区域（图标视觉仍是 18dp），比直接点 18dp 图标好按
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = stringResource(R.string.koil_ov_update_dismiss),
-                tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clickable(onClick = onDismiss)
-                    .padding(9.dp),
-            )
-        }
     }
 }
 

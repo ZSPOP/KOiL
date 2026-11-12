@@ -59,12 +59,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import org.koin.core.context.GlobalContext
 import com.llpop.koil.data.oil.ForecastDirection
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.oil.forecastDirection
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
+import com.llpop.koil.BuildConfig
+import com.llpop.koil.data.update.UpdateChecker
+import com.llpop.koil.data.update.normalizeVersion
+import com.llpop.koil.data.update.shouldBadgeUpdate
+import com.llpop.koil.data.update.releasePageUrl
+import com.llpop.koil.ui.component.UpdateBanner
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -111,6 +118,13 @@ fun AddScreen(
     val showPermissionDialog = remember { mutableStateOf(false) }
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
+    // 更新横幅：与设置页共用同一个 UpdateChecker（冷启动静默检查已把 tag 落到 DataStore）。
+    // 判据复用红点那一个有单测的 shouldBadgeUpdate，不在首页再手写一套 —— 否则将来
+    // 红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变。
+    val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
+    val latestTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
+    val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
+    val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
     // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
     val locateToast = uiState.locateMessage?.let {
@@ -177,6 +191,24 @@ fun AddScreen(
         )
         // 区块间取 12dp，高频录入页一屏更紧凑
         Spacer(Modifier.height(12.dp))
+
+        // 更新横幅：首页摘要卡（油价四宫格卡）之后。间距沿用区块间的 12dp，
+        // 最终是「摘要卡 → 12dp → 横幅 → 12dp → 上次加油条」，不是 24dp。
+        if (bannerTag != null) {
+            UpdateBanner(
+                version = normalizeVersion(bannerTag),
+                onOpen = {
+                    // 只有真拉起浏览器才记「已读」：startActivity 失败时用户什么都没看到，
+                    // 这时标记会让横幅与红点一起消失，且不会有第二次提醒
+                    if (openExternalUrl(context, releasePageUrl(bannerTag))) {
+                        updateChecker.markSeen(bannerTag)
+                    }
+                },
+                // 主动关掉 = 已知晓，同一版本不再提醒（不做「7 天后再提醒」）
+                onDismiss = { updateChecker.markSeen(bannerTag) },
+            )
+            Spacer(Modifier.height(12.dp))
+        }
 
         // 上次加油条
         LastRecordBar(uiState = uiState, onApply = viewModel::applyLastRecord)
