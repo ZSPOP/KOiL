@@ -132,7 +132,6 @@ fun AddScreen(
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
     // 应用内更新：直链与 tag 来自同一次检查（见 UpdateChecker.refresh），这里只做搬运。
-    // 下载/安装的状态由下载器自己管，失败原因用 Toast 回一次，不弹对话框（用户可能已经在别的页面）。
     val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
     val apkUrl = updateTarget?.apkUrl.orEmpty()
     // 下载/安装状态就地展示（横幅上显示百分比、失败标记），不弹 Toast：
@@ -233,8 +232,9 @@ fun AddScreen(
                     stringResource(R.string.koil_ov_update_action)
                 },
                 onOpen = {
-                    // 应用内下载：拉起安装器成功时由 ApkUpdater 内部 markSeen，
-                    // 这里不能提前标记 —— 下载失败/取消时横幅必须还在。
+                    // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
+                    // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
+                    // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
                     // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
                     if (apkUrl.isNotBlank()) {
                         // 进度直接显示在横幅上，重复点击由 download() 自己挡（job 在跑就 return）

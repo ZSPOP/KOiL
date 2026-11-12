@@ -1972,7 +1972,8 @@ private fun AboutSection(
                 val u = update
                 when {
                     u is UpdateCheck.Newer -> {
-                        // 优先应用内下载：拉起安装器成功才由下载器 markSeen，失败时红点仍在。
+                        // 应用内下载全程不写 seenTag（下载/安装失败、用户在系统确认页取消，红点与横幅都必须还在）。
+                        // 只有回退浏览器这条路径会在**成功打开版本页**后标记已知晓 —— 那是用户主动表达知悉的动作。
                         // 拿不到直链（Gitee 侧还没镜像完）才回退浏览器。
                         // 用 Newer 自带的 tag，不读 storedTag：refresh() 刚返回时 DataStore 的 Flow
                         // 可能还没 emit 到 Compose，此时读 storedTag 会把上一个版本记成已读
