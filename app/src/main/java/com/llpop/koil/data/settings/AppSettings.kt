@@ -117,6 +117,10 @@ class AppSettings(private val context: Context) {
         /** 表态结果为「仅 WiFi」；蜂窝下点更新会挡住并给一次强制下载入口 */
         private val KEY_UPDATE_WIFI_ONLY = booleanPreferencesKey("KOiL-update-wifi-only")
 
+        /** 已下好的 tag 落盘副本。`ApkUpdater.readyTag` 是内存变量，进程被杀就丢，
+         *  而 `updates/` 下的包还在 —— 不恢复就会把完好的包删掉重下 6.7MB。 */
+        private val KEY_UPDATE_READY_TAG = stringPreferencesKey("KOiL-update-ready-tag")
+
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
@@ -551,6 +555,16 @@ class AppSettings(private val context: Context) {
      * UI 分别订阅 [updateLatestTag] 与 [updateApkUrl] 是两条 collect，中间会有一帧
      * 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读。
      */
+    /** 已下好的 tag；空串表示没有 */
+    val updateReadyTag: Flow<String> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_READY_TAG] ?: "" }
+
+    suspend fun setUpdateReadyTag(tag: String?) {
+        context.KOiLDataStore.edit { p ->
+            if (tag.isNullOrBlank()) p.remove(KEY_UPDATE_READY_TAG) else p[KEY_UPDATE_READY_TAG] = tag
+        }
+    }
+
     val updateTargetPair: Flow<Pair<String, String>> =
         context.KOiLDataStore.data.distinctValue {
             (it[KEY_UPDATE_LATEST_TAG] ?: "") to (it[KEY_UPDATE_APK_URL] ?: "")
