@@ -354,6 +354,11 @@
     <string name="koil_set_about_checking">Checking\u2026</string>
     <string name="koil_set_about_latest">Up to date</string>
     <string name="koil_set_about_newer">Update to V%1$s</string>
+    <string name="koil_update_download_started">Downloading the update. The installer will open when it finishes.</string>
+    <string name="koil_update_fail_download">Download failed, please try again</string>
+    <string name="koil_update_fail_signature">The package signature does not match this app; installation was refused. Please download again.</string>
+    <string name="koil_update_fail_permission">Allow "Install unknown apps" for KOiL in system settings. Opening that page for you.</string>
+    <string name="koil_update_fail_launch">Could not open the system installer, please try again later</string>
     <string name="koil_set_about_check_failed">Check failed, tap to retry</string>
     <string name="koil_set_about_terms">Terms of use</string>
     <string name="koil_set_about_privacy">Privacy policy</string>

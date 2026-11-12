@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  只暴露更新包所在的两个目录，不放开整个 files/cache：
+  FileProvider 一旦把根目录暴露出去，任何能读我们 ContentProvider 的应用都能遍历私有文件。
+  ApkUpdater 优先写 getExternalFilesDir(null)/updates，取不到外部目录时回退 cacheDir/updates。
+-->
+<paths>
+    <external-files-path name="updates" path="updates/" />
+    <cache-path name="updates_cache" path="updates/" />
+</paths>

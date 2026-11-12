@@ -11,6 +11,7 @@ import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
+import com.llpop.koil.data.update.ApkUpdater
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.sync.WebDavClient
 import com.llpop.koil.ui.MainViewModel
@@ -45,6 +46,8 @@ val appModule = module {
     single { WebDavClient() }
     singleOf(::CloudSyncManager)
     singleOf(::UpdateChecker)
+    // 下载器持有应用级 scope：页面被销毁时下载不应中断，所以不能挂在 ViewModel 上
+    singleOf(::ApkUpdater)
 
     single<KOiLRecordDao> { get<AppDatabase>().KOiLRecordDao() }
     single<KOiLPriceDao> { get<AppDatabase>().koilPriceDao() }

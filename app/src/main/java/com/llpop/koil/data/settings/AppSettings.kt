@@ -107,6 +107,9 @@ class AppSettings(private val context: Context) {
         /** 用户已「知晓」的版本 tag：点开 Release 页 / 关闭首页横幅 / 成功拉起安装器时写入。
          *  与 LATEST_TAG 分开存，而不是清空 LATEST_TAG——清空会连行内「发现新版本」文字一起抹掉，用户想再点就没入口。 */
         private val KEY_UPDATE_SEEN_TAG = stringPreferencesKey("KOiL-update-seen-tag")
+        /** 最新版 APK 的直链（Gitee 资产）。APK 名带 versionCode，App 无法自己拼，
+         *  只能每次检查时从 Release 的 assets 里取。 */
+        private val KEY_UPDATE_APK_URL = stringPreferencesKey("KOiL-update-apk-url")
 
         // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
@@ -523,6 +526,13 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_SEEN_TAG] ?: "" }
     suspend fun setUpdateSeenTag(tag: String) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_SEEN_TAG] = tag }
+    }
+
+    /** 最新版 APK 直链（空串=不知道）。与 LATEST_TAG 同时写入，避免"有 tag 没链接"的半状态 */
+    val updateApkUrl: Flow<String> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_APK_URL] ?: "" }
+    suspend fun setUpdateApkUrl(url: String) {
+        context.KOiLDataStore.edit { it[KEY_UPDATE_APK_URL] = url }
     }
 
     // ---- 底部导航条（参考 Mishka 悬浮导航体系）----

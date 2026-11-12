@@ -103,6 +103,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
+import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
@@ -1870,6 +1871,19 @@ private fun AboutSection(
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     // 显示「上次检查」——静默检查没有可见反馈，用户会以为它从没跑过
     val lastCheckAt by updateChecker.lastCheckAt().collectAsStateWithLifecycle(initialValue = 0L)
+    // 应用内更新：直链与 tag 同源（UpdateChecker.refresh 一次响应里取），设置页只搬运
+    val apkUpdater = remember { GlobalContext.get().get<com.llpop.koil.data.update.ApkUpdater>() }
+    val apkUrl by updateChecker.latestApkUrl().collectAsStateWithLifecycle(initialValue = "")
+    val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
+    LaunchedEffect(downloadState) {
+        (downloadState as? com.llpop.koil.data.update.UpdateDownloadState.Failed)?.let {
+            android.widget.Toast.makeText(
+                context,
+                it.reason.messageRes(),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
     val checkedAgo = checkedAgoText(lastCheckAt)
     val storedVersion = remember(storedTag) { com.llpop.koil.data.update.normalizeVersion(storedTag) }
     // 与红点判定共用同一个判据（isNewerRelease）：两处各算一遍的话，将来只改一处就会分叉
@@ -1950,9 +1964,18 @@ private fun AboutSection(
                 val u = update
                 when {
                     u is UpdateCheck.Newer -> {
+                        // 优先应用内下载：拉起安装器成功才由下载器 markSeen，失败时红点仍在。
+                        // 拿不到直链（Gitee 侧还没镜像完）才回退浏览器。
                         // 用 Newer 自带的 tag，不读 storedTag：refresh() 刚返回时 DataStore 的 Flow
                         // 可能还没 emit 到 Compose，此时读 storedTag 会把上一个版本记成已读
-                        if (u.url.isNotBlank() && openExternalUrl(context, u.url)) {
+                        if (apkUrl.isNotBlank()) {
+                            android.widget.Toast.makeText(
+                                context,
+                                com.llpop.koil.R.string.koil_update_download_started,
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                            apkUpdater.download(u.tag, apkUrl)
+                        } else if (u.url.isNotBlank() && openExternalUrl(context, u.url)) {
                             updateChecker.markSeen(u.tag)
                         }
                     }
@@ -1963,7 +1986,14 @@ private fun AboutSection(
                     // 必须用原始 storedTag（V1.1.3），不能用 normalizeVersion 后的 storedVersion（1.1.3）：
                     // releasePageUrl 拼的是 releases/tag/$tag，GitHub 上没有去掉 V 的 tag，会 404。
                     u == UpdateCheck.Idle && storedHasNewer -> {
-                        if (openExternalUrl(
+                        if (apkUrl.isNotBlank()) {
+                            android.widget.Toast.makeText(
+                                context,
+                                com.llpop.koil.R.string.koil_update_download_started,
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                            apkUpdater.download(storedTag, apkUrl)
+                        } else if (openExternalUrl(
                                 context,
                                 com.llpop.koil.data.update.releasePageUrl(storedTag),
                             )

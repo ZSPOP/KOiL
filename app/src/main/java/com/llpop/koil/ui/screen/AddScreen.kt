@@ -67,11 +67,14 @@ import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLBlurBackground
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.BuildConfig
+import com.llpop.koil.data.update.ApkUpdater
+import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.shouldBadgeUpdate
 import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.ui.component.UpdateBanner
+import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -125,6 +128,16 @@ fun AddScreen(
     val latestTag by updateChecker.latestTag().collectAsStateWithLifecycle(initialValue = "")
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
     val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
+    // 应用内更新：直链与 tag 来自同一次检查（见 UpdateChecker.refresh），这里只做搬运。
+    // 下载/安装的状态由下载器自己管，失败原因用 Toast 回一次，不弹对话框（用户可能已经在别的页面）。
+    val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
+    val apkUrl by updateChecker.latestApkUrl().collectAsStateWithLifecycle(initialValue = "")
+    val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
+    LaunchedEffect(downloadState) {
+        (downloadState as? UpdateDownloadState.Failed)?.let {
+            Toast.makeText(context, it.reason.messageRes(), Toast.LENGTH_LONG).show()
+        }
+    }
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
     // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
     val locateToast = uiState.locateMessage?.let {
@@ -198,9 +211,19 @@ fun AddScreen(
             UpdateBanner(
                 version = normalizeVersion(bannerTag),
                 onOpen = {
-                    // 只有真拉起浏览器才记「已读」：startActivity 失败时用户什么都没看到，
-                    // 这时标记会让横幅与红点一起消失，且不会有第二次提醒
-                    if (openExternalUrl(context, releasePageUrl(bannerTag))) {
+                    // 应用内下载：拉起安装器成功时由 ApkUpdater 内部 markSeen，
+                    // 这里不能提前标记 —— 下载失败/取消时横幅必须还在。
+                    // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
+                    if (apkUrl.isNotBlank()) {
+                        // 6.6 MB 在国内通常要几十秒，不先给一句反馈就会变成
+                        // 「点了没反应」——这正是 ② 修过的老毛病
+                        Toast.makeText(
+                            context,
+                            R.string.koil_update_download_started,
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                        apkUpdater.download(bannerTag, apkUrl)
+                    } else if (openExternalUrl(context, releasePageUrl(bannerTag))) {
                         updateChecker.markSeen(bannerTag)
                     }
                 },
