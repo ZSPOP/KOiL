@@ -60,7 +60,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
-        run: chmod +x gradlew
+        run: chmod +x gradlew .github/scripts/gradle-with-retry.sh
 
       # 包装脚本：依赖解析/网络抖动导致的失败自动重试一次（Build #73 事故的防再发），
       # 编译/测试等真实失败不重试，边界见 .github/scripts/gradle-with-retry.sh 头注释
@@ -94,7 +94,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
-        run: chmod +x gradlew
+        run: chmod +x gradlew .github/scripts/gradle-with-retry.sh
 
       # versionCode 分配：run_number + 已发布版本数。
       # 不能用裸 run_number——重建仓库 / 换 CI 后它从 1 重来，会落在已发布正式版之下，系统判降级。

@@ -52,7 +52,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
-        run: chmod +x gradlew
+        run: chmod +x gradlew .github/scripts/gradle-with-retry.sh
 
       # 发布闸门①：两个签名 Secret 必须同时存在且可恢复，缺失即失败，
       # 避免签名材料不全时静默回落 debug 签名后照常发 Release。
