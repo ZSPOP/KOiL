@@ -153,7 +153,8 @@ jobs:
           echo "versionCode = Build 最大 $BUILD_MAX + 已发布 $REL_COUNT 版 + 1 = $NEXT（原始规划号 $RAW，已发布最大 $MAX_PUBLISHED）"
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease --no-daemon --console=plain
+        # 重试包装：规则与 android-build.yml 一致（Build #73 依赖解析抖动事故的防再发）
+        run: .github/scripts/gradle-with-retry.sh ./gradlew assembleRelease --no-daemon --console=plain
 
       # 发布闸门②：产物必须是正式证书签名；同时校验 tag 格式、tag 与 versionName 一致、
       # 版本不低于 1.0.0 且严格高于已有最高 tag、tag 提交是 main 祖先、同名 Release 不存在、
