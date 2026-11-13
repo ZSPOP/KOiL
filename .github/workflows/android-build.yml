@@ -51,13 +51,15 @@ jobs:
       # 静态检查：演练脚本管「行为对不对」，shellcheck 管「写法有没有坑」——
       # 变量没加引号（路径带空格就拆参数）、`[ ]` 里用 `&&`、`local x=$(cmd)` 吞掉
       # 退出码，这些演练一条都跑不出来，只能靠读。
-      # 只拦 warning 及以上。三文件现有 info 共 6 条，全部已知无害，逐条说明：
-      # - gitee-mirror.sh ×1 SC2016：jq 模板在单引号里，那个 $ 必须原样交给 jq；
-      # - test-gitee-mirror.sh ×3 SC2016：grep 模式里的 ${CURL[@]}，同样是刻意不展开；
-      # - test-gitee-mirror.sh ×32 SC2015：`ok … && … || bad …` 的测试输出写法；
-      # - gradle-with-retry.sh ×1 SC2086：`return ${PIPESTATUS[0]}`，PIPESTATUS 必为
-      #   单个整数，不会分词也不会 glob，加引号只是多一层。
-      # 新增脚本若冒出名单外的 info，先判断是不是同类；不是同类就该修，不要放宽门槛。
+      # 只拦 warning 及以上。三文件现有 info 全部属于下面 4 类，均已知无害：
+      # - test-gitee-mirror.sh：SC2015（`ok … && … || bad …` 的测试输出写法）；
+      # - test-gitee-mirror.sh：SC2016（grep 模式里的 ${CURL[@]}，刻意不展开）；
+      # - gitee-mirror.sh：SC2016（jq 模板在单引号里，$ 必须原样交给 jq）；
+      # - gradle-with-retry.sh：SC2086（`return ${PIPESTATUS[0]}`，PIPESTATUS 必为
+      #   单个整数，不会分词也不会 glob）。
+      # 这里不写死条数：info 会随 shellcheck 版本与用例数量自然漂移，锁数字迟早过期，
+      # 反而制造「注释和输出对不上」的假警报。只锁类别。
+      # 新增脚本若冒出名单外的类别，先判断是否同类；不是同类就该修，不要放宽门槛。
       - name: shellcheck 静态检查
         run: |
           if ! command -v shellcheck >/dev/null 2>&1; then
