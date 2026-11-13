@@ -163,7 +163,7 @@ class SettingsViewModel(
         val seedTotal: Int = 0,
         val seedFailedCount: Int = 0,               // 本轮补灌失败省数（弱网首装"看似补完"的缺口）
         val versionLabel: String = "V——",           // 版本号（V+最新调价窗口日，不受搁浅影响）
-        // 多源一致性（最近一次同步来源快照，如 "锚点:xxapi · 今日价:abapi"）
+        // 多源一致性（最近一次同步来源快照，如 "锚点:xxapi · 今日价:xxapi"）
         val lastSyncSources: String = "",
     )
     private val _priceDbStatus = MutableStateFlow(PriceDbStatus())

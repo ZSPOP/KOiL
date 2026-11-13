@@ -11,6 +11,15 @@ data class OilPriceInfo(
     val price: Double,          // 元/升
     val updateDate: String,     // yyyy-MM-dd
     val source: String,         // 来源名
+    /**
+     * 该油号本轮调价的变化量（元/升），仅实时源（xxapi / ruseo）提供，youjia 曲线无此字段。
+     *
+     * 有它就能直接判「这轮到底调没调」：窗口次日 [change] ≈ 0 即搁浅，
+     * 否则即调价。没有它时只能拿「采样价 vs 库内最近价」的差值去猜，
+     * 一旦源自身滞后未更新（youjia 每天晚 1~2 天把日期推到今天、价却没动），
+     * 就会被误判成搁浅（V1.1.13 实测：官方 11-12 24 时降 645 元/吨，11-13 youjia 仍是旧价 8.91）。
+     */
+    val change: Double? = null,
 )
 
 /** 单省份抓取结果（success=false 时 error 非空） */

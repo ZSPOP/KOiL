@@ -47,11 +47,38 @@ data class KOiLEiaBrentSeries(
     val releaseDate: String? = null,
 )
 
+/**
+ * 源端行政区名 → App 省份主键（[Provinces.ALL]）。
+ *
+ * xxapi 返回「广东省 / 北京市 / 内蒙古自治区 / 广西壮族自治区 / 新疆维吾尔自治区 …」，
+ * 而库主键是简称。**映射错了不会报错，只会让该省永远查不到价格**（四宫格全空），
+ * 所以这里统一按后缀剥离 + 用 [Provinces.isValid] 兜底校验：不在 31 省的表（港澳台）一律返回 null。
+ */
+internal fun normalizeRegionName(raw: String?): String? {
+    val name = raw?.trim().orEmpty()
+    if (name.isEmpty()) return null
+    val stripped = name
+        .removeSuffix("特别行政区")
+        .removeSuffix("维吾尔自治区")
+        .removeSuffix("壮族自治区")
+        .removeSuffix("回族自治区")
+        .removeSuffix("自治区")
+        .removeSuffix("省")
+        .removeSuffix("市")
+    return stripped.takeIf { Provinces.isValid(it) }
+}
+
 // open：单测需要 override fetchYoujiaHistory 注入假曲线（补灌空数据省回归）
 open class OilPriceNetwork {
 
     companion object {
         const val TIMEOUT_MS = 8000L
+        /** 实时价源（xxapi 主）——一次返回全国 31 省，含本轮 change */
+        private const val XXAPI_URL = "https://v2.xxapi.cn/api/oilPrice"
+        /** 实时价源备份（ruseo，与 xxapi 同源镜像，字段名不同） */
+        private const val RUSEO_URL = "https://api.ruseo.cn/api/oilprice"
+        /** 实测：不带该 UA 时部分节点返回空数组，省份编码错误也一样会静默空返回 */
+        private const val LIVE_SOURCE_UA = "KOiL"
         /** 节假日 CDN 单次上限：单次 8s 在弱网下会让首屏明显等待，故压到 4s */
         private const val CDN_TIMEOUT_MS = 4_000L
         /** 发改委公告单页上限：分页抓取最多 11 页，8s/页在弱网下不可接受 */
@@ -264,17 +291,125 @@ open class OilPriceNetwork {
     }
 
     /**
-     * 单源抓取（apizero 接口已不可用，abapi 单源：
-     * 调用方已有的「单源缺失 → 用有价源自动入库」逻辑自然生效）。
+     * 今日价抓取：实时源优先，历史曲线源兜底。
+     *
+     * 两个源角色不同（V1.1.14 起，实测依据见 API_SOURCES.md）：
+     * - 今日价：xxapi（主）→ ruseo（同源镜像备）→ youjia（兜底，滞后 1~2 天）
+     * - 历史曲线 / 灌库：youjia `range=year`（唯一提供全年曲线的源，延时已被窗口归并消化）
+     *
+     * 实测（2026-11-13）：官方 11-12 24 时降 645 元/吨，youjia 到 11-13 仍是旧价 8.91
+     * 且日期已推到 11-13，导致核验「库内 8.91 = 采样 8.91 → 无变化 → 窗口次日 → 搁浅」；
+     * 同刻 xxapi 已给出 8.39 / change -0.52。故今日价必须走实时源。
+     *
+     * 返回 (primary, secondary)：primary 是能代表今日价的那个源；实时源全失败时降级为 youjia，
+     * 此时 [OilPriceInfo.change] 为 null，核验侧据此不下"搁浅"结论（见 OilPriceDbSyncer）。
      */
     suspend fun fetchBothSources(province: String): Pair<OilPriceResponse, OilPriceResponse> =
         coroutineScope {
-            val primaryDeferred = async { fetchFromYoujia(province) }
-            primaryDeferred.await() to OilPriceResponse(
+            val liveDeferred = async {
+                fetchFromXxapi(province).takeIf { it.success } ?: fetchFromRuseo(province)
+            }
+            val historyDeferred = async { fetchFromYoujia(province) }
+            val live = liveDeferred.await()
+            val history = historyDeferred.await()
+            if (live.success) live to history else history to live
+        }
+
+    /** 实时价源 xxapi：一次返回全国 31 省 × 89/92/95/98/0，并带本轮 change */
+    open suspend fun fetchFromXxapi(province: String): OilPriceResponse = try {
+        val body = client.get(XXAPI_URL) {
+            header("User-Agent", LIVE_SOURCE_UA)
+        }.bodyAsText()
+        val items = json.decodeFromString<XxapiResponse>(body).data
+        val matched = items.firstOrNull { normalizeRegionName(it.regionName) == province }
+        if (matched == null) {
+            OilPriceResponse(
                 success = false,
-                error = "apizero 已移除（收费）",
+                province = province,
+                error = "xxapi 未匹配到省份「$province」（源共 ${items.size} 条）",
+            )
+        } else {
+            liveResponse(
+                province = province,
+                date = matched.date,
+                source = "xxapi",
+                rows = listOfNotNull(
+                    matched.n92?.let { "92" to (it to matched.n92Change) },
+                    matched.n95?.let { "95" to (it to matched.n95Change) },
+                    matched.n98?.let { "98" to (it to matched.n98Change) },
+                    matched.n0?.let { "0" to (it to matched.n0Change) },
+                ),
             )
         }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        OilPriceResponse(success = false, province = province, error = e.message ?: "xxapi 源请求失败")
+    }
+
+    /** 实时价源 ruseo（与 xxapi 同源镜像，字段名不同）：xxapi 失败时的备份 */
+    open suspend fun fetchFromRuseo(province: String): OilPriceResponse = try {
+        val body = client.get(RUSEO_URL) {
+            header("User-Agent", LIVE_SOURCE_UA)
+        }.bodyAsText()
+        val items = json.decodeFromString<RuseoResponse>(body).data?.list.orEmpty()
+        val matched = items.firstOrNull { normalizeRegionName(it.region) == province }
+        if (matched == null) {
+            OilPriceResponse(
+                success = false,
+                province = province,
+                error = "ruseo 未匹配到省份「$province」（源共 ${items.size} 条）",
+            )
+        } else {
+            liveResponse(
+                province = province,
+                date = matched.date,
+                source = "ruseo",
+                rows = listOfNotNull(
+                    matched.g92?.let { "92" to (it to matched.g92Chg) },
+                    matched.g95?.let { "95" to (it to matched.g95Chg) },
+                    matched.g98?.let { "98" to (it to matched.g98Chg) },
+                    matched.d0?.let { "0" to (it to matched.d0Chg) },
+                ),
+            )
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        OilPriceResponse(success = false, province = province, error = e.message ?: "ruseo 源请求失败")
+    }
+
+    /** 把实时源的「油号 → (价, 变化量)」装配成 [OilPriceResponse]（xxapi / ruseo 共用） */
+    private fun liveResponse(
+        province: String,
+        date: String?,
+        source: String,
+        rows: List<Pair<String, Pair<Double, Double?>>>,
+    ): OilPriceResponse {
+        val normDate = date?.let { OilPriceDateUtil.normalize(it) }
+        val data = rows.mapNotNull { (grade, pair) ->
+            val (price, change) = pair
+            OilPriceInfo(
+                grade = grade,
+                gradeLabel = GRADE_LABELS[grade] ?: grade,
+                price = price,
+                updateDate = normDate ?: "",
+                source = source,
+                change = change,
+            )
+        }
+        return OilPriceResponse(
+            success = data.isNotEmpty() && normDate != null,
+            province = province,
+            updateDate = normDate,
+            data = data,
+            error = when {
+                data.isEmpty() -> "源未返回该省价格"
+                normDate == null -> "源日期无法识别"
+                else -> null
+            },
+        )
+    }
 
     // ===== 锚点备用源：ruseo / xxapi =====
     // 实测（2026-10-26）：两源同源镜像（价格一致），date 均为最近窗口生效日
@@ -289,6 +424,10 @@ open class OilPriceNetwork {
         @SerialName("gasoline_95") val g95: Double? = null,
         @SerialName("gasoline_98") val g98: Double? = null,
         @SerialName("diesel_0") val d0: Double? = null,
+        @SerialName("gasoline_92_chg") val g92Chg: Double? = null,
+        @SerialName("gasoline_95_chg") val g95Chg: Double? = null,
+        @SerialName("gasoline_98_chg") val g98Chg: Double? = null,
+        @SerialName("diesel_0_chg") val d0Chg: Double? = null,
     )
 
     @Serializable
@@ -313,6 +452,10 @@ open class OilPriceNetwork {
         val n95: Double? = null,
         val n98: Double? = null,
         val n0: Double? = null,
+        @SerialName("n92Change") val n92Change: Double? = null,
+        @SerialName("n95Change") val n95Change: Double? = null,
+        @SerialName("n98Change") val n98Change: Double? = null,
+        @SerialName("n0Change") val n0Change: Double? = null,
     )
 
     @Serializable
@@ -327,7 +470,7 @@ open class OilPriceNetwork {
      *  返回带来源标签（xxapi/ruseo），供设置页"多源一致性"展示。 */
     suspend fun fetchAnchorWindowDate(): AnchorWindow? {
         val xxapiDate = runCatching {
-            val body = client.get("https://v2.xxapi.cn/api/oilPrice").bodyAsText()
+            val body = client.get(XXAPI_URL).bodyAsText()
             json.decodeFromString<XxapiResponse>(body).data
                 .firstOrNull { !it.date.isNullOrBlank() }?.date
         }.getOrNull()
@@ -337,7 +480,7 @@ open class OilPriceNetwork {
             xxapiDate.toAnchorWindow("xxapi")?.let { return it }
         }
         val ruseoDate = runCatching {
-            val body = client.get("https://api.ruseo.cn/api/oilprice").bodyAsText()
+            val body = client.get(RUSEO_URL).bodyAsText()
             json.decodeFromString<RuseoResponse>(body).data?.list
                 ?.firstOrNull { !it.date.isNullOrBlank() }?.date
         }.getOrNull()
