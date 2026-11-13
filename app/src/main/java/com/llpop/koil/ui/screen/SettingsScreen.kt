@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.rememberScrollState
@@ -78,6 +79,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
@@ -2022,7 +2024,10 @@ private fun AboutSection(
             subtitle = failReason?.let { stringResource(it.messageRes()) }
                 ?: checkedAgo?.let { stringResource(R.string.koil_set_about_checked_ago, it) }
                 ?: stringResource(R.string.koil_set_about_check_update_sub),
-            subtitleMaxLines = if (failReason != null) 2 else 1,
+            // 常态也是 2 行：右列（value）要占一半权重，副标题只剩半幅宽度，
+            // 「從 Gitee 取得 · 上次檢查 12 分鐘前」一行放不下，真机截成「上次檢…」——
+            // 那正是 #11 要把来源写进去、结果又被切掉的地方。
+            subtitleMaxLines = 2,
             value = downloadLabel ?: failActionLabel ?: when (val u = update) {
                 // Idle 时回落到"上次静默检查"的结论：冷启动查到新版本，这一行直接显示「发现新版本」
                 UpdateCheck.Idle ->
@@ -2303,21 +2308,17 @@ private fun SettingRow(
             )
             Spacer(Modifier.width(6.dp))
         }
-        val valueModifier = if (value.isEmpty()) {
-            // 空 value 的行（条款 / 隐私 / 反馈…）绝不能参与权重：Row 的权重是
-            // 预先切分的，右列一旦拿到 1f，左列就只剩一半，行尾箭头会停在屏幕中间。
-            Modifier
-        } else {
-            // 非空才分权重：无约束的 value 会把左列压到零宽（整句失败文案排三行、
-            // 标题每行一个字）。右列最多占一半、只留一行、超出省略。
-            Modifier.weight(1f, fill = false)
-        }
+        // value 不给权重。Row 的权重是**预先切分**的：右列一旦拿 1f，左列就只剩一半，
+        // 副标题立刻断在中间（"從 Gitee 取得 · 上次檢…"）。冷启动时 value 为空、
+        // 不参与切分所以正常，点一次检查后 value 变成「已是最新」就错位——就是这个现象。
+        // 改成「右列最多占屏幕 40%」：短词照原样，长文案单行省略，左列吃掉剩下的全部。
+        val maxValueWidth = (LocalConfiguration.current.screenWidthDp * 0.4f).dp
         Text(
             text = value,
             fontSize = 14.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
             fontWeight = FontWeight.Medium,
-            modifier = valueModifier,
+            modifier = Modifier.widthIn(max = maxValueWidth),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             textAlign = TextAlign.End,
