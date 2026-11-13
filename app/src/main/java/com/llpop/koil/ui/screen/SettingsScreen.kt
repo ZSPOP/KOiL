@@ -2031,9 +2031,9 @@ private fun AboutSection(
             subtitle = failReason?.let { stringResource(it.messageRes()) }
                 ?: checkedAgo?.let { stringResource(R.string.koil_set_about_checked_ago, it) }
                 ?: stringResource(R.string.koil_set_about_check_update_sub),
-            // 常态也是 2 行：右列（value）要占一半权重，副标题只剩半幅宽度，
-            // 「從 Gitee 取得 · 上次檢查 12 分鐘前」一行放不下，真机截成「上次檢…」——
-            // 那正是 #11 要把来源写进去、结果又被切掉的地方。
+            // 常态也给 2 行。来源并进时间句后文案变长（「從 Gitee 取得 · 上次檢查 12 分鐘前」），
+            // 窄屏或英文 / 德文下 1 行放不下，会被截成「上次檢…」——
+            // 而这句的来源信息正是要让人看见的。失败原因同样需要 2 行。
             subtitleMaxLines = 2,
             value = downloadLabel ?: failActionLabel ?: when (val u = update) {
                 // Idle 时回落到"上次静默检查"的结论：冷启动查到新版本，这一行直接显示「发现新版本」
