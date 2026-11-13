@@ -262,7 +262,10 @@ check_url() {
 
 if ! check_url "$CHECK_URL"; then
   if [ "$CHECK_URL" != "$DOWN_URL" ]; then
-    echo "::warning::用上传响应地址校验失败（HTTP ${CODE} / ${SIZE} 字节），回退自拼 URL 再试"
+    # 回退是自愈路径：换地址重试成功后 run 是绿的，这里不能留 ::warning::
+    # —— 发版核对把「运行输出 0 条 warning」当信号，回退成功能直接污染它。
+    # 真正两次都没过时才由下面的 fail() 打一次 ::warning::。
+    echo "用上传响应地址校验失败（HTTP ${CODE} / ${SIZE} 字节），回退自拼 URL 再试"
     if ! check_url "$DOWN_URL"; then
       fail "Gitee 镜像校验失败：HTTP ${CODE}${REDIRECT:+（最后一跳 ${REDIRECT}）}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${DOWN_URL}）；未通过校验故不执行清理"
     fi

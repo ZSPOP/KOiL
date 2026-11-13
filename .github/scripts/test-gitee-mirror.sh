@@ -31,6 +31,8 @@ for ((i=0;i<${#args[@]};i++)); do
     -o) out="${args[$((i+1))]}";;
     -w) fmt="${args[$((i+1))]}";;
     -X) method="${args[$((i+1))]}";;
+    # -A 要显式跳过它的值：UA 串万一以 http 开头会被 http* 误判成 URL。
+    -A) i=$((i+1));;
     http*) url="${args[$i]}";;
   esac
 done
@@ -86,6 +88,11 @@ if [ -n "$fmt" ]; then
   s=${fmt//%\{http_code\}/$code}
   s=${s//%\{size_download\}/$sz}
   s=${s//%\{time_total\}/0.100}
+  # redirect_url：真 curl 成功时为空串；验 302 诊断文案的场景用 $WORK/redirect 指定。
+  s=${s//%\{redirect_url\}/$(cat "$STUB_WORK/redirect" 2>/dev/null || true)}
+  # 真 curl 会把 -w 里的 \t 展开成制表符，printf '%s' 不展开 —— 少了这行，
+  # 被测脚本那边 IFS=$'\t' read 切不开，code 拿到整串，校验永远不过。
+  s=${s//\\t/$'\t'}
   printf '%s' "$s"
 else
   printf '%s' "$body"
@@ -212,7 +219,7 @@ run_mirror workflow_dispatch false; RC=$?
 [ "$RC" -eq 0 ] && ok "exit 0" || bad "exit 应为 0，实际 $RC"
 grep -q 'Gitee 镜像校验通过' "$WORK/last.log" && ok "最终判定校验通过" || bad "没走通校验"
 # 关键：必须先确认「第一次真的拿到 000」，否则这条用例只是又跑了一遍正常路径。
-grep -q '镜像校验第 1 次未通过（HTTP 000 / 0 字节）' "$WORK/last.log" \
+grep -q '镜像校验第 1/5 次未通过（HTTP 000 / 0 字节）' "$WORK/last.log" \
   && ok "第一次探测确实拿到 000/0 并进入重试" || bad "第一次探测没触发 000/0，用例没覆盖到重试"
 if grep -q 'Gitee 镜像校验失败' "$WORK/last.log"; then
   bad "网络抖动被误报成镜像失败"
