@@ -3,6 +3,7 @@ package com.llpop.koil
 import com.llpop.koil.data.oil.hasTodayAdjustment
 import com.llpop.koil.data.oil.normalizeRegionName
 import com.llpop.koil.data.oil.priceUnchanged
+import com.llpop.koil.data.oil.shouldReconcileWindow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -105,5 +106,30 @@ class OilPriceLiveSourceTest {
     fun `库里最新是往日或空记录时不跳过`() {
         assertFalse(hasTodayAdjustment("2026-10-31", false, "2026-11-13"))
         assertFalse(hasTodayAdjustment(null, null, "2026-11-13"))
+    }
+
+    // ===== 四、跨天纠错的放行条件 =====
+
+    @Test
+    fun `同一天也要允许纠错`() {
+        // 用户当天就是靠这里把「11-13 搁浅 8.91」改成 8.39 的
+        assertTrue(shouldReconcileWindow("2026-11-13", "2026-11-13"))
+    }
+
+    @Test
+    fun `生效日之后仍允许纠错`() {
+        // 评审 A：11-14 之后升级的用户，实时源 date 仍是 11-13，必须还能改那条错记录
+        assertTrue(shouldReconcileWindow("2026-11-13", "2026-11-13"))
+        assertTrue(shouldReconcileWindow("2026-11-13", "2026-11-14"))
+    }
+
+    @Test
+    fun `库里已推进到更晚窗口时不往回改`() {
+        assertFalse(shouldReconcileWindow("2026-11-20", "2026-11-13"))
+    }
+
+    @Test
+    fun `库内无记录时允许补写`() {
+        assertTrue(shouldReconcileWindow(null, "2026-11-13"))
     }
 }

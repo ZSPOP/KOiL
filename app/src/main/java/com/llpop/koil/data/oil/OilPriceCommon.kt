@@ -30,6 +30,15 @@ internal fun addOneDay(date: String): String {
 }
 
 /**
+ * 实时源能否对库内「最近一次生效日」做纠错。
+ *
+ * 库内最新日期比实时源的 date 还新（说明库里已经推进到更晚的窗口）时不往回改，
+ * 否则一次源端的旧快照会把已有记录覆盖成更早的价。
+ */
+internal fun shouldReconcileWindow(latestDate: String?, liveDate: String): Boolean =
+    latestDate == null || latestDate <= liveDate
+
+/**
  * 库内今日是否已有**真实调价**记录（有则本次核验可跳过）。
  *
  * 只看日期会漏掉纠错：V1.1.13 在生效日当天会写一条「搁浅」维持价记录（如 11-13 搁浅 8.91），

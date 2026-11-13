@@ -470,7 +470,9 @@ open class OilPriceNetwork {
      *  返回带来源标签（xxapi/ruseo），供设置页"多源一致性"展示。 */
     suspend fun fetchAnchorWindowDate(): AnchorWindow? {
         val xxapiDate = runCatching {
-            val body = client.get(XXAPI_URL).bodyAsText()
+            val body = client.get(XXAPI_URL) {
+                header("User-Agent", LIVE_SOURCE_UA)
+            }.bodyAsText()
             json.decodeFromString<XxapiResponse>(body).data
                 .firstOrNull { !it.date.isNullOrBlank() }?.date
         }.getOrNull()
@@ -480,7 +482,9 @@ open class OilPriceNetwork {
             xxapiDate.toAnchorWindow("xxapi")?.let { return it }
         }
         val ruseoDate = runCatching {
-            val body = client.get(RUSEO_URL).bodyAsText()
+            val body = client.get(RUSEO_URL) {
+                header("User-Agent", LIVE_SOURCE_UA)
+            }.bodyAsText()
             json.decodeFromString<RuseoResponse>(body).data?.list
                 ?.firstOrNull { !it.date.isNullOrBlank() }?.date
         }.getOrNull()
