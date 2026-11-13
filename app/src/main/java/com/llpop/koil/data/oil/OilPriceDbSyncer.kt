@@ -275,9 +275,10 @@ class OilPriceDbSyncer(
         // 所以先按它把「最近一次生效日」的库内记录对齐一次（幂等，见 reconcileLatestWindow）。
         val liveAny = listOf(samplePrimary, sampleSecondary)
             .firstOrNull { it.success && it.data.any { d -> d.change != null } }
-        val repaired = liveAny?.let { live ->
-            runCatching { reconcileLatestWindow(sampleProvince, live) }.getOrNull() ?: 0
-        } ?: 0
+        val recon = liveAny?.let { live ->
+            runCatching { reconcileLatestWindow(sampleProvince, live) }.getOrNull()
+        } ?: ReconcileResult(0, null)
+        val repaired = recon.repaired
 
         // 只信任"数据日期 == 今天"的源参与今日核验；主/次源均滞后时跳过核验（窗口存档仍生效，不产生假调价记录）
         val usableSources = listOf(samplePrimary, sampleSecondary)
@@ -295,7 +296,7 @@ class OilPriceDbSyncer(
                     append("数据源日期滞后（$lagDate），跳过本次核验")
                     if (repaired > 0) append("；已按实时源校正 $repaired 条")
                 },
-                latestDate = getLastUpdatedAt().ifBlank { null },
+                latestDate = recon.effectiveDate ?: getLastUpdatedAt().ifBlank { null },
                 newRecords = repaired,
                 nextAdjustment = nextAdjustment,
             )
@@ -429,9 +430,17 @@ class OilPriceDbSyncer(
             message = message,
             newAdjustments = if (hasNew) 1 else 0,
             newRecords = effectiveRecords,
-            // 没有实际插入时不能把「今天」当作最新调价日回传：
-            // checkAndUpdate 会据此写 priceDbLastUpdateDate/LastWindowChecked，污染版本号与「价格维持日」
-            latestDate = if (hasNew) today else getLastUpdatedAt().ifBlank { null },
+            // 生效日与实际写入对齐（B8 纪律）：checkAndUpdate 会据此写
+            // priceDbLastUpdateDate/LastWindowChecked，写错会污染版本号与「价格维持日」。
+            // - verifiedRecords > 0：本次按「今日生效日」入库 → today
+            // - 仅 repaired > 0：纠错的生效日是实时源的 date（可能是更早的窗口生效日，
+            //   如 11-14 纠 11-13），必须用它，否则「最近更新」会写成今天、库里却没有今天这条记录
+            // - 都没有：沿用上次
+            latestDate = when {
+                verifiedRecords > 0 -> today
+                recon.repaired > 0 -> recon.effectiveDate ?: getLastUpdatedAt().ifBlank { null }
+                else -> getLastUpdatedAt().ifBlank { null }
+            },
             nextAdjustment = nextAdjustment,
         )
     }
@@ -513,11 +522,15 @@ class OilPriceDbSyncer(
      * 只处理库里最新的那一天：库内最新日期比实时源 date 还新时直接放弃，
      * 避免把已经推进到下一个窗口的库往回改。
      */
-    private suspend fun reconcileLatestWindow(province: String, live: OilPriceResponse): Int {
+    /** 跨天纠错结果：[repaired] 实际写入条数；[effectiveDate] 写入的生效日（多省同源取最大，供上层回传） */
+    private data class ReconcileResult(val repaired: Int, val effectiveDate: String?)
+
+    private suspend fun reconcileLatestWindow(province: String, live: OilPriceResponse): ReconcileResult {
         val targets: List<Pair<String, List<OilPriceInfo>>> =
             if (live.siblings.isNotEmpty()) live.siblings.entries.map { it.key to it.value }
             else listOf(province to live.data)
         var repaired = 0
+        var effectiveDate: String? = null
         for ((name, rows) in targets) {
             val change = rows.firstOrNull { it.grade == GRADE_92_GRADE }?.change ?: continue
             val date = rows.firstOrNull()?.updateDate?.ifBlank { null } ?: continue
@@ -526,9 +539,14 @@ class OilPriceDbSyncer(
             if (latest == null && name != province) continue
             if (!shouldReconcileWindow(latest?.effectiveDate, date)) continue
             val stranded = kotlin.math.abs(change) < STRANDED_EPSILON
-            repaired += writeLiveRows(name, rows, date, stranded)
+            val inserted = writeLiveRows(name, rows, date, stranded)
+            if (inserted > 0) {
+                repaired += inserted
+                // 回传纠错实际落库的生效日（不是 today）：上层据此推进「最近更新」
+                if (effectiveDate == null || date > effectiveDate) effectiveDate = date
+            }
         }
-        return repaired
+        return ReconcileResult(repaired, effectiveDate)
     }
 
     /**
