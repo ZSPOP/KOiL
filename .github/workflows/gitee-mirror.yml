@@ -99,7 +99,9 @@ jobs:
           GITEE_OWNER: ${{ secrets.GITEE_OWNER }}
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
           GITEE_MIRROR_KEEP: ${{ inputs.keep }}
-          GITEE_MIRROR_DRY_RUN: ${{ inputs.dry_run }}
+          # 硬闸：script_ref 不是 main 时强制演练，未合并的脚本不可能删线上 Release。
+          # main 脚本坏了要用分支应急补传？走 revert 更干净，不给删除动作开口子。
+          GITEE_MIRROR_DRY_RUN: ${{ ((inputs.script_ref || 'main') != 'main' && 'true') || inputs.dry_run }}
           GITEE_MIRROR_EXTRA_TAGS: ${{ inputs.extra_tags }}
           TAG: ${{ inputs.tag }}
         run: bash .github/scripts/gitee-mirror.sh "$KOIL_MIRROR_APK" "$TAG"
