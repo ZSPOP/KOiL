@@ -72,7 +72,7 @@ jobs:
     steps:
       # 固定从 main 取脚本：补传用的必须是被合并、被评审过的实现，
       # 而不是 dispatch 时随手选中的分支。
-      - name: Checkout scripts from main
+      - name: Checkout scripts from ${{ inputs.script_ref || 'main' }}
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.script_ref || 'main' }}
