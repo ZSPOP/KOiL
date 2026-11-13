@@ -48,6 +48,18 @@ jobs:
       # 等于把覆盖从 /tmp 挪进仓库躺着 —— S5 防的「把 --retry-all-errors 挪回 CURL」
       # 又恰恰是最容易被「顺手统一一下」写出来的回归。
       # 无 JDK/SDK 依赖，秒级，所以放在最前面，不必等 5 分钟的 Gradle。
+      # 静态检查：演练脚本管「行为对不对」，shellcheck 管「写法有没有坑」——
+      # 变量没加引号（路径带空格就拆参数）、`[ ]` 里用 `&&`、`local x=$(cmd)` 吞掉
+      # 退出码，这些演练一条都跑不出来，只能靠读。
+      # 只拦 warning 及以上：三文件现有 info 全是 SC2015（`ok … && … || bad …`），
+      # 那是测试输出写法不是缺陷；gitee-mirror.sh 那条 SC2016 是单引号里刻意写的 `$`。
+      - name: shellcheck 静态检查
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          fi
+          shellcheck -S warning .github/scripts/*.sh
+
       - name: gitee-mirror 失败路径演练
         run: bash .github/scripts/test-gitee-mirror.sh
 
