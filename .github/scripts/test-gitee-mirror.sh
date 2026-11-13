@@ -66,6 +66,12 @@ elif [ "$method" = "DELETE" ]; then
   code=$(cat "$STUB_WORK/delcode" 2>/dev/null || echo 200); body=''
 else code=200; body='x'; fi
 
+# 回退分支专用：只让「上传响应地址」(gitee.example) 失败、自拼地址正常，
+# 用来验证「回退自拼 URL」这条自愈路径真的被走到（S9）。
+if [ -f "$STUB_WORK/up_url_fail" ] && [[ "$url" == *"gitee.example"* ]]; then
+  code=404; sz=0
+fi
+
 # 下载校验的瞬时失败：V1.1.11 那次 runner 侧拿到 000/0（实测 Gitee 直链 200/6725974）。
 # 用开关文件模拟「第一次探测就断」，脚本应重试并最终通过。
 # 用计数而不是一次性开关：正常实现下第一次 000、第二次就成功；把重试去掉之后
@@ -233,6 +239,31 @@ if grep -q '::warning::镜像校验' "$WORK/last.log"; then
 else
   ok "重试成功不留 ::warning::（不污染发版 warning 信号）"
 fi
+
+echo "S9 上传响应地址校验失败 → 回退自拼 URL 自愈，且不留 warning"
+rm -f "$WORK/failcount" "$WORK/deletes.log" "$WORK/dl_fail_left"
+touch "$WORK/up_url_fail"
+run_mirror workflow_dispatch false; RC=$?
+[ "$RC" -eq 0 ] && ok "exit 0（回退成功不连累发版）" || bad "exit 应为 0，实际 $RC"
+grep -q '用上传响应地址校验失败' "$WORK/last.log" \
+  && ok "确实走了回退分支" || bad "没走到回退分支（用例没覆盖到）"
+grep -q 'Gitee 镜像校验通过' "$WORK/last.log" \
+  && ok "回退后校验通过" || bad "回退后仍未通过"
+# 通过日志必须指向实际通过的那个地址：回退成功后成功的是自拼地址，
+# 还打印刚 404 的上传响应地址会把排障的人带到错的地方。
+if grep 'Gitee 镜像校验通过' "$WORK/last.log" | grep -q 'gitee.example'; then
+  bad "通过日志打印的是失败的旧地址（应为回退后的自拼地址）"
+else
+  ok "通过日志指向实际通过的地址"
+fi
+# dry-run 的两条（演练清单 / 真实删除提示）是刻意保留的安全注解，排除后再数
+BADW=$(grep '::warning::' "$WORK/last.log" | grep -vc 'dry-run' || true)
+[ "$BADW" -eq 0 ] && ok "回退自愈未产生非预期 warning" || bad "回退自愈打了 $BADW 条非预期 warning"
+grep -q '::warning::用上传响应地址' "$WORK/last.log" \
+  && bad "回退分支仍用 ::warning:: 打（应为普通 echo）" || ok "回退分支用普通 echo，不进 annotations"
+grep -q '其中镜像版本 6 个' "$WORK/last.log" \
+  && ok "清理段正常执行（没被误判挡住）" || bad "清理段没执行"
+rm -f "$WORK/up_url_fail"
 
 echo
 if [ "$FAILED" -eq 0 ]; then echo "全部通过"; else echo "有用例失败"; fi

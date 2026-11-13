@@ -260,6 +260,9 @@ check_url() {
   return 1
 }
 
+# 通过日志必须指向「实际通过的那一个地址」：回退成功后成功的是 DOWN_URL，
+# 若还打印 CHECK_URL（刚失败过的那一个），排障时会被带到错的地方。
+OK_URL="$CHECK_URL"
 if ! check_url "$CHECK_URL"; then
   if [ "$CHECK_URL" != "$DOWN_URL" ]; then
     # 回退是自愈路径：换地址重试成功后 run 是绿的，这里不能留 ::warning::
@@ -269,11 +272,12 @@ if ! check_url "$CHECK_URL"; then
     if ! check_url "$DOWN_URL"; then
       fail "Gitee 镜像校验失败：HTTP ${CODE}${REDIRECT:+（最后一跳 ${REDIRECT}）}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${DOWN_URL}）；未通过校验故不执行清理"
     fi
+    OK_URL="$DOWN_URL"
   else
     fail "Gitee 镜像校验失败：HTTP ${CODE}${REDIRECT:+（最后一跳 ${REDIRECT}）}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${CHECK_URL}）；未通过校验故不执行清理"
   fi
 fi
-echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
+echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${OK_URL}"
 
 # ── ④清理。Gitee 免费仓 1GB（代码+附件合并计算），单文件上限 100MB；
 #    每版约 6.6MB，约 150 版才占满，短期不紧迫 —— 但手动清理必然会被忘记。
