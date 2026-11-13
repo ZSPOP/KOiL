@@ -234,7 +234,8 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_PRICE_LAST_WINDOW_DAY_REMINDED] = date }
     }
 
-    // 最近一次同步来源快照（设置页多源一致性展示，格式如 "锚点:xxapi · 今日价:abapi"）
+    // 最近一次同步来源快照（设置页多源一致性展示，格式如 "锚点:xxapi · 今日价:xxapi"；
+    // 今日价源随实时源切换，xxapi 不可用时回落 ruseo / youjia，标签由 OilPriceDbSyncer 按实际源写入）
     val priceDbLastSources: Flow<String> =
         context.KOiLDataStore.data.distinctValue { it[KEY_PRICE_DB_LAST_SOURCES] ?: "" }
     suspend fun setPriceDbLastSources(value: String) {

@@ -373,7 +373,13 @@ internal class OilPriceSeeder(
             fun hasChange(g: String, eff: String) = entities.any {
                 !it.isStranded && it.province == province && it.grade == g && it.effectiveDate == eff
             }
-            adjustDates.filter { it < today }.forEach { w ->
+            // 只补「生效日已过」的窗口（窗口日 + 1 < today）。生效日当天不补：youjia 滞后 1~2 天，
+            // 今天才生效的窗口在它曲线里仍是上一轮价，补搁浅会写进一条错的维持价记录
+            //（V1.1.13 实例：11-12 窗口、11-13 生效，youjia 仍 8.91 → 库里被写成「11-13 搁浅 8.91」）。
+            // 生效日当天的结论改由 OilPriceDbSyncer 用实时源 change 判定后直写，两侧口径不重叠。
+            adjustDates.filter { w ->
+                runCatching { LocalDate.parse(w).plusDays(1).toString() < today }.getOrDefault(false)
+            }.forEach { w ->
                 val eff = runCatching { LocalDate.parse(w).plusDays(1).toString() }.getOrNull() ?: return@forEach
                 // 维持价取 abapi 曲线中 ≤ 窗口日的最后价格，不设"当年 1-1 起"下界：
                 // 首窗口搁浅（如 1-06）时 abapi 当年曲线 1-06 前无点（实测首点 01-23），

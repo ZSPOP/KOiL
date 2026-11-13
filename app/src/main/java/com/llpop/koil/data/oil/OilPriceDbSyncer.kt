@@ -2,6 +2,7 @@ package com.llpop.koil.data.oil
 
 import android.content.Context
 import android.util.Log
+import androidx.room.withTransaction
 import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLPriceEntity
@@ -36,6 +37,10 @@ class OilPriceDbSyncer(
         const val CHECK_INTERVAL_MS = 8L * 60 * 60 * 1000
         const val STRANDED_EPSILON = 0.005
         val PROVINCES = Provinces.ALL
+
+        /** 核验基准油号：92 号。标签从 [OilPriceNetwork.GRADE_LABELS] 取，避免日后改文案这里静默失效 */
+        private const val GRADE_92_GRADE = "92"
+        private val GRADE_92_LABEL = OilPriceNetwork.GRADE_LABELS["92"] ?: "92号汽油"
 
         /**
          * 只有成功的检测才允许写 8h 节流时间戳。
@@ -159,10 +164,9 @@ class OilPriceDbSyncer(
                 settings.setPriceDbLastCheckAt(now)
             }
             settings.setPriceDbCache(result.message)
-            // 多源一致性快照（设置页展示）——锚点源在 getAdjustDates 内记录，今日价恒为 abapi 主源
-            val anchorSrc = settings.priceDbLastAnchorSource.first().ifBlank { "—" }
-            settings.setPriceDbLastSources("锚点:$anchorSrc · 今日价:abapi")
-            if (result.newAdjustments > 0 && result.latestDate != null) {
+            // 多源一致性快照已由 performPriceCheck 在选定核验源时写入（带真实源标签）
+            // 有实际写入（新增调价 或 跨天纠错）就推进"最近更新"，否则仅纠正了数据也显示旧日期
+            if ((result.newAdjustments > 0 || result.newRecords > 0) && result.latestDate != null) {
                 settings.setPriceDbLastUpdateDate(result.latestDate)
                 settings.setPriceDbLastWindowChecked(result.latestDate)
             } else if (result.strandedWindowDate != null) {
@@ -251,6 +255,8 @@ class OilPriceDbSyncer(
         val (samplePrimary, sampleSecondary) = network.fetchBothSources(sampleProvince)
 
         if (!samplePrimary.success && !sampleSecondary.success) {
+            // 早退也要写快照，否则设置页"多源一致性"会一直停在上一轮的旧值
+            settings.setPriceDbLastSources("锚点:— · 今日价:不可用")
             return OilPriceSyncResult(
                 success = false,
                 message = samplePrimary.error ?: sampleSecondary.error ?: "实时油价获取失败",
@@ -261,32 +267,71 @@ class OilPriceDbSyncer(
         val today = LocalDate.now().format(KOIL_DATE_FMT)
         val nextAdjustment = samplePrimary.nextAdjustment ?: sampleSecondary.nextAdjustment
 
+        // ── 跨天纠错：不依赖「是不是今天」 ──
+        // xxapi/ruseo 的 date 是「最近窗口生效日」，不是「今日价」。生效日次日它就 != today，
+        // 会被下面的 usableSources 过滤掉；若纠错只走当日核验，V1.1.13 写错的
+        // 「11-13 搁浅 8.91」只有生效日当天打开 App 的用户能修到，之后升级/打开的用户
+        // 会一直卡在旧价直到下个调价窗口。实时源的 change 本身是权威证据，与日期无关，
+        // 所以先按它把「最近一次生效日」的库内记录对齐一次（幂等，见 reconcileLatestWindow）。
+        val liveAny = listOf(samplePrimary, sampleSecondary)
+            .firstOrNull { it.success && it.data.any { d -> d.change != null } }
+        val recon = liveAny?.let { live ->
+            runCatching { reconcileLatestWindow(sampleProvince, live) }.getOrNull()
+        } ?: ReconcileResult(0, null)
+        val repaired = recon.repaired
+
         // 只信任"数据日期 == 今天"的源参与今日核验；主/次源均滞后时跳过核验（窗口存档仍生效，不产生假调价记录）
         val usableSources = listOf(samplePrimary, sampleSecondary)
             .filter { it.success && it.data.isNotEmpty() && it.updateDate == today }
         if (usableSources.isEmpty()) {
             val lagDate = (samplePrimary.updateDate ?: sampleSecondary.updateDate) ?: "未知"
+            // 这条是常态路径（youjia 天天滞后），快照必须写，否则设置页一直停在上一轮的来源标签
+            val lagAnchor = settings.priceDbLastAnchorSource.first().ifBlank { "—" }
+            val lagLiveSrc = listOf(samplePrimary, sampleSecondary)
+                .firstOrNull { it.success }?.data?.firstOrNull()?.source ?: "—"
+            settings.setPriceDbLastSources("锚点:$lagAnchor · 今日价:$lagLiveSrc（date 滞后）")
             return OilPriceSyncResult(
                 success = true,
-                message = "数据源日期滞后（$lagDate），跳过本次核验",
-                latestDate = getLastUpdatedAt().ifBlank { null },
+                message = buildString {
+                    append("数据源日期滞后（$lagDate），跳过本次核验")
+                    if (repaired > 0) append("；已按实时源校正 $repaired 条")
+                },
+                latestDate = recon.effectiveDate ?: getLastUpdatedAt().ifBlank { null },
+                newRecords = repaired,
                 nextAdjustment = nextAdjustment,
             )
         }
 
-        val sampleLive = if (samplePrimary.success && samplePrimary.data.isNotEmpty() && samplePrimary.updateDate == today) {
-            samplePrimary
-        } else {
-            usableSources.first()
-        }
-        val sampleItem = sampleLive.data.first()
+        // 核验源优先选「带 change 的实时源」（xxapi → ruseo 镜像）；都没有时才用 youjia 曲线源兜底
+        val sampleLive = usableSources.firstOrNull { src -> src.data.any { it.change != null } }
+            ?: usableSources.first()
+        // 固定用 92 号做前后对比（xxapi 一次给 4 个油号，取哪个都要与库内同油号比，不能混）
+        val sampleItem = sampleLive.data.firstOrNull { it.grade == "92" } ?: sampleLive.data.first()
+
+        // 多源一致性快照（设置页展示）：锚点源在 getAdjustDates 内记录，今日价源随实时源切换
+        //（原实现写死 "今日价:abapi"，接实时源后会误导用户以为价还来自滞后源）
+        val liveSourceLabel = sampleLive.data.firstOrNull()?.source?.takeIf { it.isNotBlank() } ?: "—"
+        val anchorSrc = settings.priceDbLastAnchorSource.first().ifBlank { "—" }
+        settings.setPriceDbLastSources("锚点:$anchorSrc · 今日价:$liveSourceLabel")
 
         val latestRow = priceDao.getNewest(sampleProvince, sampleItem.gradeLabel)
         val latestPrice = latestRow?.price
         val latestDate = latestRow?.effectiveDate
 
-        // 搁浅判定：采样价与库内最新价差 < 0.005
-        if (latestPrice != null && kotlin.math.abs(latestPrice - sampleItem.price) < STRANDED_EPSILON) {
+        // 本轮是否真的没变价。
+        // - 实时源有 change：直接用源给的「本轮变化量」判，源自身滞后也骗不了它
+        //   （V1.1.13 线上事故：官方 11-12 24 时降 645 元/吨，youjia 把日期推到 11-13 价仍 8.91，
+        //   旧逻辑「采样 8.91 = 库内 8.91 → 无变化 → 窗口次日 → 搁浅」把没更新当成没调价）
+        // - 只有 youjia：change 为 null，只能退回「采样价 vs 库内最近价」差值判；
+        //   该判法无法区分「真搁浅」与「源滞后」，因此后续不下搁浅结论（见下方分支）
+        val sampledChange = sampleItem.change
+        val unchanged = priceUnchanged(
+            change = sampledChange,
+            sampledPrice = sampleItem.price,
+            latestPrice = latestPrice,
+            eps = STRANDED_EPSILON,
+        )
+        if (unchanged) {
             // 今天若是窗口日（24 点后才生效/确认搁浅），白天即使价格未变也不下"搁浅"结论、
             // 不写 lastWindowChecked=今天——否则数据库卡当天就显示"V今日 擱淺"，等于把窗口日当 0 点生效
             if (calendar.getAdjustDates().contains(today)) {
@@ -302,10 +347,28 @@ class OilPriceDbSyncer(
             val lastWindow = calendar.getAdjustDates().filter { it < today }.lastOrNull()
             val strandedConfirmDay = lastWindow?.let { LocalDate.parse(it).plusDays(1).toString() }
             if (strandedConfirmDay != null && strandedConfirmDay == today) {
+                // 只有实时源（带 change）能给"真搁浅"背书；youjia 兜底时 change 为 null，
+                // 此时的"价格未变"可能是源没更新（见本次事故），不能写成搁浅污染库。
+                if (sampledChange == null) {
+                    return OilPriceSyncResult(
+                        success = true,
+                        message = "已核对至 $today，数据源价格未变，无法确认是否搁浅（实时源不可用）",
+                        latestDate = latestDate,
+                        nextAdjustment = nextAdjustment,
+                    )
+                }
+                // 实时源确认本轮 change≈0 = 真搁浅：当天就把维持价写库（不再等次日补灌，
+                // 否则生效日当天库里空一天，UI 显示的还是上个窗口的价）
+                val adjustDates = calendar.getAdjustDates()
+                val eff = if (adjustDates.isEmpty()) today else addOneDay(adjustToWindow(today, adjustDates))
+                val inserted = if (eff == today) {
+                    writeLiveRows(sampleProvince, sampleLive.data, eff, stranded = true)
+                } else 0
                 return OilPriceSyncResult(
                     success = true,
                     message = "已核对至 $today，油价无变化（搁浅）",
-                    latestDate = latestDate,
+                    latestDate = if (inserted > 0) today else latestDate,
+                    newRecords = inserted,
                     strandedWindowDate = today,
                     nextAdjustment = nextAdjustment,
                 )
@@ -318,22 +381,47 @@ class OilPriceDbSyncer(
             )
         }
 
-        // 今日已有调价记录
-        if (latestDate == today) {
+        // 今日已有**真实调价**记录才跳过。
+        // 注意不能只看日期：V1.1.13 会在生效日当天写一条「搁浅」记录，如果这里按
+        // `latestDate == today` 就跳过，那条错的维持价永远等不到纠正（价格会一直卡在旧值）。
+        if (hasTodayAdjustment(latestDate, latestRow?.isStranded, today)) {
+            // 走到这里通常什么也没干；但跨天纠错可能刚刚把错的搁浅记录改成了真调价，
+            // 若仍报「跳过」，用户会以为没干活（其实改对了 4 条），设置页「最近更新」也不推进。
             return OilPriceSyncResult(
                 success = true,
-                message = "今日已有调价记录，跳过",
+                message = if (repaired > 0) {
+                    "已按实时源校正 $repaired 条（今日已有调价记录）"
+                } else {
+                    "今日已有调价记录，跳过"
+                },
+                newRecords = repaired,
                 latestDate = today,
                 nextAdjustment = nextAdjustment,
             )
         }
 
-        // 检测到变化：默认省按主源增量入库；其它省由 seedProvince 灌库覆盖。
-        val (verifiedRecords, failedProvinces) = verifyProvince(defaultProvince(), today)
+        // 检测到变化：实时源带 change 时直接用本次采样数据入库（省掉一次重复请求）；
+        // change 为 null（youjia 兜底）仍走 verifyProvince 曲线核验。
+        // 生效日一律走「窗口归并 + 1 天」，不直接用源给的日期：
+        // youjia 曲线晚 1~2 天、将来补灌时命中同一个幂等键（省|油号|生效日），天然对齐不会写两条。
+        val (verifiedRecords, failedProvinces) = if (sampledChange != null) {
+            val adjustDates = calendar.getAdjustDates()
+            val eff = if (adjustDates.isEmpty()) today else addOneDay(adjustToWindow(today, adjustDates))
+            val inserted = if (eff == today) {
+                writeLiveRows(sampleProvince, sampleLive.data, eff, stranded = false)
+            } else 0
+            inserted to 0
+        } else {
+            verifyProvince(defaultProvince(), today)
+        }
 
-        val hasNew = verifiedRecords > 0
+        // 跨天纠错已在本次核验前把该写的写完了，这里再写通常全部幂等跳过（inserted=0）；
+        // 若只按 verifiedRecords 汇总会报「无新记录追加」，把刚完成的纠错说成没干活。
+        // 两者取大：统计的是同一批（省|油号|生效日）记录，不会重复计入。
+        val effectiveRecords = maxOf(repaired, verifiedRecords)
+        val hasNew = effectiveRecords > 0
         val parts = mutableListOf<String>()
-        if (verifiedRecords > 0) parts.add("已入库 $verifiedRecords 条")
+        if (effectiveRecords > 0) parts.add("已入库 $effectiveRecords 条")
         if (failedProvinces > 0) parts.add("$failedProvinces 省失败")
         val message = if (parts.isNotEmpty()) parts.joinToString("、") else "无新记录追加"
 
@@ -341,10 +429,18 @@ class OilPriceDbSyncer(
             success = true,
             message = message,
             newAdjustments = if (hasNew) 1 else 0,
-            newRecords = verifiedRecords,
-            // 没有实际插入时不能把「今天」当作最新调价日回传：
-            // checkAndUpdate 会据此写 priceDbLastUpdateDate/LastWindowChecked，污染版本号与「价格维持日」
-            latestDate = if (hasNew) today else getLastUpdatedAt().ifBlank { null },
+            newRecords = effectiveRecords,
+            // 生效日与实际写入对齐（B8 纪律）：checkAndUpdate 会据此写
+            // priceDbLastUpdateDate/LastWindowChecked，写错会污染版本号与「价格维持日」。
+            // - verifiedRecords > 0：本次按「今日生效日」入库 → today
+            // - 仅 repaired > 0：纠错的生效日是实时源的 date（可能是更早的窗口生效日，
+            //   如 11-14 纠 11-13），必须用它，否则「最近更新」会写成今天、库里却没有今天这条记录
+            // - 都没有：沿用上次
+            latestDate = when {
+                verifiedRecords > 0 -> today
+                recon.repaired > 0 -> recon.effectiveDate ?: getLastUpdatedAt().ifBlank { null }
+                else -> getLastUpdatedAt().ifBlank { null }
+            },
             nextAdjustment = nextAdjustment,
         )
     }
@@ -411,6 +507,89 @@ class OilPriceDbSyncer(
      * 生效日 = 归并窗口日 + 1（窗口日 24 时生效 → 次日实际生效）。
      * 采用 abapi 单源：有价即自动入库；搁浅窗口由 seedRemainingProvinces 补搁浅处理。
      */
+    /**
+     * 用实时源对齐「最近一次生效日」的库内记录（跨天纠错，幂等）。
+     *
+     * 三种情形：
+     * 1. 库里该日是被误判的搁浅记录、实时源 change≠0 → 删掉重建为真实调价（本次事故的修复）
+     * 2. 库里该日没有记录 → 用实时源补写（change≈0 时按搁浅写）；非默认省交给 seeder 灌全年，不在这里抢
+     * 3. 库里该日已是真实调价 → 跳过，不覆盖
+     *
+     * **全国范围**：xxapi/ruseo 一次响应就含 31 省，V1.1.13 的补搁浅把 31 省当天都写成了
+     * 「搁浅 + 旧价」，只修默认省会让用户切到别的省仍看到旧价。用 [OilPriceResponse.siblings]
+     * 遍历全国，不增加任何网络请求。
+     *
+     * 只处理库里最新的那一天：库内最新日期比实时源 date 还新时直接放弃，
+     * 避免把已经推进到下一个窗口的库往回改。
+     */
+    /** 跨天纠错结果：[repaired] 实际写入条数；[effectiveDate] 写入的生效日（多省同源取最大，供上层回传） */
+    private data class ReconcileResult(val repaired: Int, val effectiveDate: String?)
+
+    private suspend fun reconcileLatestWindow(province: String, live: OilPriceResponse): ReconcileResult {
+        val targets: List<Pair<String, List<OilPriceInfo>>> =
+            if (live.siblings.isNotEmpty()) live.siblings.entries.map { it.key to it.value }
+            else listOf(province to live.data)
+        var repaired = 0
+        var effectiveDate: String? = null
+        for ((name, rows) in targets) {
+            val change = rows.firstOrNull { it.grade == GRADE_92_GRADE }?.change ?: continue
+            val date = rows.firstOrNull()?.updateDate?.ifBlank { null } ?: continue
+            val latest = priceDao.getNewest(name, GRADE_92_LABEL)
+            // 非默认省库内还没有数据时不动它：首装/漏灌由 seeder 灌全年负责，避免两边抢写
+            if (latest == null && name != province) continue
+            if (!shouldReconcileWindow(latest?.effectiveDate, date)) continue
+            val stranded = kotlin.math.abs(change) < STRANDED_EPSILON
+            val inserted = writeLiveRows(name, rows, date, stranded)
+            if (inserted > 0) {
+                repaired += inserted
+                // 回传纠错实际落库的生效日（不是 today）：上层据此推进「最近更新」
+                if (effectiveDate == null || date > effectiveDate) effectiveDate = date
+            }
+        }
+        return ReconcileResult(repaired, effectiveDate)
+    }
+
+    /**
+     * 实时源直写库（调价 / 搁浅两种）。
+     *
+     * - [eff] 必须是窗口归并后的真实生效日，调用方保证 `eff == today` 才调（否则不写）。
+     * - 幂等：同省同油号同生效日已有**真实调价**记录时一律跳过，不覆盖——
+     *   youjia 滞后补数据时命中同一键，走「已有记录」分支，不会多出一条。
+     * - **纠错**：已有记录是**搁浅**（`isStranded=true`）而本次实时源报出真实调价时，删掉重建。
+     *   否则 V1.1.13 已写进库的「11-13 搁浅 8.91」会因幂等永远留着，价格卡在旧值上。
+     * - 搁浅记录价 = 当日维持价（= 上一窗口价），与 seeder 补搁浅口径一致。
+     */
+    private suspend fun writeLiveRows(
+        province: String,
+        rows: List<OilPriceInfo>,
+        eff: String,
+        stranded: Boolean,
+    ): Int = db.withTransaction {
+        var inserted = 0
+        for (item in rows) {
+            val label = OilPriceNetwork.GRADE_LABELS[item.grade] ?: item.gradeLabel
+            val existing = priceDao.getPrice(province, label, eff)
+            // 已有真实调价记录 → 幂等跳过；已有搁浅记录而本次是真调价 → 删掉重建
+            if (existing != null && !(existing.isStranded && !stranded)) continue
+            if (existing != null) priceDao.deleteByKey(province, label, eff)
+            priceDao.insertAll(
+                listOf(
+                    KOiLPriceEntity(
+                        province = province,
+                        grade = label,
+                        effectiveDate = eff,
+                        price = item.price,
+                        source = "${item.source} 实时源（本轮${if (stranded) "搁浅" else "调价"} ${item.change ?: 0.0}）",
+                        isVerified = true,
+                        isStranded = stranded,
+                    ),
+                ),
+            )
+            inserted++
+        }
+        inserted
+    }
+
     private suspend fun verifyProvince(province: String, today: String): Pair<Int, Int> {
         return try {
             val (primary, _) = network.fetchBothSources(province)
