@@ -147,6 +147,9 @@ class SettingsViewModel(
         val isStranded: Boolean = false,
         // 调价窗口（方案 B：10 个工作日推算）
         val adjustWindowDate: String? = null,       // 最近调价窗口日（从最近实际调价日推 10 工作日）
+        // 该窗口的生效日 = 窗口日 + 1（窗口「24 时」生效，与库内 effectiveDate 同口径）。
+        // 只在这里推算一次：UI 展示与查库都取它，避免两处各算一遍、将来改规则漏一处。
+        val adjustWindowEffectiveDate: String? = null,
         val nextAdjustWindowDate: String? = null,   // 下一个调价窗口日
         val windowStranded: Boolean = false,        // 最近窗口搁浅（发改委确认维持，库内有该窗口记录且 isStranded=true）
         val windowRecordMissing: Boolean = false,   // 库内根本没有该窗口记录（待补灌/待核验）——与搁浅严格区分
@@ -339,12 +342,16 @@ class SettingsViewModel(
         var adjustWindowDelta: Double? = null
         var strandedKeptDate: String? = null
         var strandedKeptPrice: String? = null
+        // 生效日只算一次：UI 展示（「11-13 起生效」）与查库（w1Eff）共用同一口径
+        val adjustWindowEffectiveDate: String? = adjustWindowDate?.let {
+            runCatching { LocalDate.parse(it).plusDays(1).toString() }.getOrNull()
+        }
         if (adjustWindowDate != null) {
             // W1 窗口调价判定（跟随 App 默认省 + 92号汽油——不同省份/油号价格
             // 各不相同，不能用"任意省任一油号"的记录，否则会显示其他省的价格，如 8.57 vs 广东 8.63）。
             // 库内记录生效日 = 窗口日 + 1（窗口 24 时生效），故查「窗口日+1」。
             val home = settings.defaultProvince.first().takeIf { it in OilPriceDbSyncer.PROVINCES } ?: "广东"
-            val w1Eff = runCatching { LocalDate.parse(adjustWindowDate).plusDays(1).toString() }.getOrNull() ?: adjustWindowDate
+            val w1Eff = adjustWindowEffectiveDate ?: adjustWindowDate
             val w1Row = priceDao.getPrice(home, "92号汽油", w1Eff)
             when {
                 w1Row != null && !w1Row.isStranded -> {
@@ -399,6 +406,7 @@ class SettingsViewModel(
             lastUpdateMessage = lastMsg.ifBlank { null },
             isStranded = isStranded,
             adjustWindowDate = adjustWindowDate,
+            adjustWindowEffectiveDate = adjustWindowEffectiveDate,
             nextAdjustWindowDate = nextAdjustWindowDate,
             windowStranded = windowStranded,
             windowRecordMissing = windowRecordMissing,

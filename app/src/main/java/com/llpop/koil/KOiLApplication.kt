@@ -12,6 +12,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceSyncWorker
+import com.llpop.koil.data.oil.decideForceCheckOnLaunch
+import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.di.appModule
@@ -20,6 +22,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -27,6 +30,29 @@ import org.koin.core.context.GlobalContext
 import java.util.concurrent.TimeUnit
 
 class KOiLApplication : Application() {
+
+    /**
+     * 本次启动是否需要绕过 8 小时节流做一次强制核验。
+     *
+     * 判定本身抽在 [decideForceCheckOnLaunch]（纯函数，有单测）：
+     * - 已记录过 versionCode 且与当前不同 → 从有记录的版本升上来
+     * - 没有记录（lastVer = 0）但库里有检测历史 → 从还没写这个字段的旧版升上来（V1.1.14 → V1.1.15）
+     * - 全新安装两个条件都不成立，交给正常流程（首次灌库后本就要拉全量）
+     * - **自动更新开关关着 → 一律不强制**：用户关掉就是不希望它自己联网，
+     *   升级也不能替他改设置（force = true 会连开关判断一起绕过，这里必须先收口）
+     */
+    private suspend fun shouldForceCheckOnLaunch(): Boolean {
+        val settings = GlobalContext.get().get<AppSettings>()
+        val cur = BuildConfig.VERSION_CODE.toLong()
+        val lastVer = runCatching { settings.lastRunVersionCode.first() }.getOrDefault(0L)
+        val lastCheck = runCatching { settings.priceDbLastCheckAt.first() }.getOrDefault(0L)
+        // 先落 versionCode 再判定：关掉开关的用户升级后，下次启动不该再判一次「刚升级」
+        if (lastVer != cur) {
+            runCatching { settings.setLastRunVersionCode(cur) }
+        }
+        val autoOn = runCatching { settings.priceDbAutoUpdate.first() }.getOrDefault(true)
+        return decideForceCheckOnLaunch(lastVer, cur, lastCheck, autoOn)
+    }
 
     private val appScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
@@ -53,8 +79,10 @@ class KOiLApplication : Application() {
             try {
                 val syncer = GlobalContext.get().get<OilPriceDbSyncer>()
                 syncer.initPriceDb()
-                // 启动时非强制检查一次（8 小时节流 + 自动更新开关在服务内部判断）
-                syncer.checkAndUpdate(force = false)
+                // 启动时非强制检查一次（8 小时节流 + 自动更新开关在服务内部判断）。
+                // 例外：刚升级过就绕过节流强制核验——新版本可能改了窗口/价格口径，
+                // 沿用旧版本留下的时间戳会让首屏一直显示上一轮价格（V1.1.14 装完仍显示 8.91）。
+                syncer.checkAndUpdate(force = shouldForceCheckOnLaunch())
                 // 窗口日当天"今晚24点生效"提醒——同步成功后重新排期单次 Worker（00:05 精准），
                 // 再走一遍 notifyPriceChanges 兜底（当天启动/日历就绪即提醒；幂等，已提醒不会重复）
                 syncer.scheduleWindowDayReminder(this@KOiLApplication)
