@@ -21,7 +21,8 @@
 #      而删 Release 不连带删 tag，所以真实删除是两次调用。
 #   ② target_commitish 只能写 "master"：Gitee 默认分支，与 GitHub 的 SHA 不同源，
 #      写 SHA 会 404。
-#   ③ 下载走 302 跳转，校验必须 -L，否则只看得到 302。
+#   ③ 下载走 302 跳转，校验必须 -L，否则只看得到 302。302 也可能是「附件刚上传、
+#      CDN 未就绪」，因此校验重试窗口必须是分钟级，不能只重试十几秒。
 #   ④ 用 GITHUB_TOKEN 建的 GitHub Release 不会再触发 release 事件（GitHub 防递归机制），
 #      所以补传不能靠事件触发，只能手动 dispatch。
 
@@ -213,48 +214,70 @@ fi
 CHECK_URL="${UP_URL:-$DOWN_URL}"
 LOCAL_SIZE=$(stat -c%s "$APKF_PATH")
 
+# 探测下载地址：输出「状态码 \t 字节数 \t 最后一跳 URL」。
+# - 用 tab 分隔：redirect_url 可能为空或含空格，空格分隔会让下游解析错位。
+# - 带 UA：Gitee 下载 CDN 对无 UA 的裸 curl 有概率拒绝。
+# - redirect_url 是跟随完整跳转链后的最后一跳，302/000 时能看出卡在哪。
 probe_size() {
   local url="$1" out
-  out=$(curl -sSL -o /dev/null -w '%{http_code} %{size_download}' "${CHECK_CURL[@]}" "$url" 2>/dev/null || true)
-  printf '%s\n' "${out:-000 0}"
+  out=$(curl -sSL \
+    -A "KOiL-CI/1.0 (+https://github.com/ZSPOP/KOiL)" \
+    -o /dev/null \
+    -w '%{http_code}\t%{size_download}\t%{redirect_url}' \
+    "${CHECK_CURL[@]}" "$url" 2>/dev/null || true)
+  if [ -z "$out" ]; then
+    printf '000\t0\t\n'
+  else
+    printf '%s\n' "$out"
+  fi
 }
 
-# 校验必须重试。上传耗时一百多秒之后立刻拉 CDN，偶发 HTTP 000（连接建立失败）
-# 不代表镜像坏了：V1.1.11 那次 runner 侧 000/0 字节，而实测 Gitee 直链是
-# 200 / 6725974 字节，与本地一致。一次失败就报警 + 跳过清理，等于把网络抖动
-# 记成「镜像没上去」，之后每次看见 warning 都会以为是真问题。
-# 三次机会，退避 5s / 10s。成功返回 0。
+# 5 次机会，退避 5/15/30/45 秒，总窗口约 95 秒 + 每次探测耗时。
+# 成功返回 0；失败时把最后一次 CODE / SIZE / REDIRECT 留给 fail 文案。
 check_url() {
-  local url="$1" attempt
-  for attempt in 1 2 3; do
-    PROBE=$(probe_size "$url")
-    CODE=${PROBE%% *}
-    SIZE=${PROBE##* }
-    if [ "$CODE" = "200" ] && [ "$SIZE" = "$LOCAL_SIZE" ]; then
+  local url="$1" attempt code size redirect
+  local backoff=(5 15 30 45)
+  for attempt in 1 2 3 4 5; do
+    IFS=$'\t' read -r code size redirect <<< "$(probe_size "$url")"
+    CODE=$code
+    SIZE=$size
+    REDIRECT=$redirect
+    if [ "$code" = "200" ] && [ "$size" = "$LOCAL_SIZE" ]; then
       return 0
     fi
-    # 中间尝试用普通 echo：重试成功时 run 是绿的，不该在日志里留 ::warning::
-    # 污染「运行输出 0 条 warning」这个发版核对信号（告警疲劳）。
-    # 真正判定失败时才由 fail() 打 ::warning::。
-    echo "镜像校验第 ${attempt} 次未通过（HTTP ${CODE} / ${SIZE} 字节），$( [ "$attempt" -lt 3 ] && echo '稍后重试' || echo '已用尽重试' )"
-    if [ "$attempt" -lt 3 ]; then
-      sleep $((attempt * 5))
+    local why=""
+    case "$code" in
+      302) why="（重定向链未就绪${redirect:+，最后一跳 ${redirect}}）" ;;
+      000) why="（连接建立失败）" ;;
+    esac
+    if [ "$attempt" -lt 5 ]; then
+      echo "镜像校验第 ${attempt}/5 次未通过（HTTP ${code} / ${size} 字节）${why}，$((backoff[attempt-1]))s 后重试"
+      sleep "${backoff[$((attempt-1))]}"
+    else
+      echo "镜像校验第 ${attempt}/5 次未通过（HTTP ${code} / ${size} 字节）${why}，已用尽重试"
     fi
   done
   return 1
 }
 
+# 通过日志必须指向「实际通过的那一个地址」：回退成功后成功的是 DOWN_URL，
+# 若还打印 CHECK_URL（刚失败过的那一个），排障时会被带到错的地方。
+OK_URL="$CHECK_URL"
 if ! check_url "$CHECK_URL"; then
   if [ "$CHECK_URL" != "$DOWN_URL" ]; then
-    echo "::warning::用上传响应地址校验失败（HTTP ${CODE} / ${SIZE} 字节），回退自拼 URL 再试"
+    # 回退是自愈路径：换地址重试成功后 run 是绿的，这里不能留 ::warning::
+    # —— 发版核对把「运行输出 0 条 warning」当信号，回退成功能直接污染它。
+    # 真正两次都没过时才由下面的 fail() 打一次 ::warning::。
+    echo "用上传响应地址校验失败（HTTP ${CODE} / ${SIZE} 字节），回退自拼 URL 再试"
     if ! check_url "$DOWN_URL"; then
-      fail "Gitee 镜像校验失败：HTTP ${CODE}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${DOWN_URL}）；未通过校验故不执行清理"
+      fail "Gitee 镜像校验失败：HTTP ${CODE}${REDIRECT:+（最后一跳 ${REDIRECT}）}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${DOWN_URL}）；未通过校验故不执行清理"
     fi
+    OK_URL="$DOWN_URL"
   else
-    fail "Gitee 镜像校验失败：HTTP ${CODE}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${CHECK_URL}）；未通过校验故不执行清理"
+    fail "Gitee 镜像校验失败：HTTP ${CODE}${REDIRECT:+（最后一跳 ${REDIRECT}）}，远端 ${SIZE} 字节 ≠ 本地 ${LOCAL_SIZE} 字节（${CHECK_URL}）；未通过校验故不执行清理"
   fi
 fi
-echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${CHECK_URL}"
+echo "Gitee 镜像校验通过：HTTP ${CODE} / ${SIZE} 字节 / ${OK_URL}"
 
 # ── ④清理。Gitee 免费仓 1GB（代码+附件合并计算），单文件上限 100MB；
 #    每版约 6.6MB，约 150 版才占满，短期不紧迫 —— 但手动清理必然会被忘记。

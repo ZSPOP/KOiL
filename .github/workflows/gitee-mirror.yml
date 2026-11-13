@@ -20,6 +20,13 @@ on:
         description: '要补传到 Gitee 的 GitHub Release 标签（如 V1.1.5）'
         required: true
         type: string
+      # 脚本取自哪个 ref。默认 main = 原行为不变；验证 PR 里的脚本改动能指到分支，
+      # 否则 checkout 永远拿 main 的脚本，分支 dispatch 会把要修的毛病原样复现一遍。
+      script_ref:
+        description: '脚本取自哪个 ref（默认 main；验证 PR 时填分支名）'
+        required: false
+        default: 'main'
+        type: string
       # 下面两个默认值与 android-release.yml 保持一致，不填就完全维持原行为。
       # 存在意义是能不改文件就验证清理：默认 keep=5 且 dry-run，攒不满 5 条时
       # 删除路径永远不会被执行到，等于零覆盖。
@@ -63,12 +70,13 @@ jobs:
     # 正常路径实测最坏 12 分钟，3.75 倍余量。
     timeout-minutes: 45
     steps:
-      # 固定从 main 取脚本：补传用的必须是被合并、被评审过的实现，
-      # 而不是 dispatch 时随手选中的分支。
-      - name: Checkout scripts from main
+      # 默认从 main 取脚本：补传用的必须是被合并、被评审过的实现。
+      # 只有验证 PR 里的脚本改动时才把 script_ref 指到分支，此时务必配 dry_run=true
+      # —— 否则未合并的脚本会直接对线上 Release 做删除。
+      - name: Checkout scripts from ${{ inputs.script_ref || 'main' }}
         uses: actions/checkout@v7
         with:
-          ref: main
+          ref: ${{ inputs.script_ref || 'main' }}
 
       - name: Download published APK from GitHub Release
         shell: bash
@@ -91,7 +99,9 @@ jobs:
           GITEE_OWNER: ${{ secrets.GITEE_OWNER }}
           GITEE_REPO: ${{ secrets.GITEE_REPO }}
           GITEE_MIRROR_KEEP: ${{ inputs.keep }}
-          GITEE_MIRROR_DRY_RUN: ${{ inputs.dry_run }}
+          # 硬闸：script_ref 不是 main 时强制演练，未合并的脚本不可能删线上 Release。
+          # main 脚本坏了要用分支应急补传？走 revert 更干净，不给删除动作开口子。
+          GITEE_MIRROR_DRY_RUN: ${{ ((inputs.script_ref || 'main') != 'main' && 'true') || inputs.dry_run }}
           GITEE_MIRROR_EXTRA_TAGS: ${{ inputs.extra_tags }}
           TAG: ${{ inputs.tag }}
         run: bash .github/scripts/gitee-mirror.sh "$KOIL_MIRROR_APK" "$TAG"
