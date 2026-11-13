@@ -2012,9 +2012,14 @@ private fun AboutSection(
         SettingDivider()
         // —— 检查更新：查到新版本后这一行直接变成「打开 Release 页」——
         val failReason = (downloadState as? com.llpop.koil.data.update.UpdateDownloadState.Failed)?.reason
+        // 缺授权**且包还在**才说「去授权」；包被系统清掉后点这一下是真下载，
+        // 再写「去授权」就是文字与行为对不上（评审记的那条）。统一按盘上事实选词。
+        val failTag = (update as? UpdateCheck.Newer)?.tag ?: storedTag
         val failActionLabel = failReason?.let {
             stringResource(
-                if (it == com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION) {
+                if (it == com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
+                    apkUpdater.hasReady(failTag)
+                ) {
                     R.string.koil_update_action_grant
                 } else {
                     R.string.koil_update_action_retry

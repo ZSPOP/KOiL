@@ -260,7 +260,13 @@ fun AddScreen(
                 actionLabel = when {
                     // 下载中给取消入口：否则点错只能干等几十秒，scope 是应用级的杀 App才行
                     st is UpdateDownloadState.Downloading -> stringResource(R.string.koil_update_action_cancel)
-                    bannerFailed != null -> stringResource(R.string.koil_update_action_retry)
+                    // 同设置页：缺授权且包还在 → 「去授权」；包没了 → 这一下会真下载，写「重试」
+                    bannerFailed != null -> stringResource(
+                        if (bannerFailed.reason ==
+                            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
+                            apkUpdater.hasReady(bannerTag)
+                        ) R.string.koil_update_action_grant else R.string.koil_update_action_retry
+                    )
                     else -> stringResource(R.string.koil_ov_update_action)
                 },
                 onOpen = {
