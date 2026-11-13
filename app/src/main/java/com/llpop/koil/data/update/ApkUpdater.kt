@@ -121,6 +121,14 @@ class ApkUpdater(
     private fun isReady(tag: String): Boolean = isReadyFor(tag, readyTag, apkFile())
 
     /**
+     * 盘上是否真的躺着一份可装的包。给 UI 用：`Failed(NO_PERMISSION)` 时点一下到底是
+     * 「去授权 / 重试安装」（不下载）还是「包没了、得重下」（要下载），只能靠它区分。
+     * 只按 UI 层的 failure 状态短路门控是不够的 —— 系统清掉外部存储后，failure 仍停在
+     * NO_PERMISSION，短路就会绕开蜂窝确认直接下 6.7MB。
+     */
+    fun hasReady(tag: String): Boolean = isReady(tag)
+
+    /**
      * 开始下载。[url] 是 UpdateChecker 落库的 Gitee 资产直链。
      * 重复点击安全：同一轮下载中直接返回，不重复建连接。
      */

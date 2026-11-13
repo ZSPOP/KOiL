@@ -238,7 +238,10 @@ fun AddScreen(
                 // 缺安装授权时，这一下是去授权 / 重试安装，不是下载 ——
                 // 先弹「蜂窝下要下 6.7MB 吗」等于问一个不会发生的事。
                 if ((downloadState as? UpdateDownloadState.Failed)?.reason ==
-                    com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION
+                    com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
+                    // 只按 failure 短路不够：包被系统清掉后 failure 仍停在 NO_PERMISSION，
+                    // 那样就会绕开蜂窝确认直接下 6.7MB。必须确认盘上真有包。
+                    apkUpdater.hasReady(bannerTag)
                 ) {
                     apkUpdater.download(bannerTag, apkUrl)
                     return
