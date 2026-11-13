@@ -1918,7 +1918,9 @@ private fun AboutSection(
     fun applyNetworkGate(tag: String, url: String) {
         // 缺安装授权时不会下载，只拉起安装器 / 跳授权页 —— 别先弹蜂窝流量确认
         if ((downloadState as? com.llpop.koil.data.update.UpdateDownloadState.Failed)?.reason ==
-            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION
+            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
+            // 同上：包已被系统清掉时不能短路，否则绕过蜂窝确认直接下 6.7MB
+            apkUpdater.hasReady(tag)
         ) {
             apkUpdater.download(tag, url)
             return
