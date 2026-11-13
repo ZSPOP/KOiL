@@ -70,8 +70,9 @@ jobs:
     # 正常路径实测最坏 12 分钟，3.75 倍余量。
     timeout-minutes: 45
     steps:
-      # 固定从 main 取脚本：补传用的必须是被合并、被评审过的实现，
-      # 而不是 dispatch 时随手选中的分支。
+      # 默认从 main 取脚本：补传用的必须是被合并、被评审过的实现。
+      # 只有验证 PR 里的脚本改动时才把 script_ref 指到分支，此时务必配 dry_run=true
+      # —— 否则未合并的脚本会直接对线上 Release 做删除。
       - name: Checkout scripts from ${{ inputs.script_ref || 'main' }}
         uses: actions/checkout@v7
         with:
