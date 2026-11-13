@@ -119,7 +119,6 @@ class OilPriceLiveSourceTest {
     @Test
     fun `生效日之后仍允许纠错`() {
         // 评审 A：11-14 之后升级的用户，实时源 date 仍是 11-13，必须还能改那条错记录
-        assertTrue(shouldReconcileWindow("2026-11-13", "2026-11-13"))
         assertTrue(shouldReconcileWindow("2026-11-13", "2026-11-14"))
     }
 

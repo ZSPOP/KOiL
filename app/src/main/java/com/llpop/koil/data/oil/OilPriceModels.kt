@@ -32,6 +32,13 @@ data class OilPriceResponse(
     // 预测幅度恒走 EIA/腾讯本地估算（CrudeOilEstimator），窗口日恒走本地推算窗口日历。
     val error: String? = null,
     val data: List<OilPriceInfo> = emptyList(),
+    /**
+     * 全国各省的当日价（省简称 → 4 个油号），仅实时源（xxapi / ruseo）填充；youjia 为空。
+     *
+     * 用途：一次全国响应本来就含 31 省，跨天纠错（`reconcileLatestWindow`）需要按省对齐库里
+     * 被误写成"搁浅"的记录，用它能做到零额外网络请求。
+     */
+    val siblings: Map<String, List<OilPriceInfo>> = emptyMap(),
 )
 
 /** 一次检查更新的汇总结果（对齐 Web OilPriceDbUpdateResponse） */

@@ -321,26 +321,23 @@ open class OilPriceNetwork {
             header("User-Agent", LIVE_SOURCE_UA)
         }.bodyAsText()
         val items = json.decodeFromString<XxapiResponse>(body).data
-        val matched = items.firstOrNull { normalizeRegionName(it.regionName) == province }
-        if (matched == null) {
-            OilPriceResponse(
-                success = false,
-                province = province,
-                error = "xxapi 未匹配到省份「$province」（源共 ${items.size} 条）",
-            )
-        } else {
-            liveResponse(
-                province = province,
-                date = matched.date,
-                source = "xxapi",
-                rows = listOfNotNull(
-                    matched.n92?.let { "92" to (it to matched.n92Change) },
-                    matched.n95?.let { "95" to (it to matched.n95Change) },
-                    matched.n98?.let { "98" to (it to matched.n98Change) },
-                    matched.n0?.let { "0" to (it to matched.n0Change) },
-                ),
-            )
-        }
+        liveNationwide(
+            province = province,
+            source = "xxapi",
+            rawCount = items.size,
+            parsed = items.mapNotNull { item ->
+                val name = normalizeRegionName(item.regionName) ?: return@mapNotNull null
+                name to LiveRow(
+                    date = item.date,
+                    rows = listOfNotNull(
+                        item.n92?.let { "92" to (it to item.n92Change) },
+                        item.n95?.let { "95" to (it to item.n95Change) },
+                        item.n98?.let { "98" to (it to item.n98Change) },
+                        item.n0?.let { "0" to (it to item.n0Change) },
+                    ),
+                )
+            },
+        )
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -353,62 +350,91 @@ open class OilPriceNetwork {
             header("User-Agent", LIVE_SOURCE_UA)
         }.bodyAsText()
         val items = json.decodeFromString<RuseoResponse>(body).data?.list.orEmpty()
-        val matched = items.firstOrNull { normalizeRegionName(it.region) == province }
-        if (matched == null) {
-            OilPriceResponse(
-                success = false,
-                province = province,
-                error = "ruseo 未匹配到省份「$province」（源共 ${items.size} 条）",
-            )
-        } else {
-            liveResponse(
-                province = province,
-                date = matched.date,
-                source = "ruseo",
-                rows = listOfNotNull(
-                    matched.g92?.let { "92" to (it to matched.g92Chg) },
-                    matched.g95?.let { "95" to (it to matched.g95Chg) },
-                    matched.g98?.let { "98" to (it to matched.g98Chg) },
-                    matched.d0?.let { "0" to (it to matched.d0Chg) },
-                ),
-            )
-        }
+        liveNationwide(
+            province = province,
+            source = "ruseo",
+            rawCount = items.size,
+            parsed = items.mapNotNull { item ->
+                val name = normalizeRegionName(item.region) ?: return@mapNotNull null
+                name to LiveRow(
+                    date = item.date,
+                    rows = listOfNotNull(
+                        item.g92?.let { "92" to (it to item.g92Chg) },
+                        item.g95?.let { "95" to (it to item.g95Chg) },
+                        item.g98?.let { "98" to (it to item.g98Chg) },
+                        item.d0?.let { "0" to (it to item.d0Chg) },
+                    ),
+                )
+            },
+        )
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         OilPriceResponse(success = false, province = province, error = e.message ?: "ruseo 源请求失败")
     }
 
-    /** 把实时源的「油号 → (价, 变化量)」装配成 [OilPriceResponse]（xxapi / ruseo 共用） */
-    private fun liveResponse(
+    /** 实时源单省原始行（装配前的中间形态） */
+    private data class LiveRow(
+        val date: String?,
+        val rows: List<Pair<String, Pair<Double, Double?>>>,
+    )
+
+    /**
+     * 把一次全国响应装配成「该省 [OilPriceResponse] + 全部省份数据（[OilPriceResponse.siblings]）」。
+     *
+     * [OilPriceResponse.siblings] 供 `OilPriceDbSyncer.reconcileLatestWindow` 做全国纠错：
+     * V1.1.13 的补搁浅把 31 省当天都写错了，只修默认省不够；而一次响应本来就含全国，
+     * 扩到全量不增加任何网络请求。
+     */
+    private fun liveNationwide(
         province: String,
+        source: String,
+        rawCount: Int,
+        parsed: List<Pair<String, LiveRow>>,
+    ): OilPriceResponse {
+        val all = parsed.associate { (name, row) -> name to buildLiveRow(row.date, source, row.rows) }
+        val mine = all[province]
+        if (mine == null) {
+            return OilPriceResponse(
+                success = false,
+                province = province,
+                error = "$source 未匹配到省份「$province」（源共 $rawCount 条）",
+                siblings = all,
+            )
+        }
+        val date = mine.firstOrNull()?.updateDate?.ifBlank { null }
+        return OilPriceResponse(
+            success = mine.isNotEmpty() && date != null,
+            province = province,
+            updateDate = date,
+            data = mine,
+            siblings = all,
+            error = when {
+                mine.isEmpty() -> "源未返回该省价格"
+                date == null -> "源日期无法识别"
+                else -> null
+            },
+        )
+    }
+
+    /** 单省 4 个油号的 [OilPriceInfo] 装配（xxapi / ruseo 共用） */
+    private fun buildLiveRow(
         date: String?,
         source: String,
         rows: List<Pair<String, Pair<Double, Double?>>>,
-    ): OilPriceResponse {
-        val normDate = date?.let { OilPriceDateUtil.normalize(it) }
-        val data = rows.mapNotNull { (grade, pair) ->
+    ): List<OilPriceInfo> {
+        val normDate = date?.let { OilPriceDateUtil.normalize(it) }.orEmpty()
+        return rows.map { (grade, pair) ->
             val (price, change) = pair
             OilPriceInfo(
                 grade = grade,
                 gradeLabel = GRADE_LABELS[grade] ?: grade,
                 price = price,
-                updateDate = normDate ?: "",
+                updateDate = normDate,
                 source = source,
                 change = change,
             )
         }
-        return OilPriceResponse(
-            success = data.isNotEmpty() && normDate != null,
-            province = province,
-            updateDate = normDate,
-            data = data,
-            error = when {
-                data.isEmpty() -> "源未返回该省价格"
-                normDate == null -> "源日期无法识别"
-                else -> null
-            },
-        )
     }
 
     // ===== 锚点备用源：ruseo / xxapi =====
