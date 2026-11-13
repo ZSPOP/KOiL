@@ -74,3 +74,43 @@ internal fun priceUnchanged(
  */
 internal suspend fun AppSettings.koilDefaultProvince(): String =
     defaultProvince.first().takeIf { it in Provinces.ALL } ?: Provinces.ALL[0]
+
+/**
+ * 启动时是否绕过节流做一次强制核验（纯判定，副作用由调用方写 versionCode）。
+ *
+ * 覆盖「刚升级过」的两种形态：
+ * - 已记录过 versionCode 且与当前不同 → 从有记录的版本升上来
+ * - 没有记录（lastVer = 0）但有检测历史 → 从还没写这个字段的旧版升上来
+ * 全新安装两个条件都不成立（lastVer = 0 且 lastCheck = 0），走正常流程。
+ *
+ * **自动更新开关优先**：用户关掉自动更新时，升级也不能替他联网——否则等于
+ * 悄悄改用户设置。开关关着时返回 false，后续用户自己打开，交给 8 小时节流
+ * 与窗口过期判据即可。
+ */
+internal fun decideForceCheckOnLaunch(
+    lastVer: Long,
+    cur: Long,
+    lastCheck: Long,
+    autoOn: Boolean,
+): Boolean {
+    if (!autoOn) return false
+    return if (lastVer == 0L) lastCheck > 0L else lastVer != cur
+}
+
+/**
+ * 上一次成功检测是否早于「最近一个已过窗口的生效时刻」—— 是则库内价格确定过期。
+ *
+ * 生效时刻 = 窗口日次日 00:00（窗口「24 时」生效），与库内 effectiveDate = 窗口日 + 1 同口径。
+ * [prevWindow] 传「最近一个已过窗口日」（价格规范化后的 yyyy-MM-dd）；为空或解析失败时
+ * 返回 false，退回 8 小时节流——保守方向，不因为缺存档就无限联网。
+ * [lastCheck] 为 0（从未成功检测）时返回 true：越早核验越好。
+ */
+internal fun isPastLastEffectiveWindow(lastCheck: Long, prevWindow: String?): Boolean {
+    if (lastCheck <= 0L) return true
+    val prev = prevWindow?.takeIf { it.isNotBlank() } ?: return false
+    val effectiveAt = runCatching {
+        LocalDate.parse(prev).plusDays(1).atStartOfDay()
+            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+    }.getOrNull() ?: return false
+    return lastCheck < effectiveAt
+}

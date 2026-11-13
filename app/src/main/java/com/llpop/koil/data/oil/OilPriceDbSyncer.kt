@@ -95,20 +95,15 @@ class OilPriceDbSyncer(
     /**
      * 上一次成功检测是否已经落在「最近一个已过窗口的生效时刻」之后。
      *
-     * 生效时刻 = 窗口日次日 00:00（窗口「24 时」生效），与库内 effectiveDate = 窗口日 + 1 同口径。
-     * 用本地已有的 prev 窗口存档判断，不触发日历网络请求：这里只需要一个"是否确定过期"的
-     * 布尔值，拿不到存档就按未过期处理（返回 false），退回 8 小时节流。
+     * 判定抽在 [isPastLastEffectiveWindow]（纯函数，有单测）。这里只负责取设置：
+     * 用本地已有的 prev 窗口存档，不触发日历网络请求——这里只需要一个"是否确定过期"
+     * 的布尔值，拿不到存档就按未过期处理，退回 8 小时节流。
      */
     private suspend fun pastLastEffectiveWindow(lastCheck: Long): Boolean {
-        if (lastCheck <= 0L) return true          // 从未成功检测过：越早核验越好
         val prev = runCatching {
             OilPriceDateUtil.normalize(settings.priceDbPrevNextAdjustment.first())
-        }.getOrNull() ?: return false
-        val effectiveAt = runCatching {
-            LocalDate.parse(prev).plusDays(1).atStartOfDay()
-                .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-        }.getOrNull() ?: return false
-        return lastCheck < effectiveAt
+        }.getOrNull()
+        return isPastLastEffectiveWindow(lastCheck, prev)
     }
 
     private suspend fun getLastUpdatedAt(): String = settings.priceDbLastUpdateDate.first()

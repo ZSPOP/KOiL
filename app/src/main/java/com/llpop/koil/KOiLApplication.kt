@@ -12,6 +12,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceSyncWorker
+import com.llpop.koil.data.oil.decideForceCheckOnLaunch
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.update.UpdateChecker
@@ -33,22 +34,24 @@ class KOiLApplication : Application() {
     /**
      * 本次启动是否需要绕过 8 小时节流做一次强制核验。
      *
-     * 「刚升级过」的两种形态都要覆盖：
-     * - 已记录过 versionCode 且与当前不同 → 从有记录的版本升上来（V1.1.15 → V1.1.16 起生效）
+     * 判定本身抽在 [decideForceCheckOnLaunch]（纯函数，有单测）：
+     * - 已记录过 versionCode 且与当前不同 → 从有记录的版本升上来
      * - 没有记录（lastVer = 0）但库里有检测历史 → 从还没写这个字段的旧版升上来（V1.1.14 → V1.1.15）
-     * 全新安装两个条件都不成立，交给正常流程（首次灌库后本就要拉全量）。
+     * - 全新安装两个条件都不成立，交给正常流程（首次灌库后本就要拉全量）
+     * - **自动更新开关关着 → 一律不强制**：用户关掉就是不希望它自己联网，
+     *   升级也不能替他改设置（force = true 会连开关判断一起绕过，这里必须先收口）
      */
     private suspend fun shouldForceCheckOnLaunch(): Boolean {
         val settings = GlobalContext.get().get<AppSettings>()
         val cur = BuildConfig.VERSION_CODE.toLong()
         val lastVer = runCatching { settings.lastRunVersionCode.first() }.getOrDefault(0L)
         val lastCheck = runCatching { settings.priceDbLastCheckAt.first() }.getOrDefault(0L)
-        val upgraded = if (lastVer == 0L) lastCheck > 0L else lastVer != cur
+        // 先落 versionCode 再判定：关掉开关的用户升级后，下次启动不该再判一次「刚升级」
         if (lastVer != cur) {
-            // 记录本次启动的版本，下次启动就是"同版本"了；写失败不影响本次强制
             runCatching { settings.setLastRunVersionCode(cur) }
         }
-        return upgraded
+        val autoOn = runCatching { settings.priceDbAutoUpdate.first() }.getOrDefault(true)
+        return decideForceCheckOnLaunch(lastVer, cur, lastCheck, autoOn)
     }
 
     private val appScope = CoroutineScope(

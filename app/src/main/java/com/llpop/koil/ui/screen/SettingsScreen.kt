@@ -986,12 +986,9 @@ private fun PriceDbSection(
 
             // 行 1 = 结论（最近一次窗口发生了什么）；涨跌额紧随价格，涨红跌绿
             val w1Short = priceDbStatus.adjustWindowDate?.takeLast(5)
-            // 生效日 = 窗口日 + 1（窗口「24 时」生效，与库内 effectiveDate 同口径）。
-            // 这一行说的是「哪一天起跑这个价」，直接用窗口日会被读成"当天就调了"：
-            // 11-12 的窗口实际 11-13 生效（真机验收 A3 的不符点就在这里）。
-            val w1EffectiveShort: String = priceDbStatus.adjustWindowDate?.let {
-                runCatching { java.time.LocalDate.parse(it).plusDays(1).toString().takeLast(5) }.getOrNull()
-            } ?: w1Short ?: ""
+            // 生效日由 ViewModel 算好（窗口日 + 1，与查库同口径），这里只取 MM-dd 展示。
+            // 直接用窗口日会被读成"当天就调了"：11-12 的窗口实际 11-13 生效（真机验收 A3 的不符点）。
+            val w1EffectiveShort: String = priceDbStatus.adjustWindowEffectiveDate?.takeLast(5) ?: w1Short ?: ""
             val strandedKeptDate = priceDbStatus.strandedKeptDate
             val strandedKeptPrice = priceDbStatus.strandedKeptPrice
             val delta = priceDbStatus.adjustWindowDelta?.takeIf { kotlin.math.abs(it) >= 0.005 }
