@@ -248,7 +248,7 @@
     <string name="koil_pdb_sync_sources">同步來源：%1$s</string>
     <string name="koil_pdb_not_checked">尚未檢測</string>
     <string name="koil_pdb_db_title_short">資料庫</string>
-    <string name="koil_pdb_line_adjusted">%1$s 已調價 · 92# ¥%2$s</string>
+    <string name="koil_pdb_line_adjusted">%1$s 起生效 · 92# ¥%2$s</string>
     <string name="koil_pdb_line_stranded">%1$s 擱淺 · %2$s 起維持 ¥%3$s</string>
     <string name="koil_pdb_line_stranded_short">%1$s 擱淺</string>
     <string name="koil_pdb_line_missing">%1$s 視窗尚無紀錄 · 待補灌或核驗</string>

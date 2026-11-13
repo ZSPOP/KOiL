@@ -75,6 +75,9 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_DB_CACHE = stringPreferencesKey("KOiL-price-db-cache")
         // ---- 油价库同步状态（对齐 Web 端 appConfig 的 koil_price_* 键）----
         private val KEY_PRICE_DB_LAST_CHECK_AT = longPreferencesKey("KOiL-price-db-last-check-at")
+
+        /** 上一次启动时的 versionCode。不同 = 刚升级过，启动要绕过 8 小时节流强制核验一次 */
+        private val KEY_LAST_RUN_VERSION_CODE = longPreferencesKey("KOiL-last-run-version-code")
         private val KEY_PRICE_DB_LAST_UPDATE_DATE = stringPreferencesKey("KOiL-price-db-last-update-date")
         private val KEY_PRICE_DB_INIT_AT = longPreferencesKey("KOiL-price-db-init-at")
         private val KEY_PRICE_DB_LAST_WINDOW = stringPreferencesKey("KOiL-price-db-last-window-checked")
@@ -336,6 +339,13 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_PRICE_DB_LAST_CHECK_AT] ?: 0L }
     suspend fun setPriceDbLastCheckAt(ts: Long) {
         context.KOiLDataStore.edit { it[KEY_PRICE_DB_LAST_CHECK_AT] = ts }
+    }
+
+    /** 上一次启动的 versionCode（0 = 从未记录，旧版升级上来的首启） */
+    val lastRunVersionCode: Flow<Long> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_LAST_RUN_VERSION_CODE] ?: 0L }
+    suspend fun setLastRunVersionCode(code: Long) {
+        context.KOiLDataStore.edit { it[KEY_LAST_RUN_VERSION_CODE] = code }
     }
 
     /** 最近一次调价更新日期（yyyy-MM-dd） */

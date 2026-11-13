@@ -249,7 +249,7 @@
     <string name="koil_pdb_not_checked">尚未检测</string>
     <!-- 油价数据库卡：标题 / 两行摘要 / 底部按钮 -->
     <string name="koil_pdb_db_title_short">数据库</string>
-    <string name="koil_pdb_line_adjusted">%1$s 已调价 · 92# ¥%2$s</string>
+    <string name="koil_pdb_line_adjusted">%1$s 起生效 · 92# ¥%2$s</string>
     <string name="koil_pdb_line_stranded">%1$s 搁浅 · %2$s 起维持 ¥%3$s</string>
     <string name="koil_pdb_line_stranded_short">%1$s 搁浅</string>
     <string name="koil_pdb_line_missing">%1$s 窗口暂无记录 · 待补灌或核验</string>
