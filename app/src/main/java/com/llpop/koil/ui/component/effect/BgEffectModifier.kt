@@ -2,6 +2,7 @@ package com.llpop.koil.ui.component.effect
 
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.InspectorInfo
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.node.DrawModifierNode
@@ -60,6 +61,21 @@ private data class BgEffectElement(
         colorStage = colorStage,
         alpha = alpha,
     )
+
+    /**
+     * 显式声明可检查属性：不重写时 inspector 会反射遍历本类字段，
+     * 而这里还有 colorStage / alpha 两个函数字段，反射读取既没意义也容易抛异常。
+     * 只暴露能一眼看出效果状态的几个值。
+     */
+    override fun InspectorInfo.inspectableProperties() {
+        this.name = "bgEffect"
+        properties["playing"] = playing
+        properties["effectBackground"] = effectBackground
+        properties["isFullSize"] = isFullSize
+        properties["isDarkTheme"] = isDarkTheme
+        properties["deviceType"] = deviceType
+        properties["surface"] = surface
+    }
 
     override fun update(node: BgEffectNode) {
         node.update(
