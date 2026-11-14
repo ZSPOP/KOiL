@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -84,6 +86,8 @@ internal fun UpdateCellularDialog(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .heightIn(min = 48.dp)
+                        .wrapContentHeight(Alignment.CenterVertically)
                         .clickable(role = Role.Button) { onWaitWifi() }
                         .padding(vertical = 14.dp),
                     textAlign = TextAlign.Center,
@@ -98,6 +102,8 @@ internal fun UpdateCellularDialog(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(KOiLColors.Primary)
+                        .heightIn(min = 48.dp)
+                        .wrapContentHeight(Alignment.CenterVertically)
                         .clickable(role = Role.Button) { onDownload() }
                         .padding(vertical = 14.dp),
                     textAlign = TextAlign.Center,

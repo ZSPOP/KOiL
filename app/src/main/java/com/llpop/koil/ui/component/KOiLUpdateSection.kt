@@ -78,7 +78,7 @@ private fun checkedAgoText(at: Long): String? {
  * 检查更新 + 应用内下载，自成一段卡片。
  *
  * 状态与首页更新横幅同源（[UpdateChecker.updateTarget] 一次取出 tag 与直链），
- * 蜂窝门控与首页共用同一套策略（一次表态两处生效）：点击更新与检查时生效；
+ * 蜂窝门控与首页共用同一套策略（一次表态两处生效）：检查后拿到新版本、准备下载时生效；
  * 冷启动静默检查已发现新版本、用户直接点「下载」的直下分支不弹窗，与 main 行为一致。
  */
 @Composable
@@ -127,6 +127,7 @@ fun KOiLUpdateSection(
     var update by remember { mutableStateOf<UpdateCheck>(UpdateCheck.Idle) }
 
     // 蜂窝门控：与首页共用同一套策略（一次表态，两处都生效）。
+    // 只在「检查后拿到新版本、准备下载」这条路径上生效。
     // 注意下面 Idle && storedHasNewer 的直下分支不经过这里 —— 那是 main 的既有行为，
     // 冷启动已经确认过版本、用户点的是「下载」而不是「检查」。
     val settings = remember { GlobalContext.get().get<AppSettings>() }

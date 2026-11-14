@@ -281,8 +281,10 @@ private fun AboutContent(
                     Modifier
                         .fillMaxWidth()
                         .height(
+                            // 126dp 是 logo 下沿到下一项的余量，原先含「检查更新」分组标题（约 28dp）。
+                            // 该标题已删（与卡内行同名），余量同步减到 98dp，视觉间距保持原样。
                             logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                                scrollPadding.calculateTopPadding() + 126.dp,
+                                scrollPadding.calculateTopPadding() + 98.dp,
                         ),
                     contentAlignment = Alignment.TopCenter,
                     content = { },
