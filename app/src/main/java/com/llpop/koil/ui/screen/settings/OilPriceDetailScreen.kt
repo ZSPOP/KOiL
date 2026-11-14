@@ -180,7 +180,7 @@ fun OilPriceDetailScreen(
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = MiuixIcons.Back,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.koil_back),
                     tint = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.graphicsLayer {
                         scaleX = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
@@ -515,7 +515,6 @@ fun OilPriceDetailScreen(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                     )
                 }
-                Spacer(Modifier.height(8.dp))
 
                 // —— 调价时间线（最新在上）——
                 // 左轨道（涨红/跌绿/搁浅空心灰 + 淡色竖线串起节奏），
@@ -628,7 +627,7 @@ private fun StickyFilterBar(
     onBackToTop: () -> Unit,
 ) {
     val bd = backdrop
-    // 吸顶条三个 pill 的窗口坐标（按锚点自动判向：左半左对齐、右半右对齐）
+    // 吸顶条三个 pill 的窗口坐标（端由调用方按位置显式指定：整宽的 pill 传 endAligned = true）
     val stickyProvinceAnchor = remember { mutableStateOf<IntRect?>(null) }
     val stickyGradeAnchor = remember { mutableStateOf<IntRect?>(null) }
     val stickyYearAnchor = remember { mutableStateOf<IntRect?>(null) }

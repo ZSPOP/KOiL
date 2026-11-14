@@ -3,7 +3,6 @@ package com.llpop.koil.ui.component.blur
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -19,14 +18,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * BlurredBar 用 KOiL 已有的实现： BlurredBar(backdrop, blurActive, progressive)。
  */
 
-val LocalBlurEnabled = staticCompositionLocalOf { true }
-
 @Composable
 fun rememberBlurEnabled(): State<Boolean> =
-    rememberUpdatedState(LocalBlurEnabled.current && isRuntimeShaderSupported())
+    rememberUpdatedState(isRuntimeShaderSupported())
 
 @Composable
-fun rememberBlurBackdrop(enabled: Boolean = LocalBlurEnabled.current): LayerBackdrop? {
+fun rememberBlurBackdrop(enabled: Boolean = true): LayerBackdrop? {
     if (!enabled || !isRuntimeShaderSupported()) return null
     val surfaceColor = MiuixTheme.colorScheme.surface
     return rememberLayerBackdrop {

@@ -1842,7 +1842,8 @@ fun LazyListScope.aboutSection(
         items = listOf(
             CardItem("about") {
                 SettingRow(
-                    title = stringResource(R.string.koil_set_about),
+                    // 分组标题已经是「关于」，这一行用品牌名 + 版本，与 main 的品牌头一致
+                    title = stringResource(R.string.koil_app_name),
                     subtitle = stringResource(R.string.koil_set_about_version, com.llpop.koil.BuildConfig.VERSION_NAME, com.llpop.koil.BuildConfig.VERSION_CODE),
                     value = "",
                     onClick = onOpenAbout,

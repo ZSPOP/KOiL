@@ -102,7 +102,7 @@ fun LazyListScope.groupedCardItems(
     keyPrefix: String,
     items: List<CardItem>,
     outerTopPadding: Dp = 0.dp,
-    outerBottomPadding: Dp = 6.dp,
+    outerBottomPadding: Dp = 12.dp,
     outerHorizontalPadding: Dp = 12.dp,
     insidePadding: PaddingValues = PaddingValues(0.dp),
 ) {

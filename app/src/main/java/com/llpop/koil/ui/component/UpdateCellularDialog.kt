@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -83,8 +84,8 @@ internal fun UpdateCellularDialog(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                        .clickable { onWaitWifi() }
-                        .padding(vertical = 11.dp),
+                        .clickable(role = Role.Button) { onWaitWifi() }
+                        .padding(vertical = 14.dp),
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.width(12.dp))
@@ -97,8 +98,8 @@ internal fun UpdateCellularDialog(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .background(KOiLColors.Primary)
-                        .clickable { onDownload() }
-                        .padding(vertical = 11.dp),
+                        .clickable(role = Role.Button) { onDownload() }
+                        .padding(vertical = 14.dp),
                     textAlign = TextAlign.Center,
                 )
             }

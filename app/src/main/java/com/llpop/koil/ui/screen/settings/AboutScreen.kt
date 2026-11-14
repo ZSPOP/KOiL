@@ -161,7 +161,7 @@ fun AboutScreen(
                         IconButton(onClick = onBack) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.koil_set_about),
+                                contentDescription = stringResource(R.string.koil_back),
                                 tint = colorScheme.onSurface,
                                 modifier = Modifier.graphicsLayer {
                                     // RTL 语言下整组镜像，箭头指向阅读方向的反向
@@ -290,8 +290,9 @@ private fun AboutContent(
             }
 
             item(key = "update") {
+                // 不设分组标题：卡内那一行本身就叫「检查更新」，
+                // 再叠一个同名 SmallTitle 会在屏幕上方连着出现两次同样的字。
                 Column(modifier = Modifier.padding(bottom = 12.dp)) {
-                    SmallTitle(text = stringResource(R.string.koil_set_about_check_update))
                     KOiLUpdateSection(
                         blurBackdrop = if (blurEnabled) backdrop else null,
                         blurBlendColors = cardBlendColors,
