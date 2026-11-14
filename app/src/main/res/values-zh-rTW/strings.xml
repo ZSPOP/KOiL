@@ -333,6 +333,7 @@
 
     <!-- 雲端同步（堅果雲 WebDAV） -->
     <string name="koil_set_about">關於</string>
+    <string name="koil_about_open_source">開源項目</string>
     <string name="koil_set_about_version">V%1$s（%2$d）</string>
     <string name="koil_set_about_check_update">檢查更新</string>
     <string name="koil_set_about_check_update_sub">從 Gitee Releases 取得最新版本</string>

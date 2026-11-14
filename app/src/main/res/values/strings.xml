@@ -334,6 +334,7 @@
 
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_set_about">关于</string>
+    <string name="koil_about_open_source">开源项目</string>
     <string name="koil_set_about_version">V%1$s（%2$d）</string>
     <string name="koil_set_about_check_update">检查更新</string>
     <string name="koil_set_about_check_update_sub">从 Gitee Releases 获取最新版本</string>

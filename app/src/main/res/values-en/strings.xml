@@ -343,6 +343,7 @@
 
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_set_about">About</string>
+    <string name="koil_about_open_source">Open Source Projects</string>
     <string name="koil_set_about_version">V%1$s (%2$d)</string>
     <string name="koil_set_about_check_update">Check for updates</string>
     <string name="koil_set_about_check_update_sub">Fetch the latest release from Gitee</string>

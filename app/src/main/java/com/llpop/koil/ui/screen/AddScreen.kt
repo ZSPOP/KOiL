@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -70,7 +72,9 @@ import com.llpop.koil.data.oil.ForecastDirection
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.oil.forecastDirection
 import com.llpop.koil.domain.logic.NumberFormat
-import com.llpop.koil.ui.component.KOiLBlurBackground
+import com.llpop.koil.ui.component.groupedCardItems
+import com.llpop.koil.ui.component.CardItem
+import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.update.ApkUpdater
@@ -189,253 +193,274 @@ fun AddScreen(
         title = stringResource(R.string.koil_add_title),
         modifier = modifier,
     ) { _, topPadding, scrollBehavior, _ ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 // edge-to-edge 下键盘不 resize 窗口，补 imePadding 让表单底部（实付/提交按钮）不被键盘遮挡
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp),
-        ) {
-            // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
-            Spacer(Modifier.height(topPadding))
-
-        // 油价四宫格卡
-        OilPriceCard(
-            uiState = uiState,
-            onProvinceSelect = viewModel::setProvince,
-            onLocateClick = {
-                if (locationHelper.hasPermission()) {
-                    viewModel.locateProvince()
-                } else {
-                    showPermissionDialog.value = true
-                }
-            },
-        )
-        // 区块间取 12dp，高频录入页一屏更紧凑
-        Spacer(Modifier.height(12.dp))
-
-        // 更新横幅：首页摘要卡（油价四宫格卡）之后。间距沿用区块间的 12dp，
-        // 最终是「摘要卡 → 12dp → 横幅 → 12dp → 上次加油条」，不是 24dp。
-        if (bannerTag != null) {
-            // 下载中把进度接在版本文案上（"1.1.10 · 42%"）：6.6MB 在国内要几十秒，
-            // 没有可见进度就会变成"点了没反应"。失败也走同一处，并把动作换成「重试」。
-            val baseVersion = normalizeVersion(bannerTag)
-            val st = downloadState
-            val bannerVersion = when (st) {
-                is UpdateDownloadState.Downloading ->
-                    if (st.percent >= 0) {
-                        stringResource(R.string.koil_update_progress, baseVersion, st.percent)
-                    } else {
-                        stringResource(R.string.koil_update_progress_unknown, baseVersion)
-                    }
-                else -> baseVersion
-            }
-            val bannerFailed = st as? UpdateDownloadState.Failed
-            // 所有下载入口都走这里：蜂窝下的确认只做一次，且「挡住」时必须给强制下载出口
-            fun startDownload() {
-                // 缺安装授权时，这一下是去授权 / 重试安装，不是下载 ——
-                // 先弹「蜂窝下要下 6.7MB 吗」等于问一个不会发生的事。
-                if ((downloadState as? UpdateDownloadState.Failed)?.reason ==
-                    com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
-                    // 只按 failure 短路不够：包被系统清掉后 failure 仍停在 NO_PERMISSION，
-                    // 那样就会绕开蜂窝确认直接下 6.7MB。必须确认盘上真有包。
-                    apkUpdater.hasReady(bannerTag)
-                ) {
-                    apkUpdater.download(bannerTag, apkUrl)
-                    return
-                }
-                val cellular = isCellularNetwork(context)
-                cellularGate = when {
-                    needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
-                    blockedByWifiOnly(cellular, cellularDecided, wifiOnlyPref) -> CellularGate.Blocked
-                    else -> null.also { apkUpdater.download(bannerTag, apkUrl) }
-                }
-            }
-            UpdateBanner(
-                version = bannerVersion,
-                // 失败时用具体原因当主文案（签名不一致 ≠ 网络失败，不能一律让用户重试）
-                title = bannerFailed?.let { stringResource(it.reason.messageRes()) },
-                actionLabel = when {
-                    // 下载中给取消入口：否则点错只能干等几十秒，scope 是应用级的杀 App才行
-                    st is UpdateDownloadState.Downloading -> stringResource(R.string.koil_update_action_cancel)
-                    // 同设置页：缺授权且包还在 → 「去授权」；包没了 → 这一下会真下载，写「重试」
-                    bannerFailed != null -> stringResource(
-                        if (bannerFailed.reason ==
-                            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
-                            apkUpdater.hasReady(bannerTag)
-                        ) R.string.koil_update_action_grant else R.string.koil_update_action_retry
-                    )
-                    else -> stringResource(R.string.koil_ov_update_action)
-                },
-                onOpen = {
-                    when {
-                        // 下载中再点是「取消」，不是「重下」
-                        st is UpdateDownloadState.Downloading -> apkUpdater.cancel()
-                        // 失败后再点：走同一套网络门控重试
-                        bannerFailed != null -> startDownload()
-                        apkUrl.isNotBlank() -> startDownload()
-                        // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
-                        // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
-                        // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
-                        // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
-                        else -> if (openExternalUrl(context, releasePageUrl(bannerTag))) {
-                            updateChecker.markSeen(bannerTag)
-                        }
-                    }
-                },
-                // 主动关掉 = 已知晓，同一版本不再提醒（不做「7 天后再提醒」）
-                onDismiss = { updateChecker.markSeen(bannerTag) },
-            )
-            Spacer(Modifier.height(12.dp))
-            cellularGate?.let { gate ->
-                UpdateCellularDialog(
-                    blocked = gate == CellularGate.Blocked,
-                    onDownload = {
-                        cellularGate = null
-                        // 首次表态「仍要下载」= 记住不限制网络；「仅 WiFi」被挡后强制下载则不改偏好
-                        if (gate == CellularGate.Ask) {
-                            updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = false) }
-                        }
-                        apkUpdater.download(bannerTag, apkUrl)
-                    },
-                    onWaitWifi = {
-                        cellularGate = null
-                        // 只在首次表态时记成「仅 WiFi」；已表态的挡住场景点「等 WiFi」不改任何东西
-                        if (gate == CellularGate.Ask) {
-                            updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
-                        }
-                    },
-                    // 误触外部只关弹窗：不消费「只问一次」，也不写入任何偏好
-                    onDismiss = { cellularGate = null },
-                )
-            }
-        }
-
-        // 上次加油条
-        LastRecordBar(uiState = uiState, onApply = viewModel::applyLastRecord)
-        Spacer(Modifier.height(12.dp))
-
-        // 加油表单卡
-        KOiLBlurBackground(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 20f,
-        ) {
-            // KOiLBlurBackground 的内容槽是 @Composable BoxScope（内部就是 Box），多个平级子项会按
-            // TopStart 逐个叠放、彼此覆盖。所以纵向堆叠必须交给这一层不带 padding 的 Column：
-            // 它只负责顺序，横向 16dp 由内层表单 Column 提供；跳枪行的横向 16dp 由它自己的
-            // insideMargin 承担（FullTankSwitchRow 契约要求调用方零横向内距），因此它与内层平级。
-            Column {
-                // 表单三行：底部 12dp = 块模型 ①「上方内容 → 块上缘」，留在高亮之外——
-                // 上距若塞进行内 insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行。
-                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
-                    // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
-                    FormRow {
-                        com.llpop.koil.ui.component.KOiLDateField(
-                            modifier = Modifier.weight(1f),
-                            date = uiState.date,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        GradeField(
-                            modifier = Modifier.weight(1f),
-                            grade = uiState.oilGrade,
-                            priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
-                            onGradeSelected = viewModel::setOilGrade,
-                        )
-                    }
-                    Spacer(Modifier.height(14.dp))
-
-                    // 第二行：里程 + 油量
-                    FormRow {
-                        FormField(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Filled.Speed,
-                            label = stringResource(R.string.koil_add_field_mileage),
-                            value = uiState.mileage,
-                            onValueChange = viewModel::setMileage,
-                            keyboardType = KeyboardType.Number,
-                            error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        FormField(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Filled.WaterDrop,
-                            label = stringResource(R.string.koil_add_field_oil_amount),
-                            value = uiState.oilAmount,
-                            onValueChange = viewModel::setOilAmount,
-                            keyboardType = KeyboardType.Decimal,
-                            error = uiState.precheck.oilOverTank,
-                        )
-                    }
-                    Spacer(Modifier.height(14.dp))
-
-                    // 第三行：应付 + 实付
-                    FormRow {
-                        FormField(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Filled.Money,
-                            label = stringResource(R.string.koil_add_field_payable),
-                            value = uiState.payableAmount,
-                            onValueChange = {},
-                            keyboardType = KeyboardType.Decimal,
-                            readOnly = true,
-                            placeholder = stringResource(R.string.koil_ov_payable_pending),
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        FormField(
-                            modifier = Modifier.weight(1f),
-                            icon = Icons.Filled.Money,
-                            label = stringResource(R.string.koil_add_field_actual),
-                            value = uiState.actualAmount,
-                            onValueChange = viewModel::setActualAmount,
-                            keyboardType = KeyboardType.Decimal,
-                            error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
-                        )
-                    }
-                }
-                // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽。
-                // 块模型：上距 12dp 在高亮外（上方表单 Column 的 bottom），块内上距 8dp 在行内；
-                // bottomInset = 16dp → 高亮从块上缘铺到卡片底边，块下缘→卡底的 16dp 在高亮之内
-                //（顶角直角、底角随卡片圆角收边，开发者定稿确认）。
-                com.llpop.koil.ui.component.FullTankSwitchRow(
-                    checked = uiState.isFullTank,
-                    onCheckedChange = viewModel::setFullTank,
-                    bottomInset = 16.dp,
-                )
-            }
-        }
-        // 区块间取 12dp
-        Spacer(Modifier.height(12.dp))
-
-        // 实时预检提示
-        PrecheckBanner(uiState = uiState)
-        Spacer(Modifier.height(16.dp))
-
-        // 添加记录按钮（全部校验通过 → 蓝色可提交，否则一律提交不了）
-        Button(
-            onClick = viewModel::addRecord,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            enabled = uiState.precheck.isReady && !uiState.isAdding,
-            colors = ButtonDefaults.buttonColors(
-                color = KOiLColors.Primary,
-                contentColor = Color.White,
-                disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
+                .imePadding(),
+            // 底部留白统一走 contentPadding（与总览页、设置页同一种写法），
+            // 键盘弹起时不保留底部悬浮条的留白：此时它已被键盘盖住，再留会像"内容没渲染出来"
+            // 横向边距不在骨架里给：由 CardSegment / groupedCardItems 的 outerHorizontalPadding(12dp) 承担
+            contentPadding = PaddingValues(
+                top = topPadding,
+                bottom = bottomPadding,
             ),
         ) {
-            Text(
-                text = if (uiState.isAdding) stringResource(R.string.koil_add_adding) else stringResource(R.string.koil_add_add_record),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Medium,
+
+            // 油价四宫格：一组一卡
+            groupedCardItems(
+                keyPrefix = "add_oilPrice",
+                outerBottomPadding = 12.dp,
+                items = listOf(
+                    CardItem("oilPrice") {
+                        OilPriceCard(
+                    uiState = uiState,
+                    onProvinceSelect = viewModel::setProvince,
+                    onLocateClick = {
+                        if (locationHelper.hasPermission()) {
+                            viewModel.locateProvince()
+                        } else {
+                            showPermissionDialog.value = true
+                        }
+                    },
+                )
+                    },
+                ),
             )
-        }
-        // 键盘弹起时不保留底部悬浮导航条的留白。
-        // 底部导航条（84dp）此时已被键盘盖住，再留 84dp 会让「添加记录」下方出现一大块空白，
-        // 观感像"内容没渲染出来"（真机反馈原话：只见空白、没有内容）。
-        Spacer(Modifier.height(if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 12.dp else bottomPadding + 12.dp))
+
+            // 更新横幅：一组一卡，没更新时不出现
+            if (bannerTag != null) {
+                groupedCardItems(
+                    keyPrefix = "add_banner",
+                    outerBottomPadding = 12.dp,
+                        items = listOf(
+                        CardItem("updateBanner") {
+                            // 下载中把进度接在版本文案上（"1.1.10 · 42%"）：6.6MB 在国内要几十秒，
+                            // 没有可见进度就会变成"点了没反应"。失败也走同一处，并把动作换成「重试」。
+                    val baseVersion = normalizeVersion(bannerTag)
+                    val st = downloadState
+                    val bannerVersion = when (st) {
+                        is UpdateDownloadState.Downloading ->
+                            if (st.percent >= 0) {
+                                stringResource(R.string.koil_update_progress, baseVersion, st.percent)
+                            } else {
+                                stringResource(R.string.koil_update_progress_unknown, baseVersion)
+                            }
+                        else -> baseVersion
+                    }
+                    val bannerFailed = st as? UpdateDownloadState.Failed
+                    // 所有下载入口都走这里：蜂窝下的确认只做一次，且「挡住」时必须给强制下载出口
+                    fun startDownload() {
+                        // 缺安装授权时，这一下是去授权 / 重试安装，不是下载 ——
+                        // 先弹「蜂窝下要下 6.7MB 吗」等于问一个不会发生的事。
+                        if ((downloadState as? UpdateDownloadState.Failed)?.reason ==
+                            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
+                            // 只按 failure 短路不够：包被系统清掉后 failure 仍停在 NO_PERMISSION，
+                            // 那样就会绕开蜂窝确认直接下 6.7MB。必须确认盘上真有包。
+                            apkUpdater.hasReady(bannerTag)
+                        ) {
+                            apkUpdater.download(bannerTag, apkUrl)
+                            return
+                        }
+                        val cellular = isCellularNetwork(context)
+                        cellularGate = when {
+                            needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
+                            blockedByWifiOnly(cellular, cellularDecided, wifiOnlyPref) -> CellularGate.Blocked
+                            else -> null.also { apkUpdater.download(bannerTag, apkUrl) }
+                        }
+                    }
+                    UpdateBanner(
+                        version = bannerVersion,
+                        // 失败时用具体原因当主文案（签名不一致 ≠ 网络失败，不能一律让用户重试）
+                        title = bannerFailed?.let { stringResource(it.reason.messageRes()) },
+                        actionLabel = when {
+                            // 下载中给取消入口：否则点错只能干等几十秒，scope 是应用级的杀 App才行
+                            st is UpdateDownloadState.Downloading -> stringResource(R.string.koil_update_action_cancel)
+                            // 同设置页：缺授权且包还在 → 「去授权」；包没了 → 这一下会真下载，写「重试」
+                            bannerFailed != null -> stringResource(
+                                if (bannerFailed.reason ==
+                                    com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
+                                    apkUpdater.hasReady(bannerTag)
+                                ) R.string.koil_update_action_grant else R.string.koil_update_action_retry
+                            )
+                            else -> stringResource(R.string.koil_ov_update_action)
+                        },
+                        onOpen = {
+                            when {
+                                // 下载中再点是「取消」，不是「重下」
+                                st is UpdateDownloadState.Downloading -> apkUpdater.cancel()
+                                // 失败后再点：走同一套网络门控重试
+                                bannerFailed != null -> startDownload()
+                                apkUrl.isNotBlank() -> startDownload()
+                                // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
+                                // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
+                                // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
+                                // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
+                                else -> if (openExternalUrl(context, releasePageUrl(bannerTag))) {
+                                    updateChecker.markSeen(bannerTag)
+                                }
+                            }
+                        },
+                        // 主动关掉 = 已知晓，同一版本不再提醒（不做「7 天后再提醒」）
+                        onDismiss = { updateChecker.markSeen(bannerTag) },
+                    )
+                    cellularGate?.let { gate ->
+                        UpdateCellularDialog(
+                            blocked = gate == CellularGate.Blocked,
+                            onDownload = {
+                                cellularGate = null
+                                // 首次表态「仍要下载」= 记住不限制网络；「仅 WiFi」被挡后强制下载则不改偏好
+                                if (gate == CellularGate.Ask) {
+                                    updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = false) }
+                                }
+                                apkUpdater.download(bannerTag, apkUrl)
+                            },
+                            onWaitWifi = {
+                                cellularGate = null
+                                // 只在首次表态时记成「仅 WiFi」；已表态的挡住场景点「等 WiFi」不改任何东西
+                                if (gate == CellularGate.Ask) {
+                                    updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
+                                }
+                            },
+                            // 误触外部只关弹窗：不消费「只问一次」，也不写入任何偏好
+                            onDismiss = { cellularGate = null },
+                        )
+                    }
+                        },
+                    ),
+                )
+            }
+
+            // 上次加油条：一组一卡，没有上一条记录时不出现
+            if (uiState.lastRecord != null) {
+                groupedCardItems(
+                    keyPrefix = "add_lastRecord",
+                    outerBottomPadding = 12.dp,
+                        items = listOf(
+                        CardItem("lastRecord") {
+                            LastRecordBar(uiState = uiState, onApply = viewModel::applyLastRecord)
+                        },
+                    ),
+                )
+            }
+            // 加油表单 / 预检提示 / 提交按钮：三个 CardItem 走同一个入口，
+            // 组底距统一由 groupedCardItems 的 outerBottomPadding 承担
+            groupedCardItems(
+                keyPrefix = "add_form",
+                outerBottomPadding = 12.dp,
+                items = listOf(
+                    CardItem("form") {
+                    Column {
+                        // 表单三行：底部 12dp = 块模型 ①「上方内容 → 块上缘」，留在高亮之外——
+                        // 上距若塞进行内 insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行。
+                        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
+                            // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
+                            FormRow {
+                                com.llpop.koil.ui.component.KOiLDateField(
+                                    modifier = Modifier.weight(1f),
+                                    date = uiState.date,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                GradeField(
+                                    modifier = Modifier.weight(1f),
+                                    grade = uiState.oilGrade,
+                                    priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
+                                    onGradeSelected = viewModel::setOilGrade,
+                                )
+                            }
+                            Spacer(Modifier.height(14.dp))
+
+                            // 第二行：里程 + 油量
+                            FormRow {
+                                FormField(
+                                    modifier = Modifier.weight(1f),
+                                    icon = Icons.Filled.Speed,
+                                    label = stringResource(R.string.koil_add_field_mileage),
+                                    value = uiState.mileage,
+                                    onValueChange = viewModel::setMileage,
+                                    keyboardType = KeyboardType.Number,
+                                    error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                FormField(
+                                    modifier = Modifier.weight(1f),
+                                    icon = Icons.Filled.WaterDrop,
+                                    label = stringResource(R.string.koil_add_field_oil_amount),
+                                    value = uiState.oilAmount,
+                                    onValueChange = viewModel::setOilAmount,
+                                    keyboardType = KeyboardType.Decimal,
+                                    error = uiState.precheck.oilOverTank,
+                                )
+                            }
+                            Spacer(Modifier.height(14.dp))
+
+                            // 第三行：应付 + 实付
+                            FormRow {
+                                FormField(
+                                    modifier = Modifier.weight(1f),
+                                    icon = Icons.Filled.Money,
+                                    label = stringResource(R.string.koil_add_field_payable),
+                                    value = uiState.payableAmount,
+                                    onValueChange = {},
+                                    keyboardType = KeyboardType.Decimal,
+                                    readOnly = true,
+                                    placeholder = stringResource(R.string.koil_ov_payable_pending),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                FormField(
+                                    modifier = Modifier.weight(1f),
+                                    icon = Icons.Filled.Money,
+                                    label = stringResource(R.string.koil_add_field_actual),
+                                    value = uiState.actualAmount,
+                                    onValueChange = viewModel::setActualAmount,
+                                    keyboardType = KeyboardType.Decimal,
+                                    error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
+                                )
+                            }
+                        }
+                        // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽。
+                        // 与补录弹窗同一个参数（bottomInset 走默认 8dp）：跳枪行已不在卡片底部，
+                        // 高亮停在块下缘即可，块下缘 → 下一段的间距由下面段的容器自己承担。
+                        com.llpop.koil.ui.component.FullTankSwitchRow(
+                            checked = uiState.isFullTank,
+                            onCheckedChange = viewModel::setFullTank,
+                        )
+                    }
+                    },
+                    CardItem("precheck") {
+                        Box(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            PrecheckBanner(uiState = uiState)
+                        }
+                    },
+                    CardItem("submit") {
+                        Box(modifier = Modifier.padding(8.dp)) {
+                            // 添加记录按钮（全部校验通过 → 蓝色可提交，否则一律提交不了）
+                            Button(
+                    onClick = viewModel::addRecord,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    enabled = uiState.precheck.isReady && !uiState.isAdding,
+                    colors = ButtonDefaults.buttonColors(
+                        color = KOiLColors.Primary,
+                        contentColor = Color.White,
+                        // 卡底是 surfaceContainer，此处用实色 surface 做卡内凹槽，
+                        // 半透明 surfaceVariant 在卡上会与底色同色、按钮直接消失
+                        disabledColor = MiuixTheme.colorScheme.surface,
+                        disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f),
+                    ),
+                ) {
+                    Text(
+                        text = if (uiState.isAdding) stringResource(R.string.koil_add_adding) else stringResource(R.string.koil_add_add_record),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                            )
+                        }
+                        }
+                    },
+                ),
+            )
         }
     }
 
@@ -587,10 +612,6 @@ private fun OilPriceCard(
     val containerBg = if (dark) MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
     val containerText = if (dark) accent else KOiLColors.OnPrimaryContainer
     val urgentColor = if (dark) Color(0xFFFF9F0A) else Color(0xFFE65100)
-    KOiLBlurBackground(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
-    ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -733,7 +754,7 @@ private fun OilPriceCard(
             // 调价窗口提示（对齐 Web 三块式：预计调价元/吨 · 折合元/升 · 建议）
             // 由设置页「油价调整窗口提醒」开关控制显示（开显示，关隐藏）
             if (uiState.showPriceAdjust) uiState.nextAdjustDate?.let { nextDate ->
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
                 val urgent = uiState.adjustUrgent
                 val forecast = uiState.forecastAmount
                 val perLiter = uiState.perLiterEquivalent
@@ -912,7 +933,6 @@ private fun OilPriceCard(
                 }
             }
         }
-    }
 }
 
 @Composable
@@ -973,10 +993,6 @@ private fun LastRecordBar(
     onApply: () -> Unit,
 ) {
     val last = uiState.lastRecord
-    KOiLBlurBackground(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
-    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1032,7 +1048,6 @@ private fun LastRecordBar(
                 }
             }
         }
-    }
 }
 
 // ===== 表单行 / 字段 =====
@@ -1222,7 +1237,8 @@ private fun PrecheckBanner(uiState: AddUiState) {
         precheck.isReady || precheck.messageKey == "added" ->
             Color(0x1A34C759) to Color(0xFF34C759)
         else ->
-            MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f) to MiuixTheme.colorScheme.onBackgroundVariant
+            // 在卡组内：实色 surface 当凹槽底，半透明 surfaceVariant 会与 surfaceContainer 融成一片
+            MiuixTheme.colorScheme.surface to MiuixTheme.colorScheme.onBackgroundVariant
     }
     Box(
         modifier = Modifier

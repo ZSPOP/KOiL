@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,9 +68,12 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
@@ -78,13 +82,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.AnchoredDropdownColumn
 import com.llpop.koil.ui.component.AnchoredDropdownItemRow
 import com.llpop.koil.ui.component.AnchoredPopup
-import com.llpop.koil.ui.component.KOiLBlurBackground
+import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
@@ -93,6 +98,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
@@ -112,6 +118,8 @@ private val DownColor = Color(0xFF43A047)
  * 油价明细页：省份（下拉）/油号切换 → 今年累计涨跌汇总 + 价格走势图 + 调价时间线。
  * 由设置页「油價數據庫」卡片入口进入；返回手势/返回按钮回到设置页。
  */
+private const val CONTENT_KEY = "oil-price-detail-content"
+
 @Composable
 fun OilPriceDetailScreen(
     onBack: () -> Unit,
@@ -122,7 +130,7 @@ fun OilPriceDetailScreen(
     BackHandler(onBack = onBack)
     val surfaceColor = MiuixTheme.colorScheme.surface
 
-    val scrollState = rememberScrollState()
+    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
     // —— 筛选区滚出屏幕后，浮出一条可点的胶囊条 ——
@@ -132,11 +140,17 @@ fun OilPriceDetailScreen(
     // 两者都由布局测量驱动，不写死高度 → 换字号/语言、有无年份 pill 都不用改阈值。
     var filterBottomPx by remember { mutableFloatStateOf(0f) }
     var topBarPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    // 判据与数据总览页一致：读 layoutInfo 里目标 item 的 offset，与顶栏高度比较。
+    // content 是整页单 item（key = CONTENT_KEY），filterBottomPx 是筛选区底相对 item 顶的 y，
+    // 二者相加即「筛选区底在视口中的位置」；≤ topBarPx 说明已被顶栏完全盖住 → 启用吸顶条。
     val showStickyFilter by remember {
         derivedStateOf {
+            val contentInfo = listState.layoutInfo.visibleItemsInfo
+                .firstOrNull { it.key == CONTENT_KEY }
             filterBottomPx > 0f &&
                 topBarPx < Float.MAX_VALUE &&
-                scrollState.value > filterBottomPx - topBarPx
+                contentInfo != null &&
+                contentInfo.offset + filterBottomPx <= topBarPx + 2f
         }
     }
 
@@ -155,20 +169,17 @@ fun OilPriceDetailScreen(
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
         navigationIcon = {
-            Icon(
-                imageVector = MiuixIcons.Back,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackground,
-                modifier = Modifier
-                    // indication=null：去掉点击时的方形选中色卡（仅保留响应，无背景高亮）
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onBack,
-                    )
-                    .padding(8.dp)
-                    .size(24.dp),
-            )
+            val layoutDirection = LocalLayoutDirection.current
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = MiuixIcons.Back,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onBackground,
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
+                    },
+                )
+            }
         },
         overlay = { backdrop, _, topPadding ->
             StickyFilterBar(
@@ -218,7 +229,7 @@ fun OilPriceDetailScreen(
                     stickyYearExpanded = false
                     viewModel.selectYear(it)
                 },
-                onBackToTop = { scope.launch { scrollState.animateScrollTo(0) } },
+                onBackToTop = { scope.launch { listState.animateScrollToItem(0) } },
             )
         },
     ) { _, topPadding, scrollBehavior, _ ->
@@ -228,35 +239,46 @@ fun OilPriceDetailScreen(
         SideEffect {
             if (topPadding.value < topBarPx) topBarPx = topPadding.value
         }
-        // —— 明细页整体滚动容器（Column + verticalScroll，对齐一级页：整页滚动、顶栏随滚动折叠）——
-        // 时间线仅 20 条左右一次性渲染，避开 LazyColumn 懒加载层在纹理卡片/手势下的兼容性风险
-        Column(
+        // —— 明细页整体滚动容器（LazyColumn + contentPadding 页面骨架）——
+        // 时间线仅 20 条左右，整页收在一个 item 里一次性渲染；单 item 下
+        // firstVisibleItemScrollOffset 就等于总滚动距离，吸顶阈值判定与原 ScrollState 完全等价。
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 12.dp),
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            // 横向边距由四张卡的 outerHorizontalPadding(12dp) 承担
+            contentPadding = PaddingValues(
+                top = topPadding,
+                bottom = bottomPadding,
+            ),
         ) {
-            Spacer(Modifier.height(topPadding))
+            item(key = CONTENT_KEY) {
+            Column(modifier = Modifier.fillMaxWidth()) {
             Spacer(Modifier.height(4.dp))
 
             // —— 筛选区重排——
             // 行 1：省份 / 年份用下拉 pill（31 省、多年份是高基数项，若各占一行横滑 chips
             //       + 左右箭头，筛选区顶会占大半屏且 31 省里定位难）；下拉用自研 AnchoredPopup，
-            //       视觉/动效对齐 miuix Dropdown，与设置页省份选择一致。
+            //       视觉/动效与设置页省份选择一致。
             // 行 2：油号分段控件——固定 4 项（92/95/98/0）整行等宽分段，不横滑。
             var provinceMenuExpanded by remember { mutableStateOf(false) }
+            val provinceAnchor = remember { mutableStateOf<IntRect?>(null) }
             var yearMenuExpanded by remember { mutableStateOf(false) }
+            val yearAnchor = remember { mutableStateOf<IntRect?>(null) }
             // 点击已展开的 pill 时，Popup 先因「外部点击」触发 onDismissRequest 收起，
             // 同一击又落到 pill 的 toggle 上 → 立刻重新展开，表现为「收起又弹开」闪烁。
             // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不展开。
             var provinceDismissAt by remember { mutableLongStateOf(0L) }
             var yearDismissAt by remember { mutableLongStateOf(0L) }
-            // 包一层只为测量筛选区底部位置（吸顶阈值），不改变布局层级/尺寸
+            // 包一层测量筛选区底部位置（吸顶阈值）；横向 12dp 与卡片外边距同值
+            // （contentPadding 已不含横向，非卡内容自己补）
             Column(
-                modifier = Modifier.onGloballyPositioned { coords ->
-                    filterBottomPx = coords.positionInParent().y + coords.size.height
-                },
+                modifier = Modifier
+                    .padding(horizontal = 12.dp)
+                    .onGloballyPositioned { coords ->
+                        filterBottomPx = coords.positionInParent().y + coords.size.height
+                    },
             ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -266,7 +288,10 @@ fun OilPriceDetailScreen(
                 // 省份下拉 pill（含展开浮层，Popup 锚定在 pill 所在 Box）
                 // map 是 inline lambda，保留组合上下文，provinceLabel（@Composable）可直接调用
                 val provinceItems = state.provinces.map { provinceLabel(it) }
-                Box {
+                Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                    val b = coordinates.boundsInWindow()
+                    provinceAnchor.value = IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
+                }) {
                     DropdownPill(
                         label = provinceLabel(state.province),
                         expanded = provinceMenuExpanded,
@@ -279,6 +304,8 @@ fun OilPriceDetailScreen(
                     )
                     AnchoredPopup(
                         expanded = provinceMenuExpanded,
+                        endAligned = false,
+                        anchorBounds = provinceAnchor.value,
                         onDismissRequest = {
                             provinceMenuExpanded = false
                             provinceDismissAt = System.currentTimeMillis()
@@ -304,7 +331,10 @@ fun OilPriceDetailScreen(
                 }
                 // 年份下拉 pill（无年份数据时占位，保持省份 pill 左对齐语义）
                 if (state.years.isNotEmpty()) {
-                    Box {
+                    Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                        val b = coordinates.boundsInWindow()
+                        yearAnchor.value = IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
+                    }) {
                         DropdownPill(
                             label = stringResource(R.string.koil_detail_year, state.year),
                             expanded = yearMenuExpanded,
@@ -317,6 +347,7 @@ fun OilPriceDetailScreen(
                         )
                         AnchoredPopup(
                             expanded = yearMenuExpanded,
+                            anchorBounds = yearAnchor.value,
                             onDismissRequest = {
                                 yearMenuExpanded = false
                                 yearDismissAt = System.currentTimeMillis()
@@ -377,7 +408,6 @@ fun OilPriceDetailScreen(
             }
             }
             if (state.years.isNotEmpty()) {
-                Spacer(Modifier.height(12.dp))
             } else {
                 Spacer(Modifier.height(2.dp))
             }
@@ -398,9 +428,10 @@ fun OilPriceDetailScreen(
                 }
             } else {
                 // —— 涨跌汇总卡（卡片容器是 Box 布局，多个子项必须包 Column 防止重叠）——
-                KOiLBlurBackground(
-                    modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 20f,
+                // 分两段：最新价与净涨跌 / 调价次数统计（段间不画线，靠行内距区分）
+                CardSegment(
+                    isFirst = true,
+                    isLast = false,
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // —— 第一行：最新价格（前，大号突出）+ 今年净涨跌（后）——
@@ -426,12 +457,14 @@ fun OilPriceDetailScreen(
                                 valueColor = if (state.netChange >= 0) UpColor else DownColor,
                             )
                         }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(0.5.dp)
-                                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                        )
+                    }
+                }
+                CardSegment(
+                    isFirst = false,
+                    isLast = true,
+                    outerBottomPadding = 12.dp,
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         // —— 第二行：上调次数 / 下调次数 / 搁浅次数 ——
                         Row(
                             modifier = Modifier
@@ -459,12 +492,12 @@ fun OilPriceDetailScreen(
                         }
                     }
                 }
-                Spacer(Modifier.height(12.dp))
 
                 // —— 价格走势图（套圆角卡片，与汇总卡视觉统一）——
-                KOiLBlurBackground(
-                    modifier = Modifier.fillMaxWidth(),
-                    cornerRadius = 20f,
+                CardSegment(
+                    isFirst = true,
+                    isLast = true,
+                    outerBottomPadding = 12.dp,
                 ) {
                     PriceTrendCanvas(
                         items = state.items,
@@ -482,16 +515,26 @@ fun OilPriceDetailScreen(
                 // 避免全 0 导致除零（coerceAtLeast 兜底）。
                 val maxAbsDiff = timeline.maxOfOrNull { kotlin.math.abs(it.diff ?: 0.0) }
                     ?.coerceAtLeast(0.01) ?: 1.0
-                timeline.forEachIndexed { idx, row ->
-                    AdjustTimelineItem(
-                        item = row,
-                        isLatest = idx == 0,
-                        isLast = idx == timeline.lastIndex,
-                        maxAbsDiff = maxAbsDiff,
-                    )
+                // 时间线整体作为一段卡片：组底距挂在 CardSegment 上，
+                // 末项换成别的内容也不会丢
+                CardSegment(
+                    isFirst = true,
+                    isLast = true,
+                    outerBottomPadding = 12.dp,
+                    insidePadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    timeline.forEachIndexed { idx, row ->
+                        AdjustTimelineItem(
+                            item = row,
+                            isLatest = idx == 0,
+                            isLast = idx == timeline.lastIndex,
+                            maxAbsDiff = maxAbsDiff,
+                        )
+                    }
                 }
             }
-            Spacer(Modifier.height(bottomPadding + 24.dp))
+                }
+            }
         }
     }
 }
@@ -574,6 +617,10 @@ private fun StickyFilterBar(
     onBackToTop: () -> Unit,
 ) {
     val bd = backdrop
+    // 吸顶条三个 pill 的窗口坐标（按锚点自动判向：左半左对齐、右半右对齐）
+    val stickyProvinceAnchor = remember { mutableStateOf<IntRect?>(null) }
+    val stickyGradeAnchor = remember { mutableStateOf<IntRect?>(null) }
+    val stickyYearAnchor = remember { mutableStateOf<IntRect?>(null) }
     val canBlur = bd != null && isRuntimeShaderSupported()
     val barSurface = MiuixTheme.colorScheme.surface.copy(alpha = 0.82f)
     val lineColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f)
@@ -616,10 +663,15 @@ private fun StickyFilterBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Box {
+                Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                    val b = coordinates.boundsInWindow()
+                    stickyProvinceAnchor.value = IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
+                }) {
                     StickyPill(provinceText, provinceExpanded, onToggleProvince)
                     AnchoredPopup(
                         expanded = provinceExpanded,
+                        endAligned = false,
+                        anchorBounds = stickyProvinceAnchor.value,
                         onDismissRequest = onDismissProvince,
                         maxHeight = 380.dp,
                     ) {
@@ -636,10 +688,15 @@ private fun StickyFilterBar(
                         }
                     }
                 }
-                Box {
+                Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                    val b = coordinates.boundsInWindow()
+                    stickyGradeAnchor.value = IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
+                }) {
                     StickyPill(gradeText, gradeExpanded, onToggleGrade)
                     AnchoredPopup(
                         expanded = gradeExpanded,
+                        endAligned = false,
+                        anchorBounds = stickyGradeAnchor.value,
                         onDismissRequest = onDismissGrade,
                     ) {
                         AnchoredDropdownColumn {
@@ -656,10 +713,15 @@ private fun StickyFilterBar(
                     }
                 }
                 if (yearText != null) {
-                    Box {
+                    Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+                        val b = coordinates.boundsInWindow()
+                        stickyYearAnchor.value = IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
+                    }) {
                         StickyPill(yearText, yearExpanded, onToggleYear)
                         AnchoredPopup(
                             expanded = yearExpanded,
+                            endAligned = false,
+                            anchorBounds = stickyYearAnchor.value,
                             onDismissRequest = onDismissYear,
                         ) {
                             AnchoredDropdownColumn {

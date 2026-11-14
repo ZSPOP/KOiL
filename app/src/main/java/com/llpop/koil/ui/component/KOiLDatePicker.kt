@@ -26,8 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -69,7 +69,7 @@ import kotlin.math.ceil
 import java.util.Locale
 
 /**
- * 自研日期选择弹窗（柔光玻璃风格，移植 Web 端 OilKCalendar 设计）。
+ * 自研日期选择弹窗（柔光玻璃风格）。
  * - 锚定下拉弹出（AnchoredPopup）：紧贴日期字段下方，空间不足自动上翻，不被弹窗卡片遮挡
  * - 上下滑动切月（双卡轮播）：当前月跟手拖动，相邻月从对面露出，松手按位移+惯性切月，边界橡皮筋回弹
  * - 非当前月日期灰显（上月尾部 / 下月头部），点击自动跳转该月
@@ -173,6 +173,8 @@ fun KOiLDatePickerDialog(
         show = true,
         id = "koil-date-picker",
         anchorBounds = anchorBounds,
+        // 面板（300dp）比日期字段宽，右对齐会把左缘推到字段右侧再钳回屏幕边；显式左对齐贴字段左缘
+        endAligned = false,
         minWidth = 300.dp,
         maxHeight = 480.dp,
         onDismiss = onDismiss,

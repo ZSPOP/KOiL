@@ -60,7 +60,7 @@ data class SettingsUiState(
     val priceDbTotal: Int = 0,
     val priceDbProvinceCount: Int = 0,
     val importPreview: ImportPreview? = null,
-    // 导航栏（参考 Mishka 悬浮导航体系）
+    // 导航栏（悬浮导航体系）
     val floatingBottomBar: Boolean = true,
     val floatingBottomBarStyle: String = AppSettings.DEFAULT_FLOATING_BAR_STYLE,
     val bottomBarMode: String = "icon_and_text",

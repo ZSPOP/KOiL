@@ -164,13 +164,11 @@ private fun AnchoredPopupPanel(
                 val w = placeable.width
                 val h = placeable.height
                 val anchor = entry.anchorBounds
-                // 每个下拉对齐它对应的文本框，按空间翻边（不依赖中线硬切）：
-                // 优先右对齐（面板右缘 = 文本框右缘）；若右对齐会把面板左缘顶出弹窗左边界
-                // （anchor.right - w < 0，右侧放不下）→ 自动翻左对齐（面板左缘 = 文本框左缘）
-                val endX = anchor.right - w
-                val canEnd = endX >= 0
-                xDir.intValue = if (canEnd) 1 else -1
-                val xRaw = if (canEnd) endX else anchor.left
+                // 水平对齐由调用方显式指定：
+                // endAligned=true → 面板右缘贴锚点右缘（Align.End 语义）；false → 左缘贴锚点左缘。
+                // 放不下时不做翻转，只 coerceIn 回窗口内，和官方 calculatePosition 完全一致。
+                xDir.intValue = if (entry.endAligned) 1 else -1
+                val xRaw = if (entry.endAligned) anchor.right - w else anchor.left
                 val x = xRaw.coerceIn(0, (winW - w).coerceAtLeast(0))
                 val y = when {
                     h <= winH - anchor.bottom - marginV -> {
@@ -210,7 +208,7 @@ private fun AnchoredPopupPanel(
                 )
             }
             .drawWithContent {
-                // clipReveal 展开（对齐 miuix popupClipReveal）：按展开方向从上/下/中裁剪
+                // clipReveal 展开：按展开方向从上/下/中裁剪
                 val f = fraction.value
                 val h = size.height
                 if (f < 0.999f) {

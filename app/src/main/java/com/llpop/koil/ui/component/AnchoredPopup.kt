@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,11 +51,12 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.DropdownDefaults
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Check
 
 /**
- * 自研锚定下拉浮层定位器，**完整对齐 miuix DropdownPositionProvider**（miuix-ui 0.9.4 源码逐项核对）：
+ * 自研锚定下拉浮层定位器（坐标系与限位规则）：
  *
  * 坐标系（Compose Android Popup 实测反编译确认）：
  * - Popup 组件的 anchorBounds = 锚点元素 `positionInWindow()`（**相对当前 window 的坐标**，非屏幕坐标）
@@ -66,13 +67,13 @@ import top.yukonga.miuix.kmp.icon.basic.Check
  *
  * 定位规则：
  * - 垂直：优先贴锚点下方弹出（+8dp verticalMargin）；下方空间不足翻转到上方；两边不足锚点垂直居中
- * - 水平：endAligned=true 面板右缘贴锚点右缘；false 左缘贴锚点左缘；**null=自动判向**——锚点在窗口
+ * - 水平：endAligned=true 面板右缘贴锚点右缘（默认，Align.End 语义）；false 左缘贴锚点左缘（Align.Start 语义）
  *   右半 → End 对齐、左半 → Start 对齐（明细页省份 pill 贴屏幕左侧，固定 End 会把面板
  *   推出屏幕左缘再被钳到 0，表现为面板贴死屏幕左边）
  */
 class FlipBelowPositionProvider(
     private val anchorOverride: IntRect? = null,
-    private val endAligned: Boolean? = null,
+    private val endAligned: Boolean = true,
     density: Density,
     winW: Int,
     winH: Int,
@@ -93,7 +94,7 @@ class FlipBelowPositionProvider(
         popupContentSize: IntSize,
     ): IntOffset {
         val anchor = anchorOverride ?: anchorBounds
-        val end = endAligned ?: ((anchor.left + anchor.right) / 2 >= winW / 2)
+        val end = endAligned
         endResolved.value = end
         val x = (if (end) {
             anchor.right - popupContentSize.width
@@ -124,12 +125,12 @@ class FlipBelowPositionProvider(
 }
 
 /**
- * 锚定下拉浮层（自研，完整对齐 miuix Dropdown 视觉与动效）：
+ * 锚定下拉浮层（自研）：
  * - 独立 Popup 窗口渲染，浮于系统 Dialog 内容之上，不会被弹窗卡片遮挡
  * - 色彩直接取 miuix DropdownDefaults.dropdownColors()（容器/文字/选中行/勾色，自动适配深浅色）
- * - 定位：水平自动判向（锚点在窗口左半 → 左对齐展开、右半 → 右对齐展开，endAligned 可强制）、
+ * - 定位：水平对齐由 endAligned 显式指定（默认右对齐 = 官方 Align.End）、
  *   下方弹出+8dp、不足上翻、居中；自动补偿 Dialog 窗口屏幕偏移（坐标系修正）
- * - 面板宽度 = 内容自适应（IntrinsicSize.Max，最宽行），最小 minWidth（默认 200dp，对齐 miuix ListPopupColumn）
+ * - 面板宽度 = 内容自适应（IntrinsicSize.Max，最宽行），最小 minWidth（默认 200dp）
  * - 动画：缩放 spring(0.15→1) + 淡入 tween(200)，transformOrigin 从锚点方向展开
  * - anchorBounds 传锚点区域（**window 坐标：boundsInWindow()**）则以其为准；否则用 Popup 默认锚点（调用处）
  */
@@ -141,7 +142,7 @@ fun AnchoredPopup(
     minWidth: Dp = 200.dp,
     maxHeight: Dp? = null,
     anchorBounds: IntRect? = null,
-    endAligned: Boolean? = null,
+    endAligned: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     if (!expanded) return
@@ -225,11 +226,11 @@ fun AnchoredPopup(
 }
 
 /**
- * 下拉列表项（对齐 miuix DropdownImpl 非 dialog 模式）：
- * - 外层 Row：SpaceBetween，左侧文本块（限宽 216dp，对齐 miuix MaxItemTextWidth），右侧勾选图标（未选中=透明勾，保持列对齐）
+ * 下拉列表项：
+ * - 外层 Row：SpaceBetween，左侧文本块（限宽 216dp），右侧勾选图标（未选中=透明勾，保持列对齐）
  * - 行高内容自适应（无固定高度）：行内水平 padding 20dp；垂直 padding 首/尾行 20dp、中间行 12dp
  * - 文字 16sp（body1）恒 Medium；选中：文字/勾=primary（selectedContentColor/selectedIndicatorColor），
- *   行底色=容器色（选中行无独立高亮，与 miuix 一致）
+ *   行底色=容器色（选中行无独立高亮）
  */
 @Composable
 fun AnchoredDropdownItemRow(
@@ -252,7 +253,7 @@ fun AnchoredDropdownItemRow(
     ) {
         Text(
             text = text,
-            fontSize = 16.sp,
+            fontSize = MiuixTheme.textStyles.body1.fontSize,
             fontWeight = FontWeight.Medium,
             color = if (selected) colors.selectedContentColor else colors.contentColor,
             maxLines = 1,
