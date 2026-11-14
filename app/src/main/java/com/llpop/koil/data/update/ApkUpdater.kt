@@ -5,7 +5,7 @@ import com.llpop.koil.data.settings.AppSettings
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
+import androidx.core.net.toUri
 import android.provider.Settings
 import android.util.Log
 import androidx.core.content.FileProvider
@@ -228,9 +228,8 @@ class ApkUpdater(
     }
 
     private fun install(file: File): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-            !app.packageManager.canRequestPackageInstalls()
-        ) {
+        // minSdk 33 远高于 O：canRequestPackageInstalls 一定存在，不再做版本判断
+        if (!app.packageManager.canRequestPackageInstalls()) {
             // 没有「安装未知应用」授权时系统安装器直接拒，用户看不出原因。
             // 先跳到本应用的授权页，回来后再点一次；不做静默重试。
             // 保留 readyTag：文件已经下好了，用户授权回来再点就应直接进安装器
@@ -239,7 +238,7 @@ class ApkUpdater(
                 app.startActivity(
                     Intent(
                         Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:${app.packageName}")
+                        "package:${app.packageName}".toUri()
                     ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 )
             }.onFailure { Log.w("KOiL", "open unknown-source settings failed: ${it.message}") }

@@ -37,7 +37,7 @@ class MainViewModel(
     val language: StateFlow<AppSettings.Language> = settings.language
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings.Language.SYSTEM)
 
-    /** 悬浮导航条开关（参考 Mishka） */
+    /** 悬浮导航条开关 */
     val floatingBottomBar: StateFlow<Boolean> = settings.floatingBottomBar
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 

@@ -1,7 +1,7 @@
 package com.llpop.koil.ui.theme
 
 /**
- * 悬浮导航条样式（参考 Mishka ThemeConfig）。
+ * 悬浮导航条样式。
  */
 enum class FloatingBottomBarStyle(val storageValue: String) {
     /** iOS 液态玻璃悬浮导航条（IosLiquidGlassNavigationBar） */
@@ -17,7 +17,7 @@ enum class FloatingBottomBarStyle(val storageValue: String) {
 }
 
 /**
- * 底栏显示模式（参考 Mishka ThemeConfig）。
+ * 底栏显示模式。
  */
 enum class BottomBarMode(val storageValue: String) {
     /** 图标 + 文字 */

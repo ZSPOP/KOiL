@@ -14,7 +14,7 @@ import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 底栏模糊包装（参考 Mishka BlurExt.BlurredBar，简化版）：
+ * 底栏模糊包装（简化版）：
  * - Gaussian：均匀高斯模糊（textureBlur）
  * - Progressive：渐进模糊（progressiveTextureBlur，顶部最强、底部锐利）
  * 模糊不可用时（SDK<33 / 无 RuntimeShader）退化为普通内容，不包模糊层。

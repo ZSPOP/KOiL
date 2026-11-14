@@ -20,10 +20,10 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 页面级 Scaffold —— 完全对齐 Mishka 各 Screen 的顶栏模式（HomeScreen / SettingsScreen）：
+ * 页面级 Scaffold —— 统一各 Screen 的顶栏模式（HomeScreen / SettingsScreen）：
  * - 页内 [Scaffold]（大标题 [TopAppBar]，随滚动折叠），外层 MainScreen Scaffold 只提供底栏
- * - 每页独立 backdrop（等价 Mishka rememberBlurBackdrop：drawRect(surface) + drawContent()）
- * - backdrop 挂在 content 槽位的全屏 [Box] 上（与 Mishka 挂 LazyColumn 同位置）：
+ * - 每页独立 backdrop（drawRect(surface) + drawContent()）
+ * - backdrop 挂在 content 槽位的全屏 [Box] 上（与 LazyColumn 同位置）：
  *   topBar 是兄弟节点不在录制子树，避免 textureBlur 采样到自己导致递归
  * - topBar = [BlurredBar] { [TopAppBar] }，blur 可用时栏色透明、否则 surface
  *

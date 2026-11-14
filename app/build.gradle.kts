@@ -128,18 +128,18 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.compose.material3)
+    // material3 依赖已移除：全工程 0 处 androidx.compose.material3 引用
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     // Miuix（含柔光玻璃模糊库）
     // miuix-icons：Dropdown/ListPopup 菜单项渲染依赖 MiuixIcons（Check/ArrowUpDown 等），
-    // 缺它会 NoClassDefFoundError 点击闪退（对齐 Mishka 完整 miuix bundle）
+    // 缺它会 NoClassDefFoundError 点击闪退
     implementation(libs.miuix.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.blur)
     implementation(libs.miuix.icons)
     // navigationevent：miuix Dropdown 弹窗的返回手势依赖 LocalNavigationEventDispatcherOwner；
-    // 必须用 1.2.0（Mishka 版本），1.1.2 无外部 dispatcher 时抛 IllegalStateException 闪退
+    // 必须用 1.2.0：1.1.2 无外部 dispatcher 时抛 IllegalStateException 闪退
     implementation(libs.androidx.navigationevent.compose)
 
     // Room

@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,7 +106,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.Provinces
-import com.llpop.koil.ui.component.KOiLBlurBackground
+import com.llpop.koil.ui.component.CardItem
+import com.llpop.koil.ui.component.CardSegment
+import com.llpop.koil.ui.component.groupedCardItems
+import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -129,6 +132,7 @@ import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
@@ -259,14 +263,22 @@ fun OverviewScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
-            contentPadding = PaddingValues(horizontal = 12.dp),
+            // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
+            // bottom = 底栏留白 + 60dp：给悬浮回顶按钮让出位置（44dp 按钮 + 16dp 上距），
+            // 否则滚到最后一条时按钮会压在末卡右下角，金额/单价被遮住
+            contentPadding = PaddingValues(
+                top = topPadding,
+                bottom = bottomPadding + 60.dp,
+            ),
         ) {
-            // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
-            item { Spacer(Modifier.height(topPadding)) }
 
-            // 范围筛选器并入摘要卡顶部；六指标摘要（带图标 + 环比）
-            item {
-                SummaryGrid(
+            // 范围筛选器 / 六指标 / 走势图：一组一卡
+            groupedCardItems(
+                keyPrefix = "ov_summary",
+                outerBottomPadding = 12.dp,
+                items = listOf(
+                    CardItem("summary") {
+                        SummaryGrid(
                     uiState = uiState,
                     rangeLabels = rangeLabels,
                     onRangeChange = viewModel::setRange,
@@ -283,38 +295,42 @@ fun OverviewScreen(
                     } else {
                         null
                     },
-                )
-            }
-            item { Spacer(Modifier.height(12.dp)) }
+                        )
+                    },
+                ),
+            )
 
             // 异常卡：只有真有异常才占位；整卡可点击查看明细
             if (uiState.abnormalRecords.isNotEmpty()) {
-                item {
-                    AbnormalAlertCard(
+                groupedCardItems(
+                    keyPrefix = "ov_abnormal",
+                    outerBottomPadding = 12.dp,
+                        items = listOf(
+                        CardItem("abnormal") {
+                            AbnormalAlertCard(
                         count = uiState.abnormalRecords.size,
                         peakConsumption = uiState.abnormalRecords.mapNotNull { it.oilConsumption }.maxOrNull(),
                         latestConsumption = uiState.abnormalRecords
                             .maxByOrNull { it.record.reoilDate }?.oilConsumption,
-                        onClick = { showAbnormalDetail = true },
-                    )
-                }
-                item { Spacer(Modifier.height(12.dp)) }
+                                onClick = { showAbnormalDetail = true },
+                            )
+                        },
+                    ),
+                )
             }
 
             // 加油历史区（对齐 Web：标题 + 共N条 + 补录）
             item {
+                // 标题行不是卡片，横向 12dp 与卡片外边距同值（contentPadding 已不再给横向）
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
+                    SmallTitle(
                         text = stringResource(R.string.koil_ov_history),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                        modifier = Modifier.padding(start = 4.dp),
+                        modifier = Modifier.weight(1f),
+                        insideMargin = PaddingValues(start = 4.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
                     )
-                    Spacer(Modifier.weight(1f))
                     // 補錄用胶囊按钮（主色浅底 + 加号图标），点击区域加大
                     Row(
                         modifier = Modifier
@@ -340,8 +356,6 @@ fun OverviewScreen(
                     }
                 }
             }
-            item { Spacer(Modifier.height(10.dp)) }
-
             // LazyColumn 惰性渲染——月份标题分组展示，卡片仅组合可见项；
             // 无记录时显示空态引导。不设手动按月分页（visibleMonths）与"滚动加载更多"提示
             // 月份标题用普通 item——吸顶由覆盖层（StickyMonthOverlay，
@@ -362,7 +376,7 @@ fun OverviewScreen(
                             }
                         }
                         // 贴顶（进入顶栏区域）时自身透明占位；标题由覆盖层显示
-                        Box(Modifier.alpha(if (pinned) 0f else 1f)) {
+                        Box(Modifier.padding(horizontal = 12.dp).alpha(if (pinned) 0f else 1f)) {
                             MonthHeaderRow(
                                 monthKey = monthKey,
                                 count = monthRecords.size,
@@ -371,7 +385,7 @@ fun OverviewScreen(
                         }
                     }
                     // key=记录 id，回调稳定；未变化的滚出/滚入卡片可被跳过/回收
-                    items(items = monthRecords, key = { it.record.id }) { record ->
+                    itemsIndexed(items = monthRecords, key = { _, it -> it.record.id }) { _, record ->
                         RecordCard(
                             record = record,
                             prevRecord = prevMap[record.record.id],
@@ -381,13 +395,12 @@ fun OverviewScreen(
                             onRect = onActionRect,
                             recentAvg = recentAvgMap[record.record.id]?.first,
                             recentCount = recentAvgMap[record.record.id]?.second ?: 0,
-                            modifier = Modifier.padding(bottom = 10.dp),
+                            // 卡间距与组底距同一个值：12dp
+                            modifier = Modifier.padding(bottom = 12.dp),
                         )
                     }
                 }
             }
-            // 底部留白取 bottomPadding+80.dp——回顶按钮占 bottomPadding+16 起的高度，留白不足会盖住末卡内容
-            item { Spacer(Modifier.height(bottomPadding + 80.dp)) }
         }
 
         // 长按全屏操作层——点击任意处收起；圆按钮定位在长按卡片中央
@@ -447,6 +460,8 @@ fun OverviewScreen(
         }
 
         // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
+        // 竖直位置 = 底栏留白 + 60.dp：44dp 按钮 + 16dp 上距，正好落在末卡之外。
+        // 这 60dp 是按钮的固定占位（列表 contentPadding 的 bottom 与按钮对齐），不是随手加的留白。
         // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
         // 再短动画收尾到 0；近处保持平滑 animateScrollToItem，不从深处慢速长飞。
         AnimatedVisibility(
@@ -544,12 +559,7 @@ fun OverviewScreen(
                         )
                     }
                     if (index < uiState.abnormalRecords.lastIndex) {
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(0.5.dp)
-                                .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-                        )
+                        KOiLHorizontalDivider(Modifier.padding(vertical = 8.dp))
                     }
                 }
             }
@@ -958,7 +968,7 @@ private fun StickyMonthOverlay(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            // 水平 12dp 对齐 LazyColumn contentPadding，标题文字与列表内标题行位置一致（切换无错位）
+            // 横向 12dp 与卡片外边距同值（contentPadding 已不含横向），标题文字与列表内标题行位置一致（切换无错位）
             .padding(start = 12.dp, end = 12.dp, top = topPadding)
             .then(
                 if (canBlur) {
@@ -1016,7 +1026,7 @@ private fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
                 tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
                 modifier = Modifier.size(36.dp),
             )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(R.string.koil_ov_empty_title),
                 fontSize = 15.sp,
@@ -1065,10 +1075,7 @@ private fun SummaryGrid(
     fun pct(cur: Double, prevVal: Double?): Double? =
         if (prevVal != null && prevVal > 0) (cur - prevVal) / prevVal * 100 else null
 
-    KOiLBlurBackground(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
-    ) {
+    // 分三段：范围筛选器 / 指标网格 / 走势与汇总（段间不留分割线，靠内距区分）
         Column(modifier = Modifier.padding(16.dp)) {
             // 范围筛选器放在摘要卡顶部（独立悬浮灰条会在卡片区多一块浮块）
             Row(
@@ -1098,6 +1105,8 @@ private fun SummaryGrid(
                 }
             }
             Spacer(Modifier.height(14.dp))
+        }
+        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp)) {
             // —— 六指标 3×2（字号统一 21sp；里程/油量涨幅不判好坏用中性灰）——
             Row(modifier = Modifier.fillMaxWidth()) {
                 StatCell(
@@ -1164,15 +1173,11 @@ private fun SummaryGrid(
                     comparePct = pct(stats.avgUnitPriceActual ?: 0.0, prev?.avgUnitPriceActual),
                 )
             }
+        }
+        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+            // 指标区与走势区用淡分割线分组
+            KOiLHorizontalDivider(Modifier.padding(top = 10.dp, bottom = 10.dp))
             // 不设「實付 vs 應付 对比条」——按用户要求不显示节省提示
-            Spacer(Modifier.height(12.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(0.5.dp)
-                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.12f))
-            )
-            Spacer(Modifier.height(10.dp))
             // 油耗走势 sparkline（不设独立趋势卡，无坐标轴无图例，只表达形状）
             val sparkValues = remember(uiState.trend) {
                 // 短途闭合区间（<100km）单条失真风险大：趋势中隐藏（总账仍计入，见定稿）
@@ -1250,14 +1255,7 @@ private fun SummaryGrid(
             }
             // 无异常 → 「暂无异常」不单占整卡，收成这一行（省约 80dp）
             if (stableNote != null) {
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
-                )
-                Spacer(Modifier.height(10.dp))
+                KOiLHorizontalDivider(Modifier.padding(vertical = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier
@@ -1284,7 +1282,6 @@ private fun SummaryGrid(
                 }
             }
         }
-    }
 }
 
 @Composable
@@ -1411,10 +1408,6 @@ private fun AbnormalAlertCard(
     latestConsumption: Double?,
     onClick: () -> Unit,
 ) {
-    KOiLBlurBackground(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
-    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1462,7 +1455,6 @@ private fun AbnormalAlertCard(
                 softWrap = false,
             )
         }
-    }
 }
 
 // ===== 三段式记录卡（对齐 Web） =====
@@ -1506,10 +1498,14 @@ private fun RecordCard(
             // 长按显示时上报自身全局位置（页面级全屏层据此定位圆按钮）
             .onGloballyPositioned { if (showMoreMenu) onRect(it.boundsInRoot()) },
     ) {
-        KOiLBlurBackground(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 20f,
+        CardSegment(
+            isFirst = true,
+            isLast = true,
+            outerBottomPadding = 0.dp,
         ) {
+            // CardSegment 内容槽是 ColumnScope；异常竖条要 matchParentSize 叠在内容上，
+            // 因此显式包一层 Box 承接原来的 BoxScope 布局（列表项间距由调用处 padding(bottom) 给）。
+            Box {
             // 异常左竖条（异常卡唯一结构性信号，加宽到 4dp）
             if (isAbnormal) {
                 // 外层 Box 是 wrap-content（滚动列表里高度约束无穷），fillMaxHeight 解析为 0 高导致竖条隐身；
@@ -1648,15 +1644,7 @@ private fun RecordCard(
 
                 // —— 油耗区（不设灰底，用淡分割线分组；数字左对齐、单价右对齐到内容线）——
                 if (record.oilConsumption != null && record.spanDistance != null) {
-                    // 14. 分割线：1dp、内容区全宽、文字色 10%
-                    Spacer(Modifier.height(10.dp))
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.10f)),
-                    )
-                    Spacer(Modifier.height(10.dp))
+                    KOiLHorizontalDivider(Modifier.padding(vertical = 10.dp))
                     // 深色主题下 2E7D32/E65100 对比度不足，按背景亮度切换亮色变体
                     val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
                     // 短途区间数字失真（标"短途参考"），环比 delta 不计算不显示——与异常判定口径一致
@@ -1840,6 +1828,7 @@ private fun RecordCard(
                             .background(MiuixTheme.colorScheme.onBackground.copy(alpha = 0.15f)),
                     )
                 }
+            }
             }
         }
     }
@@ -2365,7 +2354,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
         }
     }
     if (showPicker.value) {
-        // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位，与 miuix 同款视觉）
+        // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位）
         com.llpop.koil.ui.component.AnchoredPopupAnchor(
             show = true,
             id = "ov-province-picker",

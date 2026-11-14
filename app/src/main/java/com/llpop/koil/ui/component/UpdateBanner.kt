@@ -49,10 +49,6 @@ internal fun UpdateBanner(
      */
     title: String? = null,
 ) {
-    KOiLBlurBackground(
-        modifier = Modifier.fillMaxWidth(),
-        cornerRadius = 20f,
-    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -104,5 +100,4 @@ internal fun UpdateBanner(
                     .padding(9.dp),
             )
         }
-    }
 }

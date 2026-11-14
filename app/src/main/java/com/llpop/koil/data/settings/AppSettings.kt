@@ -124,7 +124,7 @@ class AppSettings(private val context: Context) {
          *  而 `updates/` 下的包还在 —— 不恢复就会把完好的包删掉重下 6.7MB。 */
         private val KEY_UPDATE_READY_TAG = stringPreferencesKey("KOiL-update-ready-tag")
 
-        // ---- 导航栏（参考 Mishka：悬浮导航/样式/模式）----
+        // ---- 导航栏（悬浮导航 / 样式 / 模式）----
         private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
         private val KEY_BOTTOM_BAR_MODE = stringPreferencesKey("KOiL-bottom-bar-mode")
@@ -594,7 +594,7 @@ class AppSettings(private val context: Context) {
         }
     }
 
-    // ---- 底部导航条（参考 Mishka 悬浮导航体系）----
+    // ---- 底部导航条（悬浮导航体系）----
 
     /** 悬浮导航条开关（默认开启，按用户要求采用悬浮导航） */
     val floatingBottomBar: Flow<Boolean> =

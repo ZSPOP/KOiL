@@ -38,12 +38,12 @@ fun KOiLTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    // 完全对齐 Mishka：useMonet=false 时零覆盖 Miuix 静态配色（Mishka 主题即如此）。
+    // useMonet=false 时不覆盖 Miuix 静态配色。
     // 官方色值（0.9.4 一致）：
     //   浅色 surface（页面/Scaffold 底色）=#F7F7F7、surfaceContainer（卡片）=#FFFFFF
     //   深色 surface=#000000（纯黑底）、surfaceContainer=#242424（深灰卡片）
     // 页面底色由 Miuix Scaffold 默认 containerColor=surface 提供，卡片用 surfaceContainer，
-    // 无需任何 .copy 覆盖，仅替换主色即可还原 Mishka 观感。
+    // 无需任何 .copy 覆盖，仅替换主色即可。
     val colors = if (darkTheme) {
         darkColorScheme(primary = KOiLColors.PrimaryDark)
     } else {
