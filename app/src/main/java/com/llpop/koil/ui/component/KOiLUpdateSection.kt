@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -268,6 +269,9 @@ fun KOiLUpdateSection(
                         color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        // endActions 这一列没有权重约束：不限宽时，长文案（「正在下载 1.1.15 · 45%（点击取消）」）
+                        // 会把左边的「检查更新」标题挤成竖排（#55 记过这个教训）
+                        modifier = Modifier.widthIn(max = 120.dp),
                     )
                 }
             },
