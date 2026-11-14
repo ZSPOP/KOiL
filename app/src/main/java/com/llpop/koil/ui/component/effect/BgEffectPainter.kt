@@ -1,6 +1,9 @@
 package com.llpop.koil.ui.component.effect
 
+import android.util.Log
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import top.yukonga.miuix.kmp.blur.RuntimeShader
 import top.yukonga.miuix.kmp.blur.asBrush
 import kotlin.math.cos
@@ -8,13 +11,15 @@ import kotlin.math.sin
 
 internal class BgEffectPainter {
 
-    val runtimeShader by lazy {
-        RuntimeShader(OS3_BG_FRAG).also {
-            initStaticUniforms(it)
-        }
+    // 编译失败（个别机型不支持 AGSL / 驱动异常）时置空：整块背景退化成透明纯色，
+    // 而不是把异常缓存在 lazy 里、每次取用都再崩一次
+    val runtimeShader: RuntimeShader? by lazy {
+        runCatching { RuntimeShader(OS3_BG_FRAG).also { initStaticUniforms(it) } }
+            .onFailure { Log.w("BgEffectPainter", "runtime shader 不可用，背景退化为纯色", it) }
+            .getOrNull()
     }
 
-    val brush: Brush get() = runtimeShader.asBrush()
+    val brush: Brush get() = runtimeShader?.asBrush() ?: SolidColor(Color.Transparent)
 
     private val resolution = FloatArray(2)
     private val bound = FloatArray(4)
@@ -55,13 +60,13 @@ internal class BgEffectPainter {
         if (resolution[0] == width && resolution[1] == height) return
         resolution[0] = width
         resolution[1] = height
-        runtimeShader.setFloatUniform("uResolution", resolution)
+        runtimeShader?.setFloatUniform("uResolution", resolution)
     }
 
     fun updateAnimTime(time: Float) {
         if (animTime == time) return
         animTime = time
-        runtimeShader.setFloatUniform("uAnimTime", animTime)
+        runtimeShader?.setFloatUniform("uAnimTime", animTime)
     }
 
     fun updatePointsAnim(time: Float, preset: BgEffectConfig.Config) {
@@ -78,7 +83,7 @@ internal class BgEffectPainter {
             pointsAnimBuffer[i * 2 + 1] = animY
             i++
         }
-        runtimeShader.setFloatUniform("uPointsAnim", pointsAnimBuffer)
+        runtimeShader?.setFloatUniform("uPointsAnim", pointsAnimBuffer)
 
         cachedPointsAnimTime = time
         cachedPointsAnimPreset = preset
@@ -94,7 +99,7 @@ internal class BgEffectPainter {
         for (i in 0 until 16) {
             colorsBuffer[i] = start[i] + (end[i] - start[i]) * fraction
         }
-        runtimeShader.setFloatUniform("uColors", colorsBuffer)
+        runtimeShader?.setFloatUniform("uColors", colorsBuffer)
 
         cachedColorsPreset = preset
         cachedColorStage = stage
@@ -119,7 +124,7 @@ internal class BgEffectPainter {
         }
 
         updateBound(logoHeight, totalHeight, totalWidth)
-        runtimeShader.setFloatUniform("uBound", bound)
+        runtimeShader?.setFloatUniform("uBound", bound)
 
         cachedLogoHeight = logoHeight
         cachedTotalHeight = totalHeight
@@ -139,9 +144,9 @@ internal class BgEffectPainter {
     private fun applyPreset(deviceType: DeviceType, isDark: Boolean) {
         val preset = BgEffectConfig.get(deviceType, isDark)
 
-        runtimeShader.setFloatUniform("uPoints", preset.points)
-        runtimeShader.setFloatUniform("uLightOffset", preset.lightOffset)
-        runtimeShader.setFloatUniform("uSaturateOffset", preset.saturateOffset)
+        runtimeShader?.setFloatUniform("uPoints", preset.points)
+        runtimeShader?.setFloatUniform("uLightOffset", preset.lightOffset)
+        runtimeShader?.setFloatUniform("uSaturateOffset", preset.saturateOffset)
     }
 
     private fun updateBound(

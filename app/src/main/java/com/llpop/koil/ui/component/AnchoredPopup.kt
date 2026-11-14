@@ -68,8 +68,8 @@ import top.yukonga.miuix.kmp.icon.basic.Check
  * 定位规则：
  * - 垂直：优先贴锚点下方弹出（+8dp verticalMargin）；下方空间不足翻转到上方；两边不足锚点垂直居中
  * - 水平：endAligned=true 面板右缘贴锚点右缘（默认，Align.End 语义）；false 左缘贴锚点左缘（Align.Start 语义）
- *   右半 → End 对齐、左半 → Start 对齐（明细页省份 pill 贴屏幕左侧，固定 End 会把面板
- *   推出屏幕左缘再被钳到 0，表现为面板贴死屏幕左边）
+ *   端由调用方按锚点位置显式指定，本类不做自动判向：贴屏幕左侧的 pill（明细页省份/等级/年份）
+ *   必须传 false——固定 End 会把面板推出屏幕左缘、再被钳回 0，表现为面板贴死屏幕左边。
  */
 class FlipBelowPositionProvider(
     private val anchorOverride: IntRect? = null,
@@ -84,7 +84,7 @@ class FlipBelowPositionProvider(
     private val marginV = with(density) { 8.dp.roundToPx() }
     val direction = mutableIntStateOf(1)
 
-    /** 自动判向后的实际水平对齐（true=End/右对齐锚点右缘），供动画 TransformOrigin 读取 */
+    /** 实际生效的水平对齐（true=End/右对齐锚点右缘），供动画 TransformOrigin 读取 */
     val endResolved = mutableStateOf(true)
 
     override fun calculatePosition(

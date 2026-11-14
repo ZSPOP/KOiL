@@ -264,9 +264,11 @@ fun OverviewScreen(
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
+            // bottom = 底栏留白 + 60dp：给悬浮回顶按钮让出位置（44dp 按钮 + 16dp 上距），
+            // 否则滚到最后一条时按钮会压在末卡右下角，金额/单价被遮住
             contentPadding = PaddingValues(
                 top = topPadding,
-                bottom = bottomPadding,
+                bottom = bottomPadding + 60.dp,
             ),
         ) {
 
@@ -458,7 +460,8 @@ fun OverviewScreen(
         }
 
         // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
-        // 悬浮在导航栏上方（bottomPadding + 16.dp），滚到底时会短暂遮住末卡右侧一小块。
+        // 竖直位置 = 底栏留白 + 60.dp：44dp 按钮 + 16dp 上距，正好落在末卡之外。
+        // 这 60dp 是按钮的固定占位（列表 contentPadding 的 bottom 与按钮对齐），不是随手加的留白。
         // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
         // 再短动画收尾到 0；近处保持平滑 animateScrollToItem，不从深处慢速长飞。
         AnimatedVisibility(

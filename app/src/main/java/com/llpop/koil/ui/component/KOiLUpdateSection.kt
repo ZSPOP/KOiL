@@ -33,14 +33,11 @@ import com.llpop.koil.data.update.RefreshOutcome
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateFailure
-import com.llpop.koil.data.update.blockedByWifiOnly
 import com.llpop.koil.data.update.isCellularNetwork
 import com.llpop.koil.data.update.isNewerRelease
-import com.llpop.koil.data.update.needsCellularPrompt
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.data.update.shouldBadgeUpdate
-import com.llpop.koil.ui.screen.CellularGate
 import com.llpop.koil.ui.screen.openExternalUrl
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
@@ -135,28 +132,31 @@ fun KOiLUpdateSection(
     var cellularPending by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     fun applyNetworkGate(tag: String, url: String) {
-        // 缺安装授权时不会下载，只拉起安装器 / 跳授权页 —— 别先弹蜂窝流量确认
-        if ((downloadState as? UpdateDownloadState.Failed)?.reason == UpdateFailure.NO_PERMISSION &&
-            // 同上：包已被系统清掉时不能短路，否则绕过蜂窝确认直接下几 MB
-            apkUpdater.hasReady(tag)
-        ) {
+        val failedNoPermission =
+            (downloadState as? UpdateDownloadState.Failed)?.reason == UpdateFailure.NO_PERMISSION
+        if (skipNetworkGateForGrant(failedNoPermission, apkUpdater.hasReady(tag))) {
             apkUpdater.download(tag, url)
             return
         }
-        val cellular = isCellularNetwork(context)
-        cellularGate = when {
-            needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
-            blockedByWifiOnly(cellular, cellularDecided, wifiOnlyPref) -> CellularGate.Blocked
-            else -> null.also { apkUpdater.download(tag, url) }
-        }
-        if (cellularGate != null) cellularPending = tag to url
+        val gate = evaluateCellularGate(
+            cellular = isCellularNetwork(context),
+            decided = cellularDecided,
+            wifiOnly = wifiOnlyPref,
+        )
+        cellularGate = gate
+        // 没有门控就直接下；需要门控时记下待下载的直链，等弹窗结果回来再下
+        if (gate == null) apkUpdater.download(tag, url) else cellularPending = tag to url
     }
 
     val failReason = (downloadState as? UpdateDownloadState.Failed)?.reason
     val failTag = (update as? UpdateCheck.Newer)?.tag ?: storedTag
+    // hasReady 会 stat 文件系统：放进 remember 跟着 (原因, tag) 走，别每次重组都 stat 一遍
+    val failHasReady = remember(failReason, failTag) {
+        failReason != null && apkUpdater.hasReady(failTag)
+    }
     val failActionLabel: String? = failReason?.let {
         stringResource(
-            if (it == UpdateFailure.NO_PERMISSION && apkUpdater.hasReady(failTag)) {
+            if (it == UpdateFailure.NO_PERMISSION && failHasReady) {
                 R.string.koil_update_action_grant
             } else {
                 R.string.koil_update_action_retry
@@ -180,10 +180,11 @@ fun KOiLUpdateSection(
                     )
                 } else Modifier
             ),
-        // 毛玻璃生效时底色必须透明，否则 Card 自绘的实色会把采样结果整块盖掉
+        // 毛玻璃生效时底色必须透明，否则 Card 自绘的实色会把采样结果整块盖掉。
+        // 内容色不能给透明：Card 会把 LocalContentColor 设成它，内部谁没显式指定字色就整块看不见
         colors = CardDefaults.defaultColors(
             if (blurBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
-            Color.Transparent,
+            MiuixTheme.colorScheme.onSurfaceContainer,
         ),
     ) {
         ArrowPreference(

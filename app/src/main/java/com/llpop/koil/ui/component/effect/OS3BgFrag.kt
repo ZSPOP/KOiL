@@ -73,7 +73,9 @@ const val OS3_BG_FRAG = """
         }
 
         float oppositeNoise = smoothstep(0., 1., noiseValue);
-        color.rgb /= color.a;
+        // 预乘除法的除零保护：点光衰减到 0 时 color.a 可能为 0，
+        // 直接除会得到 Inf/NaN，再乘回 color.a 就是整片黑或白闪一下
+        color.rgb /= max(color.a, 1e-4);
         vec3 hsv = rgb2hsv(color.rgb);
         hsv.y = mix(hsv.y, 0.0, oppositeNoise * uSaturateOffset);
         color.rgb = hsv2rgb(hsv);

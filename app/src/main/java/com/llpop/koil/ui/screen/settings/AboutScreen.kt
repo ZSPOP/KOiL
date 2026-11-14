@@ -321,10 +321,11 @@ private fun AboutContent(
                                         )
                                     } else Modifier
                                 ),
-                            // 关键：blur 生效时底色必须透明，否则 Card 自绘的实色会把采样结果整块盖掉
+                            // 关键：blur 生效时底色必须透明，否则 Card 自绘的实色会把采样结果整块盖掉。
+                            // 内容色不能给透明：Card 会把 LocalContentColor 设成它，内部谁没显式指定字色就整块看不见
                             colors = CardDefaults.defaultColors(
                                 if (blurEnabled) Color.Transparent else colorScheme.surfaceContainer,
-                                Color.Transparent,
+                                colorScheme.onSurfaceContainer,
                             ),
                         ) {
                             val ossProjects = remember {
@@ -466,7 +467,7 @@ private fun BoxScope.AboutHero(
                     scaleY = 1 - (p * 0.05f)
                 },
             color = colorScheme.onSurfaceVariantSummary,
-            text = "V${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            text = stringResource(R.string.koil_set_about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
             fontSize = 14.sp,
             textAlign = TextAlign.Center,
         )

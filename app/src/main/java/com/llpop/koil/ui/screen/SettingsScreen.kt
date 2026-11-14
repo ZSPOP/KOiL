@@ -1843,7 +1843,7 @@ fun LazyListScope.aboutSection(
             CardItem("about") {
                 SettingRow(
                     title = stringResource(R.string.koil_set_about),
-                    subtitle = "V${com.llpop.koil.BuildConfig.VERSION_NAME} (${com.llpop.koil.BuildConfig.VERSION_CODE})",
+                    subtitle = stringResource(R.string.koil_set_about_version, com.llpop.koil.BuildConfig.VERSION_NAME, com.llpop.koil.BuildConfig.VERSION_CODE),
                     value = "",
                     onClick = onOpenAbout,
                 )

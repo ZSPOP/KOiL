@@ -47,8 +47,9 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.launch
 import com.llpop.koil.ui.component.UpdateCellularDialog
-import com.llpop.koil.data.update.blockedByWifiOnly
-import com.llpop.koil.data.update.needsCellularPrompt
+import com.llpop.koil.ui.component.CellularGate
+import com.llpop.koil.ui.component.evaluateCellularGate
+import com.llpop.koil.ui.component.skipNetworkGateForGrant
 import com.llpop.koil.data.update.isCellularNetwork
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
@@ -199,12 +200,13 @@ fun AddScreen(
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 // edge-to-edge 下键盘不 resize 窗口，补 imePadding 让表单底部（实付/提交按钮）不被键盘遮挡
                 .imePadding(),
-            // 底部留白统一走 contentPadding（与总览页、设置页同一种写法），
-            // 键盘弹起时不保留底部悬浮条的留白：此时它已被键盘盖住，再留会像"内容没渲染出来"
+            // 底部留白统一走 contentPadding（与总览页、设置页同一种写法）。
+            // 键盘弹起时只留 12dp：此时底部悬浮条已被键盘盖住，再留一整段导航栏高度会像"内容没渲染出来"；
+            // 键盘收起才让出 bottomPadding（底栏自身占的高度）。
             // 横向边距不在骨架里给：由 CardSegment / groupedCardItems 的 outerHorizontalPadding(12dp) 承担
             contentPadding = PaddingValues(
                 top = topPadding,
-                bottom = bottomPadding,
+                bottom = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 12.dp else bottomPadding,
             ),
         ) {
 
@@ -252,23 +254,21 @@ fun AddScreen(
                     val bannerFailed = st as? UpdateDownloadState.Failed
                     // 所有下载入口都走这里：蜂窝下的确认只做一次，且「挡住」时必须给强制下载出口
                     fun startDownload() {
-                        // 缺安装授权时，这一下是去授权 / 重试安装，不是下载 ——
-                        // 先弹「蜂窝下要下 6.7MB 吗」等于问一个不会发生的事。
-                        if ((downloadState as? UpdateDownloadState.Failed)?.reason ==
-                            com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
-                            // 只按 failure 短路不够：包被系统清掉后 failure 仍停在 NO_PERMISSION，
-                            // 那样就会绕开蜂窝确认直接下 6.7MB。必须确认盘上真有包。
-                            apkUpdater.hasReady(bannerTag)
-                        ) {
+                        val failedNoPermission =
+                            (downloadState as? UpdateDownloadState.Failed)?.reason ==
+                                com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION
+                        if (skipNetworkGateForGrant(failedNoPermission, apkUpdater.hasReady(bannerTag))) {
                             apkUpdater.download(bannerTag, apkUrl)
                             return
                         }
-                        val cellular = isCellularNetwork(context)
-                        cellularGate = when {
-                            needsCellularPrompt(cellular, cellularDecided) -> CellularGate.Ask
-                            blockedByWifiOnly(cellular, cellularDecided, wifiOnlyPref) -> CellularGate.Blocked
-                            else -> null.also { apkUpdater.download(bannerTag, apkUrl) }
-                        }
+                        val gate = evaluateCellularGate(
+                            cellular = isCellularNetwork(context),
+                            decided = cellularDecided,
+                            wifiOnly = wifiOnlyPref,
+                        )
+                        cellularGate = gate
+                        // 没有门控就直接下：不把下载塞进 when 的 else 分支里（那是个隐式副作用）
+                        if (gate == null) apkUpdater.download(bannerTag, apkUrl)
                     }
                     UpdateBanner(
                         version = bannerVersion,
@@ -612,327 +612,327 @@ private fun OilPriceCard(
     val containerBg = if (dark) MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
     val containerText = if (dark) accent else KOiLColors.OnPrimaryContainer
     val urgentColor = if (dark) Color(0xFFFF9F0A) else Color(0xFFE65100)
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
+    Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LocalGasStation,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                // 标题自动缩字不换行——宽度不够时（英文 "Guangdong fuel prices" 较长，
+                // 加上定位/省份按钮占位）就硬折成两行，真机反馈不美观。溢出时按 0.92 缩字号直到放下。
+                var titleScale by remember { mutableFloatStateOf(1f) }
+                Text(
+                    text = stringResource(R.string.koil_add_province_price, provinceLabel(uiState.viewProvince)),
+                    fontSize = 16.sp * titleScale,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                    softWrap = false,
+                    onTextLayout = { if (it.hasVisualOverflow && titleScale > 0.6f) titleScale *= 0.92f },
+                )
+                Text(
+                    text = stringResource(R.string.koil_add_price_db_version, uiState.versionLabel),
+                    fontSize = 11.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+            // 定位按钮
+            // 命中区取 48×48dp（视觉仍是小胶囊）：30×24dp 远低于 Material 的 48dp 建议，
+            // 手指点偏就落到省份按钮上。做法是外层撑开 48dp 承担点击，内层保持原样只管外观。
+            // clip 必须放在 clickable 之前——否则按下波纹是 48dp 外层的矩形色块
+            //（真机反馈"点击出现矩形色块"）。裁成圆角后波纹跟随圆角轮廓。
+            Box(
+                modifier = Modifier
+                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(onClick = onLocateClick),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = Icons.Filled.LocalGasStation,
-                    contentDescription = null,
-                    tint = accent,
-                    modifier = Modifier.size(22.dp),
-                )
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    // 标题自动缩字不换行——宽度不够时（英文 "Guangdong fuel prices" 较长，
-                    // 加上定位/省份按钮占位）就硬折成两行，真机反馈不美观。溢出时按 0.92 缩字号直到放下。
-                    var titleScale by remember { mutableFloatStateOf(1f) }
-                    Text(
-                        text = stringResource(R.string.koil_add_province_price, provinceLabel(uiState.viewProvince)),
-                        fontSize = 16.sp * titleScale,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                        softWrap = false,
-                        onTextLayout = { if (it.hasVisualOverflow && titleScale > 0.6f) titleScale *= 0.92f },
-                    )
-                    Text(
-                        text = stringResource(R.string.koil_add_price_db_version, uiState.versionLabel),
-                        fontSize = 11.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-                // 定位按钮
-                // 命中区取 48×48dp（视觉仍是小胶囊）：30×24dp 远低于 Material 的 48dp 建议，
-                // 手指点偏就落到省份按钮上。做法是外层撑开 48dp 承担点击，内层保持原样只管外观。
-                // clip 必须放在 clickable 之前——否则按下波纹是 48dp 外层的矩形色块
-                //（真机反馈"点击出现矩形色块"）。裁成圆角后波纹跟随圆角轮廓。
                 Box(
                     modifier = Modifier
-                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable(onClick = onLocateClick),
-                    contentAlignment = Alignment.Center,
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(containerBg)
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(containerBg)
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.MyLocation,
-                            contentDescription = stringResource(R.string.koil_add_locate_cd),
-                            tint = containerText,
-                            modifier = Modifier.size(14.dp),
-                        )
-                    }
-                }
-                Spacer(Modifier.width(2.dp))
-                // 省份选择按钮（点击弹设置页同款 OverlayDropdownPopup 下拉，锚定按钮下方、跟随位置）
-                // 同定位按钮——clip 在 clickable 之前，波纹圆角不出现矩形色块
-                Box(
-                    modifier = Modifier
-                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showProvincePicker.value = true },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(containerBg)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        // 省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
-                        // 文字→箭头间 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
-                        Text(
-                            // 省份是数据库主键（中文），显示层用本地化名
-                            text = provinceLabel(uiState.viewProvince),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = containerText,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        // 省份下拉箭头——用 Miuix DropdownArrowEndAction（与设置页 Dropdown / 油号选择
-                        // 行尾同款线条风格），不用实心小三角 ArrowDropDown（用户反馈不显眼）
-                        DropdownArrowEndAction(actionColor = containerText)
-                    }
-                }
-                if (showProvincePicker.value) {
-                    OverlayDropdownPopup(
-                        entry = DropdownEntry(
-                            items = PROVINCES.map { p ->
-                                DropdownItem(
-                                    text = provinceLabel(p),
-                                    selected = p == uiState.viewProvince,
-                                    onClick = {
-                                        onProvinceSelect(p)
-                                        showProvincePicker.value = false
-                                    },
-                                )
-                            }
-                        ),
-                        show = showProvincePicker.value,
-                        onDismiss = { showProvincePicker.value = false },
-                        onDismissFinished = {},
-                        maxHeight = 300.dp,
-                        dropdownColors = DropdownDefaults.dropdownColors(),
-                        renderInRootScaffold = true,
-                        collapseOnSelection = true,
+                    Icon(
+                        imageVector = Icons.Filled.MyLocation,
+                        contentDescription = stringResource(R.string.koil_add_locate_cd),
+                        tint = containerText,
+                        modifier = Modifier.size(14.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(14.dp))
-            // 四宫格：92# / 95# / 98# / 0#（仅价格，无涨跌幅）
-            Row(modifier = Modifier.fillMaxWidth()) {
-                PriceCell(
-                    modifier = Modifier.weight(1f),
-                    grade = "92#",
-                    price = uiState.priceMap["92"],
-                )
-                PriceCell(
-                    modifier = Modifier.weight(1f),
-                    grade = "95#",
-                    price = uiState.priceMap["95"],
-                )
-                PriceCell(
-                    modifier = Modifier.weight(1f),
-                    grade = "98#",
-                    price = uiState.priceMap["98"],
-                )
-                PriceCell(
-                    modifier = Modifier.weight(1f),
-                    grade = "0#",
-                    price = uiState.priceMap["0"],
-                )
-            }
-            // 调价窗口提示（对齐 Web 三块式：预计调价元/吨 · 折合元/升 · 建议）
-            // 由设置页「油价调整窗口提醒」开关控制显示（开显示，关隐藏）
-            if (uiState.showPriceAdjust) uiState.nextAdjustDate?.let { nextDate ->
-                Spacer(Modifier.height(6.dp))
-                val urgent = uiState.adjustUrgent
-                val forecast = uiState.forecastAmount
-                val perLiter = uiState.perLiterEquivalent
-                val rising = forecast != null && forecast > 0
-                // 搁浅判定要先于建议计算：stranded 依赖 eiaSource + 方向，原先写在 forecast != null
-                // 块内，导致建议只能看到涨/跌两态，搁浅时误显示「建议等降价」。
-                val eiaSource = uiState.forecastSource != "腾讯"
-                val direction = forecast?.let { forecastDirection(it) }
-                val stranded = eiaSource && direction == ForecastDirection.STRANDED
-                // 估算失败时不驱动建议——历史涨跌不预示下一轮方向（因果不成立），不给任何建议徽章；
-                // forecast==null 时下方按原因分两种空态：汇率没取到显示「汇率获取中」，其余什么都不显示
-                val suggestion = when {
-                    forecast == null -> ""
-                    stranded -> stringResource(R.string.koil_add_suggest_stranded)
-                    rising -> stringResource(R.string.koil_add_suggest_early)
-                    else -> stringResource(R.string.koil_add_suggest_wait)
-                }
-                // 搁浅既不是「赶紧加」也不是「等降」，徽章用中性色；涨/跌仍沿用现有强调色
-                val suggestionColor = if (stranded) MiuixTheme.colorScheme.onBackgroundVariant
-                    else if (urgent) urgentColor
-                    else accent
-                val bgColor = if (dark) Color(0xFF17191D)
-                    else if (urgent) urgentColor.copy(alpha = 0.16f)
-                    else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
-                val textColor = if (urgent) urgentColor
-                    else if (dark) accent
-                    else KOiLColors.OnPrimaryContainer
-                val barColor = if (urgent) urgentColor else accent
+            Spacer(Modifier.width(2.dp))
+            // 省份选择按钮（点击弹设置页同款 OverlayDropdownPopup 下拉，锚定按钮下方、跟随位置）
+            // 同定位按钮——clip 在 clickable 之前，波纹圆角不出现矩形色块
+            Box(
+                modifier = Modifier
+                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { showProvincePicker.value = true },
+                contentAlignment = Alignment.Center,
+            ) {
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(bgColor),
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(containerBg)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(4.dp)
-                            .fillMaxHeight()
-                            .background(barColor),
+                    // 省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
+                    // 文字→箭头间 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
+                    Text(
+                        // 省份是数据库主键（中文），显示层用本地化名
+                        text = provinceLabel(uiState.viewProvince),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = containerText,
                     )
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (urgent) Icons.Filled.Warning else Icons.Filled.Info,
-                                contentDescription = null,
-                                tint = if (urgent) urgentColor else accent,
-                                // 图标跟随本行字号：文字 12sp→13sp 后仍是 14dp 会显得偏小，
-                                // 与下方「机制预测」行的字重/字号也对不上（真机反馈两行大小不一）
-                                modifier = Modifier.size(15.dp),
+                    Spacer(Modifier.width(8.dp))
+                    // 省份下拉箭头——用 Miuix DropdownArrowEndAction（与设置页 Dropdown / 油号选择
+                    // 行尾同款线条风格），不用实心小三角 ArrowDropDown（用户反馈不显眼）
+                    DropdownArrowEndAction(actionColor = containerText)
+                }
+            }
+            if (showProvincePicker.value) {
+                OverlayDropdownPopup(
+                    entry = DropdownEntry(
+                        items = PROVINCES.map { p ->
+                            DropdownItem(
+                                text = provinceLabel(p),
+                                selected = p == uiState.viewProvince,
+                                onClick = {
+                                    onProvinceSelect(p)
+                                    showProvincePicker.value = false
+                                },
                             )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                text = stringResource(
-                                    R.string.koil_add_window_prefix,
-                                    nextDate.let { if (it.length >= 5) it.substring(5) else it },
-                                ),
-                                // 与「機制預測」行同字号：两行是同一张卡里的并列结论，12sp 显得矮一截
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = textColor,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                            )
-                            // 建议徽章贴在窗口日行右侧：它是对「这一轮调价」的结论，跟日期同屏最直观
-                            if (suggestion.isNotEmpty()) {
-                                Spacer(Modifier.width(6.dp))
-                                AdjustBadge(
-                                    text = suggestion,
-                                    color = suggestionColor,
-                                    bold = true,
-                                )
-                            }
                         }
-                        if (forecast != null) {
-                            // 头行给结论（「机制预测：上调约 X 元/吨」），随后是数据时点行。
-                            // 建议徽章放在最上面的窗口日行右侧（与「这一轮调什么」同屏），
-                            // 免责句则并进数据时点行末尾的括号里，不再单独占一行。
-                            // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
-                            // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
-                            val headRes = when {
-                                stranded -> R.string.koil_add_forecast_mech_stranded
-                                eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_mech_up
-                                eiaSource -> R.string.koil_add_forecast_mech_down
-                                rising -> R.string.koil_add_forecast_single_up
-                                else -> R.string.koil_add_forecast_single_down
-                            }
-                            // 折合值的方向必须与 headRes 同源：EIA 源走向量 direction（含搁浅），
-                            // 腾讯源只有涨/跌两态。不能只看 rising（forecast > 0），否则搁浅时
-                            // 会出现「机制预测：搁浅」+「折合约涨」的自相矛盾。
-                            // 搁浅不显示折合：<50 元/吨 折不到 0.04 元/升，四舍五入常显示 0.00，
-                            // 反而让人以为「白算了一个数」。
-                            val perLiterRes = when {
-                                stranded -> null
-                                eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_per_liter_up
-                                eiaSource -> R.string.koil_add_forecast_per_liter_down
-                                rising -> R.string.koil_add_forecast_per_liter_up
-                                else -> R.string.koil_add_forecast_per_liter_down
-                            }
-                            val perLiterText = if (perLiterRes != null && perLiter != null) {
-                                stringResource(perLiterRes, kotlin.math.abs(perLiter))
-                            } else {
-                                ""
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = stringResource(
-                                    headRes,
-                                    kotlin.math.abs(forecast).toInt().toString(),
-                                ) + perLiterText,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = textColor,
+                    ),
+                    show = showProvincePicker.value,
+                    onDismiss = { showProvincePicker.value = false },
+                    onDismissFinished = {},
+                    maxHeight = 300.dp,
+                    dropdownColors = DropdownDefaults.dropdownColors(),
+                    renderInRootScaffold = true,
+                    collapseOnSelection = true,
+                )
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        // 四宫格：92# / 95# / 98# / 0#（仅价格，无涨跌幅）
+        Row(modifier = Modifier.fillMaxWidth()) {
+            PriceCell(
+                modifier = Modifier.weight(1f),
+                grade = "92#",
+                price = uiState.priceMap["92"],
+            )
+            PriceCell(
+                modifier = Modifier.weight(1f),
+                grade = "95#",
+                price = uiState.priceMap["95"],
+            )
+            PriceCell(
+                modifier = Modifier.weight(1f),
+                grade = "98#",
+                price = uiState.priceMap["98"],
+            )
+            PriceCell(
+                modifier = Modifier.weight(1f),
+                grade = "0#",
+                price = uiState.priceMap["0"],
+            )
+        }
+        // 调价窗口提示（对齐 Web 三块式：预计调价元/吨 · 折合元/升 · 建议）
+        // 由设置页「油价调整窗口提醒」开关控制显示（开显示，关隐藏）
+        if (uiState.showPriceAdjust) uiState.nextAdjustDate?.let { nextDate ->
+            Spacer(Modifier.height(6.dp))
+            val urgent = uiState.adjustUrgent
+            val forecast = uiState.forecastAmount
+            val perLiter = uiState.perLiterEquivalent
+            val rising = forecast != null && forecast > 0
+            // 搁浅判定要先于建议计算：stranded 依赖 eiaSource + 方向，原先写在 forecast != null
+            // 块内，导致建议只能看到涨/跌两态，搁浅时误显示「建议等降价」。
+            val eiaSource = uiState.forecastSource != "腾讯"
+            val direction = forecast?.let { forecastDirection(it) }
+            val stranded = eiaSource && direction == ForecastDirection.STRANDED
+            // 估算失败时不驱动建议——历史涨跌不预示下一轮方向（因果不成立），不给任何建议徽章；
+            // forecast==null 时下方按原因分两种空态：汇率没取到显示「汇率获取中」，其余什么都不显示
+            val suggestion = when {
+                forecast == null -> ""
+                stranded -> stringResource(R.string.koil_add_suggest_stranded)
+                rising -> stringResource(R.string.koil_add_suggest_early)
+                else -> stringResource(R.string.koil_add_suggest_wait)
+            }
+            // 搁浅既不是「赶紧加」也不是「等降」，徽章用中性色；涨/跌仍沿用现有强调色
+            val suggestionColor = if (stranded) MiuixTheme.colorScheme.onBackgroundVariant
+                else if (urgent) urgentColor
+                else accent
+            val bgColor = if (dark) Color(0xFF17191D)
+                else if (urgent) urgentColor.copy(alpha = 0.16f)
+                else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
+            val textColor = if (urgent) urgentColor
+                else if (dark) accent
+                else KOiLColors.OnPrimaryContainer
+            val barColor = if (urgent) urgentColor else accent
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(bgColor),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .fillMaxHeight()
+                        .background(barColor),
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (urgent) Icons.Filled.Warning else Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = if (urgent) urgentColor else accent,
+                            // 图标跟随本行字号：文字 12sp→13sp 后仍是 14dp 会显得偏小，
+                            // 与下方「机制预测」行的字重/字号也对不上（真机反馈两行大小不一）
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.koil_add_window_prefix,
+                                nextDate.let { if (it.length >= 5) it.substring(5) else it },
+                            ),
+                            // 与「機制預測」行同字号：两行是同一张卡里的并列结论，12sp 显得矮一截
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        // 建议徽章贴在窗口日行右侧：它是对「这一轮调价」的结论，跟日期同屏最直观
+                        if (suggestion.isNotEmpty()) {
+                            Spacer(Modifier.width(6.dp))
+                            AdjustBadge(
+                                text = suggestion,
+                                color = suggestionColor,
+                                bold = true,
                             )
-                            if (eiaSource) {
-                                // 样本天数恒显示：满窗口也写「已计入 10 个交易日」，
-                                // 只在 <10 时显示会让满窗口看起来像没标样本的最终值。
-                                // 脚注只保留两段事实：数据截至哪天、算进了几个交易日，末尾拼免责句。
-                                // 发布日期不再展示——它只是对滞后的解释性信息，「数据截至」本身已能
-                                // 回答「数新不新」，砍掉后 360dp 窄屏也更容易单行放下。
-                                val meta = buildList {
-                                    uiState.forecastDataDate?.let {
-                                        add(
-                                            stringResource(
-                                                R.string.koil_add_forecast_as_of,
-                                                it.takeLast(5),
-                                            ),
-                                        )
-                                    }
-                                    uiState.forecastSampleDays?.let {
-                                        add(stringResource(R.string.koil_add_forecast_sample, it))
-                                    }
+                        }
+                    }
+                    if (forecast != null) {
+                        // 头行给结论（「机制预测：上调约 X 元/吨」），随后是数据时点行。
+                        // 建议徽章放在最上面的窗口日行右侧（与「这一轮调什么」同屏），
+                        // 免责句则并进数据时点行末尾的括号里，不再单独占一行。
+                        // 官方搁浅门槛：|幅度| < 50 元/吨本轮不作调整。不单独分支就会显示
+                        // 「预计下调约 0 元/吨」或「预计上调约 47 元/吨」，用户以为会调、公告却是「不调」
+                        val headRes = when {
+                            stranded -> R.string.koil_add_forecast_mech_stranded
+                            eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_mech_up
+                            eiaSource -> R.string.koil_add_forecast_mech_down
+                            rising -> R.string.koil_add_forecast_single_up
+                            else -> R.string.koil_add_forecast_single_down
+                        }
+                        // 折合值的方向必须与 headRes 同源：EIA 源走向量 direction（含搁浅），
+                        // 腾讯源只有涨/跌两态。不能只看 rising（forecast > 0），否则搁浅时
+                        // 会出现「机制预测：搁浅」+「折合约涨」的自相矛盾。
+                        // 搁浅不显示折合：<50 元/吨 折不到 0.04 元/升，四舍五入常显示 0.00，
+                        // 反而让人以为「白算了一个数」。
+                        val perLiterRes = when {
+                            stranded -> null
+                            eiaSource && direction == ForecastDirection.UP -> R.string.koil_add_forecast_per_liter_up
+                            eiaSource -> R.string.koil_add_forecast_per_liter_down
+                            rising -> R.string.koil_add_forecast_per_liter_up
+                            else -> R.string.koil_add_forecast_per_liter_down
+                        }
+                        val perLiterText = if (perLiterRes != null && perLiter != null) {
+                            stringResource(perLiterRes, kotlin.math.abs(perLiter))
+                        } else {
+                            ""
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(
+                                headRes,
+                                kotlin.math.abs(forecast).toInt().toString(),
+                            ) + perLiterText,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = textColor,
+                        )
+                        if (eiaSource) {
+                            // 样本天数恒显示：满窗口也写「已计入 10 个交易日」，
+                            // 只在 <10 时显示会让满窗口看起来像没标样本的最终值。
+                            // 脚注只保留两段事实：数据截至哪天、算进了几个交易日，末尾拼免责句。
+                            // 发布日期不再展示——它只是对滞后的解释性信息，「数据截至」本身已能
+                            // 回答「数新不新」，砍掉后 360dp 窄屏也更容易单行放下。
+                            val meta = buildList {
+                                uiState.forecastDataDate?.let {
+                                    add(
+                                        stringResource(
+                                            R.string.koil_add_forecast_as_of,
+                                            it.takeLast(5),
+                                        ),
+                                    )
                                 }
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = meta.joinToString(
-                                        stringResource(R.string.koil_add_forecast_meta_sep),
-                                    ) + stringResource(R.string.koil_add_forecast_caveat_inline),
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.65f),
-                                )
-                            } else {
-                                // 无 EIA 时没有「截至」行，免责句仍需出现，单独作末段
-                                Spacer(Modifier.height(3.dp))
-                                Text(
-                                    text = stringResource(R.string.koil_add_forecast_caveat),
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.65f),
-                                )
+                                uiState.forecastSampleDays?.let {
+                                    add(stringResource(R.string.koil_add_forecast_sample, it))
+                                }
                             }
-                            if (uiState.forecastFxStale) {
-                                // 汇率缓存超 90 天：数值仍给出（有边界比没有好），但如实告知数据旧，
-                                // 提示用户这次误差可能比平时大
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = stringResource(R.string.koil_add_forecast_fx_stale),
-                                    fontSize = 11.sp,
-                                    color = textColor.copy(alpha = 0.65f),
-                                )
-                            }
-                        } else if (uiState.forecastFxMissing) {
-                            // 与普通「待检测」区分开：这是汇率没取到（快照到位会触发重算、自动出数），
-                            // 不是 EIA/腾讯都挂了。合并成一个空态用户会以为卡死。
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(3.dp))
                             Text(
-                                text = stringResource(R.string.koil_add_forecast_fx_pending),
+                                text = meta.joinToString(
+                                    stringResource(R.string.koil_add_forecast_meta_sep),
+                                ) + stringResource(R.string.koil_add_forecast_caveat_inline),
+                                fontSize = 11.sp,
+                                color = textColor.copy(alpha = 0.65f),
+                            )
+                        } else {
+                            // 无 EIA 时没有「截至」行，免责句仍需出现，单独作末段
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                text = stringResource(R.string.koil_add_forecast_caveat),
                                 fontSize = 11.sp,
                                 color = textColor.copy(alpha = 0.65f),
                             )
                         }
+                        if (uiState.forecastFxStale) {
+                            // 汇率缓存超 90 天：数值仍给出（有边界比没有好），但如实告知数据旧，
+                            // 提示用户这次误差可能比平时大
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = stringResource(R.string.koil_add_forecast_fx_stale),
+                                fontSize = 11.sp,
+                                color = textColor.copy(alpha = 0.65f),
+                            )
+                        }
+                    } else if (uiState.forecastFxMissing) {
+                        // 与普通「待检测」区分开：这是汇率没取到（快照到位会触发重算、自动出数），
+                        // 不是 EIA/腾讯都挂了。合并成一个空态用户会以为卡死。
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = stringResource(R.string.koil_add_forecast_fx_pending),
+                            fontSize = 11.sp,
+                            color = textColor.copy(alpha = 0.65f),
+                        )
                     }
                 }
             }
         }
+    }
 }
 
 @Composable
@@ -993,61 +993,61 @@ private fun LastRecordBar(
     onApply: () -> Unit,
 ) {
     val last = uiState.lastRecord
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Timer,
-                contentDescription = null,
-                tint = MiuixTheme.colorScheme.onBackgroundVariant,
-                modifier = Modifier.size(18.dp),
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Timer,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onBackgroundVariant,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.koil_add_last_refuel),
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
+            if (last != null) {
                 Text(
-                    text = stringResource(R.string.koil_add_last_refuel),
-                    fontSize = 12.sp,
+                    // 统一走 NumberFormat：直接拼 Double（"45.0 L"/"油量 38.0"）会带多余小数点，金额 toInt() 截断分位，
+                    // 与全站金额口径（两位小数）不一致。
+                    text = "${last.reoilDate.takeLast(5)} · ${NumberFormat.measure(last.mileage)} km · " +
+                        "${NumberFormat.measure(last.oilAmount)} L · ¥${NumberFormat.money(last.actualAmount)}",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onBackground,
+                    maxLines = 1,
+                )
+            } else {
+                Text(
+                    text = stringResource(R.string.koil_add_no_record),
+                    fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
-                if (last != null) {
-                    Text(
-                        // 统一走 NumberFormat：直接拼 Double（"45.0 L"/"油量 38.0"）会带多余小数点，金额 toInt() 截断分位，
-                        // 与全站金额口径（两位小数）不一致。
-                        text = "${last.reoilDate.takeLast(5)} · ${NumberFormat.measure(last.mileage)} km · " +
-                            "${NumberFormat.measure(last.oilAmount)} L · ¥${NumberFormat.money(last.actualAmount)}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onBackground,
-                        maxLines = 1,
-                    )
-                } else {
-                    Text(
-                        text = stringResource(R.string.koil_add_no_record),
-                        fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                    )
-                }
-            }
-            if (last != null) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(KOiLColors.Primary)
-                        .clickable(onClick = onApply)
-                        .padding(horizontal = 14.dp, vertical = 7.dp),
-                ) {
-                    Text(
-                        text = stringResource(R.string.koil_add_apply_last),
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White,
-                    )
-                }
             }
         }
+        if (last != null) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(KOiLColors.Primary)
+                    .clickable(onClick = onApply)
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.koil_add_apply_last),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White,
+                )
+            }
+        }
+    }
 }
 
 // ===== 表单行 / 字段 =====
@@ -1266,5 +1266,3 @@ private fun PrecheckBanner(uiState: AddUiState) {
     }
 }
 
-/** 蜂窝下载的两个门控形态 */
-internal enum class CellularGate { Ask, Blocked }
