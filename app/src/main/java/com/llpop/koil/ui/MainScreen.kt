@@ -5,10 +5,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -295,27 +291,13 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                 mode = PagerInterceptionMode.CrossAxisInterceptor,
                             )
                         if (showAbout) {
-                            // 关于页：全屏承载在 Pager 之外。
-                            // 进入做 180ms 淡入：这一行被按下时的高亮才不会被瞬间切页吞掉
-                            AnimatedVisibility(
-                                visibleState = remember {
-                                    MutableTransitionState(false).apply { targetState = true }
-                                },
-                                enter = fadeIn(tween(180)),
-                            ) {
-                                com.llpop.koil.ui.screen.settings.AboutScreen(
-                                    onBack = { showAbout = false },
-                                )
-                            }
+                            // 关于页：全屏承载在 Pager 之外
+                            com.llpop.koil.ui.screen.settings.AboutScreen(
+                                onBack = { showAbout = false },
+                            )
                         } else if (showOilPriceDetail) {
                             // 调价记录明细页：全屏承载在 Pager 之外（二级路由页），
                             // 横向手势完全归页面内组件所有；无底栏，底部留白用系统导航条 inset
-                            AnimatedVisibility(
-                                visibleState = remember {
-                                    MutableTransitionState(false).apply { targetState = true }
-                                },
-                                enter = fadeIn(tween(180)),
-                            ) {
                             OilPriceDetailScreen(
                                 onBack = { showOilPriceDetail = false },
                                 // 二级页不显示底部悬浮栏（见上方 bottomBar 槽的 showAbout/showOilPriceDetail 判断），
@@ -324,7 +306,6 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                     .asPaddingValues()
                                     .calculateBottomPadding(),
                             )
-                            }
                         } else {
                             HorizontalPager(
                                 state = pagerState,
