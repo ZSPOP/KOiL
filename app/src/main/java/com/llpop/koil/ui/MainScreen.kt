@@ -7,6 +7,9 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -74,7 +77,7 @@ import top.yukonga.miuix.kmp.utils.springAnimateToPage
 /**
  * 主界面：三 Tab（录入 / 总览 / 设置）+ 底部导航 + 主题三档。
  *
- * 底部导航条参考 Mishka（https://github.com/YuKongA/Mishka）悬浮导航体系：
+ * 底部导航条采用悬浮导航体系：
  * - 悬浮导航开关：floatingBottomBar（默认开启）
  * - 悬浮样式：Miuix（胶囊悬浮 + textureBlur 玻璃） / iOS 液态玻璃（IosLiquidGlassNavigationBar）
  * - 底栏模式：图标+文字 / 仅图标
@@ -130,7 +133,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     ) {
         KOiLTheme(darkTheme = darkTheme) {
         // 底栏玻璃 backdrop：drawRect(surface) + drawContent() 录制页面真实内容，
-        // 供悬浮导航条/底栏模糊采样产生通透感（对齐 Mishka rememberBlurBackdrop 用 surface 铺底）。
+        // 供悬浮导航条/底栏模糊采样产生通透感（用 surface 铺底）。
         // 页面底色 = Miuix Scaffold 默认 containerColor=surface（浅 #F7F7F7 / 深 #000000），
         // 卡片为 surfaceContainer（浅白 / 深 #242424），两者天然拉开色差。
         val surfaceColor = MiuixTheme.colorScheme.surface
@@ -145,14 +148,16 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                 // 最底层填充：Scaffold 已透明，若不铺背景会露出窗口底色
                 .background(surfaceColor),
         ) {
-            // 三页用 HorizontalPager 承载（对齐 Mishka MainPage）：
+            // 三页用 HorizontalPager 承载：
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
             val scope = rememberCoroutineScope()
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
-            // 调价记录明细页开关：true 时在 Pager 之外全屏显示（对齐 Mishka 二级路由页，
+            // 调价记录明细页开关：true 时在 Pager 之外全屏显示（二级路由页，
             // 脱离 Pager 的手势拦截器，页面内横向组件可自由滑动）
             var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
+            // 关于页开关：同样提升到 MainScreen 级全屏页（二级路由页）
+            var showAbout by rememberSaveable { mutableStateOf(false) }
 
             // 导航项列表按标签缓存，避免每次重组都重新 listOf 三个 NavigationItem
             // （含 stringResource 解析）在 Pager 滑动引发的高频重组下造成纯浪费。
@@ -169,7 +174,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             val showLabels = barMode == BottomBarMode.IconAndText.storageValue
             val isFloatingStyleIos = floatingStyle == FloatingBottomBarStyle.IosLike.storageValue
             val isDark = darkTheme
-            // 对齐 Mishka：深色 GlassStrokeMiddleDark / 浅色 GlassStrokeMiddleLight 高光边
+            // 高光边：深色 GlassStrokeMiddleDark / 浅色 GlassStrokeMiddleLight 高光边
             val floatingHighlight = remember(isDark) {
                 if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
             }
@@ -177,11 +182,11 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             Scaffold(
                     containerColor = Color.Transparent,
                     bottomBar = {
-                        // 二级全屏页（调价记录明细页）隐藏底部导航（对齐 Mishka 二级路由页规范）
-                        if (!showOilPriceDetail) {
+                        // 二级全屏页（调价记录明细页 / 关于页）隐藏底部导航（二级路由页规范）
+                        if (!showOilPriceDetail && !showAbout) {
                         if (floatingBottomBar) {
                             if (isFloatingStyleIos) {
-                                // iOS 液态玻璃悬浮导航条（Mishka 移植）
+                                // iOS 液态玻璃悬浮导航条
                                 IosLiquidGlassNavigationBar(
                                     items = navigationItems,
                                     selectedIndex = selectedTab,
@@ -192,7 +197,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                     showLabels = showLabels,
                                 )
                             } else {
-                                // Miuix 胶囊悬浮导航条 + 玻璃（对齐 Mishka 全部参数）
+                                // Miuix 胶囊悬浮导航条 + 玻璃
                                 val floatingPillRadius = 50.dp
                                 val floatingBarShape = RoundedCornerShape(floatingPillRadius)
                                 val floatingBarModifier = Modifier.textureBlur(
@@ -251,49 +256,55 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                         }
                     },
                 ) { innerPadding ->
-                    // 参考 Mishka：页面容器全屏（内容延伸到悬浮条下方，
+                    // 页面容器全屏（内容延伸到悬浮条下方，
                     // 槽位区域显示页面内容本身而非裸露背景色带），
-                    // 顶部 inset 交给各页内 Scaffold 的 TopAppBar 处理（对齐 Mishka：外层 MainPage
+                    // 顶部 inset 交给各页内 Scaffold 的 TopAppBar 处理（外层 MainPage
                     // Scaffold 只传 bottomPadding，内层 page Scaffold 管 topBar），此处不加 top padding。
-                    // 【对齐 Mishka 关键结构】layerBackdrop(bottomBarBackdrop) 挂在 HorizontalPager 外层
+                    // layerBackdrop(bottomBarBackdrop) 挂在 HorizontalPager 外层
                     // （录制整个 Pager 含所有页面内容），悬浮条在 bottomBar 槽位不在录制范围内，安全；
                     // 左右滑动切换时悬浮条永远能采样到页面内容 → 滑动过程保持通透。
                     val contentModifier = Modifier.fillMaxSize()
-                    val bottomPad = if (floatingBottomBar) {
-                        val floatingBarHeight = if (isFloatingStyleIos) 100.dp else 64.dp
-                        floatingBarHeight + 20.dp
-                    } else {
-                        innerPadding.calculateBottomPadding()
-                    }
+                    // 底部留白直接取 Scaffold 算出的槽高：悬浮胶囊与普通栏都适用，
+                    // 不再按"胶囊高度 + 20dp"硬编码猜测（胶囊尺寸一变就会错）
+                    val bottomPad = innerPadding.calculateBottomPadding()
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .layerBackdrop(bottomBarBackdrop),
                     ) {
-                        // 【对齐 Mishka】flingBehavior 用 miuix PagerNavigationSpringSpec：
-                        // 页面切换/松手回弹的弹簧曲线与 Mishka 完全一致，避免默认 fling 的
+                        // flingBehavior 用 miuix PagerNavigationSpringSpec：
+                        // 页面切换/松手回弹的弹簧曲线统一，避免默认 fling 的
                         // 生硬 snap 造成的"卡一下"观感
                         val pagerFlingBehavior = PagerDefaults.flingBehavior(
                             state = pagerState,
                             snapAnimationSpec = PagerNavigationSpringSpec,
                         )
-                        // 【对齐 Mishka】miuix 定制手势管线：跨轴拦截器接管左右滑动
+                        // miuix 定制手势管线：跨轴拦截器接管左右滑动
                         // （页面内垂直滚动与 Pager 横向滑动不打架）+ 配套嵌套滚动连接。
                         // 注意：拦截器仅作用于 Pager 内三个 tab 页；调价记录明细页已提升为
                         // MainScreen 级全屏页（脱离 Pager，见下方 if(showOilPriceDetail)），
-                        // 因此其省份横滑条/走势图拖动不受拦截器影响（同 Mishka 二级页）。
+                        // 因此其省份横滑条/走势图拖动不受拦截器影响（二级页同理）。
                         val pagerGestureModifier = Modifier
                             .fillMaxSize()
                             .pagerGestureOverride(
                                 pagerState = pagerState,
                                 mode = PagerInterceptionMode.CrossAxisInterceptor,
                             )
-                        if (showOilPriceDetail) {
-                            // 调价记录明细页：全屏承载在 Pager 之外（对齐 Mishka 二级路由页），
+                        if (showAbout) {
+                            // 关于页：全屏承载在 Pager 之外
+                            com.llpop.koil.ui.screen.settings.AboutScreen(
+                                onBack = { showAbout = false },
+                            )
+                        } else if (showOilPriceDetail) {
+                            // 调价记录明细页：全屏承载在 Pager 之外（二级路由页），
                             // 横向手势完全归页面内组件所有；无底栏，底部留白用系统导航条 inset
                             OilPriceDetailScreen(
                                 onBack = { showOilPriceDetail = false },
-                                bottomPadding = innerPadding.calculateBottomPadding(),
+                                // 二级页不显示底部悬浮栏（见上方 bottomBar 槽的 showAbout/showOilPriceDetail 判断），
+                                // 因此不与 Pager 三页共用 bottomPad，只让出系统导航条高度，与关于页一致
+                                bottomPadding = WindowInsets.systemBars
+                                    .asPaddingValues()
+                                    .calculateBottomPadding(),
                             )
                         } else {
                             HorizontalPager(
@@ -322,6 +333,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
                                         onOpenPriceDetail = { showOilPriceDetail = true },
+                                        onOpenAbout = { showAbout = true },
                                     )
                                 }
                             }
@@ -333,7 +345,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
         }
     }
 
-/** 参考 Mishka AppNavigation.MiuixFloatingNavigationBarItem：按压反馈 + 图标/文字 */
+/** 浮动导航项：按压反馈 + 图标 / 文字 */
 @Composable
 private fun MiuixFloatingNavigationBarItem(
     item: NavigationItem,
