@@ -281,10 +281,13 @@ private fun AboutContent(
                     Modifier
                         .fillMaxWidth()
                         .height(
-                            // 126dp 是 logo 下沿到下一项的余量，原先含「检查更新」分组标题（约 28dp）。
-                            // 该标题已删（与卡内行同名），余量同步减到 98dp，视觉间距保持原样。
+                            // 126dp 是 hero 下方的留白原值（hero 底边到下一元素的间距）。
+                            // 这一项原先紧随「检查更新」分组标题，标题删掉（与卡内行同名）后由卡片接替，
+                            // 留白沿用 126dp：间距关系不变，也释放掉原本给标题预留的那一段高度。
+                            // 若改成 126 + 标题高（约 34dp = 160dp），卡片位置与改动前完全一致，
+                            // 但会在 hero 与卡片之间留下一块原本属于标题的空白。
                             logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                                scrollPadding.calculateTopPadding() + 98.dp,
+                                scrollPadding.calculateTopPadding() + 126.dp,
                         ),
                     contentAlignment = Alignment.TopCenter,
                     content = { },
