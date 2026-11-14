@@ -140,9 +140,16 @@ fun OilPriceDetailScreen(
     // 两者都由布局测量驱动，不写死高度 → 换字号/语言、有无年份 pill 都不用改阈值。
     var filterBottomPx by remember { mutableFloatStateOf(0f) }
     var topBarPx by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    // item 的 offset 是相对 viewport 顶的（不含 contentPadding），而顶栏盖住的是含 padding 的
+    // 那块可视区 —— 少了这一项，一进页面就会判成「已吸顶」。
+    var contentTopPaddingPx by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
     // 判据与数据总览页一致：读 layoutInfo 里目标 item 的 offset，与顶栏高度比较。
-    // content 是整页单 item（key = CONTENT_KEY），filterBottomPx 是筛选区底相对 item 顶的 y，
-    // 二者相加即「筛选区底在视口中的位置」；≤ topBarPx 说明已被顶栏完全盖住 → 启用吸顶条。
+    // content 是整页单 item（key = CONTENT_KEY），filterBottomPx 是筛选区底相对 item 顶的 y。
+    // 筛选区底在视口中的位置 = item.offset + contentPadding.top + filterBottomPx；
+    // ≤ topBarPx（折叠后的顶栏高度）说明已被完全盖住 → 启用吸顶条。
+    // 三项统一用 px：offset 是 px，filterBottomPx 来自 positionInParent/size（px），
+    // topPadding 是 Dp，必须在下面 SideEffect 里就地转 px，否则 density > 1 时数值对不上。
     val showStickyFilter by remember {
         derivedStateOf {
             val contentInfo = listState.layoutInfo.visibleItemsInfo
@@ -150,7 +157,7 @@ fun OilPriceDetailScreen(
             filterBottomPx > 0f &&
                 topBarPx < Float.MAX_VALUE &&
                 contentInfo != null &&
-                contentInfo.offset + filterBottomPx <= topBarPx + 2f
+                contentInfo.offset + contentTopPaddingPx + filterBottomPx <= topBarPx + 2f
         }
     }
 
@@ -237,7 +244,11 @@ fun OilPriceDetailScreen(
         // 放在 SideEffect 里而不是组合体内直接赋值：避免「组合期间写状态、同帧又被 derivedStateOf 读到」
         // 引起的重复组合警告/来回翻转。
         SideEffect {
-            if (topPadding.value < topBarPx) topBarPx = topPadding.value
+            // 随滚动折叠变化的「当前」顶栏高度（含展开态），吸顶判据要用当前值而不是折叠值
+            val topPx = with(density) { topPadding.toPx() }
+            contentTopPaddingPx = topPx
+            // 折叠后高度取历史最小值
+            if (topPx < topBarPx) topBarPx = topPx
         }
         // —— 明细页整体滚动容器（LazyColumn + contentPadding 页面骨架）——
         // 时间线仅 20 条左右，整页收在一个 item 里一次性渲染；单 item 下
