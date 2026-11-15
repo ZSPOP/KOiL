@@ -111,7 +111,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
-import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
@@ -1843,16 +1842,14 @@ fun LazyListScope.aboutSection(
         outerBottomPadding = 12.dp,
         items = listOf(
             CardItem("about") {
-                // 红点与首页横幅同源（同一个 shouldBadgeUpdate）：有新版本就亮，
-                // 亮到装上最新版为止；横幅 × 掉只影响横幅本身，红点照样亮
+                // 红点只看「有没有新版本」，**不看 seenTag**：首页横幅的 × 只收起那条提醒，
+                // 不代表用户不想知道有更新；红点要一直亮到装上最新版为止
                 val updateChecker = remember {
                     org.koin.core.context.GlobalContext.get()
                         .get<com.llpop.koil.data.update.UpdateChecker>()
                 }
                 val target by updateChecker.updateTarget()
                     .collectAsStateWithLifecycle(initialValue = null)
-                val seen by updateChecker.seenTag()
-                    .collectAsStateWithLifecycle(initialValue = "")
                 SettingRow(
                     // 标题是「关于 KOiL」，副标题仍是当前版本号（不因有新版本而变化）
                     title = stringResource(R.string.koil_set_about_koil),
@@ -1861,7 +1858,6 @@ fun LazyListScope.aboutSection(
                     onClick = onOpenAbout,
                     badgeDot = com.llpop.koil.data.update.shouldBadgeUpdate(
                         target?.tag.orEmpty(),
-                        seen,
                         com.llpop.koil.BuildConfig.VERSION_NAME,
                     ),
                 )

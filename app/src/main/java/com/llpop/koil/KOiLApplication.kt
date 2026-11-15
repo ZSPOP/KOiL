@@ -141,7 +141,7 @@ class KOiLApplication : Application() {
         // 更新横幅的「已读」只在本次运行内有效（见 UpdateChecker.markSeen），不再需要应用级 scope 落库。
 
         // 冷启动静默检查应用更新（45min 节流，回前台也查）——查到比本机更新的 release 就把 tag 落到 DataStore，
-        // 设置页「检查更新」行据此挂红点，用户不用主动点也能知道有新版本。
+        // 设置页「关于 KOiL」行据此挂红点，用户不用主动点也能知道有新版本。
         // 失败（离线 / 限流 / 超时）静默吞掉，保留上一次的 tag，不打扰、不显示假状态。
         appScope.launch {
             runCatching {

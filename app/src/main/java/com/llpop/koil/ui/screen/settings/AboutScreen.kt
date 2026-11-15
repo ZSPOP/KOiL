@@ -225,6 +225,8 @@ private fun AboutContent(
     var status by remember { mutableStateOf<AboutUpdateStatus>(AboutUpdateStatus.Idle) }
     // 「直链还没就绪、重查一次也没拿到」的下载侧失败：版本确实存在，胶囊不能消失
     var downloadFailed by remember { mutableStateOf(false) }
+    // 请求在途：挡连点（进页自动查 + 用户立刻点「应用版本」行会变成两次真请求）
+    var isChecking by remember { mutableStateOf(false) }
     val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
     val storedTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
 
@@ -264,16 +266,28 @@ private fun AboutContent(
         return next
     }
 
-    /** 手动检查走 refresh()：它本身就是一次真实请求（45 分钟节流只在 checkIfDue 里） */
+    /**
+     * 手动检查走 refresh()：它本身就是一次真实请求（45 分钟节流只在 checkIfDue 里）。
+     *
+     * [isChecking] 挡连点：进页自动查 + 用户立刻点「应用版本」行，会变成两次真请求；
+     * 快速来回切页同理。旧版靠一个 Checking 状态挡住，这里保留同样的语义。
+     */
     fun check() {
+        if (isChecking) return
         scope.launch {
+            isChecking = true
             downloadFailed = false
             status = runCheck()
+            isChecking = false
         }
     }
 
     // 进关于页自动查一次：这一页是唯一能发起检查的地方，进来就该给结论
-    LaunchedEffect(Unit) { status = runCheck() }
+    LaunchedEffect(Unit) {
+        isChecking = true
+        status = runCheck()
+        isChecking = false
+    }
 
     // 冷启动静默检查已经发现的版本：先用库里的值把胶囊撑起来，不用等这次请求回来
     LaunchedEffect(storedTarget) {

@@ -346,33 +346,6 @@
     <string name="koil_set_about">About</string>
     <string name="koil_about_open_source">Open Source Projects</string>
     <string name="koil_set_about_version">V%1$s (%2$d)</string>
-    <string name="koil_set_about_check_update">Check for updates</string>
-    <string name="koil_set_about_check_update_sub">Fetch the latest release from Gitee</string>
-    <string name="koil_set_about_checked_ago">From Gitee · last checked %1$s</string>
-    <string name="koil_set_check_just_now">just now</string>
-    <string name="koil_set_check_min_ago">%1$d min ago</string>
-    <string name="koil_set_check_hour_ago">%1$d h ago</string>
-    <string name="koil_set_check_day_ago">%1$d d ago</string>
-    <string name="koil_set_about_checking">Checking\u2026</string>
-    <string name="koil_set_about_latest">Up to date</string>
-    <string name="koil_set_about_newer">Update to V%1$s</string>
-    <string name="koil_update_fail_download">Download failed, please try again</string>
-    <string name="koil_update_fail_signature">The package signature does not match this app; installation was refused. Please download again.</string>
-    <string name="koil_update_fail_permission">Allow "Install unknown apps" for KOiL in system settings. Opening that page for you.</string>
-    <string name="koil_update_fail_launch">Could not open the system installer, please try again later</string>
-    <string name="koil_update_cellular_title">Not on Wi-Fi</string>
-    <string name="koil_update_cellular_msg">The update is about 6.6 MB and will use mobile data.</string>
-    <string name="koil_update_cellular_mobile">Download anyway</string>
-    <string name="koil_update_cellular_wait">Wait for Wi-Fi</string>
-    <string name="koil_update_wifi_only_title">Wi-Fi only is on</string>
-    <string name="koil_update_wifi_only_msg">You chose to download updates over Wi-Fi only. Download with mobile data anyway?</string>
-    <string name="koil_update_progress">%1$s · %2$d%%</string>
-    <string name="koil_update_progress_tap_cancel">%1$s · %2$d%% · tap to cancel</string>
-    <string name="koil_update_progress_unknown">%1$s · …</string>
-    <string name="koil_update_action_grant">Open settings</string>
-    <string name="koil_update_action_cancel">Cancel</string>
-    <string name="koil_update_action_retry">Retry</string>
-    <string name="koil_set_about_check_failed">Check failed, tap to retry</string>
     <string name="koil_set_about_terms">Terms of use</string>
     <string name="koil_set_about_privacy">Privacy policy</string>
     <string name="koil_set_about_feedback">Send feedback</string>
@@ -381,7 +354,6 @@
     <string name="koil_set_about_open_failed">No app can open this link</string>
     <string name="koil_common_close">Close</string>
     <string name="koil_ov_update_new">New version %1$s available</string>
-    <string name="koil_ov_update_action">Update</string>
     <string name="koil_ov_update_dismiss">Dismiss update notice</string>
     <string name="koil_set_about_terms_body">KOiL records your own fuel purchases and reads publicly announced fuel price adjustments.\n\nAccuracy: prices follow station postings and official announcements. Reference prices, forecasts and conversions are for reference only and are not purchasing or investment advice.\n\nRisk: deviations caused by entry mistakes, data delays or device faults are borne by the user.\n\nThis is an open source project provided as is, without warranty of uninterrupted or error-free operation.</string>
     <string name="koil_set_about_privacy_body">Local first: fuel records, vehicle info and settings stay on your device. Nothing is uploaded to any server.\n\nLocation: used only when auto-detect province is on, solely to fill in the default province. No tracking, no upload.\n\nCloud sync (optional): data is backed up only to your own WebDAV server. Credentials are encrypted and stored locally; the developer has no access.\n\nCrash logs: kept on device only, exported manually, never reported automatically.</string>
@@ -439,4 +411,20 @@
     <string name="koil_detail_pct_down">−%1$s%%</string>
     <string name="koil_sync_password_invalid">App password is unreadable (key lost after device change) — please re-enter it</string>
     <string name="koil_sync_status_password_invalid">Sync paused: re-enter the app password</string>
+
+    <!-- 关于页更新改造（en） -->
+    <string name="koil_set_other">Other</string>
+    <string name="koil_set_about_koil">About KOiL</string>
+    <string name="koil_about_version_plain">%1$s</string>
+    <string name="koil_about_version_arrow">%1$s → %2$s</string>
+    <string name="koil_about_app_version">App version</string>
+    <string name="koil_about_release_date">Release date</string>
+    <string name="koil_about_status_latest">Up to date</string>
+    <string name="koil_about_status_failed">Check failed</string>
+    <string name="koil_about_action_newer">New version available</string>
+    <string name="koil_about_action_install">Install latest</string>
+    <string name="koil_about_action_failed">Download failed</string>
+    <string name="koil_about_percent">%1$d%%</string>
+    <string name="koil_about_downloaded">Downloaded %1$s MB</string>
+    <string name="koil_ov_update_view">View</string>
 </resources>

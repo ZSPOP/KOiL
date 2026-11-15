@@ -46,7 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,13 +72,10 @@ import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.BuildConfig
-import com.llpop.koil.data.update.ApkUpdater
-import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.normalizeVersion
-import com.llpop.koil.data.update.shouldBadgeUpdate
+import com.llpop.koil.data.update.shouldShowBanner
 import com.llpop.koil.ui.component.UpdateBanner
-import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -129,7 +125,7 @@ fun AddScreen(
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
     // 更新横幅：与设置页共用同一个 UpdateChecker（冷启动静默检查已把 tag 落到 DataStore）。
-    // 判据复用红点那一个有单测的 shouldBadgeUpdate，不在首页再手写一套 —— 否则将来
+    // 判据复用一个有单测的 shouldShowBanner，不在首页再手写一套 —— 否则将来
     // 红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变。
     val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
     // tag 与直链必须来自**同一快照**：分别订阅是两条 collect，中间有一帧
@@ -137,7 +133,7 @@ fun AddScreen(
     val updateTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
     val latestTag = updateTarget?.tag.orEmpty()
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
-    val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
+    val bannerTag = latestTag.takeIf { shouldShowBanner(it, seenTag, BuildConfig.VERSION_NAME) }
     // 首页横幅只负责提醒与跳转：检查 / 下载 / 安装全部在关于页
     // （关于页是唯一发起检查的地方，首页不再需要 ApkUpdater、下载进度、失败原因这一整套状态）
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），

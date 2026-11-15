@@ -310,5 +310,14 @@ fun isNewerRelease(latestTag: String, currentVersion: String): Boolean =
  * @param seenTag 用户已知晓的 tag（空串=从未知晓）
  * @param currentVersion 本机 versionName，用于挡住「本地已是最新」的情况
  */
-fun shouldBadgeUpdate(latestTag: String, seenTag: String, currentVersion: String): Boolean =
+fun shouldShowBanner(latestTag: String, seenTag: String, currentVersion: String): Boolean =
     isNewerRelease(latestTag, currentVersion) && latestTag != seenTag
+
+/**
+ * 「设置页红点要不要亮」：只看有没有新版本，**不受横幅 × 影响**。
+ *
+ * × 收起的只是首页那条横幅（「这条提醒我看过了」），不等于「我不想知道有更新」；
+ * 红点要一直亮到装上最新版为止 —— 装成功后版本号不再比本机新，红点自然灭。
+ */
+fun shouldBadgeUpdate(latestTag: String, currentVersion: String): Boolean =
+    isNewerRelease(latestTag, currentVersion)

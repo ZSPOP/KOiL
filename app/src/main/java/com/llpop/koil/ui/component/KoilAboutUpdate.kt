@@ -15,8 +15,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.data.update.AboutCapsuleState
 import com.llpop.koil.data.update.AboutUpdateStatus
 import com.llpop.koil.data.update.UpdateDownloadState
+import com.llpop.koil.data.update.resolveCapsuleState
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -68,22 +70,20 @@ fun KoilAboutUpdateButton(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val newer = status as? AboutUpdateStatus.Newer
-    if (newer == null && !extraFailed) return
+    val capsule = resolveCapsuleState(status, downloadState, readyTag, extraFailed)
+    if (capsule == AboutCapsuleState.Hidden) return
     val downloading = downloadState as? UpdateDownloadState.Downloading
-    val failed = extraFailed || downloadState is UpdateDownloadState.Failed
-    val ready = !failed && downloading == null && newer != null && readyTag == newer.tag
 
-    val label = when {
-        failed -> stringResource(R.string.koil_about_action_failed)
-        ready -> stringResource(R.string.koil_about_action_install)
+    val label = when (capsule) {
+        AboutCapsuleState.Failed -> stringResource(R.string.koil_about_action_failed)
+        AboutCapsuleState.Install -> stringResource(R.string.koil_about_action_install)
         // 下载中也写「有新版本」：文案不能变成「下载中」，否则和下面那行进度条重复
         else -> stringResource(R.string.koil_about_action_newer)
     }
-    val onClick = when {
-        downloading != null -> onCancel
-        failed -> onRetry
-        ready -> onInstall
+    val onClick = when (capsule) {
+        AboutCapsuleState.Downloading -> onCancel
+        AboutCapsuleState.Failed -> onRetry
+        AboutCapsuleState.Install -> onInstall
         else -> onDownload
     }
 
