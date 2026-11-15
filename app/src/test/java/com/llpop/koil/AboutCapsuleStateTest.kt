@@ -117,11 +117,11 @@ class AboutCapsuleStateTest {
     }
 
     @Test
-    fun `形态派生是纯函数 —— 同样的输入永远给同样的形态`() {
-        val status = newer()
-        val first = resolveCapsuleState(status, UpdateDownloadState.Idle, null)
-        val second = resolveCapsuleState(status, UpdateDownloadState.Idle, null)
-        assertEquals(AboutCapsuleState.Newer, first)
-        assertEquals(first, second)
+    fun `同一份状态下 readyTag 决定 Newer 还是 Install —— 一次判断只差一个参数`() {
+        // 这条替代了原先「同样的输入给同样的形态」那类恒真断言（f(x) == f(x) 永远不会红）。
+        // 现在两个调用只差 readyTag，形态必须不同，改坏任一分支都会失败。
+        val status = newer("V1.1.18")
+        assertEquals(Newer, resolveCapsuleState(status, UpdateDownloadState.Idle, null))
+        assertEquals(Install, resolveCapsuleState(status, UpdateDownloadState.Idle, "V1.1.18"))
     }
 }
