@@ -347,6 +347,7 @@
     <string name="koil_about_app_version">应用版本</string>
     <string name="koil_about_release_date">发布日期</string>
     <string name="koil_about_status_latest">已是最新版本</string>
+    <string name="koil_about_status_checking">正在检查…</string>
     <string name="koil_about_status_failed">检查失败</string>
     <string name="koil_about_action_newer">有新版本</string>
     <string name="koil_about_action_cancel_download">取消下载</string>
