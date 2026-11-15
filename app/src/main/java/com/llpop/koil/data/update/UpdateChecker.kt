@@ -27,8 +27,9 @@ data class UpdateTarget(val tag: String, val apkUrl: String)
  * 一次检查结果该不该落库（[UpdateChecker.refresh] 的唯一口径）。
  *
  * 直链没就绪时返回 null：Gitee 侧「Release 已建、apk 附件还在传」的镜像窗口里，
- * 若把 (tag, "") 写进 DataStore，点击就只能回退浏览器，而 45 分钟节流窗口内又不会重查，
- * 用户会卡在「显示可更新、怎么点都跳浏览器」。宁可这轮不落库，等下次检查补上。
+ * 若把 (tag, "") 写进 DataStore，1.1.15 的实测表现是「显示可更新、怎么点都跳浏览器」，
+ * 且 45 分钟节流内不会重查而卡死。现在点击虽会就地重查一次，但仍要多点一次才拿到直链；
+ * 宁可这轮不落库（保留上一次可用直链），等下次检查补上。
  *
  * 抽成纯函数是为了单测：它决定上面那种卡死会不会复现，不该只靠实机复现验证。
  */
@@ -244,7 +245,7 @@ internal fun selectLatestRelease(json: String): UpdateTarget? {
         ?: return null
 
     // assets 里除 APK 还有源码包（V1.x.zip / .tar.gz），只认 .apk；找不到直链时留空，
-    // 让 UI 回退浏览器，而不是让整次检查失败（否则用户永远看不到"有新版本"）
+    // 交给 UI 就地重查，而不是让整次检查失败（否则用户永远看不到"有新版本"）
     // 多个 .apk 时优先 KOiL- 开头的那个（本项目的产物命名），避免源码包/附带包被选走；
     // 顺序由服务端决定，不能靠"第一个"
     val apkAssets = best.assets.filter { it.name.endsWith(".apk") || it.url.endsWith(".apk") }
@@ -253,7 +254,7 @@ internal fun selectLatestRelease(json: String): UpdateTarget? {
     return UpdateTarget(best.tagName, apkUrl)
 }
 
-/** 版本页地址。用 Gitee 而不是 GitHub：GitHub 在国内经常打不开，而这条只在「Gitee 没镜像好」时才走 */
+/** 版本页地址。用 Gitee 而不是 GitHub：GitHub 在国内经常打不开。当前无生产调用方（预留），仅测试覆盖格式 */
 fun releasePageUrl(tag: String): String = "https://gitee.com/ZSPOP/KOiL/releases/tag/$tag"
 
 /** 去掉 V/v 前缀，得到可比较的版本号（"V1.0.0" → "1.0.0"） */

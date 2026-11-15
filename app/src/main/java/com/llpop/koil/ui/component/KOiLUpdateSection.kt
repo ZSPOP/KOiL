@@ -219,7 +219,7 @@ fun KOiLUpdateSection(
                     downloadState is UpdateDownloadState.Downloading -> apkUpdater.cancel()
                     u is UpdateCheck.Newer -> {
                         // 应用内下载全程不写 seenTag（下载/安装失败、用户在系统确认页取消，红点与横幅都必须还在）。
-                        // 只有回退浏览器这条路径会在成功打开版本页后标记已知晓 —— 那是用户主动表达知悉的动作。
+                        // 目前唯一写 seenTag 的地方是首页横幅的关闭按钮（用户主动点 × 表示知悉）。
                         // 用 Newer 自带的 tag，不读 storedTag：refresh() 刚返回时 DataStore 的 Flow
                         // 可能还没 emit 到 Compose，此时读 storedTag 会把上一个版本记成已读。
                         // 直链只认 Newer 自带的那一个：它与 tag 出自同一次 refresh()。
