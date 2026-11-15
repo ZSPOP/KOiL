@@ -318,7 +318,7 @@ class SettingsViewModel(
         if (nextDate == null || (todayDate != null && nextDate.isBefore(todayDate))) {
             nextAdjustWindowDate = calendarNext
                 ?: nextDate?.plusDays(14)?.toString()
-        } else if (calendarNext != null && nextDate != null &&
+        } else if (calendarNext != null &&
             runCatching { LocalDate.parse(calendarNext) }.getOrNull()?.isBefore(nextDate) == true
         ) {
             nextAdjustWindowDate = calendarNext

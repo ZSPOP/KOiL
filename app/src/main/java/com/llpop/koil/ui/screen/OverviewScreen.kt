@@ -1777,7 +1777,7 @@ private fun RecordCard(
                         val badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
                         if (recentAvg != null && record.oilConsumption != null) {
                             Spacer(Modifier.height(10.dp))
-                            val cur = record.oilConsumption!!
+                            val cur = record.oilConsumption
                             val avg = recentAvg
                             val maxV = maxOf(cur, avg)
                             val curColor = if (cur <= avg) goodColor else badColor

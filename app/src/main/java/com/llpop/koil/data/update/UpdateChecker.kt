@@ -206,9 +206,15 @@ class UpdateChecker(private val settings: AppSettings) {
  * 用 kotlinx.serialization 而不是正则扫全文：release 的 `body` 里若贴了下载链接，
  * 正则会把正文里的 URL 当成 asset；按结构解析则只认 assets 数组，不受正文影响。
  */
+/**
+ * Release JSON 解析器。Json 是线程安全的不可变配置，建一次复用即可；
+ * 每次解析都 new 一个属于无谓开销（K2: Redundant creation of Json format）。
+ */
+private val releaseJson = Json { ignoreUnknownKeys = true }
+
 internal fun selectLatestRelease(json: String): UpdateTarget? {
     val releases = runCatching {
-        Json { ignoreUnknownKeys = true }.decodeFromString<List<GiteeRelease>>(json)
+        releaseJson.decodeFromString<List<GiteeRelease>>(json)
     }.getOrNull() ?: return null
 
     // 跳过 prerelease 与无 tag 的脏数据：预发布不该覆盖正式版的提示
