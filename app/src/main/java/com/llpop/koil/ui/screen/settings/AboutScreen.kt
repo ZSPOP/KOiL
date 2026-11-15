@@ -441,8 +441,6 @@ private fun AboutContent(
             statusAlpha = { statusAlpha.value },
             statusGapTop = statusGapTop,
             statusAreaHeight = statusAreaHeight,
-            // 整块可点：这是关于页的第二个检查入口（第一个是「应用版本」行）
-            onClick = { check() },
             onMeasured = { logoHeightDp = it },
         )
 
@@ -468,7 +466,7 @@ private fun AboutContent(
                         // 上，hero 自己的 clickable 收不到 —— 表现为「点 logo 没反应」。
                         // 这一项的位置与视觉 hero 完全重合（高度就按 hero 实测算），由它接住点击，
                         // 体验上就是「点 hero 区触发检查」；滚动后它随列表移出、hero 同时淡出，不脱节。
-                        // hero 上那个 clickable 保留：两者都走 check()，isChecking 会挡掉重复请求。
+                        // 这是关于页唯一的 hero 区检查入口（hero 自身不再挂 clickable）。
                         .clickable(onClick = { check() })
                         .height(
                             // hero（logo + 版本号 + 状态区）的实测高度。三个易错点：
@@ -661,14 +659,14 @@ private fun BoxScope.AboutHero(
     /** 状态区距版本号 / 状态区固定高度 */
     statusGapTop: Dp,
     statusAreaHeight: Dp,
-    /** 整块点击 = 触发一次检查更新（实际由列表顶部那块重合区接住，见 logoSpacer 的注释） */
-    onClick: () -> Unit,
     onMeasured: (androidx.compose.ui.unit.Dp) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            // 这里刻意不放 clickable：本组件与 LazyColumn 是同一个 Box 的兄弟节点，
+            // 列表声明在后、绘制在上层且 fillMaxSize，命中先落列表 —— 放这儿收不到事件，
+            // 只会变成一段没有效果的代码。检查入口统一由列表顶部的 logoSpacer 承接。
             .padding(
                 top = logoPadding.calculateTopPadding() + 52.dp,
                 start = logoPadding.calculateStartPadding(layoutDirection),
