@@ -52,5 +52,11 @@ class UpdatePersistActionTest {
 
         assertEquals(UpdatePersistAction.Clear, action)
         assertTrue(action.advancesLastCheckAt)
+
+        // 钉住「Clear 优先于 Keep」：不更新 + 空直链同时成立时必须清空，不能落进保留分支。
+        // 这两行是分支优先级的唯一断言——把 when 里 !newer 与 isBlank 调换，上面几条照样全绿，
+        // 但不更新的 Release 撞上「只有源码包」的镜像窗口会永久保留旧值、lastCheckAt 永不推进。
+        assertEquals(UpdatePersistAction.Clear, resolvePersistAction("V1.1.15", "", false))
+        assertTrue(resolvePersistAction("V1.1.15", "", false).advancesLastCheckAt)
     }
 }
