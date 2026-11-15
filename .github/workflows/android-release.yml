@@ -213,6 +213,23 @@ jobs:
             exit 1
           fi
           echo "versionCode 与规划号一致：$VC"
+
+          # 发布日期一致性：「发布日期」现在是手工常量（app/build.gradle.kts 的 KOIL_RELEASE_DATE），
+          # 发版时忘了改就会让关于页写错日期，而且没有任何东西会拦住这件事。
+          # 与 tag 指向 commit 的日期比对：允许 commit 当天或次日，覆盖「23:59 bump / 00:10 打 tag」
+          # 这类跨天发版。tag 本身是纯版本号（V1.1.17），不含日期，所以只能比 commit 日期。
+          REL_DATE=$(grep -m1 -o 'KOIL_RELEASE_DATE.*' app/build.gradle.kts \
+            | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+          if [ -z "$REL_DATE" ]; then
+            echo "::error::app/build.gradle.kts 里找不到 KOIL_RELEASE_DATE"; exit 1
+          fi
+          TAG_COMMIT_DATE=$(TZ=Asia/Shanghai git log -1 --format=%cd --date=format:'%Y-%m-%d' "$GITHUB_SHA")
+          LATEST_ALLOWED=$(TZ=Asia/Shanghai date -d "$TAG_COMMIT_DATE +1 day" +%Y-%m-%d)
+          if [ "$REL_DATE" != "$TAG_COMMIT_DATE" ] && [ "$REL_DATE" != "$LATEST_ALLOWED" ]; then
+            echo "::error::KOIL_RELEASE_DATE=$REL_DATE 与 tag 提交日期 $TAG_COMMIT_DATE 不符（允许 $TAG_COMMIT_DATE 或 $LATEST_ALLOWED）—— 发版前是否忘了改发布日期？"
+            exit 1
+          fi
+          echo "发布日期与 tag 提交日期一致：$REL_DATE"
           if [ "$RAW" -le "$SNAPSHOT_MAX" ]; then
             echo "::error::原始规划号 $RAW ≤ 构建开始时已发布最大 $SNAPSHOT_MAX（Build 记录或 Release 列表是否被读成 0？号段规则是否被改动？）"
             exit 1

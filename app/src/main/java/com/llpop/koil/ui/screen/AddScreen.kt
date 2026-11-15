@@ -125,8 +125,9 @@ fun AddScreen(
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
     // 更新横幅：与设置页共用同一个 UpdateChecker（冷启动静默检查已把 tag 落到 DataStore）。
-    // 判据复用一个有单测的 shouldShowBanner，不在首页再手写一套 —— 否则将来
-    // 红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变。
+    // 判据走独立的有单测的 shouldShowBanner，不在首页再手写一套。
+    // 注意它与设置页红点 shouldBadgeUpdate 是**刻意**不同源：横幅受 × 影响，红点不受
+    // （详见 UpdateBanner 顶部注释），改其中一个不要顺手去同步另一个。
     val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
     // tag 与直链必须来自**同一快照**：分别订阅是两条 collect，中间有一帧
     // 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读
