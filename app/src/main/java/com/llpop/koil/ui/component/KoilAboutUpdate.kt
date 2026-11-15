@@ -124,7 +124,9 @@ fun KoilAboutUpdateButton(
                     // 拿不到总大小：只报已下载量，不画百分比（分子有了、分母没有，百分比是假的）
                     stringResource(
                         R.string.koil_about_downloaded,
-                        "%.1f".format(downloading.received / 1048576f),
+                        // Locale.ROOT：format 默认跟随系统语言，德语/法语会把小数点写成逗号，
+                        // 拼进「已下载 %1$s MB」就变成「已下载 3,4 MB」
+                        "%.1f".format(java.util.Locale.ROOT, downloading.received / 1048576f),
                     )
                 },
                 fontSize = 12.sp,
@@ -196,8 +198,8 @@ fun KoilAboutInfoCard(
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             },
-            // 纯展示行：给空 lambda 而不是 null（保持可点态的默认语义）
-            onClick = {},
+            // 纯展示行：不传 onClick（源码签名是 click 可空的 `(() -> Unit)? = null`），
+            // 而不是塞一个空 lambda —— 后者会让 TalkBack 把它读成一个点了没反应的按钮
         )
     }
 }
