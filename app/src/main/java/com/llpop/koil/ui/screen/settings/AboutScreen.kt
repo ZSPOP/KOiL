@@ -324,6 +324,12 @@ private fun AboutContent(
         }
     }
 
+    // 胶囊位置按参考图（HyperOS 关于页）的段内比例对齐：那一段「版本号底边 → 卡片顶边」共 390px，
+    // 胶囊顶在 53.8% 处。本页这一段是 190dp（留白 + 胶囊 52dp + 间距），53.8% ≈ 102dp，
+    // 即留白从 126dp 上移 24dp；下方同时从 12dp 补到 36dp，总高仍是 190dp —— 卡片位置一丝不动。
+    val capsuleLift = 24.dp
+    val capsuleTail = 36.dp
+
     val backdrop = rememberLayerBackdrop()
 
     val isDark = LocalKOiLDarkTheme.current
@@ -430,7 +436,7 @@ private fun AboutContent(
                             // 若改成 126 + 标题高（约 34dp = 160dp），卡片位置与改动前完全一致，
                             // 但会在 hero 与卡片之间留下一块原本属于标题的空白。
                             logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                                scrollPadding.calculateTopPadding() + 126.dp,
+                                scrollPadding.calculateTopPadding() + (126.dp - capsuleLift),
                         ),
                     contentAlignment = Alignment.TopCenter,
                     content = { },
@@ -442,7 +448,9 @@ private fun AboutContent(
                 KoilAboutUpdateButton(
                     status = status,
                     downloadState = downloadState,
-                    readyTag = (downloadState as? UpdateDownloadState.Ready)?.tag,
+                    // 用 ApkUpdater 的快照而不是从 state 推：失败态下 state 里没有 tag，
+                    // 但盘上的包可能仍然可用（下完没装成）
+                    readyTag = apkUpdater.readyTagSnapshot,
                     extraFailed = downloadFailed,
                     onDownload = { downloadOrRecheck() },
                     onCancel = { apkUpdater.cancel() },
@@ -453,7 +461,10 @@ private fun AboutContent(
                         downloadFailed = false
                         downloadOrRecheck()
                     },
-                    modifier = Modifier.padding(bottom = 12.dp),
+                    // 上移了多少就在下方补回多少：卡片位置与改动前完全一致
+                    modifier = Modifier.padding(bottom = capsuleTail),
+                    blurBackdrop = if (blurEnabled) backdrop else null,
+                    blurBlendColors = cardBlendColors,
                 )
             }
 

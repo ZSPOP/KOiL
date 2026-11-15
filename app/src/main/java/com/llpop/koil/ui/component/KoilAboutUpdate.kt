@@ -48,7 +48,7 @@ private val PROGRESS_HEIGHT = 3.dp
  * 五形态 / 六条触发路径（全部由外部状态推导，组件本身不持有业务状态）：
  * - 没有比本机新的版本 → 不显示（[status] 不是 Newer 时直接 return）
  * - 有新版未下载 → 「有新版本」，点击开始下载
- * - 下载中 → 仍写「有新版本」+ 进度条，点击**取消下载**
+ * - 下载中 → 写「取消下载」+ 进度条 + 百分比，点下去即取消（服务端不支持 Range，取消=重下）
  * - 下载完成（[readyTag] 与当前 tag 相同）→ 「安装最新版」，点击拉起安装器
  * - 已下载但包被删 / 又出新版 → [readyTag] 对不上，退回「有新版本」
  * - 下载失败 → 「下载失败」，点击重试
@@ -69,6 +69,9 @@ fun KoilAboutUpdateButton(
     onInstall: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    /** 与下方信息卡同一套毛玻璃：不传则退回实心 surfaceContainer */
+    blurBackdrop: LayerBackdrop? = null,
+    blurBlendColors: List<BlendColorEntry>? = null,
 ) {
     val capsule = resolveCapsuleState(status, downloadState, readyTag, extraFailed)
     if (capsule == AboutCapsuleState.Hidden) return
@@ -77,7 +80,9 @@ fun KoilAboutUpdateButton(
     val label = when (capsule) {
         AboutCapsuleState.Failed -> stringResource(R.string.koil_about_action_failed)
         AboutCapsuleState.Install -> stringResource(R.string.koil_about_action_install)
-        // 下载中也写「有新版本」：文案不能变成「下载中」，否则和下面那行进度条重复
+        // 下载中写「取消下载」：这一格是可点的，文案必须说清点下去会发生什么。
+        // 不写「下载中」是因为进度条与百分比已经说了这件事，重复一次只占位置。
+        AboutCapsuleState.Downloading -> stringResource(R.string.koil_about_action_cancel_download)
         else -> stringResource(R.string.koil_about_action_newer)
     }
     val onClick = when (capsule) {
@@ -93,11 +98,26 @@ fun KoilAboutUpdateButton(
     ) {
         Button(
             onClick = onClick,
-            modifier = Modifier.fillMaxWidth(ACTION_WIDTH_FRACTION),
+            modifier = Modifier
+                .fillMaxWidth(ACTION_WIDTH_FRACTION)
+                .then(
+                    if (blurBackdrop != null) {
+                        // 和信息卡同一套采样：形状跟随胶囊圆角，底色必须透明，
+                        // 否则 Button 自绘的实色会把采样结果整块盖掉（信息卡踩过同一个坑）
+                        Modifier.textureBlur(
+                            backdrop = blurBackdrop,
+                            shape = RoundedCornerShape(ACTION_CORNER),
+                            blurRadius = 60f,
+                            colors = BlurColors(blendColors = blurBlendColors.orEmpty()),
+                            enabled = true,
+                        )
+                    } else Modifier
+                ),
             cornerRadius = ACTION_CORNER,
             minHeight = ACTION_HEIGHT,
             colors = ButtonDefaults.buttonColors(
-                color = MiuixTheme.colorScheme.surfaceContainer,
+                color = if (blurBackdrop != null) Color.Transparent
+                else MiuixTheme.colorScheme.surfaceContainer,
                 contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
             ),
         ) {
@@ -119,7 +139,14 @@ fun KoilAboutUpdateButton(
             Spacer(Modifier.height(6.dp))
             Text(
                 text = if (downloading.percent >= 0) {
-                    stringResource(R.string.koil_about_percent, downloading.percent)
+                    // 「45% (3.4MB/6.4MB)」：括号里只放数字与单位，帮用户判断这包到底多大；
+                    // 拿不到总大小时（percent < 0）不加括号，否则分母是假的
+                    stringResource(
+                        R.string.koil_about_percent_with_size,
+                        downloading.percent,
+                        "%.1f".format(java.util.Locale.ROOT, downloading.received / 1048576f),
+                        "%.1f".format(java.util.Locale.ROOT, downloading.total / 1048576f),
+                    )
                 } else {
                     // 拿不到总大小：只报已下载量，不画百分比（分子有了、分母没有，百分比是假的）
                     stringResource(

@@ -356,6 +356,8 @@
     <string name="koil_sync_url">WebDAV 位址</string>
     <string name="koil_sync_username">帳號</string>
     <string name="koil_sync_app_password_unset">未設定</string>
+
+    <string name="koil_sync_app_password_unset_builtin">未設定（將使用內建預設密碼）</string>
     <string name="koil_sync_app_password_set">已設定，輸入新值以修改</string>
     <string name="koil_sync_password_plain_warn">應用程式密碼未加密儲存（裝置不支援 Keystore）</string>
     <string name="koil_sync_password_clear">清除</string>
@@ -409,9 +411,10 @@
     <string name="koil_about_status_latest">已是最新版本</string>
     <string name="koil_about_status_failed">檢查失敗</string>
     <string name="koil_about_action_newer">有新版本</string>
+    <string name="koil_about_action_cancel_download">取消下載</string>
     <string name="koil_about_action_install">安裝最新版</string>
     <string name="koil_about_action_failed">下載失敗</string>
-    <string name="koil_about_percent">%1$d%%</string>
+    <string name="koil_about_percent_with_size">%1$d%% (%2$sMB/%3$sMB)</string>
     <string name="koil_about_downloaded">已下載 %1$s MB</string>
     <string name="koil_ov_update_view">查看</string>
 </resources>

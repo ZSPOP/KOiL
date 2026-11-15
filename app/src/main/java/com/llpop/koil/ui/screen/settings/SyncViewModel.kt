@@ -18,6 +18,10 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** 内置默认应用密码（作者私有账号；泄露可去坚果云官网单独撤销重新生成）。
+ *  与默认地址、默认用户名同级：只在「本地没存过密码」时兜底，永远不覆盖用户自己填的值。 */
+internal const val DEFAULT_SYNC_APP_PASSWORD = "aees8xuzs3dzsdz3"
+
 /** 云同步配置区状态（密码不回显，仅暴露是否已设置 + 是否密文存储） */
 data class SyncUiState(
     val enabled: Boolean = false,
@@ -35,7 +39,17 @@ data class SyncUiState(
     val busy: Boolean = false,
     // 云同步配置异步加载完成标志（首值到达前不渲染开关，杜绝"关→开"闪烁）
     val loaded: Boolean = false,
-)
+) {
+    /**
+     * 界面与开关回调共用的「有效密码草稿」。
+     *
+     * 存过密码就回显它；没存过（全新安装、`KOiL_secret` 文件不存在）回落内置默认值。
+     * 同一个口径只留一处定义 —— 原来开关回调和输入框初始化各写了一遍同样的 `ifBlank`，
+     * 将来改一处漏一处就是新的「全新安装点开关连不上」。
+     */
+    val effectivePasswordDraft: String
+        get() = password.ifBlank { if (!passwordSet) DEFAULT_SYNC_APP_PASSWORD else "" }
+}
 
 /** 恢复预览（UI 确认弹窗用） */
 data class SyncRestorePreview(

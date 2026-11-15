@@ -82,6 +82,20 @@ class AboutCapsuleStateTest {
     }
 
     @Test
+    fun `失败但包已落地 —— 显示安装最新版，不能报下载失败`() {
+        // 下载完自动拉起安装器、用户没装就返回：state 停在失败态，但盘上的包是好的。
+        // 报「下载失败」会让用户以为要重下 6.7MB，而点下去其实是直接进安装器。
+        assertEquals(
+            Install,
+            resolveCapsuleState(
+                newer(),
+                UpdateDownloadState.Failed(UpdateFailure.LAUNCH, "installer"),
+                "V1.1.18",
+            ),
+        )
+    }
+
+    @Test
     fun `重查仍拿不到直链 —— 版本确实存在但胶囊进失败态，不能被藏掉`() {
         assertEquals(Failed, resolveCapsuleState(newer(), UpdateDownloadState.Idle, null, extraFailed = true))
         // 极端场景：状态还没回来的那一帧也不能藏（否则按钮一隐一现）

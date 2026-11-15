@@ -427,8 +427,11 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_SYNC_ENABLED] = enabled }
     }
 
+    /** 空串也回落默认：存过空值（比如旧版本把空草稿落盘）时不能当作"有效地址" */
     val syncUrl: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_SYNC_URL] ?: DEFAULT_SYNC_URL }
+        context.KOiLDataStore.data.distinctValue {
+            it[KEY_SYNC_URL]?.takeIf { url -> url.isNotBlank() } ?: DEFAULT_SYNC_URL
+        }
     suspend fun setSyncUrl(url: String) {
         context.KOiLDataStore.edit { it[KEY_SYNC_URL] = url.trim() }
     }
