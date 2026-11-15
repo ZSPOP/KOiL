@@ -4,7 +4,9 @@
 
 ## 发版流程
 
-1. **改版本名**：`app/build.gradle.kts` 里的 `versionName` 手动递增（当前基线 `1.0.0`），`versionCode` 不要手改
+1. **改版本名与发布日期**：`app/build.gradle.kts` 里的 `versionName` 手动递增（当前基线 `1.0.0`），
+   同时把 `buildConfigField("String", "KOIL_RELEASE_DATE", "\"YYYY-MM-DD\"")` 改成**本次打 tag 当天**的日期
+   （关于页「发布日期」显示的就是它；不改会被 CI 的发布日期闸门拦下）；`versionCode` 不要手改
 2. **合 main**：功能分支合并到 `main` 并推送
 3. **打标签**：`git tag -a V1.0.0 -m "KOiL V1.0.0"` → `git push origin V1.0.0`
 4. CI 自动构建、校验签名、生成 `KOiL-V*-vc*-release.apk`，挂到同名 Release
@@ -80,9 +82,13 @@ cc962f1e2524ba8273c9d668436e9926d8a056e49b816e680c730518d46ffe4b
 - 版本不低于 `1.0.0`，且严格高于已有最高标签
 - 标签提交是 `main` 的祖先
 - 同名 Release 不存在
+- `KOIL_RELEASE_DATE` 等于标签提交日期或其次日（拦住「发版忘了改发布日期」）
 
 ## 注意
 
 - **同名标签会覆盖 Release 附件**：CI 检测到同名 Release 已存在会直接失败；不要在不改代码的情况下重复推同一个 tag
 - `keystore/` 等价于私钥。分发源码、打包或上传网盘前必须删除，`.gitignore` 只在 git 操作时生效
 - CI 计数被重置（换平台、重建流水线）会让 `run_number` 归零，CI 的「versionCode 不得回退」断言会拦下这类事故
+- **发布日期闸门按「标签提交日期」比对**：tag 打在 merge commit 上时，取的是**合并日**。所以版本号 bump 在昨天、
+  今天才合并打 tag 的话，`KOIL_RELEASE_DATE` 要写**合并日**（今天），写成 bump 那天会被拦 —— 这是刻意的，
+  不是闸门坏了；闸门允许「当天或次日」正是为了兜住 23:59 提交 / 00:10 打 tag 这种跨天操作

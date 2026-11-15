@@ -3,12 +3,11 @@ package com.llpop.koil.data.update
 import android.util.Log
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.settings.AppSettings
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -99,14 +98,21 @@ private data class GiteeRelease(
  */
 class UpdateChecker(private val settings: AppSettings) {
 
-    /** 最近一次**成功**检查的时间戳（0=从未查过），设置页据此显示「上次检查」 */
+    /**
+     * 用户已知晓的版本 tag，**只在本次运行内有效**（冷启动清零，不落库）。
+     * 产品口径：横幅的 × 只收起本次运行，冷启动后新版本横幅必须重新出现 ——
+     * 所以这个值不能再写 DataStore，否则「× 掉之后永远不再提醒」。
+     */
+    private val sessionSeenTag = MutableStateFlow("")
+
+    /** 最近一次**成功**检查的时间戳（0=从未查过）。 */
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
 
     /**
      * 用户已知晓的版本 tag（原始形式）。与 [updateTarget] 配合判定红点：
-     * 两者不等 = 有新版本且用户还没被告知过。写入时机见 AppSettings.updateSeenTag。
+     * 两者不等 = 有新版本且用户还没被告知过。写入时机见 [markSeen]。
      */
-    fun seenTag(): Flow<String> = settings.updateSeenTag
+    fun seenTag(): Flow<String> = sessionSeenTag
 
     /**
      * tag 与直链的**单一快照**。UI 一律读这个，不分别订阅 latestTag / latestApkUrl：
@@ -119,37 +125,16 @@ class UpdateChecker(private val settings: AppSettings) {
         }
 
     /**
-     * 应用级 scope：由 Application 在 onCreate 注入（与 CloudSyncManager 同一先例）。
-     * [markSeen] 用它落库，不依赖页面生命周期。
-     */
-    private var appScope: CoroutineScope? = null
-    fun init(scope: CoroutineScope) {
-        appScope = scope
-    }
-
-    /**
-     * 记录「用户已知晓此版本」。
-     * 调用时机必须是用户主动表达知悉的动作：**关闭更新横幅**（当前唯一调用点）。
+     * 记录「用户已知晓此版本」，**只影响本次运行**（冷启动清零）。
+     * 调用时机必须是用户主动表达知悉的动作：**关闭首页更新横幅**（唯一调用点）。
      * **下载进行中、下载失败、拉起安装器但未装成都不要调用**
      * ——那会让红点与横幅同时消失，用户再也不会被提醒。
      * （装成功后 `isNewerRelease(latest, 当前版本)` 自然为 false，横幅自己就消失了，
      * 不需要任何人提前写 seenTag 去兜。）
-     *
-     * 写入跑在应用级 scope：用户点 × 关闭横幅后立刻退出页面时，页面 scope 会被取消，
-     * `DataStore.edit` 有概率没落库——红点不灭，再点还是同一个症状。
      */
     fun markSeen(tag: String) {
         if (tag.isBlank()) return
-        val scope = appScope
-        if (scope == null) {
-            // 未注入就静默丢弃会让红点永远不灭，这里明确告警（Application.onCreate 已注入）
-            Log.w("KOiL", "markSeen before init, tag=$tag dropped")
-            return
-        }
-        scope.launch {
-            runCatching { settings.setUpdateSeenTag(tag) }
-                .onFailure { Log.w("KOiL", "persist seen tag failed: ${it.message}") }
-        }
+        sessionSeenTag.value = tag
     }
 
     /**
@@ -325,5 +310,14 @@ fun isNewerRelease(latestTag: String, currentVersion: String): Boolean =
  * @param seenTag 用户已知晓的 tag（空串=从未知晓）
  * @param currentVersion 本机 versionName，用于挡住「本地已是最新」的情况
  */
-fun shouldBadgeUpdate(latestTag: String, seenTag: String, currentVersion: String): Boolean =
+fun shouldShowBanner(latestTag: String, seenTag: String, currentVersion: String): Boolean =
     isNewerRelease(latestTag, currentVersion) && latestTag != seenTag
+
+/**
+ * 「设置页红点要不要亮」：只看有没有新版本，**不受横幅 × 影响**。
+ *
+ * × 收起的只是首页那条横幅（「这条提醒我看过了」），不等于「我不想知道有更新」；
+ * 红点要一直亮到装上最新版为止 —— 装成功后版本号不再比本机新，红点自然灭。
+ */
+fun shouldBadgeUpdate(latestTag: String, currentVersion: String): Boolean =
+    isNewerRelease(latestTag, currentVersion)

@@ -320,7 +320,12 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                 flingBehavior = pagerFlingBehavior,
                             ) { page ->
                                 when (page) {
-                                    0 -> AddScreen(modifier = contentModifier, bottomPadding = bottomPad)
+                                    0 -> AddScreen(
+                                        modifier = contentModifier,
+                                        bottomPadding = bottomPad,
+                                        // 更新横幅点进来 → 关于页（落地自动重新检查）
+                                        onOpenAbout = { showAbout = true },
+                                    )
                                     1 -> OverviewScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,

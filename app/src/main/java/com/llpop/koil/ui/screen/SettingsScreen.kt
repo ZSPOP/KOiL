@@ -111,7 +111,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
-import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
@@ -1832,7 +1831,9 @@ fun LazyListScope.aboutSection(
     )
     item {
         SmallTitle(
-            text = stringResource(R.string.koil_set_about),
+            // 「关于」二字留给行标题（关于 KOiL），分组名改成「其他」，
+            // 否则屏幕上会出现「关于」→「关于 KOiL」两级同名
+            text = stringResource(R.string.koil_set_other),
             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         )
     }
@@ -1841,12 +1842,24 @@ fun LazyListScope.aboutSection(
         outerBottomPadding = 12.dp,
         items = listOf(
             CardItem("about") {
+                // 红点只看「有没有新版本」，**不看 seenTag**：首页横幅的 × 只收起那条提醒，
+                // 不代表用户不想知道有更新；红点要一直亮到装上最新版为止
+                val updateChecker = remember {
+                    org.koin.core.context.GlobalContext.get()
+                        .get<com.llpop.koil.data.update.UpdateChecker>()
+                }
+                val target by updateChecker.updateTarget()
+                    .collectAsStateWithLifecycle(initialValue = null)
                 SettingRow(
-                    // 分组标题已经是「关于」，这一行用品牌名 + 版本，与 main 的品牌头一致
-                    title = stringResource(R.string.koil_app_name),
+                    // 标题是「关于 KOiL」，副标题仍是当前版本号（不因有新版本而变化）
+                    title = stringResource(R.string.koil_set_about_koil),
                     subtitle = stringResource(R.string.koil_set_about_version, com.llpop.koil.BuildConfig.VERSION_NAME, com.llpop.koil.BuildConfig.VERSION_CODE),
                     value = "",
                     onClick = onOpenAbout,
+                    badgeDot = com.llpop.koil.data.update.shouldBadgeUpdate(
+                        target?.tag.orEmpty(),
+                        com.llpop.koil.BuildConfig.VERSION_NAME,
+                    ),
                 )
             },
         ),

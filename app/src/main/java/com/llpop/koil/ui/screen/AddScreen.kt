@@ -46,12 +46,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.launch
-import com.llpop.koil.ui.component.UpdateCellularDialog
-import com.llpop.koil.ui.component.CellularGate
-import com.llpop.koil.ui.component.evaluateCellularGate
-import com.llpop.koil.ui.component.skipNetworkGateForGrant
-import com.llpop.koil.data.update.isCellularNetwork
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -78,13 +72,10 @@ import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.BuildConfig
-import com.llpop.koil.data.update.ApkUpdater
-import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.normalizeVersion
-import com.llpop.koil.data.update.shouldBadgeUpdate
+import com.llpop.koil.data.update.shouldShowBanner
 import com.llpop.koil.ui.component.UpdateBanner
-import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -122,6 +113,8 @@ import java.util.Locale
 fun AddScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
+    /** 更新横幅点击后进入关于页：检查与下载都在那边发生，首页只负责跳转 */
+    onOpenAbout: () -> Unit = {},
     viewModel: AddViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -132,24 +125,18 @@ fun AddScreen(
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
     // 更新横幅：与设置页共用同一个 UpdateChecker（冷启动静默检查已把 tag 落到 DataStore）。
-    // 判据复用红点那一个有单测的 shouldBadgeUpdate，不在首页再手写一套 —— 否则将来
-    // 红点判定加条件（如 ④ 下载失败后的重试策略），横幅不会跟着变。
+    // 判据走独立的有单测的 shouldShowBanner，不在首页再手写一套。
+    // 注意它与设置页红点 shouldBadgeUpdate 是**刻意**不同源：横幅受 × 影响，红点不受
+    // （详见 UpdateBanner 顶部注释），改其中一个不要顺手去同步另一个。
     val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
     // tag 与直链必须来自**同一快照**：分别订阅是两条 collect，中间有一帧
     // 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读
     val updateTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
     val latestTag = updateTarget?.tag.orEmpty()
     val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
-    val bannerTag = latestTag.takeIf { shouldBadgeUpdate(it, seenTag, BuildConfig.VERSION_NAME) }
-    // 应用内更新：直链与 tag 来自同一次检查（见 UpdateChecker.refresh），这里只做搬运。
-    val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
-    val apkUrl = updateTarget?.apkUrl.orEmpty()
-    // 直链没就绪时点击会就地重查（而不是跳浏览器），这段等待需要可见反馈
-    var bannerRechecking by remember { mutableStateOf(false) }
-    // 下载/安装状态就地展示（横幅上显示百分比、失败标记），不弹 Toast：
-    // Toast 是"一次事件"，首页与设置页同时组合会各弹一次；用 SharedFlow 又会在无人订阅时丢事件。
-    // 失败本身是持续状态，贴近"有更新但没装成"这个事实，所以让横幅自己说话。
-    val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
+    val bannerTag = latestTag.takeIf { shouldShowBanner(it, seenTag, BuildConfig.VERSION_NAME) }
+    // 首页横幅只负责提醒与跳转：检查 / 下载 / 安装全部在关于页
+    // （关于页是唯一发起检查的地方，首页不再需要 ApkUpdater、下载进度、失败原因这一整套状态）
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
     // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
     val locateToast = uiState.locateMessage?.let {
@@ -164,11 +151,6 @@ fun AddScreen(
 
     // 首次打开：未授权定位时自动弹出定位权限提醒引导（仅一次，之后由用户主动点击定位按钮）
     val settings = org.koin.compose.koinInject<com.llpop.koil.data.settings.AppSettings>()
-    // 蜂窝门控：下载 6.6MB 前给流量计费用户一次明确知情
-    val updateScope = rememberCoroutineScope()
-    val cellularDecided by settings.updateCellularDecided.collectAsStateWithLifecycle(initialValue = false)
-    val wifiOnlyPref by settings.updateWifiOnly.collectAsStateWithLifecycle(initialValue = false)
-    var cellularGate by remember { mutableStateOf<CellularGate?>(null) }
     LaunchedEffect(Unit) {
         if (!locationHelper.hasPermission() && !settings.hasPromptedLocation.first()) {
             settings.setHasPromptedLocation(true)
@@ -239,103 +221,14 @@ fun AddScreen(
                     outerBottomPadding = 12.dp,
                         items = listOf(
                         CardItem("updateBanner") {
-                            // 下载中把进度接在版本文案上（"1.1.10 · 42%"）：6.6MB 在国内要几十秒，
-                            // 没有可见进度就会变成"点了没反应"。失败也走同一处，并把动作换成「重试」。
-                    val baseVersion = normalizeVersion(bannerTag)
-                    val st = downloadState
-                    val bannerVersion = when (st) {
-                        is UpdateDownloadState.Downloading ->
-                            if (st.percent >= 0) {
-                                stringResource(R.string.koil_update_progress, baseVersion, st.percent)
-                            } else {
-                                stringResource(R.string.koil_update_progress_unknown, baseVersion)
-                            }
-                        else -> baseVersion
-                    }
-                    val bannerFailed = st as? UpdateDownloadState.Failed
-                    // 所有下载入口都走这里：蜂窝下的确认只做一次，且「挡住」时必须给强制下载出口
-                    fun startDownload() {
-                        val failedNoPermission =
-                            (downloadState as? UpdateDownloadState.Failed)?.reason ==
-                                com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION
-                        if (skipNetworkGateForGrant(failedNoPermission, apkUpdater.hasReady(bannerTag))) {
-                            apkUpdater.download(bannerTag, apkUrl)
-                            return
-                        }
-                        val gate = evaluateCellularGate(
-                            cellular = isCellularNetwork(context),
-                            decided = cellularDecided,
-                            wifiOnly = wifiOnlyPref,
-                        )
-                        cellularGate = gate
-                        // 没有门控就直接下：不把下载塞进 when 的 else 分支里（那是个隐式副作用）
-                        if (gate == null) apkUpdater.download(bannerTag, apkUrl)
-                    }
+                            // 首页横幅只提醒与跳转：检查、下载、安装全部收在关于页。
+                            // version 用本机 tag 归一后的版本号（不含 V），文案见 UpdateBanner。
                     UpdateBanner(
-                        version = bannerVersion,
-                        // 失败时用具体原因当主文案（签名不一致 ≠ 网络失败，不能一律让用户重试）
-                        title = bannerFailed?.let { stringResource(it.reason.messageRes()) },
-                        actionLabel = when {
-                            // 下载中给取消入口：否则点错只能干等几十秒，scope 是应用级的杀 App才行
-                            st is UpdateDownloadState.Downloading -> stringResource(R.string.koil_update_action_cancel)
-                            // 同设置页：缺授权且包还在 → 「去授权」；包没了 → 这一下会真下载，写「重试」
-                            bannerFailed != null -> stringResource(
-                                if (bannerFailed.reason ==
-                                    com.llpop.koil.data.update.UpdateFailure.NO_PERMISSION &&
-                                    apkUpdater.hasReady(bannerTag)
-                                ) R.string.koil_update_action_grant else R.string.koil_update_action_retry
-                            )
-                            bannerRechecking -> stringResource(R.string.koil_set_about_checking)
-                            else -> stringResource(R.string.koil_ov_update_action)
-                        },
-                        onOpen = {
-                            when {
-                                // 下载中再点是「取消」，不是「重下」
-                                st is UpdateDownloadState.Downloading -> apkUpdater.cancel()
-                                // 失败后再点：走同一套网络门控重试
-                                bannerFailed != null -> startDownload()
-                                apkUrl.isNotBlank() -> startDownload()
-                                // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
-                                // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
-                                // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
-                                // 拿不到直链 = 这次检查撞上「Release 已建、附件还在传」的镜像窗口。
-                                // 就地重查一次，别把用户丢进浏览器；重查后横幅按新数据重建。
-                                else -> {
-                                    if (!bannerRechecking) {
-                                        bannerRechecking = true
-                                        updateScope.launch {
-                                            updateChecker.refresh()
-                                            bannerRechecking = false
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        // 主动关掉 = 已知晓，同一版本不再提醒（不做「7 天后再提醒」）
+                        version = normalizeVersion(bannerTag),
+                        onOpen = onOpenAbout,
+                        // × 只收起本次运行：markSeen 只写内存，冷启动后新版本横幅会重新出现
                         onDismiss = { updateChecker.markSeen(bannerTag) },
                     )
-                    cellularGate?.let { gate ->
-                        UpdateCellularDialog(
-                            blocked = gate == CellularGate.Blocked,
-                            onDownload = {
-                                cellularGate = null
-                                // 首次表态「仍要下载」= 记住不限制网络；「仅 WiFi」被挡后强制下载则不改偏好
-                                if (gate == CellularGate.Ask) {
-                                    updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = false) }
-                                }
-                                apkUpdater.download(bannerTag, apkUrl)
-                            },
-                            onWaitWifi = {
-                                cellularGate = null
-                                // 只在首次表态时记成「仅 WiFi」；已表态的挡住场景点「等 WiFi」不改任何东西
-                                if (gate == CellularGate.Ask) {
-                                    updateScope.launch { settings.setUpdateCellularPolicy(wifiOnly = true) }
-                                }
-                            },
-                            // 误触外部只关弹窗：不消费「只问一次」，也不写入任何偏好
-                            onDismiss = { cellularGate = null },
-                        )
-                    }
                         },
                     ),
                 )

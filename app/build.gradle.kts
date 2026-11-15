@@ -47,6 +47,11 @@ android {
         // versionName 与 tag 严格对齐（CI 已有「tag 去 V == versionName」断言，不一致直接 fail）
         versionName = "1.1.17"
 
+        // 关于页「发布日期」信息行：编译期常量，每次发版随 versionName 一起改。
+        // 不读 git 提交时间/构建时间 —— 那会把构建机时钟与时区差异带进包里，
+        // 而这一行要表达的是「这个正式版发布的日子」，与 CI 何时跑无关。
+        buildConfigField("String", "KOIL_RELEASE_DATE", "\"2026-11-15\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true

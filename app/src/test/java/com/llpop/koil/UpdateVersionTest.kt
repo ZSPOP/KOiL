@@ -5,6 +5,7 @@ import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.data.update.shouldBadgeUpdate
+import com.llpop.koil.data.update.shouldShowBanner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -84,23 +85,38 @@ class UpdateVersionTest {
     }
 
     @Test
-    fun `shouldBadgeUpdate 只在有新版本且未知晓时成立`() {
+    fun `shouldShowBanner 只在有新版本且横幅未被收起时成立`() {
         val current = "1.1.3"
 
-        // 从未查到过 : 不亮
-        assertFalse(shouldBadgeUpdate("", "", current))
-        // 查到的 tag 不比本机新 : 不亮（防止把同版本或更低版本标成更新）
-        assertFalse(shouldBadgeUpdate("V1.1.2", "", current))
-        assertFalse(shouldBadgeUpdate("V1.1.3", "", current))
+        // 从未查到过 : 不出现
+        assertFalse(shouldShowBanner("", "", current))
+        // 查到的 tag 不比本机新 : 不出现（防止把同版本或更低版本标成更新）
+        assertFalse(shouldShowBanner("V1.1.2", "", current))
+        assertFalse(shouldShowBanner("V1.1.3", "", current))
 
-        // 有更新且未知晓 : 亮
-        assertTrue(shouldBadgeUpdate("V1.1.4", "", current))
-        assertTrue(shouldBadgeUpdate("V1.1.4", "V1.1.3", current))
+        // 有更新且没点过 × : 出现
+        assertTrue(shouldShowBanner("V1.1.4", "", current))
+        assertTrue(shouldShowBanner("V1.1.4", "V1.1.3", current))
 
-        // 有更新但已知晓 : 不亮（点过之后同一版本不再重复提醒）
-        assertFalse(shouldBadgeUpdate("V1.1.4", "V1.1.4", current))
+        // 点过 × 收起同一版本 : 不出现（× 只收起本次运行）
+        assertFalse(shouldShowBanner("V1.1.4", "V1.1.4", current))
 
-        // 发了更新的版本 : seenTag 还停在旧版本也要重新亮
-        assertTrue(shouldBadgeUpdate("V1.1.5", "V1.1.4", current))
+        // 又发了更新的版本 : seenTag 停在旧版本也要重新出现
+        assertTrue(shouldShowBanner("V1.1.5", "V1.1.4", current))
+    }
+
+    @Test
+    fun `shouldBadgeUpdate 只看有没有新版本，不受横幅被收起影响`() {
+        val current = "1.1.3"
+
+        assertFalse(shouldBadgeUpdate("", current))
+        assertFalse(shouldBadgeUpdate("V1.1.2", current))
+        assertFalse(shouldBadgeUpdate("V1.1.3", current))
+
+        // 有新版本就亮 —— 与 seenTag 无关（这是它与 shouldShowBanner 的关键差别）
+        assertTrue(shouldBadgeUpdate("V1.1.4", current))
+
+        // 装完最新版 : 不再比本机新，红点自然灭
+        assertFalse(shouldBadgeUpdate("V1.1.4", "1.1.4"))
     }
 }

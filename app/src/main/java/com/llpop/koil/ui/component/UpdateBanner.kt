@@ -31,17 +31,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * 位置修正：这个组件最初写在 OverviewScreen（底部导航的「数据」页），真机验收发现横幅
  * 显示在数据总览页而不是首页。首页是 tab 0 的 AddScreen，摘要卡是其中的 OilPriceCard。
  *
- * 显示条件与设置页红点完全同源（同一个 shouldBadgeUpdate，有单测），所以不会出现
- * 「有一处亮、另一处不亮」。点「更新」跳 Release 页 —— ④ 应用内下载落地后只改 onOpen
- * 回调，判据不用动；点 × 视为已知晓，写 seenTag 后同一版本不再出现（不做「7 天后再提醒」）。
+ * 显示条件走 `shouldShowBanner`（有新版且这一版没被 × 掉，有单测）；
+ * 设置页红点走的是另一个判据 `shouldBadgeUpdate`（只看有没有新版、不看 seenTag）——
+ * 两者刻意不同源：× 只收起这条横幅，不代表用户不想知道有更新，所以红点照样亮。
  */
 @Composable
 internal fun UpdateBanner(
     version: String,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
-    /** 右侧动作文案：下载失败时换成「重试」，其余场景仍是「更新」 */
-    actionLabel: String = stringResource(R.string.koil_ov_update_action),
+    /** 右侧动作文案：首页不再下载，这一格只是「点进去看」 */
+    actionLabel: String = stringResource(R.string.koil_ov_update_view),
     /**
      * 自定义主文案；null 时用「发现新版本 %1$s」。
      * 下载/安装失败时传具体原因（签名不一致、需要授权…），不这么做的话
