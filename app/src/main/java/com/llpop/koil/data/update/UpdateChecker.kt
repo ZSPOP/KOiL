@@ -161,10 +161,14 @@ class UpdateChecker(private val settings: AppSettings) {
         val persist = resolvePersistTarget(target.tag, target.apkUrl, newer)
         // tag 与直链在**同一次 edit** 里写入：两次独立写入会留下「tag 已更新、链接还是旧版」的持久错位
         runCatching {
-            settings.setUpdateTarget(
-                tag = persist?.tag.orEmpty(),
-                apkUrl = persist?.apkUrl.orEmpty(),
-            )
+            if (persist != null) {
+                settings.setUpdateTarget(tag = persist.tag, apkUrl = persist.apkUrl)
+            } else if (!newer) {
+                // 确认没有新版：把旧值清干净
+                settings.setUpdateTarget(tag = "", apkUrl = "")
+            }
+            // 少数情况：查到新版但直链未就绪 → 既不清也不写，上一次可用的直链继续留在库里，
+            // 横幅与红点不会因为这一轮撞窗口而消失
             // 只有「确认没有新版」或「直链可用」才算一次成功检查并推进节流时间戳；
             // 空直链不推进，否则下次冷启动本该重查，却被 45 分钟窗口直接跳过
             if (!newer || persist != null) settings.setUpdateLastCheckAt(System.currentTimeMillis())
