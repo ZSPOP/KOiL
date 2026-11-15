@@ -24,17 +24,42 @@ import java.net.URL
 data class UpdateTarget(val tag: String, val apkUrl: String)
 
 /**
- * 一次检查结果该不该落库（[UpdateChecker.refresh] 的唯一口径）。
+ * 一次检查结果对已落库状态的处置（[UpdateChecker.refresh] 的唯一口径）。
  *
- * 直链没就绪时返回 null：Gitee 侧「Release 已建、apk 附件还在传」的镜像窗口里，
- * 若把 (tag, "") 写进 DataStore，1.1.15 的实测表现是「显示可更新、怎么点都跳浏览器」，
- * 且 45 分钟节流内不会重查而卡死。现在点击虽会就地重查一次，但仍要多点一次才拿到直链；
- * 宁可这轮不落库（保留上一次可用直链），等下次检查补上。
+ * 三态而不是「有/无 target」两态：两态会把「确认没有新版」和「新版直链还没就绪」压成同一个 null，
+ * 调用方只能二选一——要么照清空处理，把用户手里可用的直链抹掉；
+ * 要么照写入处理，把 (tag, "") 存进库，于是 1.1.15 的实测故障（显示可更新、怎么点都跳浏览器、
+ * 45 分钟节流内不重查）有了复现路径。
+ */
+sealed interface UpdatePersistAction {
+    /** 确认更新且直链可用：写入 (tag, apkUrl)。 */
+    data class Write(val target: UpdateTarget) : UpdatePersistAction
+
+    /** 确认不比本机新：清空旧值，库里不留任何指向更低版本的入口。 */
+    data object Clear : UpdatePersistAction
+
+    /** 确认更新但直链未就绪（Gitee「Release 已建、apk 附件还在传」的镜像窗口）：不写也不清。 */
+    data object Keep : UpdatePersistAction
+}
+
+/**
+ * 判定一次检查该落到哪个处置。
  *
  * 抽成纯函数是为了单测：它决定上面那种卡死会不会复现，不该只靠实机复现验证。
  */
-fun resolvePersistTarget(tag: String, apkUrl: String, newer: Boolean): UpdateTarget? =
-    if (newer && apkUrl.isNotBlank()) UpdateTarget(tag, apkUrl) else null
+fun resolvePersistAction(tag: String, apkUrl: String, newer: Boolean): UpdatePersistAction = when {
+    !newer -> UpdatePersistAction.Clear
+    apkUrl.isBlank() -> UpdatePersistAction.Keep
+    else -> UpdatePersistAction.Write(UpdateTarget(tag, apkUrl))
+}
+
+/**
+ * 这次处置是否算「一次成功的检查」。
+ *
+ * Keep 不算：空直链若也推进节流时间戳，下次冷启动本该重查补直链，却被 45 分钟窗口直接跳过。
+ */
+val UpdatePersistAction.advancesLastCheckAt: Boolean
+    get() = this !is UpdatePersistAction.Keep
 
 /**
  * 一次检查的三态结果。
@@ -158,21 +183,23 @@ class UpdateChecker(private val settings: AppSettings) {
         // 只认严格比本机更新的 Release：不更新的 tag 一律不落库，
         // 设置页因此不存在任何指向更低版本的提示/跳转入口
         val newer = isNewerRelease(target.tag, BuildConfig.VERSION_NAME)
-        // 落库口径见 resolvePersistTarget：直链没就绪时这轮什么都不写
-        val persist = resolvePersistTarget(target.tag, target.apkUrl, newer)
+        // 落库口径见 resolvePersistAction：直链没就绪时这轮既不写也不清（Keep）
+        val action = resolvePersistAction(target.tag, target.apkUrl, newer)
         // tag 与直链在**同一次 edit** 里写入：两次独立写入会留下「tag 已更新、链接还是旧版」的持久错位
         runCatching {
-            if (persist != null) {
-                settings.setUpdateTarget(tag = persist.tag, apkUrl = persist.apkUrl)
-            } else if (!newer) {
-                // 确认没有新版：把旧值清干净
-                settings.setUpdateTarget(tag = "", apkUrl = "")
+            when (action) {
+                is UpdatePersistAction.Write ->
+                    settings.setUpdateTarget(tag = action.target.tag, apkUrl = action.target.apkUrl)
+
+                UpdatePersistAction.Clear ->
+                    settings.setUpdateTarget(tag = "", apkUrl = "")
+
+                // 查到新版但直链未就绪：上一次可用的直链继续留在库里，
+                // 横幅与红点不会因为这一轮撞窗口而消失
+                UpdatePersistAction.Keep -> Unit
             }
-            // 少数情况：查到新版但直链未就绪 → 既不清也不写，上一次可用的直链继续留在库里，
-            // 横幅与红点不会因为这一轮撞窗口而消失
-            // 只有「确认没有新版」或「直链可用」才算一次成功检查并推进节流时间戳；
-            // 空直链不推进，否则下次冷启动本该重查，却被 45 分钟窗口直接跳过
-            if (!newer || persist != null) settings.setUpdateLastCheckAt(System.currentTimeMillis())
+            // 只有 Write / Clear 才算一次成功检查并推进节流时间戳；Keep 不推进
+            if (action.advancesLastCheckAt) settings.setUpdateLastCheckAt(System.currentTimeMillis())
         }.onFailure { Log.w("KOiL", "persist update target failed: ${it.message}") }
         // 带上 newer：否则「确认没新版」和「查到新版」打出一模一样的日志，排查时分不清
         Log.i(
