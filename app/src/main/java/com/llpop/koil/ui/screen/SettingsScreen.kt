@@ -123,6 +123,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.ui.screen.settings.DEFAULT_SYNC_APP_PASSWORD
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
@@ -162,7 +163,6 @@ private val GRADES = listOf("92", "95", "98", "0")
 
 /** 云同步自用默认值（作者私有账号；应用密码泄露可去坚果云官网单独撤销重新生成） */
 private const val DEFAULT_SYNC_USERNAME = "Kay@LLPop.CoM"
-private const val DEFAULT_SYNC_APP_PASSWORD = "aees8xuzs3dzsdz3"
 
 /**
  * 设置页（M4：14 项设置完整实现）
@@ -662,9 +662,7 @@ fun SettingsScreen(
                                         // 界面上那个 Kay@LLPop.CoM 只是渲染时 ifBlank 出来的。
                                         // 空串一旦落盘，isConfigured() 的 username.isBlank() 就把整条连接挡掉。
                                         syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME },
-                                        syncUi.password.ifBlank {
-                                            if (!syncUi.passwordSet) DEFAULT_SYNC_APP_PASSWORD else ""
-                                        },
+                                        syncUi.effectivePasswordDraft,
                                     )
                                 },
                                 trailingContent = null,
@@ -1305,7 +1303,7 @@ private fun SyncPanelBody(
         // 本地没有存过密码时预填内置默认密码：与地址栏（数据层兜底）、用户名栏（UI 层 ifBlank 兜底）
         // 保持同一套口径 —— 否则全新安装打开只有密码框是空的，看着像「默认值被删了」。
         var pwdDraft by remember(syncUi.password) {
-            mutableStateOf(syncUi.password.ifBlank { if (!syncUi.passwordSet) DEFAULT_SYNC_APP_PASSWORD else "" })
+            mutableStateOf(syncUi.effectivePasswordDraft)
         }
         val effectivePwd: String? = when {
             pwdDraft.isNotBlank() -> pwdDraft
@@ -2193,6 +2191,9 @@ private fun SettingSwitchRow(
                 trailingContent()
                 Spacer(Modifier.width(8.dp))
             }
+            // Switch 自带 `Modifier.toggleable`（miuix 0.9.4 Switch.kt：`onCheckedChange != null` 时挂
+            // toggleable，否则只加 semantics），它会消费点击事件，所以点开关只走这一条回调，
+            // 不会和下面整行的 onClick 各触发一次变成「闪两下」。
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         },
         onClick = { onCheckedChange(!checked) },
