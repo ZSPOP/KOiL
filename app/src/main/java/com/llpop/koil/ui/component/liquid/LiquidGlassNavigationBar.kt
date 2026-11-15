@@ -327,10 +327,9 @@ internal fun IosLiquidGlassNavigationBar(
         Platform.IOS -> 20.dp
 
         else -> {
-            // 底部占位：有系统栏 16dp + 系统栏高度；无系统栏 32dp。
-            // 不齐的话，同一个 Scaffold 算出的 bottomPadding 会差 8dp，
-            // 页面末项到导航条的距离就会随底栏样式变化
-            if (navBarBottomPadding != 0.dp) 16.dp + navBarBottomPadding else 32.dp
+            // 底部占位：有系统栏 8dp + 系统栏高度；无系统栏 28dp。
+            // 这两个值直接决定胶囊离屏幕底边的距离，加大等于把整条胶囊往上顶
+            if (navBarBottomPadding != 0.dp) 8.dp + navBarBottomPadding else 28.dp
         }
     }
     val containerHeight = if (showLabels) 62.dp else 56.dp

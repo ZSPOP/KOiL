@@ -264,11 +264,10 @@ fun OverviewScreen(
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
-            // bottom = 底栏留白 + 60dp：给悬浮回顶按钮让出位置（44dp 按钮 + 16dp 上距），
-            // 否则滚到最后一条时按钮会压在末卡右下角，金额/单价被遮住
+            // bottom 只留底栏槽高，与添加页、设置页一致
             contentPadding = PaddingValues(
                 top = topPadding,
-                bottom = bottomPadding + 60.dp,
+                bottom = bottomPadding,
             ),
         ) {
 

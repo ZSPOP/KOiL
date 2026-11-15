@@ -451,14 +451,8 @@ fun AddScreen(
                         .fillMaxWidth()
                         .height(52.dp),
                     enabled = uiState.precheck.isReady && !uiState.isAdding,
-                    colors = ButtonDefaults.buttonColors(
-                        color = KOiLColors.Primary,
-                        contentColor = Color.White,
-                        // 卡底是 surfaceContainer，此处用实色 surface 做卡内凹槽，
-                        // 半透明 surfaceVariant 在卡上会与底色同色、按钮直接消失
-                        disabledColor = MiuixTheme.colorScheme.surface,
-                        disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f),
-                    ),
+                    // 主按钮预设自带禁用态配色（深色下是深蓝，而不是纯黑）
+                    colors = ButtonDefaults.buttonColorsPrimary(color = KOiLColors.Primary),
                 ) {
                     Text(
                         text = if (uiState.isAdding) stringResource(R.string.koil_add_adding) else stringResource(R.string.koil_add_add_record),
@@ -1246,8 +1240,8 @@ private fun PrecheckBanner(uiState: AddUiState) {
         precheck.isReady || precheck.messageKey == "added" ->
             Color(0x1A34C759) to Color(0xFF34C759)
         else ->
-            // 在卡组内：实色 surface 当凹槽底，半透明 surfaceVariant 会与 surfaceContainer 融成一片
-            MiuixTheme.colorScheme.surface to MiuixTheme.colorScheme.onBackgroundVariant
+            // 在卡组内做凹槽底：用主题的次要禁用色，深色下比卡片亮一档、浅色下是浅灰
+            MiuixTheme.colorScheme.disabledSecondaryVariant to MiuixTheme.colorScheme.onBackgroundVariant
     }
     Box(
         modifier = Modifier
