@@ -35,6 +35,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -324,11 +328,15 @@ private fun AboutContent(
         }
     }
 
-    // 胶囊位置按参考图（HyperOS 关于页）的段内比例对齐：那一段「版本号底边 → 卡片顶边」共 390px，
-    // 胶囊顶在 53.8% 处。本页这一段是 190dp（留白 + 胶囊 52dp + 间距），53.8% ≈ 102dp，
-    // 即留白从 126dp 上移 24dp；下方同时从 12dp 补到 36dp，总高仍是 190dp —— 卡片位置一丝不动。
-    val capsuleLift = 24.dp
-    val capsuleTail = 36.dp
+    // hero 区改成「logo → 版本号 → 状态文案 → 胶囊」一整块，胶囊不再挂在下方列表里。
+    // 段内比例沿用参考图口径：版本号底边到卡片顶边原为 102dp + 胶囊 52dp + 36dp。
+    // 状态区固定 26dp（6dp 间距 + 20dp 行高：有没有文案都占位，胶囊不会上下跳），
+    // 状态区到胶囊取 62dp（比原 76dp 少 14dp，胶囊随之上移 14dp）；
+    // hero 底边到卡片补到 50dp（36 + 14）把上移量还回去 —— 卡片位置一丝不动。
+    val statusGapTop = 6.dp
+    val statusAreaHeight = 26.dp
+    val statusToCapsule = 62.dp
+    val heroToCard = 50.dp
 
     val backdrop = rememberLayerBackdrop()
 
@@ -370,11 +378,34 @@ private fun AboutContent(
     } else {
         stringResource(R.string.koil_about_version_plain, BuildConfig.VERSION_NAME)
     }
-    // 状态文字只在「本次运行查过」时出现：Idle（还没查 / 冷启动）什么都不显示
-    val heroStatusLabel = when (status) {
-        AboutUpdateStatus.Latest -> stringResource(R.string.koil_about_status_latest)
-        AboutUpdateStatus.Failed -> stringResource(R.string.koil_about_status_failed)
+    // 状态文字三态：检查中即时出现、出结论后停 5 秒再淡出、发现新版本时让位给版本号箭头。
+    // 「检查中」必须立刻显示：从进页到结果回来这段原本是空白，用户会以为点了没反应。
+    val checkingLabel = stringResource(R.string.koil_about_status_checking)
+    val latestLabel = stringResource(R.string.koil_about_status_latest)
+    val failedLabel = stringResource(R.string.koil_about_status_failed)
+    val pendingStatusLabel = when {
+        isChecking -> checkingLabel
+        status == AboutUpdateStatus.Latest -> latestLabel
+        status == AboutUpdateStatus.Failed -> failedLabel
         else -> null
+    }
+    // 文案与 alpha 分开存：淡出期间文案仍在，靠 alpha 收掉，硬置 null 会闪一下
+    var shownStatusLabel by remember { mutableStateOf<String?>(null) }
+    val statusAlpha = remember { Animatable(0f) }
+    LaunchedEffect(pendingStatusLabel, isChecking) {
+        if (pendingStatusLabel == null) {
+            statusAlpha.animateTo(0f, tween(200))
+            shownStatusLabel = null
+        } else {
+            shownStatusLabel = pendingStatusLabel
+            statusAlpha.animateTo(1f, tween(200))
+            // 检查中不进入停留倒计时：它本身是个会被下一次结果替换的中间态
+            if (!isChecking) {
+                delay(5_000)
+                statusAlpha.animateTo(0f, tween(400))
+                shownStatusLabel = null
+            }
+        }
     }
 
     val scrollPadding = PaddingValues(
@@ -406,7 +437,33 @@ private fun AboutContent(
             iconProgress = iconProgress,
             versionCodeProgress = versionCodeProgress,
             versionLabel = heroVersionLabel,
-            statusLabel = heroStatusLabel,
+            statusLabel = shownStatusLabel,
+            statusAlpha = { statusAlpha.value },
+            statusGapTop = statusGapTop,
+            statusAreaHeight = statusAreaHeight,
+            statusToCapsule = statusToCapsule,
+            // 胶囊与进度条现在属于 hero：只在检测到新版本时出现，随 hero 一起淡出
+            capsule = {
+                KoilAboutUpdateButton(
+                    status = status,
+                    downloadState = downloadState,
+                    // 用 ApkUpdater 的快照而不是从 state 推：失败态下 state 里没有 tag，
+                    // 但盘上的包可能仍然可用（下完没装成）
+                    readyTag = apkUpdater.readyTagSnapshot,
+                    extraFailed = downloadFailed,
+                    onDownload = { downloadOrRecheck() },
+                    onCancel = { apkUpdater.cancel() },
+                    onInstall = {
+                        (status as? AboutUpdateStatus.Newer)?.let { apkUpdater.installReady(it.tag) }
+                    },
+                    onRetry = {
+                        downloadFailed = false
+                        downloadOrRecheck()
+                    },
+                    blurBackdrop = if (blurEnabled) backdrop else null,
+                    blurBlendColors = cardBlendColors,
+                )
+            },
             // 整块可点：这是关于页的第二个检查入口（第一个是「应用版本」行）
             onClick = { check() },
             onMeasured = { logoHeightDp = it },
@@ -430,41 +487,17 @@ private fun AboutContent(
                     Modifier
                         .fillMaxWidth()
                         .height(
-                            // 126dp 是 hero 下方的留白原值（hero 底边到下一元素的间距）。
-                            // 这一项原先紧随「检查更新」分组标题，标题删掉（与卡内行同名）后由卡片接替，
-                            // 留白沿用 126dp：间距关系不变，也释放掉原本给标题预留的那一段高度。
-                            // 若改成 126 + 标题高（约 34dp = 160dp），卡片位置与改动前完全一致，
-                            // 但会在 hero 与卡片之间留下一块原本属于标题的空白。
+                            // hero 现在自带胶囊，实测高度已经包含它。这里有三个易错点：
+                            // 1) onSizeChanged 挂在 padding 之内，量到的是内容高、不含 padding，所以要补回
+                            //    logoPadding.top + 52dp 才是 hero 底边的绝对位置；
+                            // 2) hero 从页面顶端起算，而这一项从 LazyColumn 的 contentPadding 之后起算，
+                            //    两者差 scrollPadding.top，必须抵掉；
+                            // 3) 最后补的 heroToCard 就是「hero 底边（= 胶囊底）到卡片顶」的距离。
                             logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                                scrollPadding.calculateTopPadding() + (126.dp - capsuleLift),
+                                scrollPadding.calculateTopPadding() + heroToCard,
                         ),
                     contentAlignment = Alignment.TopCenter,
                     content = { },
-                )
-            }
-
-            item(key = "updateButton") {
-                // 独立居中的胶囊：只在检测到新版本时出现，下载进度条挂在它下面
-                KoilAboutUpdateButton(
-                    status = status,
-                    downloadState = downloadState,
-                    // 用 ApkUpdater 的快照而不是从 state 推：失败态下 state 里没有 tag，
-                    // 但盘上的包可能仍然可用（下完没装成）
-                    readyTag = apkUpdater.readyTagSnapshot,
-                    extraFailed = downloadFailed,
-                    onDownload = { downloadOrRecheck() },
-                    onCancel = { apkUpdater.cancel() },
-                    onInstall = {
-                        (status as? AboutUpdateStatus.Newer)?.let { apkUpdater.installReady(it.tag) }
-                    },
-                    onRetry = {
-                        downloadFailed = false
-                        downloadOrRecheck()
-                    },
-                    // 上移了多少就在下方补回多少：卡片位置与改动前完全一致
-                    modifier = Modifier.padding(bottom = capsuleTail),
-                    blurBackdrop = if (blurEnabled) backdrop else null,
-                    blurBlendColors = cardBlendColors,
                 )
             }
 
@@ -599,8 +632,16 @@ private fun BoxScope.AboutHero(
     versionCodeProgress: () -> Float,
     /** logo 下方的版本号文案：`1.1.17`，有新版本时是 `1.1.17 → 1.1.18` */
     versionLabel: String,
-    /** 版本号右边的状态文案（已是最新版本 / 检查失败）；null 时整块不占位 */
+    /** 版本号下方的状态文案（正在检查… / 已是最新版本 / 检查失败）：无文案时留空位，胶囊不上下跳 */
     statusLabel: String?,
+    /** 状态文案的淡入淡出进度（0f 隐藏 / 1f 全显）：出结论 5 秒后由调用方收掉 */
+    statusAlpha: () -> Float,
+    /** 状态区距版本号 / 状态区固定高度 / 状态区到胶囊 */
+    statusGapTop: Dp,
+    statusAreaHeight: Dp,
+    statusToCapsule: Dp,
+    /** 胶囊与下载进度条：属于 hero 内容，随 hero 一起淡出 */
+    capsule: @Composable () -> Unit,
     /** 整块点击 = 触发一次检查更新 */
     onClick: () -> Unit,
     onMeasured: (androidx.compose.ui.unit.Dp) -> Unit,
@@ -647,7 +688,7 @@ private fun BoxScope.AboutHero(
                     } else Modifier
                 ),
         )
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
@@ -656,8 +697,7 @@ private fun BoxScope.AboutHero(
                     scaleX = 1 - (p * 0.05f)
                     scaleY = 1 - (p * 0.05f)
                 },
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 color = colorScheme.onSurfaceVariantSummary,
@@ -665,16 +705,38 @@ private fun BoxScope.AboutHero(
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
             )
-            if (statusLabel != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    // 检查结论跟在版本号右边：同一行读，不另起一行打断 hero 的居中关系
-                    color = colorScheme.onSurfaceVariantSummary,
-                    text = statusLabel,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                )
+            // 状态区高度固定：三种文案（正在检查… / 已是最新版本 / 检查失败）与无文案时都占同一份高度，
+            // 结论换来换去胶囊不会上下跳。文案本身靠 alpha 淡入淡出，不走「有就撑开、没有就塌陷」。
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(statusAreaHeight)
+                    .padding(top = statusGapTop),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (statusLabel != null) {
+                    Text(
+                        color = colorScheme.onSurfaceVariantSummary,
+                        text = statusLabel,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.graphicsLayer { alpha = statusAlpha() },
+                    )
+                }
             }
+        }
+        // 状态区到胶囊的距离：胶囊已经不再靠下方列表的留白顶开，由这一处直接给
+        Spacer(Modifier.height(statusToCapsule))
+        Box(
+            modifier = Modifier.graphicsLayer {
+                // 跟 logo 同一套淡出：滚动时整块一起收，不让胶囊孤零零留在原位被卡片盖过
+                val p = iconProgress()
+                alpha = 1 - p
+                scaleX = 1 - (p * 0.05f)
+                scaleY = 1 - (p * 0.05f)
+            },
+        ) {
+            capsule()
         }
     }
 }

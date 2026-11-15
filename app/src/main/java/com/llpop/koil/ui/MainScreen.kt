@@ -1,5 +1,6 @@
 package com.llpop.koil.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -158,6 +159,14 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
             // 关于页开关：同样提升到 MainScreen 级全屏页（二级路由页）
             var showAbout by rememberSaveable { mutableStateOf(false) }
+
+            // 一级页的返回手势：数据总览 / 设定不是首页，按返回先回首页，不退出应用；
+            // 只在首页按返回才交给系统（Activity finish）。
+            // 二级页（明细页 / 关于页）自己有 BackHandler，且比这里更内层注册、先消费事件；
+            // enabled 里再排除一次，不依赖注册顺序兜底。
+            BackHandler(enabled = selectedTab != 0 && !showOilPriceDetail && !showAbout) {
+                scope.launch { pagerState.springAnimateToPage(0) }
+            }
 
             // 导航项列表按标签缓存，避免每次重组都重新 listOf 三个 NavigationItem
             // （含 stringResource 解析）在 Pager 滑动引发的高频重组下造成纯浪费。

@@ -422,6 +422,7 @@
     <string name="koil_about_app_version">App version</string>
     <string name="koil_about_release_date">Release date</string>
     <string name="koil_about_status_latest">Up to date</string>
+    <string name="koil_about_status_checking">Checking…</string>
     <string name="koil_about_status_failed">Check failed</string>
     <string name="koil_about_action_newer">New version available</string>
     <string name="koil_about_action_cancel_download">Cancel download</string>
