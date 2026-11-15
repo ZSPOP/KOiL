@@ -28,7 +28,7 @@ enum class AboutCapsuleState {
  * 由「检查结论 + 下载状态 + 已落地的包」推导胶囊形态。
  *
  * 判定顺序有讲究：
- * 1. **先判失败**：失败是终止态，此时不该显示「下载中」（`extraFailed` 与 `Downloading`
+ * 1. **先判失败，但包还在时让位**：失败是终止态，不过「已下好却没装成」（用户从安装器返回、，此时不该显示「下载中」（`extraFailed` 与 `Downloading`
  *    理论上互斥，但调用方是两次独立状态更新，不能靠互斥假设兜底）；
  * 2. 再判下载中；
  * 3. 再判包是否真的可用 —— 只看 `readyTag` 与当前 tag 是否相等，**不看** state 是否 `Ready`：
@@ -47,7 +47,14 @@ fun resolveCapsuleState(
     // 没有新版也不在失败态 → 整块不显示（失败态要显示「下载失败」，不能藏）
     if (newer == null && !extraFailed) return AboutCapsuleState.Hidden
 
-    if (extraFailed || downloadState is UpdateDownloadState.Failed) return AboutCapsuleState.Failed
+    if (extraFailed) return AboutCapsuleState.Failed
+    // 失败态要先让位给「包其实还在」：下载完自动拉起安装器、用户没装就返回，
+    // 或首次安装被「未知来源」拦下，都会停在这个失败态上；此时盘上的包是完好的，
+    // 再报「下载失败」等于告诉用户要重下 6.7MB，而点下去其实直接进安装器。
+    if (downloadState is UpdateDownloadState.Failed) {
+        if (newer != null && readyTag == newer.tag) return AboutCapsuleState.Install
+        return AboutCapsuleState.Failed
+    }
     if (downloadState is UpdateDownloadState.Downloading) return AboutCapsuleState.Downloading
 
     // readyTag 对不上当前 tag = 包被系统清掉，或又出了更新的版本 → 退回「有新版本」

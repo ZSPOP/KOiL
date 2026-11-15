@@ -80,6 +80,11 @@ class ApkUpdater(
     @Volatile
     private var readyTag: String? = null
 
+    /** 已落地包的 tag 快照。UI 不能只从 [state] 推断：失败态里包仍可能是完好的，
+     *  而 state 是 Failed 时读不到 tag，会把「下好了没装成」误报成「下载失败」。 */
+    val readyTagSnapshot: String?
+        get() = readyTag
+
     /**
      * 进程重启后的恢复。
      *

@@ -653,9 +653,22 @@ fun SettingsScreen(
                                 subtitle = stringResource(R.string.koil_sync_switch_sub),
                                 checked = syncUi.enabled,
                                 onCheckedChange = { on ->
-                                    syncVm.setEnabled(on, syncUi.url, syncUi.username, null)
+                                    // 本地没存过密码时传内置默认密码：否则 persistDrafts 跳过空值，
+                                    // isConfigured() 一直 false，全新安装打开开关既连不上也不弹「N 条待同步」。
+                                    syncVm.setEnabled(
+                                        on,
+                                        syncUi.url.ifBlank { AppSettings.DEFAULT_SYNC_URL },
+                                        // 用户名同样要兜底：全新安装时 syncUi.username 是空串，
+                                        // 界面上那个 Kay@LLPop.CoM 只是渲染时 ifBlank 出来的。
+                                        // 空串一旦落盘，isConfigured() 的 username.isBlank() 就把整条连接挡掉。
+                                        syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME },
+                                        syncUi.password.ifBlank {
+                                            if (!syncUi.passwordSet) DEFAULT_SYNC_APP_PASSWORD else ""
+                                        },
+                                    )
                                 },
-                                trailingContent = if (syncUi.enabled) ({ SyncStatusBadge(syncHealthy) }) else null,
+                                trailingContent = null,
+                                titleTrailing = if (syncUi.enabled) ({ SyncStatusBadge(syncHealthy) }) else null,
                             )
                         })
                     }
@@ -1288,8 +1301,12 @@ private fun SyncPanelBody(
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
         var urlDraft by remember { mutableStateOf(syncUi.url) }
         var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
-        // 密码草稿 = 存储里的真实密码（异步到达后回填一次），眼睛关闭时掩码、点亮显示明文
-        var pwdDraft by remember(syncUi.password) { mutableStateOf(syncUi.password) }
+        // 密码草稿 = 存储里的真实密码（异步到达后回填一次），眼睛关闭时掩码、点亮显示明文。
+        // 本地没有存过密码时预填内置默认密码：与地址栏（数据层兜底）、用户名栏（UI 层 ifBlank 兜底）
+        // 保持同一套口径 —— 否则全新安装打开只有密码框是空的，看着像「默认值被删了」。
+        var pwdDraft by remember(syncUi.password) {
+            mutableStateOf(syncUi.password.ifBlank { if (!syncUi.passwordSet) DEFAULT_SYNC_APP_PASSWORD else "" })
+        }
         val effectivePwd: String? = when {
             pwdDraft.isNotBlank() -> pwdDraft
             syncUi.passwordSet -> null
@@ -1506,7 +1523,7 @@ private fun SyncPanelBody(
                             },
                         label = stringResource(
                             if (syncUi.passwordSet) R.string.koil_sync_app_password_set
-                            else R.string.koil_sync_app_password_unset,
+                            else R.string.koil_sync_app_password_unset_builtin,
                         ),
                         useLabelAsPlaceholder = true,
                         singleLine = true,
@@ -2148,20 +2165,55 @@ private fun SettingSwitchRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     trailingContent: (@Composable () -> Unit)? = null,
+    /** 标题右侧的行内内容（状态徽章）。传了它就走自绘标题，因为 SwitchPreference 的 title 只收 String */
+    titleTrailing: (@Composable () -> Unit)? = null,
 ) {
-    // 开关行交回 SwitchPreference，云同步徽章挂在开关前的 endActions。
-    SwitchPreference(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        title = title,
-        summary = subtitle,
+    if (titleTrailing == null) {
+        // 开关行交回 SwitchPreference，附加内容挂在开关前的 endActions。
+        SwitchPreference(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            title = title,
+            summary = subtitle,
+            endActions = {
+                if (trailingContent != null) {
+                    trailingContent()
+                    Spacer(Modifier.width(8.dp))
+                }
+            },
+        )
+        return
+    }
+    // 徽章要贴在标题旁边，只能自绘标题区：用 BasicComponent 的无 title 重载，
+    // 内边距、最小高度、整行点击涟漪仍由 miuix 提供，字号与颜色照 BasicComponent
+    // 内部排版取值（headline1 / body2），保证与上面那些 SwitchPreference 行一致。
+    BasicComponent(
         endActions = {
             if (trailingContent != null) {
                 trailingContent()
                 Spacer(Modifier.width(8.dp))
             }
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
         },
-    )
+        onClick = { onCheckedChange(!checked) },
+        onClickLabel = title,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = title,
+                fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.width(6.dp))
+            titleTrailing()
+        }
+        Text(
+            text = subtitle,
+            fontSize = MiuixTheme.textStyles.body2.fontSize,
+            color = MiuixTheme.colorScheme.onBackgroundVariant,
+        )
+    }
 }
 
 /** 云同步状态徽章：已连接（主色）/ 未配置（灰） */
