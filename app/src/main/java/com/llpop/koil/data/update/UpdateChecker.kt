@@ -24,6 +24,19 @@ import java.net.URL
 data class UpdateTarget(val tag: String, val apkUrl: String)
 
 /**
+ * 一次检查结果该不该落库（[UpdateChecker.refresh] 的唯一口径）。
+ *
+ * 直链没就绪时返回 null：Gitee 侧「Release 已建、apk 附件还在传」的镜像窗口里，
+ * 若把 (tag, "") 写进 DataStore，1.1.15 的实测表现是「显示可更新、怎么点都跳浏览器」，
+ * 且 45 分钟节流内不会重查而卡死。现在点击虽会就地重查一次，但仍要多点一次才拿到直链；
+ * 宁可这轮不落库（保留上一次可用直链），等下次检查补上。
+ *
+ * 抽成纯函数是为了单测：它决定上面那种卡死会不会复现，不该只靠实机复现验证。
+ */
+fun resolvePersistTarget(tag: String, apkUrl: String, newer: Boolean): UpdateTarget? =
+    if (newer && apkUrl.isNotBlank()) UpdateTarget(tag, apkUrl) else null
+
+/**
  * 一次检查的三态结果。
  * 不能只用「有/无 target」表达：那样「确认没新版」和「网络失败」会被压成同一个 null，
  * 设置页就分不出该显示「已是最新」还是「检查失败」。
@@ -91,13 +104,13 @@ class UpdateChecker(private val settings: AppSettings) {
 
     /**
      * 记录「用户已知晓此版本」。
-     * 调用时机必须是用户主动表达知悉的动作：**打开版本页、关闭更新横幅**。
+     * 调用时机必须是用户主动表达知悉的动作：**关闭更新横幅**（当前唯一调用点）。
      * **下载进行中、下载失败、拉起安装器但未装成都不要调用**
      * ——那会让红点与横幅同时消失，用户再也不会被提醒。
      * （装成功后 `isNewerRelease(latest, 当前版本)` 自然为 false，横幅自己就消失了，
      * 不需要任何人提前写 seenTag 去兜。）
      *
-     * 写入跑在应用级 scope：用户点开版本页后立刻连续返回退出设置页时，页面 scope 会被取消，
+     * 写入跑在应用级 scope：用户点 × 关闭横幅后立刻退出页面时，页面 scope 会被取消，
      * `DataStore.edit` 有概率没落库——红点不灭，再点还是同一个症状。
      */
     fun markSeen(tag: String) {
@@ -145,13 +158,21 @@ class UpdateChecker(private val settings: AppSettings) {
         // 只认严格比本机更新的 Release：不更新的 tag 一律不落库，
         // 设置页因此不存在任何指向更低版本的提示/跳转入口
         val newer = isNewerRelease(target.tag, BuildConfig.VERSION_NAME)
+        // 落库口径见 resolvePersistTarget：直链没就绪时这轮什么都不写
+        val persist = resolvePersistTarget(target.tag, target.apkUrl, newer)
         // tag 与直链在**同一次 edit** 里写入：两次独立写入会留下「tag 已更新、链接还是旧版」的持久错位
         runCatching {
-            settings.setUpdateTarget(
-                tag = if (newer) target.tag else "",
-                apkUrl = if (newer) target.apkUrl else "",
-            )
-            settings.setUpdateLastCheckAt(System.currentTimeMillis())
+            if (persist != null) {
+                settings.setUpdateTarget(tag = persist.tag, apkUrl = persist.apkUrl)
+            } else if (!newer) {
+                // 确认没有新版：把旧值清干净
+                settings.setUpdateTarget(tag = "", apkUrl = "")
+            }
+            // 少数情况：查到新版但直链未就绪 → 既不清也不写，上一次可用的直链继续留在库里，
+            // 横幅与红点不会因为这一轮撞窗口而消失
+            // 只有「确认没有新版」或「直链可用」才算一次成功检查并推进节流时间戳；
+            // 空直链不推进，否则下次冷启动本该重查，却被 45 分钟窗口直接跳过
+            if (!newer || persist != null) settings.setUpdateLastCheckAt(System.currentTimeMillis())
         }.onFailure { Log.w("KOiL", "persist update target failed: ${it.message}") }
         // 带上 newer：否则「确认没新版」和「查到新版」打出一模一样的日志，排查时分不清
         Log.i(
@@ -224,7 +245,7 @@ internal fun selectLatestRelease(json: String): UpdateTarget? {
         ?: return null
 
     // assets 里除 APK 还有源码包（V1.x.zip / .tar.gz），只认 .apk；找不到直链时留空，
-    // 让 UI 回退浏览器，而不是让整次检查失败（否则用户永远看不到"有新版本"）
+    // 交给 UI 就地重查，而不是让整次检查失败（否则用户永远看不到"有新版本"）
     // 多个 .apk 时优先 KOiL- 开头的那个（本项目的产物命名），避免源码包/附带包被选走；
     // 顺序由服务端决定，不能靠"第一个"
     val apkAssets = best.assets.filter { it.name.endsWith(".apk") || it.url.endsWith(".apk") }
@@ -233,7 +254,7 @@ internal fun selectLatestRelease(json: String): UpdateTarget? {
     return UpdateTarget(best.tagName, apkUrl)
 }
 
-/** 版本页地址。用 Gitee 而不是 GitHub：GitHub 在国内经常打不开，而这条只在「Gitee 没镜像好」时才走 */
+/** 版本页地址。用 Gitee 而不是 GitHub：GitHub 在国内经常打不开。当前无生产调用方（预留），仅测试覆盖格式 */
 fun releasePageUrl(tag: String): String = "https://gitee.com/ZSPOP/KOiL/releases/tag/$tag"
 
 /** 去掉 V/v 前缀，得到可比较的版本号（"V1.0.0" → "1.0.0"） */

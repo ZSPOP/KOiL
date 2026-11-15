@@ -68,7 +68,7 @@ class UpdateReleaseParseTest {
 
     @Test
     fun `只有源码包时保留 tag 但没有直链`() {
-        // 镜像链只传上源码包（APK 上传失败）时要仍能提示有新版本，只是点进去回退浏览器；
+        // 镜像链只传上源码包（APK 上传失败）时要仍能提示有新版本，点击后就地重查等附件就绪；
         // 若这里返回 null，用户会永远收不到更新提示。
         val json = "[" + release("V1.1.9", 1302471, apk = null) + "]"
         val r = selectLatestRelease(json)!!

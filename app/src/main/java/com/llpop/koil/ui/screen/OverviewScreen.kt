@@ -180,10 +180,13 @@ fun OverviewScreen(
 
 
     // snapshotFlow 监听 LazyList 滚动位置，仅在"是否显示返回顶部"翻转时更新状态，
-    // 不用 LaunchedEffect(scrollState.value) 每次像素变化都触发
+    // 不用 LaunchedEffect(scrollState.value) 每次像素变化都触发。
+    // 滚到底（canScrollForward = false）时一并收起：此时列表无法再往下滚，
+    // 按钮停在那里就会盖住末卡右下角的金额/单价，收起后末卡完整可读。
     LaunchedEffect(listState) {
         snapshotFlow {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 300
+            (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 300) &&
+                listState.canScrollForward
         }
             .distinctUntilChanged()
             .collect { showBackToTop = it }
@@ -264,11 +267,10 @@ fun OverviewScreen(
                 .fillMaxSize()
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
-            // bottom = 底栏留白 + 60dp：给悬浮回顶按钮让出位置（44dp 按钮 + 16dp 上距），
-            // 否则滚到最后一条时按钮会压在末卡右下角，金额/单价被遮住
+            // bottom 只留底栏槽高，与添加页、设置页一致
             contentPadding = PaddingValues(
                 top = topPadding,
-                bottom = bottomPadding + 60.dp,
+                bottom = bottomPadding,
             ),
         ) {
 
@@ -460,8 +462,8 @@ fun OverviewScreen(
         }
 
         // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
-        // 竖直位置 = 底栏留白 + 60.dp：44dp 按钮 + 16dp 上距，正好落在末卡之外。
-        // 这 60dp 是按钮的固定占位（列表 contentPadding 的 bottom 与按钮对齐），不是随手加的留白。
+        // 竖直位置 = 底栏留白 + 16.dp（按钮 44dp）。列表 bottom 只留底栏留白，与另两页一致；
+        // 滚到底时按钮随 canScrollForward 收起，所以不需要在列表底部预留额外占位。
         // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
         // 再短动画收尾到 0；近处保持平滑 animateScrollToItem，不从深处慢速长飞。
         AnimatedVisibility(
