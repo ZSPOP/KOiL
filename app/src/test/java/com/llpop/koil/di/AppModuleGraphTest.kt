@@ -1,6 +1,5 @@
 package com.llpop.koil.di
 
-import androidx.lifecycle.ViewModel
 import com.llpop.koil.data.update.ApkUpdater
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.sync.WebDavClient
@@ -11,7 +10,6 @@ import com.llpop.koil.ui.screen.settings.OilPriceDetailViewModel
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import org.junit.After
-import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
@@ -47,21 +45,25 @@ class AppModuleGraphTest {
     fun `容器能创建关键单例`() {
         // WebDavClient 的 engine 参数只为单测注入 MockEngine，生产必须走无参构造；
         // 若有人改回 singleOf(::WebDavClient)，这里会先抛 NoDefinitionFoundException。
-        assertTrue(koin.get<WebDavClient>() is WebDavClient)
-        assertTrue(koin.get<CloudSyncManager>() is CloudSyncManager)
+        //
+        // 这里不做 `is X` 断言：get<X>() 的返回类型就是 X，断言恒真（K2 会报
+        // "Check for instance is always 'true'"），而"取不到会抛异常"本身就是断言。
+        koin.get<WebDavClient>()
+        koin.get<CloudSyncManager>()
         // ApkUpdater 是懒加载：第一次取用发生在用户点更新横幅那一刻。
         // 缺注册 = 点更新闪退，而那时 CI 早已全绿——所以必须在这里显式取一次。
-        assertTrue(koin.get<ApkUpdater>() is ApkUpdater)
+        koin.get<ApkUpdater>()
     }
 
     @Test
     fun `容器能创建全部ViewModel`() {
-        // 逐个显式取：走与 koinViewModel() 相同的解析路径，依赖链缺一环即抛异常
-        assertTrue(koin.get<MainViewModel>() is ViewModel)
-        assertTrue(koin.get<AddViewModel>() is ViewModel)
-        assertTrue(koin.get<OverviewViewModel>() is ViewModel)
-        assertTrue(koin.get<SettingsViewModel>() is ViewModel)
-        assertTrue(koin.get<OilPriceDetailViewModel>() is ViewModel)
-        assertTrue(koin.get<SyncViewModel>() is ViewModel)
+        // 逐个显式取：走与 koinViewModel() 相同的解析路径，依赖链缺一环即抛异常。
+        // 同上，get<X>() 已经固定了类型，再加 `is ViewModel` 是恒真判断。
+        koin.get<MainViewModel>()
+        koin.get<AddViewModel>()
+        koin.get<OverviewViewModel>()
+        koin.get<SettingsViewModel>()
+        koin.get<OilPriceDetailViewModel>()
+        koin.get<SyncViewModel>()
     }
 }

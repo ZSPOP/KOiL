@@ -495,13 +495,13 @@ class OverviewViewModel(
                 devPct = result.deviationPercent
                 devExceeded = result.hasDeviation
             } else {
-                val pct = if (effectivePayable != null && effectivePayable!! > 0)
-                    kotlin.math.abs(actual - effectivePayable!!) / effectivePayable!! * 100 else 0.0
+                val pct = if (effectivePayable != null && effectivePayable > 0)
+                    kotlin.math.abs(actual - effectivePayable) / effectivePayable * 100 else 0.0
                 devPct = pct
                 devExceeded = pct > threshold
             }
             // 5) 实付>应付 一律拦截（=允许）
-            if (effectivePayable != null && effectivePayable!! > 0 && actual > effectivePayable!!) {
+            if (effectivePayable != null && effectivePayable > 0 && actual > effectivePayable) {
                 overPayable = true
             }
         }
@@ -771,13 +771,13 @@ class OverviewViewModel(
                 devPct = result.deviationPercent
                 devExceeded = result.hasDeviation
             } else {
-                val pct = if (effectivePayable != null && effectivePayable!! > 0)
-                    kotlin.math.abs(actual - effectivePayable!!) / effectivePayable!! * 100 else 0.0
+                val pct = if (effectivePayable != null && effectivePayable > 0)
+                    kotlin.math.abs(actual - effectivePayable) / effectivePayable * 100 else 0.0
                 devPct = pct
                 devExceeded = pct > threshold
             }
             // 5) 实付>应付 一律拦截（=允许）
-            if (effectivePayable != null && effectivePayable!! > 0 && actual > effectivePayable!!) {
+            if (effectivePayable != null && effectivePayable > 0 && actual > effectivePayable) {
                 overPayable = true
             }
         }

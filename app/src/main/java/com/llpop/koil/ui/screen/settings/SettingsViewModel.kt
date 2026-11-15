@@ -318,7 +318,9 @@ class SettingsViewModel(
         if (nextDate == null || (todayDate != null && nextDate.isBefore(todayDate))) {
             nextAdjustWindowDate = calendarNext
                 ?: nextDate?.plusDays(14)?.toString()
-        } else if (calendarNext != null && nextDate != null &&
+        } else if (calendarNext != null &&
+            // 不用再判 nextDate != null：能进 else-if 说明首条件 nextDate == null 为 false，
+            // 加回来编译器会报 Condition is always 'true'
             runCatching { LocalDate.parse(calendarNext) }.getOrNull()?.isBefore(nextDate) == true
         ) {
             nextAdjustWindowDate = calendarNext

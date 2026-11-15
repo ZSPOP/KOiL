@@ -676,16 +676,16 @@ class AddViewModel(
                     priceDeviationExceeded = result.hasDeviation
                 } else {
                     // B：缺参考价，回退 实付 vs 应付
-                    val pct = if (effectivePayable != null && effectivePayable!! > 0)
-                        kotlin.math.abs(actual - effectivePayable!!) / effectivePayable!! * 100 else 0.0
+                    val pct = if (effectivePayable != null && effectivePayable > 0)
+                        kotlin.math.abs(actual - effectivePayable) / effectivePayable * 100 else 0.0
                     priceDeviationPct = pct
                     priceDeviationExceeded = pct > threshold
                 }
             }
 
             // 实付 > 应付 一律拦截（=允许）
-            if (actual != null && effectivePayable != null && effectivePayable!! > 0 &&
-                actual > effectivePayable!!
+            if (actual != null && effectivePayable != null && effectivePayable > 0 &&
+                actual > effectivePayable
             ) {
                 amountOverPayable = true
             }
@@ -726,10 +726,13 @@ class AddViewModel(
                 }
                 isReady -> {
                     // 优惠金额 = 应付金额 - 实付金额（实付 ≥ 应付则无优惠，记 0）
-                    // actual 在 isReady 分支恒非空
-                    val discount = if (effectivePayable != null && actual != null &&
-                        actual < effectivePayable!!
-                    ) effectivePayable!! - actual else 0.0
+                    // 不用判 actual != null：isReady = fieldsValid && …，而 fieldsValid 已含
+                    // actual != null，故该分支内 actual 已智能转换为非空 Double
+                    val discount = if (effectivePayable != null && actual < effectivePayable) {
+                        effectivePayable - actual
+                    } else {
+                        0.0
+                    }
                     messageKey = "ready"
                     messageArgs = listOf(distanceKm ?: 0.0, discount)
                 }
