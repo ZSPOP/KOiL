@@ -220,6 +220,24 @@ class ApkUpdater(
         _state.value = UpdateDownloadState.Failed(reason, detail)
     }
 
+    /**
+     * 检测到更新的版本时，把**旧版本**的包丢掉。
+     *
+     * 不丢的后果：盘上留着一个能通过签名校验的旧包，用户点「安装最新版」时
+     * 若 tag 判断出现偏差就得装回旧版；而且 6.7MB 会一直压在更新目录里。
+     * 只丢「与 [tag] 不同」的那一个：同 tag 的包正在装，不能删。
+     */
+    fun discardReadyExcept(tag: String) {
+        val current = readyTag ?: return
+        if (current == tag) return
+        apkFile()?.delete()
+        readyTag = null
+        persistReadyTag(null)
+        if (_state.value is UpdateDownloadState.Ready) {
+            _state.value = UpdateDownloadState.Idle
+        }
+    }
+
     /** 已下好则直接拉起安装器；返回 false 表示还没下好或没拉起来 */
     fun installReady(tag: String): Boolean {
         val file = apkFile() ?: return false

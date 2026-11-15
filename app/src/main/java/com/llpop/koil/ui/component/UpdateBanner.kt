@@ -40,8 +40,8 @@ internal fun UpdateBanner(
     version: String,
     onOpen: () -> Unit,
     onDismiss: () -> Unit,
-    /** 右侧动作文案：下载失败时换成「重试」，其余场景仍是「更新」 */
-    actionLabel: String = stringResource(R.string.koil_ov_update_action),
+    /** 右侧动作文案：首页不再下载，这一格只是「点进去看」 */
+    actionLabel: String = stringResource(R.string.koil_ov_update_view),
     /**
      * 自定义主文案；null 时用「发现新版本 %1$s」。
      * 下载/安装失败时传具体原因（签名不一致、需要授权…），不这么做的话

@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -64,7 +66,6 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.component.BlurredBar
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import top.yukonga.miuix.kmp.basic.Button
-import com.llpop.koil.ui.component.KOiLUpdateSection
 import com.llpop.koil.ui.component.blur.ColorBlendToken
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurEnabled
@@ -85,6 +86,24 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.compose.ui.platform.LocalContext
+import com.llpop.koil.data.update.AboutUpdateStatus
+import com.llpop.koil.data.update.ApkUpdater
+import com.llpop.koil.data.update.RefreshOutcome
+import com.llpop.koil.data.update.UpdateChecker
+import com.llpop.koil.data.update.UpdateDownloadState
+import com.llpop.koil.data.update.UpdateFailure
+import com.llpop.koil.data.update.formatReleaseDate
+import com.llpop.koil.data.update.isNewerRelease
+import com.llpop.koil.data.update.normalizeVersion
+import com.llpop.koil.ui.component.KoilAboutInfoCard
+import com.llpop.koil.ui.component.KoilAboutUpdateButton
+import kotlinx.coroutines.launch
+import org.koin.core.context.GlobalContext
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.BlurColors
@@ -199,6 +218,98 @@ private fun AboutContent(
     val density = LocalDensity.current
     val uriHandler = LocalUriHandler.current
 
+    // —— 更新状态：只在本次运行内有效（冷启动回到 Idle）——
+    val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
+    val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf<AboutUpdateStatus>(AboutUpdateStatus.Idle) }
+    // 「直链还没就绪、重查一次也没拿到」的下载侧失败：版本确实存在，胶囊不能消失
+    var downloadFailed by remember { mutableStateOf(false) }
+    val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
+    val storedTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
+
+    // 安装授权：点「安装最新版」时未开「安装未知应用」→ 系统跳到授权页，
+    // 用户授权完回到本页（ON_RESUME）就自动续上，不用再点一次
+    val context = LocalContext.current
+    LifecycleResumeEffect(Unit) {
+        val st = apkUpdater.state.value
+        val tag = (status as? AboutUpdateStatus.Newer)?.tag
+        if (st is UpdateDownloadState.Failed &&
+            st.reason == UpdateFailure.NO_PERMISSION &&
+            tag != null &&
+            context.packageManager.canRequestPackageInstalls()
+        ) {
+            apkUpdater.installReady(tag)
+        }
+        onPauseOrDispose { }
+    }
+
+    fun applyOutcome(outcome: RefreshOutcome): AboutUpdateStatus = when (outcome) {
+        is RefreshOutcome.Newer -> AboutUpdateStatus.Newer(
+            outcome.target.tag,
+            normalizeVersion(outcome.target.tag),
+            outcome.target.apkUrl,
+        )
+        RefreshOutcome.Latest -> AboutUpdateStatus.Latest
+        RefreshOutcome.Failed -> AboutUpdateStatus.Failed
+    }
+
+    /**
+     * 手动检查与进页检查共用：真实请求一次，并把「检测到更新的版本」这件事
+     * 顺手落到 ApkUpdater（旧包的清理在那里做，磁盘内容只由它管）。
+     */
+    suspend fun runCheck(): AboutUpdateStatus {
+        val next = applyOutcome(updateChecker.refresh())
+        (next as? AboutUpdateStatus.Newer)?.let { apkUpdater.discardReadyExcept(it.tag) }
+        return next
+    }
+
+    /** 手动检查走 refresh()：它本身就是一次真实请求（45 分钟节流只在 checkIfDue 里） */
+    fun check() {
+        scope.launch {
+            downloadFailed = false
+            status = runCheck()
+        }
+    }
+
+    // 进关于页自动查一次：这一页是唯一能发起检查的地方，进来就该给结论
+    LaunchedEffect(Unit) { status = runCheck() }
+
+    // 冷启动静默检查已经发现的版本：先用库里的值把胶囊撑起来，不用等这次请求回来
+    LaunchedEffect(storedTarget) {
+        val target = storedTarget ?: return@LaunchedEffect
+        if (status == AboutUpdateStatus.Idle && isNewerRelease(target.tag, BuildConfig.VERSION_NAME)) {
+            status = AboutUpdateStatus.Newer(
+                target.tag,
+                normalizeVersion(target.tag),
+                target.apkUrl,
+            )
+        }
+    }
+
+    /** 点胶囊：直链就绪就下；空直链（镜像窗口：附件还没传完）先就地重查一次，拿到才下 */
+    fun downloadOrRecheck() {
+        val target = (status as? AboutUpdateStatus.Newer) ?: return
+        if (target.apkUrl.isNotBlank()) {
+            downloadFailed = false
+            apkUpdater.download(target.tag, target.apkUrl)
+            return
+        }
+        scope.launch {
+            val next = applyOutcome(updateChecker.refresh())
+            status = next
+            val target = next as? AboutUpdateStatus.Newer
+            val url = target?.apkUrl.orEmpty()
+            if (target != null && url.isNotBlank()) {
+                downloadFailed = false
+                apkUpdater.download(target.tag, url)
+            } else {
+                // 重查还是拿不到：这时候报「下载失败」才不算误导（网络没问题，只是镜像还没同步完）
+                downloadFailed = true
+            }
+        }
+    }
+
     val backdrop = rememberLayerBackdrop()
 
     val isDark = LocalKOiLDarkTheme.current
@@ -232,6 +343,20 @@ private fun AboutContent(
     val versionCodeProgress = { ((scrollProgress() - 0.05f) / 0.15f).coerceIn(0f, 1f) }
     val iconProgress = { ((scrollProgress() - 0.35f) / 0.15f).coerceIn(0f, 1f) }
 
+    // logo 下方：本机版本；有新版本时追加「→ 新版本」
+    val newerVersion = (status as? AboutUpdateStatus.Newer)?.version
+    val heroVersionLabel = if (newerVersion != null) {
+        stringResource(R.string.koil_about_version_arrow, BuildConfig.VERSION_NAME, newerVersion)
+    } else {
+        stringResource(R.string.koil_about_version_plain, BuildConfig.VERSION_NAME)
+    }
+    // 状态文字只在「本次运行查过」时出现：Idle（还没查 / 冷启动）什么都不显示
+    val heroStatusLabel = when (status) {
+        AboutUpdateStatus.Latest -> stringResource(R.string.koil_about_status_latest)
+        AboutUpdateStatus.Failed -> stringResource(R.string.koil_about_status_failed)
+        else -> null
+    }
+
     val scrollPadding = PaddingValues(
         top = innerPadding.calculateTopPadding(),
         start = innerPadding.calculateStartPadding(layoutDirection),
@@ -260,6 +385,10 @@ private fun AboutContent(
             logoBlend = logoBlend,
             iconProgress = iconProgress,
             versionCodeProgress = versionCodeProgress,
+            versionLabel = heroVersionLabel,
+            statusLabel = heroStatusLabel,
+            // 整块可点：这是关于页的第二个检查入口（第一个是「应用版本」行）
+            onClick = { check() },
             onMeasured = { logoHeightDp = it },
         )
 
@@ -294,11 +423,34 @@ private fun AboutContent(
                 )
             }
 
-            item(key = "update") {
-                // 不设分组标题：卡内那一行本身就叫「检查更新」，
-                // 再叠一个同名 SmallTitle 会在屏幕上方连着出现两次同样的字。
-                Column(modifier = Modifier.padding(bottom = 12.dp)) {
-                    KOiLUpdateSection(
+            item(key = "updateButton") {
+                // 独立居中的胶囊：只在检测到新版本时出现，下载进度条挂在它下面
+                KoilAboutUpdateButton(
+                    status = status,
+                    downloadState = downloadState,
+                    readyTag = (downloadState as? UpdateDownloadState.Ready)?.tag,
+                    extraFailed = downloadFailed,
+                    onDownload = { downloadOrRecheck() },
+                    onCancel = { apkUpdater.cancel() },
+                    onInstall = {
+                        (status as? AboutUpdateStatus.Newer)?.let { apkUpdater.installReady(it.tag) }
+                    },
+                    onRetry = {
+                        downloadFailed = false
+                        downloadOrRecheck()
+                    },
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
+
+            item(key = "updateInfo") {
+                Box(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                    KoilAboutInfoCard(
+                        versionName = BuildConfig.VERSION_NAME,
+                        versionCode = BuildConfig.VERSION_CODE,
+                        releaseDate = formatReleaseDate(BuildConfig.KOIL_RELEASE_DATE),
+                        // 「应用版本」行点了就地检查，不跳转
+                        onCheck = { check() },
                         blurBackdrop = if (blurEnabled) backdrop else null,
                         blurBlendColors = cardBlendColors,
                     )
@@ -420,11 +572,18 @@ private fun BoxScope.AboutHero(
     logoBlend: List<BlendColorEntry>,
     iconProgress: () -> Float,
     versionCodeProgress: () -> Float,
+    /** logo 下方的版本号文案：`1.1.17`，有新版本时是 `1.1.17 → 1.1.18` */
+    versionLabel: String,
+    /** 版本号右边的状态文案（已是最新版本 / 检查失败）；null 时整块不占位 */
+    statusLabel: String?,
+    /** 整块点击 = 触发一次检查更新 */
+    onClick: () -> Unit,
     onMeasured: (androidx.compose.ui.unit.Dp) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(
                 top = logoPadding.calculateTopPadding() + 52.dp,
                 start = logoPadding.calculateStartPadding(layoutDirection),
@@ -463,7 +622,7 @@ private fun BoxScope.AboutHero(
                     } else Modifier
                 ),
         )
-        Text(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .graphicsLayer {
@@ -472,10 +631,25 @@ private fun BoxScope.AboutHero(
                     scaleX = 1 - (p * 0.05f)
                     scaleY = 1 - (p * 0.05f)
                 },
-            color = colorScheme.onSurfaceVariantSummary,
-            text = stringResource(R.string.koil_set_about_version, BuildConfig.VERSION_NAME, BuildConfig.VERSION_CODE),
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center,
-        )
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                color = colorScheme.onSurfaceVariantSummary,
+                text = versionLabel,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+            )
+            if (statusLabel != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    // 检查结论跟在版本号右边：同一行读，不另起一行打断 hero 的居中关系
+                    color = colorScheme.onSurfaceVariantSummary,
+                    text = statusLabel,
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }

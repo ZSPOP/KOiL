@@ -335,35 +335,32 @@
 
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_set_about">关于</string>
+    <!-- 设置页分组名：行标题已经叫「关于 KOiL」，分组再叫「关于」会两级同名 -->
+    <string name="koil_set_other">其他</string>
+    <string name="koil_set_about_koil">关于 KOiL</string>
     <string name="koil_about_open_source">开源项目</string>
     <string name="koil_set_about_version">V%1$s（%2$d）</string>
-    <string name="koil_set_about_check_update">检查更新</string>
-    <string name="koil_set_about_check_update_sub">从 Gitee Releases 获取最新版本</string>
-    <string name="koil_set_about_checked_ago">从 Gitee 获取 · 上次检查 %1$s</string>
+    <!-- 关于页 logo 下方：只留版本号本身，不带 V、不带括号里的 versionCode -->
+    <string name="koil_about_version_plain">%1$s</string>
+    <!-- 有新版本时：本机版本 → 新版本 -->
+    <string name="koil_about_version_arrow">%1$s → %2$s</string>
+    <string name="koil_about_app_version">应用版本</string>
+    <string name="koil_about_release_date">发布日期</string>
+    <string name="koil_about_status_latest">已是最新版本</string>
+    <string name="koil_about_status_failed">检查失败</string>
+    <string name="koil_about_action_newer">有新版本</string>
+    <string name="koil_about_action_install">安装最新版</string>
+    <string name="koil_about_action_failed">下载失败</string>
+    <string name="koil_about_percent">%1$d%%</string>
+    <string name="koil_about_downloaded">已下载 %1$s MB</string>
     <string name="koil_set_check_just_now">刚刚</string>
     <string name="koil_set_check_min_ago">%1$d 分钟前</string>
     <string name="koil_set_check_hour_ago">%1$d 小时前</string>
     <string name="koil_set_check_day_ago">%1$d 天前</string>
-    <string name="koil_set_about_checking">检查中…</string>
-    <string name="koil_set_about_latest">已是最新</string>
-    <string name="koil_set_about_newer">可更新 V%1$s</string>
     <string name="koil_update_fail_download">更新包下载失败，请重试</string>
     <string name="koil_update_fail_signature">安装包签名与本机不一致，已拒绝安装，请重新下载</string>
     <string name="koil_update_fail_permission">需要在系统设置里允许「安装未知应用」，已为你打开设置页</string>
     <string name="koil_update_fail_launch">无法打开系统安装界面，请稍后重试</string>
-    <string name="koil_update_cellular_title">当前不是 WiFi</string>
-    <string name="koil_update_cellular_msg">更新包约 6.6MB，将使用移动数据下载。</string>
-    <string name="koil_update_cellular_mobile">仍要下载</string>
-    <string name="koil_update_cellular_wait">等 WiFi</string>
-    <string name="koil_update_wifi_only_title">已设为仅 WiFi 下载</string>
-    <string name="koil_update_wifi_only_msg">你之前选择只用 WiFi 下载更新。现在仍要使用移动数据下载吗？</string>
-    <string name="koil_update_progress">%1$s · %2$d%%</string>
-    <string name="koil_update_progress_tap_cancel">%1$s · %2$d%% · 点按取消</string>
-    <string name="koil_update_progress_unknown">%1$s · …</string>
-    <string name="koil_update_action_grant">去授权</string>
-    <string name="koil_update_action_cancel">取消</string>
-    <string name="koil_update_action_retry">重试</string>
-    <string name="koil_set_about_check_failed">检查失败，点击重试</string>
     <string name="koil_set_about_terms">使用条款</string>
     <string name="koil_set_about_privacy">隐私政策</string>
     <string name="koil_set_about_feedback">问题反馈</string>
@@ -372,7 +369,7 @@
     <string name="koil_set_about_open_failed">没有可打开该链接的应用</string>
     <string name="koil_common_close">关闭</string>
     <string name="koil_ov_update_new">发现新版本 %1$s</string>
-    <string name="koil_ov_update_action">更新</string>
+    <string name="koil_ov_update_view">查看</string>
     <string name="koil_ov_update_dismiss">关闭更新提示</string>
     <string name="koil_set_about_terms_body">KOiL 用于记录个人加油数据、查询公开的成品油调价信息。\n\n数据准确性：油价以加油站公示与官方调价公告为准，应用内的参考价、预测与折合仅作参考，不构成消费或投资建议。\n\n使用风险：因录入错误、数据源延迟或设备故障造成的记录偏差，由使用者自行承担。\n\n本应用为开源项目，按「现状」提供，不承诺无中断或无错误运行。</string>
     <string name="koil_set_about_privacy_body">本地优先：加油记录、车辆信息与设置项全部保存在设备本地，不上传任何服务器。\n\n定位权限：仅在开启「自动定位省份」时使用，结果只用于填充默认省份，不记录轨迹、不上传。\n\n云同步（可选）：开启后数据只备份到你自己的 WebDAV 服务器（如坚果云），账号与应用密码加密后存于本机，开发者无法访问。\n\n崩溃日志：只保存在本机，需手动导出，不会自动上报。</string>

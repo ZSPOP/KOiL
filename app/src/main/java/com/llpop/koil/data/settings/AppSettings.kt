@@ -107,18 +107,10 @@ class AppSettings(private val context: Context) {
         // ---- 应用更新检查（冷启动静默查 GitHub Releases；45min 节流 + 回前台也查；查到新版本设置页挂红点）----
         private val KEY_UPDATE_LATEST_TAG = stringPreferencesKey("KOiL-update-latest-tag")
         private val KEY_UPDATE_LAST_CHECK_AT = longPreferencesKey("KOiL-update-last-check-at")
-        /** 用户已「知晓」的版本 tag：点开 Release 页 / 关闭首页横幅 / 成功拉起安装器时写入。
-         *  与 LATEST_TAG 分开存，而不是清空 LATEST_TAG——清空会连行内「发现新版本」文字一起抹掉，用户想再点就没入口。 */
-        private val KEY_UPDATE_SEEN_TAG = stringPreferencesKey("KOiL-update-seen-tag")
+
         /** 最新版 APK 的直链（Gitee 资产）。APK 名带 versionCode，App 无法自己拼，
          *  只能每次检查时从 Release 的 assets 里取。 */
         private val KEY_UPDATE_APK_URL = stringPreferencesKey("KOiL-update-apk-url")
-
-        /** 蜂窝下载策略用户是否已表态（false=还没问过，点更新时弹一次确认） */
-        private val KEY_UPDATE_CELLULAR_DECIDED = booleanPreferencesKey("KOiL-update-cellular-decided")
-
-        /** 表态结果为「仅 WiFi」；蜂窝下点更新会挡住并给一次强制下载入口 */
-        private val KEY_UPDATE_WIFI_ONLY = booleanPreferencesKey("KOiL-update-wifi-only")
 
         /** 已下好的 tag 落盘副本。`ApkUpdater.readyTag` 是内存变量，进程被杀就丢，
          *  而 `updates/` 下的包还在 —— 不恢复就会把完好的包删掉重下 6.7MB。 */
@@ -527,38 +519,6 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_CHECK_AT] ?: 0L }
     suspend fun setUpdateLastCheckAt(at: Long) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_LAST_CHECK_AT] = at }
-    }
-
-    /**
-     * 用户已知晓的版本 tag（原始形式如 "V1.1.3"；空串=从未知晓过）。
-     * 红点条件 = 有更新版本 && LATEST_TAG != SEEN_TAG：
-     * - 点过之后同一版本不再重复提醒；
-     * - 发新版时 LATEST_TAG 变化，比较自然重新成立，无需额外清理；
-     * - 不进状态清理路径（下载失败、取消都不写），否则提醒会与强提示同时消失，用户彻底失联。
-     */
-    val updateSeenTag: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_SEEN_TAG] ?: "" }
-    /** 蜂窝策略是否已表态 */
-    val updateCellularDecided: Flow<Boolean> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_CELLULAR_DECIDED] ?: false }
-
-    /** 已表态为「仅 WiFi」 */
-    val updateWifiOnly: Flow<Boolean> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_WIFI_ONLY] ?: false }
-
-    /**
-     * 一次写两个 key：只有「已表态 + 选择」同时成立才有意义，
-     * 拆两次写会在中间留下「decided=true 但 wifiOnly 还是旧值」的状态。
-     */
-    suspend fun setUpdateCellularPolicy(wifiOnly: Boolean) {
-        context.KOiLDataStore.edit {
-            it[KEY_UPDATE_CELLULAR_DECIDED] = true
-            it[KEY_UPDATE_WIFI_ONLY] = wifiOnly
-        }
-    }
-
-    suspend fun setUpdateSeenTag(tag: String) {
-        context.KOiLDataStore.edit { it[KEY_UPDATE_SEEN_TAG] = tag }
     }
 
     /**

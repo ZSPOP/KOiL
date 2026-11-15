@@ -1832,7 +1832,9 @@ fun LazyListScope.aboutSection(
     )
     item {
         SmallTitle(
-            text = stringResource(R.string.koil_set_about),
+            // 「关于」二字留给行标题（关于 KOiL），分组名改成「其他」，
+            // 否则屏幕上会出现「关于」→「关于 KOiL」两级同名
+            text = stringResource(R.string.koil_set_other),
             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         )
     }
@@ -1841,12 +1843,27 @@ fun LazyListScope.aboutSection(
         outerBottomPadding = 12.dp,
         items = listOf(
             CardItem("about") {
+                // 红点与首页横幅同源（同一个 shouldBadgeUpdate）：有新版本就亮，
+                // 亮到装上最新版为止；横幅 × 掉只影响横幅本身，红点照样亮
+                val updateChecker = remember {
+                    org.koin.core.context.GlobalContext.get()
+                        .get<com.llpop.koil.data.update.UpdateChecker>()
+                }
+                val target by updateChecker.updateTarget()
+                    .collectAsStateWithLifecycle(initialValue = null)
+                val seen by updateChecker.seenTag()
+                    .collectAsStateWithLifecycle(initialValue = "")
                 SettingRow(
-                    // 分组标题已经是「关于」，这一行用品牌名 + 版本，与 main 的品牌头一致
-                    title = stringResource(R.string.koil_app_name),
+                    // 标题是「关于 KOiL」，副标题仍是当前版本号（不因有新版本而变化）
+                    title = stringResource(R.string.koil_set_about_koil),
                     subtitle = stringResource(R.string.koil_set_about_version, com.llpop.koil.BuildConfig.VERSION_NAME, com.llpop.koil.BuildConfig.VERSION_CODE),
                     value = "",
                     onClick = onOpenAbout,
+                    badgeDot = com.llpop.koil.data.update.shouldBadgeUpdate(
+                        target?.tag.orEmpty(),
+                        seen,
+                        com.llpop.koil.BuildConfig.VERSION_NAME,
+                    ),
                 )
             },
         ),
