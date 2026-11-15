@@ -726,7 +726,8 @@ class AddViewModel(
                 }
                 isReady -> {
                     // 优惠金额 = 应付金额 - 实付金额（实付 ≥ 应付则无优惠，记 0）
-                    // actual 在 isReady 分支恒非空
+                    // 不用判 actual != null：isReady = fieldsValid && …，而 fieldsValid 已含
+                    // actual != null，故该分支内 actual 已智能转换为非空 Double
                     val discount = if (effectivePayable != null && actual < effectivePayable) {
                         effectivePayable - actual
                     } else {
