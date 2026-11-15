@@ -83,7 +83,6 @@ import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.normalizeVersion
 import com.llpop.koil.data.update.shouldBadgeUpdate
-import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.ui.component.UpdateBanner
 import com.llpop.koil.ui.component.messageRes
 import com.llpop.koil.ui.component.KOiLScreenScaffold
@@ -145,6 +144,8 @@ fun AddScreen(
     // 应用内更新：直链与 tag 来自同一次检查（见 UpdateChecker.refresh），这里只做搬运。
     val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
     val apkUrl = updateTarget?.apkUrl.orEmpty()
+    // 直链没就绪时点击会就地重查（而不是跳浏览器），这段等待需要可见反馈
+    var bannerRechecking by remember { mutableStateOf(false) }
     // 下载/安装状态就地展示（横幅上显示百分比、失败标记），不弹 Toast：
     // Toast 是"一次事件"，首页与设置页同时组合会各弹一次；用 SharedFlow 又会在无人订阅时丢事件。
     // 失败本身是持续状态，贴近"有更新但没装成"这个事实，所以让横幅自己说话。
@@ -284,6 +285,7 @@ fun AddScreen(
                                     apkUpdater.hasReady(bannerTag)
                                 ) R.string.koil_update_action_grant else R.string.koil_update_action_retry
                             )
+                            bannerRechecking -> stringResource(R.string.koil_set_about_checking)
                             else -> stringResource(R.string.koil_ov_update_action)
                         },
                         onOpen = {
@@ -296,9 +298,16 @@ fun AddScreen(
                                 // 应用内下载：拉起安装器**不写 seenTag**（ApkUpdater.install 只负责 startActivity），
                                 // 这里更不能提前标记 —— 用户可能在系统确认页点取消，横幅必须还在。
                                 // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失。
-                                // 只有拿不到直链（旧数据、Gitee 侧还没镜像完）才回退浏览器。
-                                else -> if (openExternalUrl(context, releasePageUrl(bannerTag))) {
-                                    updateChecker.markSeen(bannerTag)
+                                // 拿不到直链 = 这次检查撞上「Release 已建、附件还在传」的镜像窗口。
+                                // 就地重查一次，别把用户丢进浏览器；重查后横幅按新数据重建。
+                                else -> {
+                                    if (!bannerRechecking) {
+                                        bannerRechecking = true
+                                        updateScope.launch {
+                                            updateChecker.refresh()
+                                            bannerRechecking = false
+                                        }
+                                    }
                                 }
                             }
                         },

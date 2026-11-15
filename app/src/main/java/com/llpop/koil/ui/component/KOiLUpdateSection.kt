@@ -37,9 +37,7 @@ import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.isCellularNetwork
 import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
-import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.data.update.shouldBadgeUpdate
-import com.llpop.koil.ui.screen.openExternalUrl
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 import top.yukonga.miuix.kmp.blur.BlurColors
@@ -192,6 +190,23 @@ fun KOiLUpdateSection(
             MiuixTheme.colorScheme.onSurfaceContainer,
         ),
     ) {
+        // 直链还没就绪时（镜像窗口）点更新 = 就地重查一次，而不是把人直接丢进浏览器。
+        // 重查拿到直链后，下一次点击就走应用内下载；仍拿不到就停在「发现新版本」，不误标已读。
+        fun recheck() {
+            update = UpdateCheck.Checking
+            scope.launch {
+                // refresh 已经把「是否比本机新」算完了（判据只在 UpdateChecker 一处）
+                update = when (val outcome = updateChecker.refresh()) {
+                    is RefreshOutcome.Newer -> UpdateCheck.Newer(
+                        outcome.target.tag,
+                        normalizeVersion(outcome.target.tag),
+                        outcome.target.apkUrl,
+                    )
+                    RefreshOutcome.Latest -> UpdateCheck.Latest
+                    RefreshOutcome.Failed -> UpdateCheck.Failed
+                }
+            }
+        }
         ArrowPreference(
             title = stringResource(R.string.koil_set_about_check_update),
             summary = failReason?.let { stringResource(it.messageRes()) }
@@ -210,8 +225,9 @@ fun KOiLUpdateSection(
                         // 直链只认 Newer 自带的那一个：它与 tag 出自同一次 refresh()。
                         if (u.url.isNotBlank()) {
                             applyNetworkGate(u.tag, u.url)
-                        } else if (openExternalUrl(context, releasePageUrl(u.tag))) {
-                            updateChecker.markSeen(u.tag)
+                        } else {
+                            // 直链为空：这次检查碰到的是「Release 已建、附件没传完」，重查而不是开浏览器
+                            recheck()
                         }
                     }
                     u == UpdateCheck.Checking -> Unit
@@ -223,26 +239,12 @@ fun KOiLUpdateSection(
                     u == UpdateCheck.Idle && storedHasNewer -> {
                         if (apkUrl.isNotBlank()) {
                             apkUpdater.download(storedTag, apkUrl)
-                        } else if (openExternalUrl(context, releasePageUrl(storedTag))) {
-                            updateChecker.markSeen(storedTag)
+                        } else {
+                            // 冷启动只存下了 tag、没配直链：重查补齐
+                            recheck()
                         }
                     }
-                    else -> {
-                        update = UpdateCheck.Checking
-                        scope.launch {
-                            // refresh 已经把「是否比本机新」算完了（判据只在 UpdateChecker 一处），
-                            // 这里按三态分支即可
-                            update = when (val outcome = updateChecker.refresh()) {
-                                is RefreshOutcome.Newer -> UpdateCheck.Newer(
-                                    outcome.target.tag,
-                                    normalizeVersion(outcome.target.tag),
-                                    outcome.target.apkUrl,
-                                  )
-                                RefreshOutcome.Latest -> UpdateCheck.Latest
-                                RefreshOutcome.Failed -> UpdateCheck.Failed
-                            }
-                        }
-                    }
+                    else -> recheck()
                 }
             },
             endActions = {

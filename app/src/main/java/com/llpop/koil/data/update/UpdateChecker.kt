@@ -24,6 +24,18 @@ import java.net.URL
 data class UpdateTarget(val tag: String, val apkUrl: String)
 
 /**
+ * 一次检查结果该不该落库（[UpdateChecker.refresh] 的唯一口径）。
+ *
+ * 直链没就绪时返回 null：Gitee 侧「Release 已建、apk 附件还在传」的镜像窗口里，
+ * 若把 (tag, "") 写进 DataStore，点击就只能回退浏览器，而 45 分钟节流窗口内又不会重查，
+ * 用户会卡在「显示可更新、怎么点都跳浏览器」。宁可这轮不落库，等下次检查补上。
+ *
+ * 抽成纯函数是为了单测：它决定上面那种卡死会不会复现，不该只靠实机复现验证。
+ */
+fun resolvePersistTarget(tag: String, apkUrl: String, newer: Boolean): UpdateTarget? =
+    if (newer && apkUrl.isNotBlank()) UpdateTarget(tag, apkUrl) else null
+
+/**
  * 一次检查的三态结果。
  * 不能只用「有/无 target」表达：那样「确认没新版」和「网络失败」会被压成同一个 null，
  * 设置页就分不出该显示「已是最新」还是「检查失败」。
@@ -145,13 +157,17 @@ class UpdateChecker(private val settings: AppSettings) {
         // 只认严格比本机更新的 Release：不更新的 tag 一律不落库，
         // 设置页因此不存在任何指向更低版本的提示/跳转入口
         val newer = isNewerRelease(target.tag, BuildConfig.VERSION_NAME)
+        // 落库口径见 resolvePersistTarget：直链没就绪时这轮什么都不写
+        val persist = resolvePersistTarget(target.tag, target.apkUrl, newer)
         // tag 与直链在**同一次 edit** 里写入：两次独立写入会留下「tag 已更新、链接还是旧版」的持久错位
         runCatching {
             settings.setUpdateTarget(
-                tag = if (newer) target.tag else "",
-                apkUrl = if (newer) target.apkUrl else "",
+                tag = persist?.tag.orEmpty(),
+                apkUrl = persist?.apkUrl.orEmpty(),
             )
-            settings.setUpdateLastCheckAt(System.currentTimeMillis())
+            // 只有「确认没有新版」或「直链可用」才算一次成功检查并推进节流时间戳；
+            // 空直链不推进，否则下次冷启动本该重查，却被 45 分钟窗口直接跳过
+            if (!newer || persist != null) settings.setUpdateLastCheckAt(System.currentTimeMillis())
         }.onFailure { Log.w("KOiL", "persist update target failed: ${it.message}") }
         // 带上 newer：否则「确认没新版」和「查到新版」打出一模一样的日志，排查时分不清
         Log.i(
