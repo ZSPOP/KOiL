@@ -45,7 +45,7 @@ android {
         versionCode = System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull()
             ?: System.getenv("KOIL_CI_RUN_NUMBER")?.toIntOrNull() ?: 1
         // versionName 与 tag 严格对齐（CI 已有「tag 去 V == versionName」断言，不一致直接 fail）
-        versionName = "1.1.19"
+        versionName = "1.1.20"
 
         // 关于页「发布日期」信息行：编译期常量，每次发版随 versionName 一起改。
         // 不读 git 提交时间/构建时间 —— 那会把构建机时钟与时区差异带进包里，
