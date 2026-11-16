@@ -286,7 +286,6 @@ class SyncViewModel(
                 // （别的设备在写、网络在抖）恰恰让这次 GET 也可能失败。不包就会从
                 // viewModelScope 一路抛成未捕获异常，用户看到的是「点了合并，应用闪一下没了」。
                 _message.value = "reconcile_stale"
-                reopened = true
                 val reprobe = try {
                     manager.probeReconcile()
                 } catch (e: CancellationException) {
@@ -297,6 +296,7 @@ class SyncViewModel(
                 if (reprobe != null) {
                     _reconcile.value = (reprobe as? CloudSyncManager.ReconcileProbe.Ready)?.preview
                     _reconcileCorrupt.value = reprobe as? CloudSyncManager.ReconcileProbe.Corrupt
+                    // 只有真拿到新预览才留着面板；重跑失败就关掉——留着旧数字比关掉更误导
                     if (reprobe is CloudSyncManager.ReconcileProbe.Ready) reopened = true
                 }
             } catch (_: Exception) {
@@ -323,7 +323,11 @@ class SyncViewModel(
                 val ok = manager.forceOverwriteCorrupt(corrupt.raw)
                 _message.value = if (ok) "reconcile_done" else "reconcile_failed"
                 // 失败就留着面板：重试不该需要用户先关开关再打开
-                if (ok) _reconcileCorrupt.value = null
+                if (ok) {
+                    _reconcileCorrupt.value = null
+                    // 这条也产生副本（forceOverwriteCorrupt 第一句就是 backupBeforeOverwrite）
+                    refreshBackupCount()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
