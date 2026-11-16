@@ -625,24 +625,40 @@ private fun OilPriceCard(
         }
         Spacer(Modifier.height(14.dp))
         // 四宫格：92# / 95# / 98# / 0#（仅价格，无涨跌幅）
-        Row(modifier = Modifier.fillMaxWidth()) {
+        // 每格独立灰底圆角块，格间 8dp —— 与设置页「油价数据与提醒」的统计四宫格同款
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             PriceCell(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.05f)),
                 grade = "92#",
                 price = uiState.priceMap["92"],
             )
             PriceCell(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.05f)),
                 grade = "95#",
                 price = uiState.priceMap["95"],
             )
             PriceCell(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.05f)),
                 grade = "98#",
                 price = uiState.priceMap["98"],
             )
             PriceCell(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.05f)),
                 grade = "0#",
                 price = uiState.priceMap["0"],
             )
@@ -859,7 +875,8 @@ private fun PriceCell(
     price: Double?,
 ) {
     Column(
-        modifier = modifier.padding(vertical = 4.dp),
+        // 上下 12dp：与色块一起构成设置页四宫格同款的内边距
+        modifier = modifier.padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(

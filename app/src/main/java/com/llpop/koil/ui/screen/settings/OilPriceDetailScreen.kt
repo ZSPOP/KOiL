@@ -90,6 +90,7 @@ import com.llpop.koil.ui.component.AnchoredDropdownColumn
 import com.llpop.koil.ui.component.AnchoredDropdownItemRow
 import com.llpop.koil.ui.component.AnchoredPopup
 import com.llpop.koil.ui.component.CardSegment
+import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
@@ -470,6 +471,11 @@ fun OilPriceDetailScreen(
                         }
                     }
                 }
+                // 两格（最新价 / 净涨跌）与三格（上调 / 下调 / 搁浅）之间画一条分割线。
+                // 内缩 28dp = 卡片外边距 12 + 行内边距 16，线与单元格文字左右对齐。
+                KOiLHorizontalDivider(
+                    Modifier.padding(start = 28.dp, end = 28.dp)
+                )
                 CardSegment(
                     isFirst = false,
                     isLast = true,
