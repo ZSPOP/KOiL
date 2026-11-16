@@ -471,7 +471,12 @@ class AppSettings(private val context: Context) {
      * 键缺省时**不是**直接 false，而是看密码：旧版本没有这个标记，而旧版本「清空密码」写的是空串、
      * 「设置密码」写的是非空串——所以只要存着非空密码，就一定是用户设置过的。
      * 这就是老用户的升级路径：升级后第一次读，立刻按已有数据推出正确结论，不需要额外迁移任务。
-     * （反过来「存储为空且无标记」仍按从未设置处理，可回落内置默认——全新安装即此。）
+     *
+     * **认了的一个缺口**：存储为空时无法区分「从未设置」与「旧版清空过」——旧版清空动作没留任何痕迹，
+     * 信息论上推不出来。这两类都按从未设置处理（可回落内置默认）。
+     * 后果：旧版点过清空密码的用户，升级后打开开关仍会用内置默认连上，
+     * **需要重设一次密码**才算真停用；此后本标记生效，清空即为停用。
+     * 这是刻意的选择，不是漏改。
      */
     val syncPasswordEverSet: Flow<Boolean> = context.KOiLSecretStore.data.distinctValue { p ->
         p[KEY_SYNC_PASSWORD_EVER_SET]
@@ -481,12 +486,6 @@ class AppSettings(private val context: Context) {
         context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_EVER_SET] = everSet }
     }
 
-    /**
-     * 原始存储值（**不经过任何默认兜底**），只给测试用。
-     *
-     * 为什么需要它：`syncUrl` 等 Flow 自带默认兜底，读出来永远非空，没法用来证明
-     * 「默认值没有被写进存储」。要钉住这件事，必须看键的原始值。
-     */
     /**
      * 清空凭据文件，只给测试用。
      *
@@ -503,6 +502,12 @@ class AppSettings(private val context: Context) {
         context.KOiLSecretStore.edit { it.clear() }
     }
 
+    /**
+     * 原始存储值（**不经过任何默认兜底**），只给测试用。
+     *
+     * 为什么需要它：`syncUrl` 等 Flow 自带默认兜底，读出来永远非空，没法用来证明
+     * 「默认值没有被写进存储」。要钉住这件事，必须看键的原始值。
+     */
     @VisibleForTesting
     internal suspend fun rawSyncConfig(): Triple<String?, String?, String?> {
         // 地址/账号存普通设置文件，密码存凭据文件——两处各读各的
