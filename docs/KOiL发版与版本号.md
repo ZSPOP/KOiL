@@ -13,8 +13,8 @@
    ```
 
    脚本按二十进制规则算出下一个 `versionName`，并一并改好三处：`versionName`、
-   `KOIL_RELEASE_DATE`（关于页「发布日期」显示的就是它，必须是**打 tag 当天**，否则被 CI
-   的发布日期闸门拦下）、`CHANGELOG.md` 的段标题。`versionCode` 不要手改。
+   `KOIL_RELEASE_DATE`（关于页「发布日期」显示的就是它，必须是**打 tag 当天或次日**，否
+   则被 CI 的发布日期闸门拦下）、`CHANGELOG.md` 的段标题。`versionCode` 不要手改。
    **不要手算进位**：手写成 `1.1.20 → 1.1.21` 就违反了本口径，而 CI 要等打 tag 才拦得住。
    `--apply` 只插 CHANGELOG 标题不写内容，条目仍要人补。
 2. **合 main**：功能分支合并到 `main` 并推送
