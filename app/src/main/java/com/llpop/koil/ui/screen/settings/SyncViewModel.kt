@@ -7,6 +7,7 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.sync.CryptoHelper
 import com.llpop.koil.data.sync.SyncConfig
+import com.llpop.koil.data.sync.SyncDraftWriter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -53,9 +54,12 @@ data class SyncUiState(
     /**
      * 界面与输入框共用的「有效密码草稿」：存过就回显，没设置过回落内置默认，
      * 设置过又被清空则为空（用户主动停用）。口径统一由 [SyncConfig] 提供。
+     *
+     * 密文解不开时给空串而不是默认密码：此时状态行已经说「密码无法解密」，
+     * 再预填默认密码会让用户以为密码就是这个，然后把错的密码存回去。
      */
     val effectivePasswordDraft: String
-        get() = SyncConfig.effectivePassword(password, passwordEverSet)
+        get() = if (passwordInvalid) "" else SyncConfig.effectivePassword(password, passwordEverSet)
 }
 
 /** 恢复预览（UI 确认弹窗用） */
@@ -139,6 +143,15 @@ class SyncViewModel(
             configured = SyncConfig.isComplete(effUrl, effUser, effPwd),
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SyncUiState())
+
+    /**
+     * 未配置时点开关：明确说缺什么。
+     * 开关点亮却什么都不发生（旧版被反复反馈的「静默」）比直接拒绝更糟，
+     * 这里让开关回弹并给一句提示，理由是状态行在面板里、未配置时面板根本不展开。
+     */
+    fun notifyNotConfigured() {
+        _message.value = "not_configured"
+    }
 
     /**
      * 开关切换。打开 = 立即同步：空库自动恢复 / 非空库立即推送。
@@ -291,24 +304,17 @@ class SyncViewModel(
         }
     }
 
-    /** 草稿落盘：挂起等待 DataStore 写入完成，保证后续 push/restore 读取到最新配置 */
-    private suspend fun persistDrafts(
+    /**
+     * 草稿落盘：只写**用户真实输入**，默认值一律不落盘。
+     * 实现收在 [com.llpop.koil.data.sync.SyncDraftWriter]：那一支能被真实 AppSettings 直接测到，
+     * 不必为了测一条落盘规则去构造整个 ViewModel。
+     */
+    internal suspend fun persistDrafts(
         urlDraft: String?,
         usernameDraft: String?,
         passwordDraft: String?,
     ) {
-        if (urlDraft != null) settings.setSyncUrl(urlDraft)
-        if (usernameDraft != null) settings.setSyncUsername(usernameDraft)
-        if (!passwordDraft.isNullOrBlank()) {
-            val encrypted = CryptoHelper.encrypt(passwordDraft)
-            if (encrypted != null) {
-                settings.setSyncAppPassword(encrypted)
-                settings.setSyncPasswordEncrypted(true)
-            } else {
-                settings.setSyncAppPassword(passwordDraft)
-                settings.setSyncPasswordEncrypted(false)
-            }
-        }
+        SyncDraftWriter.persist(settings, urlDraft, usernameDraft, passwordDraft)
     }
 
     /** 确认恢复：插入 valid + 应用设置。带重入闸——连点会并发插入（幂等但会重复提示、重复网络） */

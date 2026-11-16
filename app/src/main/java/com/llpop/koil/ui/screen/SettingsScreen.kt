@@ -654,7 +654,15 @@ fun SettingsScreen(
                                 onCheckedChange = { on ->
                                     // 不再把默认值当草稿传下去：有效配置由 SyncConfig 在数据层兜底，
                                     // 默认值永不落盘。开关只负责「开 / 关 + 触发一次同步」。
-                                    syncVm.setEnabled(on)
+                                    //
+                                    // 未配置时打开 = 开关亮了却什么都不发生（旧版最被诟病的那种静默）：
+                                    // 开关是受控组件（checked = syncUi.enabled），这里不调就是直接回弹。
+                                    // 关闭方向永远放行——包括「开了但密码解不开」时让用户能关掉。
+                                    when {
+                                        !on -> syncVm.setEnabled(false)      // 关闭方向永远放行
+                                        syncUi.configured -> syncVm.setEnabled(true)
+                                        else -> syncVm.notifyNotConfigured()  // 回弹 + 说明缺什么
+                                    }
                                 },
                                 trailingContent = null,
                                 titleTrailing = if (syncUi.enabled) ({ SyncStatusBadge(syncHealthy) }) else null,
@@ -1295,11 +1303,11 @@ private fun SyncPanelBody(
         var pwdDraft by remember(syncUi.password) {
             mutableStateOf(syncUi.effectivePasswordDraft)
         }
-        val effectivePwd: String? = when {
-            pwdDraft.isNotBlank() -> pwdDraft
-            syncUi.passwordSet -> null
-            else -> SyncConfig.DEFAULT_APP_PASSWORD
-        }
+        // 只有用户真实输入过的密码才允许被落盘：**绝不**用默认密码兜底。
+        // 否则「清空密码 → 重新打开开关 → 点立即备份」会把默认密码写回存储，
+        // 用户刚做的停用被自己一次点击静默撤销。这个变量原来自己又算了一遍口径，
+        // 与 SyncConfig 分裂，所以现在只判「有没有输入」。
+        val effectivePwd: String? = pwdDraft.takeIf { it.isNotBlank() }
         LaunchedEffect(syncUi.effectiveUrl) {
             if (urlDraft != syncUi.effectiveUrl) urlDraft = syncUi.effectiveUrl
         }
@@ -2301,6 +2309,8 @@ private fun formatSyncNotice(key: String): String {
         "restore_failed" -> stringResource(R.string.koil_sync_restore_failed)
         "config_saved" -> stringResource(R.string.koil_sync_config_saved)
         "config_test_failed" -> stringResource(R.string.koil_sync_config_test_failed)
+        // 未配置时点开关：复用状态行同一句（三语文案已齐，不新增条目）
+        "not_configured" -> stringResource(R.string.koil_sync_status_not_configured)
         else -> key
     }
 }

@@ -42,4 +42,12 @@ object SyncConfig {
     /** 三项是否都有效（界面「已設定完整」与开关回调共用这一条判定） */
     fun isComplete(url: String, username: String, password: String): Boolean =
         url.isNotBlank() && username.isNotBlank() && password.isNotBlank()
+
+    // ---- 落盘守卫：这三个值可以由兜底算出来，但绝不允许被当成「用户填的」写进存储 ----
+
+    fun isBuiltInUrl(value: String): Boolean = value.trim() == DEFAULT_URL
+
+    fun isBuiltInUsername(value: String): Boolean = value.trim() == DEFAULT_USERNAME
+
+    fun isBuiltInPassword(value: String): Boolean = value == DEFAULT_APP_PASSWORD
 }

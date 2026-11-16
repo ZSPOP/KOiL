@@ -3,7 +3,7 @@ package com.llpop.koil
 import com.llpop.koil.data.sync.SyncConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
+
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,12 +56,23 @@ class SyncConfigTest {
     }
 
     @Test
-    fun `默认值不参与存储_`() {
-        // 输入是空串（= 存储里什么都没有），有效值与存储值必须是两回事：
-        // 有效值有默认，但存储值本身仍然是空 —— 默认值没有被写进去。
-        val stored = ""
-        val effective = SyncConfig.effectiveUsername(stored)
-        assertEquals(stored, "")
-        assertNotEquals(stored, effective)
+    fun `落盘守卫认得出三个内置默认值`() {
+        // 这一组是落盘路径的判据：等于默认的一律不写进存储。
+        // 原来的 `assertNotEquals(stored, effective)` 恒真，钉不住任何东西，已删除。
+        assertTrue(SyncConfig.isBuiltInUrl(SyncConfig.DEFAULT_URL))
+        assertTrue(SyncConfig.isBuiltInUsername(SyncConfig.DEFAULT_USERNAME))
+        assertTrue(SyncConfig.isBuiltInPassword(SyncConfig.DEFAULT_APP_PASSWORD))
+
+        // 带空白也要认出来（输入框可能带首尾空格）
+        assertTrue(SyncConfig.isBuiltInUrl("  ${SyncConfig.DEFAULT_URL}  "))
+        assertTrue(SyncConfig.isBuiltInUsername(" ${SyncConfig.DEFAULT_USERNAME} "))
+
+        // 用户自建的值不能被误拦
+        assertFalse(SyncConfig.isBuiltInUrl("https://example.com/dav/"))
+        assertFalse(SyncConfig.isBuiltInUsername("someone@example.com"))
+        assertFalse(SyncConfig.isBuiltInPassword("my-own-pwd"))
+        // 空串也不等于默认：空串代表「用户清空了」，该照写（清空地址后 Flow 自己回落默认）
+        assertFalse(SyncConfig.isBuiltInUrl(""))
+        assertFalse(SyncConfig.isBuiltInUsername(""))
     }
 }
