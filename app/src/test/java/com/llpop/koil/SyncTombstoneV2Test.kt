@@ -445,7 +445,10 @@ class SyncTombstoneV2Test {
         settings.setSyncLastStatus(CloudSyncManager.STATUS_FAIL_CORRUPT)
         cloudBody = """{"version":3,"records":[]}"""
         val probe = manager.reprobeCorruptIfNeeded()
-        assertEquals(CloudSyncManager.STATUS_FAIL_CORRUPT, settings.syncLastStatus.first())
+        // 重探是纯读：不该有任何 PUT（DELETE 也一样），否则「只是探一下」会把云端改了
+        assertEquals(0, calls.count { it == "PUT" })
+        assertEquals("探完也不该自己去改状态，文案由调用方按返回结果决定",
+            CloudSyncManager.STATUS_FAIL_CORRUPT, settings.syncLastStatus.first())
         assertTrue("读不懂才该返回，否则面板是空的", probe is CloudSyncManager.ReconcileProbe.Corrupt)
 
         // 3) 上次 corrupt、但云端已被别的设备改回可读 → 返回 null，调用方继续常规推送

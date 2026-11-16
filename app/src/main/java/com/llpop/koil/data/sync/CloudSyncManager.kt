@@ -556,6 +556,9 @@ class CloudSyncManager(
      *
      * 只在上次状态确实是 corrupt 时才发这次 GET——决策独立于 ViewModel，
      * 所以它能在 manager 层被钉住（UI 层没有 coroutines-test，测不到）。
+     *
+     * **网络/服务端失败会抛**（`downloadWithMeta` 非 2xx 直接 `error(...)`）：调用方必须兜底，
+     * 别在手势回调里裸调，否则崩在主线程。
      */
     suspend fun reprobeCorruptIfNeeded(): ReconcileProbe.Corrupt? {
         if (settings.syncLastStatus.first() != STATUS_FAIL_CORRUPT) return null
