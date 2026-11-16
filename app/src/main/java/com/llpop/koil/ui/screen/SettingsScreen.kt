@@ -964,10 +964,9 @@ private fun PriceDbSection(
                 when {
                     // 生效时刻已过：数据源还没翻到下一个窗口日，别再挂「今晚 24:00」骗人
                     !now.isBefore(deadline) -> stringResource(R.string.koil_pdb_countdown_passed)
-                    target == todayLocal -> stringResource(
-                        R.string.koil_pdb_countdown,
-                        stringResource(R.string.koil_pdb_countdown_today),
-                    )
+                    // 三语的「今晚 24:00 …」本身都是完整句，直接出；
+                    // 套 countdown 模板会念成「Next price change in Price change tonight at 24:00」
+                    target == todayLocal -> stringResource(R.string.koil_pdb_countdown_today)
                     else -> {
                         val totalMin = java.time.Duration.between(now, deadline)
                             .toMinutes().coerceAtLeast(0)
