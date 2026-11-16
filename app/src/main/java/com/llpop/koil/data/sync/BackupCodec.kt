@@ -21,8 +21,13 @@ import java.util.Locale
  */
 object BackupCodec {
 
-    /** 当前写入的备份格式版本 */
-    const val BACKUP_VERSION = 1
+    /**
+     * 当前写入的备份格式版本。
+     * v1：只有 records。v2：+ `deleted: [{key, at}]`（删除扩散）。
+     * 升版本的理由不是「加了字段」，而是云同步的读路径要靠它判断「能不能无损往返」——
+     * 本版读不出 deleted 的 v2 快照必须判读不懂，否则写回时会把删除静默抹掉。
+     */
+    const val BACKUP_VERSION = 2
     /** 手动备份（含 settings 块）的格式版本；文件结构含 settings 块，与云快照按结构分流 */
     const val MANUAL_BACKUP_VERSION = 1
 
@@ -34,6 +39,21 @@ object BackupCodec {
 
     /** 云端固定文件名（跨设备定位"最新备份"用；手动备份仍用时间戳文件名） */
     const val CLOUD_FILE_NAME = "koil_backup.json"
+
+    /** 墓碑窗口：只写最近 180 天、最多 1000 条（坚果云单文件 500MB 够大，但 deleted 会无限增长） */
+    private const val TOMBSTONE_WINDOW_MS = 180L * 24 * 60 * 60 * 1000
+    private const val TOMBSTONE_MAX = 1000
+    private const val ONE_DAY_MS = 24L * 60 * 60 * 1000
+
+    /**
+     * 云端删除标记。`at` 用于「同键多次删除取最晚」以及窗口裁剪。
+     * 写入前必须过 [clampAt]：一台时间设到未来的设备否则会永久赢下所有合并。
+     */
+    data class DeletedEntry(val key: String, val at: Long)
+
+    /** `at` 钳制：不得晚于 now+1d（容忍时钟小幅超前的设备，不给它永久优势） */
+    fun clampAt(at: Long, now: Long = System.currentTimeMillis()): Long =
+        if (at > now + ONE_DAY_MS) now + ONE_DAY_MS else if (at < 0) now else at
 
     /** 解析后的单条记录（与 KOiLRecordEntity 字段一一对应，id 不跨设备传递） */
     data class RecordData(
@@ -80,7 +100,20 @@ object BackupCodec {
      * 派生口径统一走 [DerivedCalculator]（满箱区间口径，与总览页一致）；
      * distance/oilDays 仍为相邻段口径；派生依赖升序：函数内部强制排序，调用方无需自行保证（M-21）。
      */
-    fun buildBackup(records: List<KOiLRecordEntity>, appVersion: String): String {
+    fun buildBackup(
+        records: List<KOiLRecordEntity>,
+        appVersion: String,
+        deleted: List<DeletedEntry> = emptyList(),
+    ): String {
+        val now = System.currentTimeMillis()
+        // 按键去重取 max → 裁剪窗口 → 才能在 push 时「一次摘净」，也让文件不无限增长
+        val deduped = deleted.associate { it.key to clampAt(it.at, now) }
+            .map { (key, at) -> DeletedEntry(key, at) }
+            .filter { it.at >= now - TOMBSTONE_WINDOW_MS }
+            .sortedByDescending { it.at }
+            .take(TOMBSTONE_MAX)
+        val deletedArr = JSONArray()
+        deduped.forEach { deletedArr.put(JSONObject().put("key", it.key).put("at", it.at)) }
         val recordsArr = JSONArray()
         // 与总览/CSV 导出同一计算器：油耗/每公里成本只在满箱闭合区间产出（半箱为 null），
         // abnormalPct 取 0（仅影响状态判定，不影响派生数值本身）
@@ -112,6 +145,7 @@ object BackupCodec {
             .put("exportTime", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
             .put("recordCount", records.size)
             .put("records", recordsArr)
+            .put("deleted", deletedArr)
             .put(
                 "meta", JSONObject()
                     .put("appVersion", appVersion)
@@ -146,7 +180,13 @@ object BackupCodec {
     }
 
     /** 解析结果：云端条数（含脏行）+ 通过校验的记录 + 备份 version（缺省/非法为 null）。一次解析产出，避免大 JSON 解析两遍。 */
-    data class ParseResult(val total: Int, val records: List<RecordData>, val version: Int? = null)
+    data class ParseResult(
+        val total: Int,
+        val records: List<RecordData>,
+        val version: Int? = null,
+        /** v1 快照读作空集；同键多条取最晚 at */
+        val deleted: List<DeletedEntry> = emptyList(),
+    )
 
     /** 解析备份 JSON 的 records 数组长度（云端条数，用于统计 errors = total - parsed） */
     fun countRecords(jsonText: String): Int {
@@ -207,7 +247,19 @@ object BackupCodec {
                 )
             )
         }
-        return ParseResult(arr.length(), out, version)
+        // 按键去重取 max：同键出现两次（at=100、at=200）解析后只留一条且 at=200，
+        // 摘除时才能一次摘净，不会摘了一条又漏出一条
+        val deletedMap = HashMap<String, Long>()
+        root.optJSONArray("deleted")?.let { dArr ->
+            for (i in 0 until dArr.length()) {
+                val o = dArr.optJSONObject(i) ?: continue
+                val key = o.optString("key").takeIf { it.isNotBlank() } ?: continue
+                val at = clampAt(o.optLong("at", 0L))
+                val prev = deletedMap[key]
+                if (prev == null || at > prev) deletedMap[key] = at
+            }
+        }
+        return ParseResult(arr.length(), out, version, deletedMap.map { DeletedEntry(it.key, it.value) })
     }
 
     // 校验口径统一由 domain.logic.RecordValidator 提供（CSV/手动备份/云备份三处共用）
