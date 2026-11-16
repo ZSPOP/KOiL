@@ -83,16 +83,24 @@ class CloudSyncManager(
     /** 是否已配置（URL/账号/密码齐备；密码按密文或明文回退取值） */
     suspend fun isConfigured(): Boolean {
         if (!settings.syncEnabled.first()) return false
-        val url = settings.syncUrl.first()
-        val username = settings.syncUsername.first()
+        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
         if (url.isBlank() || username.isBlank()) return false
         return getAppPassword().isNotBlank()
     }
 
-    /** 应用密码（Keystore 密文优先，解密失败视为未配置） */
+    /**
+     * 有效应用密码（Keystore 密文优先）。
+     *
+     * - 存储为空：从没设置过 → 回落内置默认密码；设置过又清空 → 返回空（用户主动停用，不得再偷偷连）；
+     * - 存储非空但解不开（换机/重装后 Keystore 主密钥丢失）：返回空，按未配置处理，**不走默认兜底**，
+     *   否则「解不开的密文」会被当成「没设置」，静默换成默认账号去连。
+     */
     suspend fun getAppPassword(): String {
         val stored = settings.syncAppPassword.first()
-        if (stored.isBlank()) return ""
+        if (stored.isBlank()) {
+            return SyncConfig.effectivePassword("", settings.syncPasswordEverSet.first())
+        }
         return if (settings.syncPasswordEncrypted.first()) {
             CryptoHelper.decrypt(stored) ?: ""
         } else stored
@@ -100,8 +108,8 @@ class CloudSyncManager(
 
     /** 连接测试（设置页「保存并测试连接」）：读取最新配置，PROPFIND 验证认证与可达性 */
     suspend fun testConnection(): Boolean {
-        val url = settings.syncUrl.first()
-        val username = settings.syncUsername.first()
+        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
         val password = getAppPassword()
         if (url.isBlank() || username.isBlank() || password.isBlank()) return false
         return client.checkConnection(url, username, password)
@@ -172,8 +180,8 @@ class CloudSyncManager(
     }
 
     private suspend fun pushOnce() {
-        val url = settings.syncUrl.first()
-        val username = settings.syncUsername.first()
+        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
         val password = getAppPassword()
 
         // 记录本次推送开始前的墓碑：推送期间用户新删除的键不能被本次 clear 掉
@@ -232,8 +240,8 @@ class CloudSyncManager(
     /** 下载云端快照并生成合并预览（不写库）。云端无备份/未配置返回 null */
     suspend fun restorePreview(): RestoreResult? {
         if (!isConfigured()) return null
-        val url = settings.syncUrl.first()
-        val username = settings.syncUsername.first()
+        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
         val password = getAppPassword()
 
         val json = client.download(url, BackupCodec.CLOUD_FILE_NAME, username, password)

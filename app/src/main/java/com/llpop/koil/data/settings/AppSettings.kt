@@ -1,6 +1,7 @@
 package com.llpop.koil.data.settings
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
@@ -97,6 +98,14 @@ class AppSettings(private val context: Context) {
         // 应用密码：优先 Android Keystore 密文，Keystore 不可用时明文回退（KOiL-sync-password-encrypted=false）
         private val KEY_SYNC_APP_PASSWORD = stringPreferencesKey("KOiL-sync-app-password")
         private val KEY_SYNC_PASSWORD_ENCRYPTED = booleanPreferencesKey("KOiL-sync-password-encrypted")
+        /**
+         * 是否「设置过」应用密码。
+         *
+         * 用来区分两件长得一样的事：从没设置过（可以回落内置默认密码）／
+         * 设置过又被用户清空（视为主动停用，不得再拿默认密码连上去）。
+         * 只看密码是否为空区分不出这两种，旧实现正是因此把「清空」当成了「从没设置」。
+         */
+        private val KEY_SYNC_PASSWORD_EVER_SET = booleanPreferencesKey("KOiL-sync-password-ever-set")
         private val KEY_SYNC_LAST_PUSH_AT = longPreferencesKey("KOiL-sync-last-push-at")
         private val KEY_SYNC_LAST_STATUS = stringPreferencesKey("KOiL-sync-last-status")
         private val KEY_SYNC_DELETED_KEYS = stringSetPreferencesKey("KOiL-sync-deleted-keys")
@@ -454,6 +463,61 @@ class AppSettings(private val context: Context) {
         context.KOiLSecretStore.data.distinctValue { it[KEY_SYNC_PASSWORD_ENCRYPTED] ?: false }
     suspend fun setSyncPasswordEncrypted(encrypted: Boolean) {
         context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted }
+    }
+
+    /**
+     * 是否设置过应用密码（与密码同存凭据文件）。
+     *
+     * 键缺省时**不是**直接 false，而是看密码：旧版本没有这个标记，而旧版本「清空密码」写的是空串、
+     * 「设置密码」写的是非空串——所以只要存着非空密码，就一定是用户设置过的。
+     * 这就是老用户的升级路径：升级后第一次读，立刻按已有数据推出正确结论，不需要额外迁移任务。
+     *
+     * **认了的一个缺口**：存储为空时无法区分「从未设置」与「旧版清空过」——旧版清空动作没留任何痕迹，
+     * 信息论上推不出来。这两类都按从未设置处理（可回落内置默认）。
+     * 后果：旧版点过清空密码的用户，升级后打开开关仍会用内置默认连上，
+     * **需要重设一次密码**才算真停用；此后本标记生效，清空即为停用。
+     * 这是刻意的选择，不是漏改。
+     */
+    val syncPasswordEverSet: Flow<Boolean> = context.KOiLSecretStore.data.distinctValue { p ->
+        p[KEY_SYNC_PASSWORD_EVER_SET]
+            ?: !p[KEY_SYNC_APP_PASSWORD].isNullOrBlank()
+    }
+    suspend fun setSyncPasswordEverSet(everSet: Boolean) {
+        context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_EVER_SET] = everSet }
+    }
+
+    /**
+     * 清空凭据文件，只给测试用。
+     *
+     * 凭据 DataStore 是进程级单例，跨测试方法共享状态（`preferencesDataStore` 委托只创建一次），
+     * 不清理会发现「上个用例写的密码漏到下个用例」。
+     */
+    @VisibleForTesting
+    internal suspend fun clearSyncSecretForTest() {
+        // 地址/账号在普通设置文件，密码/标记在凭据文件，两处都要清
+        context.KOiLDataStore.edit {
+            it.remove(KEY_SYNC_URL)
+            it.remove(KEY_SYNC_USERNAME)
+        }
+        context.KOiLSecretStore.edit { it.clear() }
+    }
+
+    /**
+     * 原始存储值（**不经过任何默认兜底**），只给测试用。
+     *
+     * 为什么需要它：`syncUrl` 等 Flow 自带默认兜底，读出来永远非空，没法用来证明
+     * 「默认值没有被写进存储」。要钉住这件事，必须看键的原始值。
+     */
+    @VisibleForTesting
+    internal suspend fun rawSyncConfig(): Triple<String?, String?, String?> {
+        // 地址/账号存普通设置文件，密码存凭据文件——两处各读各的
+        val prefs = context.KOiLDataStore.data.first()
+        val secret = context.KOiLSecretStore.data.first()
+        return Triple(
+            prefs[KEY_SYNC_URL],
+            prefs[KEY_SYNC_USERNAME],
+            secret[KEY_SYNC_APP_PASSWORD],
+        )
     }
 
     val syncLastPushAt: Flow<Long> =
