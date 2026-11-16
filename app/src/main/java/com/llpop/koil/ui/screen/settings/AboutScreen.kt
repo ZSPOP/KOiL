@@ -590,6 +590,7 @@ private fun AboutContent(
             statusGapTop = statusGapTop,
             statusAreaHeight = statusAreaHeight,
             statusToCapsule = statusToCapsule,
+            hasCapsule = status is AboutUpdateStatus.Newer,
             capsule = {
                 KoilAboutUpdateButton(
                     status = status,
@@ -647,6 +648,8 @@ private fun BoxScope.AboutHero(
     statusToCapsule: Dp,
     /** 胶囊与下载进度条：属于 hero 内容，跟着 hero 一起淡出、不上滑 */
     capsule: @Composable () -> Unit,
+    /** 当前是否真有胶囊（有新版本才出现）：滚动后不组合胶囊时，只有它存在才需要补占位 */
+    hasCapsule: Boolean,
     /**
      * 这一整块是否接收点击。列表滚动后 hero 已经淡出，这时它仍压在上层，
      * 若继续接收点击会把卡片与滚动一起挡掉。
@@ -746,11 +749,13 @@ private fun BoxScope.AboutHero(
         }
         // 状态区到胶囊顶：胶囊属于 hero，上滑时跟着整块一起淡出，不随列表上移
         Spacer(Modifier.height(statusToCapsule))
-        if (interactive) {
+        if (hasCapsule && interactive) {
             capsule()
         } else {
-            // 淡出到底后不再组合胶囊：alpha 已经到 0，留着只会变成看不见却能点的幽灵按钮，
-            // 挡住滑上来的卡片。占位照留，hero 高度不变，列表不会因此跳动。
+            // 胶囊这段高度恒定占着，有没有新版都一样：hero 总高不因版本状态变化，
+            // 信息卡永远停在同一个位置，不会因为「有没有新版」上下跳 52dp。
+            // interactive == false 时不组合胶囊：alpha 已经到 0，留着会变成看不见却能点的幽灵按钮，
+            // 挡住滑上来的卡片。占位照补，滚动态与静止态高度一致，列表不会跳。
             Spacer(Modifier.height(52.dp))
         }
     }
