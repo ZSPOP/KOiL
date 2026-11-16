@@ -124,17 +124,18 @@ class SyncReconcileFlowTest {
         val before = dao.getRange("1970-01-01", "2999-12-31").map { it.reoilDate }
         calls.clear()
 
-        val preview = manager.previewReconcile()
+        val probe = manager.probeReconcile()
 
-        assertNotNull(preview)
+        assertTrue(probe is CloudSyncManager.ReconcileProbe.Ready)
         // 只发了一次 GET，没有任何 PUT
         assertEquals(1, calls.count { it.first == "GET" })
         assertEquals(0, calls.count { it.first == "PUT" })
         // 本机记录一条没动
         assertEquals(before, dao.getRange("1970-01-01", "2999-12-31").map { it.reoilDate })
         // 云端独有 2 / 本机独有 2
-        assertEquals(2, preview!!.stats.cloudOnlyCount)
-        assertEquals(2, preview.stats.localOnlyCount)
+        val stats = (probe as CloudSyncManager.ReconcileProbe.Ready).preview.stats
+        assertEquals(2, stats.cloudOnlyCount)
+        assertEquals(2, stats.localOnlyCount)
     }
 
     @Test
@@ -142,7 +143,7 @@ class SyncReconcileFlowTest {
         dao.insert(entity("2026-02-01", 1000.0))
         cloudBody = cloudJson(entity("2026-02-02", 1100.0))
 
-        val preview = manager.previewReconcile()!!
+        val preview = (manager.probeReconcile() as CloudSyncManager.ReconcileProbe.Ready).preview
         calls.clear()
         val ok = manager.applyReconcile(preview, SyncReconcile.Mode.MERGE)
 
@@ -168,7 +169,7 @@ class SyncReconcileFlowTest {
         )
         settings.setSyncRevivedKeys(setOf(RecordMerger.keyOf("2026-01-01", 500.0)))
 
-        val preview = manager.previewReconcile()!!
+        val preview = (manager.probeReconcile() as CloudSyncManager.ReconcileProbe.Ready).preview
         val ok = manager.applyReconcile(preview, SyncReconcile.Mode.CLOUD_WINS)
 
         assertTrue(ok)
@@ -202,11 +203,108 @@ class SyncReconcileFlowTest {
     }
 
     @Test
-    fun `云端没有快照时预览返回null_由调用方按首次上传处理`() = runBlocking {
+    fun `云端没有快照时探测返回NoCloud_由调用方按首次上传处理`() = runBlocking {
         dao.insert(entity("2026-04-01", 1000.0))
         // GET 404 = 云端还没备份：MockEngine 用空体 + 200 仍会被当作「内容为空」
         cloudBody = ""
-        val preview = manager.previewReconcile()
-        assertEquals(null, preview)
+        val probe = manager.probeReconcile()
+        assertTrue(probe is CloudSyncManager.ReconcileProbe.NoCloud)
+    }
+
+    @Test
+    fun `云端快照看得见但读不懂时_不许发PUT`() = runBlocking {
+        dao.insert(entity("2026-05-01", 1000.0))
+        // 真·读不懂：网关错误页（坚果云 502 时常见），parse 会宽松地退化成 0 条
+        cloudBody = "<html><body>502 Bad Gateway</body></html>"
+        calls.clear()
+
+        val probe = manager.probeReconcile()
+
+        assertTrue(probe is CloudSyncManager.ReconcileProbe.Corrupt)
+        // 一个字都不许写：读不懂的云端文件不能被「云端没备份」那套逻辑顺手覆盖
+        assertEquals(0, calls.count { it.first == "PUT" })
+        // 本机数据也没动
+        assertEquals(1, dao.getRange("1970-01-01", "2999-12-31").size)
+    }
+
+    @Test
+    fun `截断的JSON也算读不懂`() = runBlocking {
+        dao.insert(entity("2026-05-10", 1000.0))
+        cloudBody = """{"records":[{"date":"2026-05-11","mileage":1200,"_cut""""
+        val probe = manager.probeReconcile()
+        assertTrue(probe is CloudSyncManager.ReconcileProbe.Corrupt)
+    }
+
+    @Test
+    fun `用户坚持覆盖读不懂的快照_会先留副本再PUT`() = runBlocking {
+        dao.insert(entity("2026-06-01", 1000.0))
+        cloudBody = "<html><body>login page</body></html>"
+        calls.clear()
+
+        val corrupt = manager.probeReconcile() as CloudSyncManager.ReconcileProbe.Corrupt
+        val ok = manager.forceOverwriteCorrupt(corrupt.raw)
+
+        assertTrue(ok)
+        // 先留了副本
+        val dir = File(context.filesDir, "sync-backups")
+        assertTrue(dir.listFiles().orEmpty().isNotEmpty())
+        // 然后才 PUT
+        assertEquals(1, calls.count { it.first == "PUT" })
+    }
+
+    @Test
+    fun `412时applyReconcile抛冲突异常_不吞成普通失败`() = runBlocking {
+        dao.insert(entity("2026-07-01", 1000.0))
+        cloudBody = cloudJson(entity("2026-07-02", 1100.0))
+        val preview = (manager.probeReconcile() as CloudSyncManager.ReconcileProbe.Ready).preview
+
+        // 换一个会返回 412 的引擎，模拟「面板停留期间别的设备推过」
+        val conflictEngine = MockEngine { request ->
+            when (request.method.value) {
+                "PUT" -> respond("", HttpStatusCode.PreconditionFailed)
+                "MKCOL" -> respond("", HttpStatusCode.MethodNotAllowed)
+                else -> respond("", HttpStatusCode.OK)
+            }
+        }
+        val conflictManager = CloudSyncManager(settings, dao, WebDavClient(conflictEngine), db, context)
+
+        var conflict = false
+        try {
+            conflictManager.applyReconcile(preview, SyncReconcile.Mode.MERGE)
+        } catch (_: com.llpop.koil.data.sync.WebDavConflictException) {
+            conflict = true
+        }
+        assertTrue("412 必须外传，让调用方重新对一次账", conflict)
+    }
+
+    @Test
+    fun `副本恢复只插入不删本机_且跳过墓碑`() = runBlocking {
+        dao.insert(entity("2026-08-01", 1000.0))          // 本机独有，恢复后必须还在
+        cloudBody = cloudJson(entity("2026-08-02", 1100.0), entity("2026-08-03", 1200.0))
+        val backup = manager.backupBeforeOverwrite(cloudBody)!!
+        settings.markRecordDeleted("2026-08-03", 1200.0)   // 已删过的键不许复活
+
+        val inserted = manager.restoreFromLocalBackup(
+            CloudSyncManager.LocalBackup(backup, "stamp", 2),
+        )
+
+        assertEquals(1, inserted)
+        val rows = dao.getRange("1970-01-01", "2999-12-31")
+        assertTrue(rows.any { it.reoilDate == "2026-08-01" })
+        assertTrue(rows.any { it.reoilDate == "2026-08-02" })
+        assertTrue(rows.none { it.reoilDate == "2026-08-03" })
+    }
+
+    @Test
+    fun `副本列表按时间倒序_读不懂的副本标负一`() = runBlocking {
+        manager.backupBeforeOverwrite(cloudJson(entity("2026-09-01", 1000.0)))
+        Thread.sleep(6)
+        manager.backupBeforeOverwrite("<html>not a backup</html>")
+
+        val list = manager.listLocalBackups()
+        assertEquals(2, list.size)
+        // 最新的在前
+        assertEquals(-1, list.first().recordCount)
+        assertEquals(1, list.last().recordCount)
     }
 }

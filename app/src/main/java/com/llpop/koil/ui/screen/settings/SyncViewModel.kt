@@ -9,6 +9,7 @@ import com.llpop.koil.data.sync.CryptoHelper
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.data.sync.SyncDraftWriter
 import com.llpop.koil.data.sync.SyncReconcile
+import com.llpop.koil.data.sync.WebDavConflictException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -83,12 +84,25 @@ class SyncViewModel(
     private val _busy = MutableStateFlow(false)
     private val _restorePreview = MutableStateFlow<SyncRestorePreview?>(null)
     private val _reconcile = MutableStateFlow<CloudSyncManager.ReconcilePreview?>(null)
+    private val _reconcileCorrupt = MutableStateFlow<CloudSyncManager.ReconcileProbe.Corrupt?>(null)
+    private val _localBackups = MutableStateFlow<List<CloudSyncManager.LocalBackup>>(emptyList())
+    private val _backupCount = MutableStateFlow(0)
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
     val restorePreview: StateFlow<SyncRestorePreview?> = _restorePreview.asStateFlow()
 
     /** 首次配对对账面板的数据（非空即展示） */
     val reconcile: StateFlow<CloudSyncManager.ReconcilePreview?> = _reconcile.asStateFlow()
+
+    /** 云端快照读不懂时的确认入口（非空即展示） */
+    val reconcileCorrupt: StateFlow<CloudSyncManager.ReconcileProbe.Corrupt?> =
+        _reconcileCorrupt.asStateFlow()
+
+    /** 「从副本恢复」面板的列表（非空即展示） */
+    val localBackups: StateFlow<List<CloudSyncManager.LocalBackup>> = _localBackups.asStateFlow()
+
+    /** 本地副本份数：入口只在 >0 时出现，免得给一个永远空的面板 */
+    val backupCount: StateFlow<Int> = _backupCount.asStateFlow()
 
     /** 解密后的密码 + 是否解不开（Keystore 主密钥丢失） */
     private data class PasswordInfo(val plain: String, val broken: Boolean)
@@ -181,13 +195,19 @@ class SyncViewModel(
                 // 非空库：首次配对先对账，用户选完才动数据。
                 // 旧实现在这里直接 pushNow，云端独有记录被静默吞掉、用户完全不知道发生了什么。
                 if (!settings.syncEverConfigured.first()) {
-                    val preview = manager.previewReconcile()
-                    if (preview == null) {
+                    when (val probe = manager.probeReconcile()) {
                         // 云端还没有快照 = 没有对账对象，弹完整面板只是多一步
-                        _message.value = "first_upload:${recordDao.count()}"
-                        manager.pushNow(force = true)
-                    } else {
-                        _reconcile.value = preview
+                        CloudSyncManager.ReconcileProbe.NoCloud -> {
+                            _message.value = "first_upload:${recordDao.count()}"
+                            manager.pushNow(force = true)
+                        }
+                        is CloudSyncManager.ReconcileProbe.Ready -> {
+                            _reconcile.value = probe.preview
+                        }
+                        // 文件在、但读不懂：一个字都不写，交给用户决定是否覆盖
+                        is CloudSyncManager.ReconcileProbe.Corrupt -> {
+                            _reconcileCorrupt.value = probe
+                        }
                     }
                 } else {
                     // 已配对过：走常规推送
@@ -258,11 +278,83 @@ class SyncViewModel(
                 _message.value = if (ok) "reconcile_done" else "reconcile_failed"
             } catch (e: CancellationException) {
                 throw e
+            } catch (_: WebDavConflictException) {
+                // 面板可能停留很久，期间别的设备推过：账号网络都正常，缺的是「重新对一次」
+                _message.value = "reconcile_stale"
+                val reprobe = manager.probeReconcile()
+                _reconcile.value = (reprobe as? CloudSyncManager.ReconcileProbe.Ready)?.preview
+                _reconcileCorrupt.value = reprobe as? CloudSyncManager.ReconcileProbe.Corrupt
             } catch (_: Exception) {
                 _message.value = "reconcile_failed"
             } finally {
                 _busy.value = false
                 _reconcile.value = null
+            }
+        }
+    }
+
+    /** 用户放弃覆盖读不懂的云端快照：什么都不做 */
+    fun dismissReconcileCorrupt() {
+        _reconcileCorrupt.value = null
+    }
+
+    /** 用户坚持覆盖：先留副本，再推 */
+    fun confirmReconcileCorrupt() {
+        val corrupt = _reconcileCorrupt.value ?: return
+        if (!_busy.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val ok = manager.forceOverwriteCorrupt(corrupt.raw)
+                _message.value = if (ok) "reconcile_done" else "reconcile_failed"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = "reconcile_failed"
+            } finally {
+                _busy.value = false
+                _reconcileCorrupt.value = null
+            }
+        }
+    }
+
+    /** 刷新副本份数（进设置页时调一次） */
+    fun refreshBackupCount() {
+        viewModelScope.launch {
+            _backupCount.value = manager.listLocalBackups().size
+        }
+    }
+
+    /** 打开「从副本恢复」列表 */
+    fun loadLocalBackups() {
+        viewModelScope.launch {
+            val list = manager.listLocalBackups()
+            _backupCount.value = list.size
+            _localBackups.value = list
+        }
+    }
+
+    fun dismissLocalBackups() {
+        _localBackups.value = emptyList()
+    }
+
+    /** 从某份副本恢复（只插入、不删本地） */
+    fun restoreLocalBackup(backup: CloudSyncManager.LocalBackup) {
+        if (!_busy.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val inserted = manager.restoreFromLocalBackup(backup)
+                _message.value = when {
+                    inserted < 0 -> "local_backup_broken"
+                    inserted == 0 -> "restore_none"
+                    else -> "restore_done:$inserted"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = "restore_failed"
+            } finally {
+                _busy.value = false
+                _localBackups.value = emptyList()
             }
         }
     }

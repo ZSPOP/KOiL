@@ -434,8 +434,8 @@
     <string name="koil_sync_reconcile_title">First pairing: cloud already has a backup</string>
     <string name="koil_sync_reconcile_counts">%1$d here · %2$d in cloud</string>
     <string name="koil_sync_reconcile_both">%1$d on both sides (%2$d of them differ in content)</string>
-    <string name="koil_sync_reconcile_cloud_only">%1$d only in cloud, not here yet</string>
-    <string name="koil_sync_reconcile_local_only">%1$d only here, not in cloud</string>
+    <string name="koil_sync_reconcile_cloud_only">%1$d only in cloud, not here yet (merge brings them in)</string>
+    <string name="koil_sync_reconcile_local_only">%1$d only here, not in cloud (lost if cloud wins)</string>
     <string name="koil_sync_reconcile_skipped">%1$d skipped as deleted (you deleted them here, they stay out)</string>
     <string name="koil_sync_reconcile_merge">Merge (recommended): add the %1$d cloud records here, nothing is deleted</string>
     <string name="koil_sync_reconcile_local_wins">This device wins: overwrite the cloud, the %1$d cloud-only records will be gone</string>
@@ -450,4 +450,15 @@
     <string name="koil_sync_reconcile_merge_plain">Merge (recommended): keep both sides, nothing is deleted</string>
     <string name="koil_sync_reconcile_local_wins_plain">This device wins: overwrite the cloud (the cloud copy is replaced)</string>
     <string name="koil_sync_reconcile_cloud_wins_plain">Cloud wins: rebuild this device from cloud (this copy is replaced)</string>
+
+    <string name="koil_sync_reconcile_corrupt_title">Cloud backup cannot be read</string>
+    <string name="koil_sync_reconcile_corrupt_msg">That cloud backup could not be parsed (it may come from a newer version, or the file was changed). Nothing was modified this time.</string>
+    <string name="koil_sync_reconcile_corrupt_overwrite">Overwrite anyway (a copy is kept first)</string>
+    <string name="koil_sync_reconcile_stale">The cloud was updated by another device; reconciled again</string>
+    <string name="koil_sync_backup_restore_entry">Restore from local copy (%1$d)</string>
+    <string name="koil_sync_backup_restore_title">Local copies</string>
+    <string name="koil_sync_backup_restore_hint">Snapshots saved automatically before overwriting the cloud. Restoring only adds records, nothing here is deleted.</string>
+    <string name="koil_sync_backup_restore_item">%1$s · %2$d records</string>
+    <string name="koil_sync_backup_restore_broken">This copy cannot be read</string>
+    <string name="koil_local_backup_broken">This copy cannot be parsed; nothing was modified</string>
 </resources>
