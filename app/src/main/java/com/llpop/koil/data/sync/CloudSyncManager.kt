@@ -132,13 +132,18 @@ class CloudSyncManager(
      *        force 必须真的被读取，否则"绕过频率闸"只是碰巧成立。
      * @return 是否推送成功；force=false 被节流跳过时返回 false
      */
-    suspend fun pushNow(force: Boolean = true): Boolean {
+    /**
+     * @param allowOverwriteCorrupt 用户已在面板上明确授权覆盖读不懂的云端文件。
+     *   只有 `forceOverwriteCorrupt()` 传 true——自动推送与定时器永远不传，
+     *   否则「读不懂就不许写」这条防线会被定时器绕过去。
+     */
+    suspend fun pushNow(force: Boolean = true, allowOverwriteCorrupt: Boolean = false): Boolean {
         if (!isConfigured()) return false
         if (!force) {
             val last = settings.syncLastPushAt.first()
             if (System.currentTimeMillis() - last < MIN_PUSH_INTERVAL_MS) return false
         }
-        return pushWithRetry()
+        return pushWithRetry(allowOverwriteCorrupt)
     }
 
     /**
@@ -165,12 +170,12 @@ class CloudSyncManager(
         }
     }
 
-    private suspend fun pushWithRetry(): Boolean {
+    private suspend fun pushWithRetry(allowOverwriteCorrupt: Boolean = false): Boolean {
         pushMutex.withLock {
             var attempt = 0
             while (true) {
                 try {
-                    pushOnce()
+                    pushOnce(allowOverwriteCorrupt)
                     return true
                 } catch (e: CancellationException) {
                     throw e
@@ -187,13 +192,15 @@ class CloudSyncManager(
         }
     }
 
-    private suspend fun pushOnce() {
+    private suspend fun pushOnce(allowOverwriteCorrupt: Boolean = false) {
         val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
         val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
         val password = getAppPassword()
 
-        // 记录本次推送开始前的墓碑：推送期间用户新删除的键不能被本次 clear 掉
+        // 记录本次推送开始前的墓碑与撤销：推送期间用户新删除/新重录的键不能被本次 clear 掉
         val tombstonesAtStart = settings.syncDeletedKeys.first()
+        val revivedAtStart = settings.syncRevivedKeys.first()
+        val cacheAtStart = settings.syncDeletedCache.first()
 
         // 推送前先读云端快照：把其它设备已推、本机还没有的记录合进本地，
         // 再以「本地 ∪ 云端」的全量写回，避免后写者把先写者的记录整包覆盖。
@@ -202,25 +209,76 @@ class CloudSyncManager(
         // 空文件若被当作不存在，上传会带 If-None-Match: *，服务端因文件已存在永久返回 412。
         val cloudExists = snapshot.content != null
         val cloudBody = snapshot.content?.takeIf { it.isNotBlank() }
+        // 自动推送同样不能覆盖读不懂的云端文件：定时器不知道面板上发生过什么，
+        // 它一旦把 v3/v4 快照当「0 条」推上去，别人的删除和归档就没了。
+        // 这里置 fail:corrupt 让设置页给出人工入口（「仍然覆盖（会先留副本）」）。
+        if (cloudBody != null && !allowOverwriteCorrupt && !isRoundTrippable(cloudBody)) {
+            settings.setSyncLastStatus("fail:corrupt")
+            return
+        }
+        val cloudDeleted = cloudBody?.let { BackupCodec.parse(it).deleted } ?: emptyList()
         if (cloudBody != null) mergeCloudIntoLocal(cloudBody)
 
         val records = recordDao.getRange("1970-01-01", "2999-12-31").inChronologicalOrder()
-        val json = BackupCodec.buildBackup(records, BuildConfig.VERSION_NAME)
+        val plan = prepareSnapshot(records, cloudDeleted, tombstonesAtStart, revivedAtStart, cacheAtStart)
 
         client.upload(
-            url, BackupCodec.CLOUD_FILE_NAME, json, username, password,
+            url, BackupCodec.CLOUD_FILE_NAME, plan.json, username, password,
             expectedEtag = snapshot.etag, cloudExists = cloudExists,
         )
 
         // 只清“推送开始前已存在”的墓碑；推送期间新增的删除必须保留到下一轮，
         // 否则本轮快照仍含被删记录，云端会把刚删掉的记录重新拉回来。
         settings.clearSyncDeletedKeys(tombstonesAtStart)
+        // 缓存 = 本轮真正写出去的删除历史。v1 客户端读到 deleted 会整块抹掉（它重建 JSON），
+        // 下次推送靠这份缓存把它补回去——不能靠「缓存为空」判首次，因为从没删过东西的设备也是空。
+        settings.setSyncDeletedCache(plan.deleted)
+        settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
+        // 只清本轮真的从云端摘掉的那批撤销；推送期间新打的标记留到下一轮
+        settings.setSyncRevivedKeys(settings.syncRevivedKeys.first() - plan.clearedRevived)
         settings.setSyncLastPushAt(System.currentTimeMillis())
         // 首次真正推送成功 = "配置过同步"：墓碑判定据此生效
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
             "ok@${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())}"
         )
+    }
+
+    /** 一次推送要写出去的东西：JSON、本次生效的删除集、本轮真摘掉的撤销键 */
+    private data class SnapshotPlan(
+        val json: String,
+        val deleted: Map<String, Long>,
+        val clearedRevived: Set<String>,
+    )
+
+    /**
+     * 组装要写回云端的快照。
+     *
+     * `deleted` = (本地墓碑 ∪ 云端 deleted ∪ 缓存) − 撤销 − 「本地还有记录的键」。
+     * 最后一项是「数据赢过删除」：云端说删了、本机这条还在，保留记录并摘掉云端删除
+     * （复活能再删，丢记录找不回）。
+     *
+     * 三处来源缺一不可：少了缓存，v1 客户端抹掉 deleted 后就永远补不回来；
+     * 少了云端，两台设备交替推送会互相摘掉对方的删除。
+     */
+    private fun prepareSnapshot(
+        records: List<KOiLRecordEntity>,
+        cloudDeleted: List<BackupCodec.DeletedEntry>,
+        tombstones: Set<String>,
+        revived: Set<String>,
+        cache: Map<String, Long>,
+        now: Long = System.currentTimeMillis(),
+    ): SnapshotPlan {
+        val localKeys = records.map { RecordMerger.keyOf(it.reoilDate, it.mileage) }.toHashSet()
+        val merged = RecordMerger.mergeTombstones(tombstones, cloudDeleted, cache, now)
+        val dataWins = RecordMerger.dataWinsOverDeletion(merged, localKeys, revived)
+        val target = merged.filterKeys { it !in revived && it !in dataWins }
+        val json = BackupCodec.buildBackup(
+            records.toList(),
+            BuildConfig.VERSION_NAME,
+            target.map { BackupCodec.DeletedEntry(it.key, it.value) },
+        )
+        return SnapshotPlan(json, target, revived + dataWins)
     }
 
     /**
@@ -235,10 +293,22 @@ class CloudSyncManager(
         } catch (_: Exception) {
             return 0
         }
-        if (parsed.records.isEmpty()) return 0
+        if (parsed.records.isEmpty() && parsed.deleted.isEmpty()) return 0
         val local = recordDao.getRange("1970-01-01", "2999-12-31")
+        val localKeys = local.map { RecordMerger.keyOf(it.reoilDate, it.mileage) }.toHashSet()
         val tombstones = settings.syncDeletedKeys.first()
-        val missing = RecordMerger.missing(parsed.records, local, tombstones)
+        val cache = settings.syncDeletedCache.first()
+        val revived = settings.syncRevivedKeys.first()
+        // 有效墓碑不只本地那一份：云端 deleted 与缓存里的删除同样要挡，
+        // 否则「只拉不推」的设备（B 打开应用、不写云端）看到 v1 快照就会把已删记录复活
+        val merged = RecordMerger.mergeTombstones(
+            tombstones, parsed.deleted, cache, System.currentTimeMillis(),
+        )
+        // 数据赢过删除：本地还有这条 → 登记撤销，下次推送把云端那条删除摘掉
+        RecordMerger.dataWinsOverDeletion(merged, localKeys, revived)
+            .forEach { settings.markRecordRevived(it) }
+        val effective = RecordMerger.effectiveTombstones(merged, revived)
+        val missing = RecordMerger.missing(parsed.records, local, effective)
         if (missing.isEmpty()) return 0
         return recordDao.insertAllIgnore(missing).count { it != -1L }
     }
@@ -330,6 +400,19 @@ class CloudSyncManager(
     }
 
     /**
+     * 这份云端文件能不能被本版**无损往返**：结构是备份 + 版本就是本版写出的那个
+     * （或没有 version 的旧格式）。自动推送与对账面板共用这一条判据，
+     * 否则两条路径会一个拦住、一个照样覆盖。
+     */
+    private fun isRoundTrippable(raw: String): Boolean {
+        if (!BackupCodec.looksLikeBackup(raw)) return false
+        val version = BackupCodec.parse(raw).version ?: return true
+        // v1 读作「deleted 空集」，写回时升成 v2——这是升级，不丢任何语义；
+        // v2 是本版格式；v3 及以后读不懂它多了什么，必须拦住。
+        return version in 1..BackupCodec.BACKUP_VERSION
+    }
+
+    /**
      * 拉云端快照并算差集。**不写库、不写云端。**
      * 未配置时返回 [ReconcileProbe.NoCloud]（调用方已有 isConfigured 前置判断，这里不重复区分）。
      */
@@ -343,6 +426,7 @@ class CloudSyncManager(
         val body = snapshot.content?.takeIf { it.isNotBlank() } ?: return ReconcileProbe.NoCloud
         // 文件在、但结构不是备份（错误页 / 截断 / 别的格式）→ 一个字都不许写。
         // 不能用「parse 出 0 条」来判断：合法空备份也是 0 条，两者混同就是拿别人的数据去覆盖。
+        // 判据与自动推送共用 isRoundTrippable，两条路径不能各算各的
         if (!BackupCodec.looksLikeBackup(body)) {
             return ReconcileProbe.Corrupt(body, "云端文件不是备份格式")
         }
@@ -353,7 +437,7 @@ class CloudSyncManager(
         // parse 只读 records、buildBackup 不写 deleted，结果是把别人的 v2 降级成 v1 写回云端，
         // 那些 deleted 静默消失、删除扩散失效——不报错、不提示，比"读不懂"更难发现。
         // PR ③ 把 BACKUP_VERSION 升到 2 并真的读写 deleted 之后，这条判定自动跟随，不用再改。
-        if (version != null && version != BackupCodec.BACKUP_VERSION) {
+        if (version != null && version !in 1..BackupCodec.BACKUP_VERSION) {
             return ReconcileProbe.Corrupt(body, "备份版本 $version 超出本版能力")
         }
         val local = recordDao.getRange("1970-01-01", "2999-12-31")
@@ -373,7 +457,8 @@ class CloudSyncManager(
      */
     suspend fun forceOverwriteCorrupt(raw: String): Boolean {
         backupBeforeOverwrite(raw)
-        return pushNow(force = true)
+        // 用户在面板上明确选了「仍然覆盖」：这是唯一允许越过「读不懂就不许写」的入口
+        return pushNow(force = true, allowOverwriteCorrupt = true)
     }
 
 
@@ -391,11 +476,11 @@ class CloudSyncManager(
                 when (mode) {
                     SyncReconcile.Mode.MERGE -> {
                         mergeCloudIntoLocal(preview.cloudJson)
-                        uploadLocalSnapshot(preview.etag)
+                        uploadLocalSnapshot(preview.etag, preview.cloudJson)
                     }
                     SyncReconcile.Mode.LOCAL_WINS -> {
                         backupBeforeOverwrite(preview.cloudJson)
-                        uploadLocalSnapshot(preview.etag)
+                        uploadLocalSnapshot(preview.etag, preview.cloudJson)
                     }
                     SyncReconcile.Mode.CLOUD_WINS -> {
                         backupBeforeOverwrite(preview.cloudJson)
@@ -418,16 +503,25 @@ class CloudSyncManager(
     }
 
     /** 用本地全量覆盖云端；ETag 来自对账那次 GET，不额外请求 */
-    private suspend fun uploadLocalSnapshot(expectedEtag: String?) {
+    private suspend fun uploadLocalSnapshot(expectedEtag: String?, cloudJson: String? = null) {
         val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
         val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
         val password = getAppPassword()
+        val tombstonesAtStart = settings.syncDeletedKeys.first()
+        val revivedAtStart = settings.syncRevivedKeys.first()
+        val cacheAtStart = settings.syncDeletedCache.first()
         val records = recordDao.getRange("1970-01-01", "2999-12-31").inChronologicalOrder()
+        val cloudDeleted = cloudJson?.let { BackupCodec.parse(it).deleted } ?: emptyList()
+        val plan = prepareSnapshot(records, cloudDeleted, tombstonesAtStart, revivedAtStart, cacheAtStart)
         client.upload(
             url, BackupCodec.CLOUD_FILE_NAME,
-            BackupCodec.buildBackup(records, BuildConfig.VERSION_NAME),
+            plan.json,
             username, password, expectedEtag = expectedEtag, cloudExists = true,
         )
+        settings.clearSyncDeletedKeys(tombstonesAtStart)
+        settings.setSyncDeletedCache(plan.deleted)
+        settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
+        settings.setSyncRevivedKeys(settings.syncRevivedKeys.first() - plan.clearedRevived)
         settings.setSyncLastPushAt(System.currentTimeMillis())
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
@@ -443,6 +537,7 @@ class CloudSyncManager(
      */
     private suspend fun applyCloudAsTruth(cloudJson: String) {
         val parsed = BackupCodec.parse(cloudJson)
+        val cloudDeleted = parsed.deleted.associate { it.key to it.at }
         val cloudByKey = LinkedHashMap<String, BackupCodec.RecordData>()
         parsed.records.forEach {
             cloudByKey.putIfAbsent(RecordMerger.keyOf(it.reoilDate, it.mileage), it)
@@ -456,7 +551,10 @@ class CloudSyncManager(
             localKeys.add(key)
             val c = cloudByKey[key]
             when {
-                c == null -> toDelete.add(r.id)                  // 本机独有：跟随云端 → 丢弃
+                // 本机独有，或云端把它标成 deleted：跟随云端 → 丢弃。
+                // 同步侧删除不写墓碑、不进缓存（否则下次推送又把它推回云端，
+                // 等于「服从云端」只生效一次）
+                c == null -> toDelete.add(r.id)
                 !SyncReconcile.sameContent(r, c) -> {            // 同键不同内容：以云端为准
                     toDelete.add(r.id)
                     toInsert.add(c.toEntity())
@@ -472,6 +570,10 @@ class CloudSyncManager(
 
         // 用户刚同意服从云端：撤销标记必须清掉，否则下次推送会把云端的删除又摘回来
         settings.clearRevivedKeys()
+        // 缓存按云端重建：否则下次推送缓存的「自愈」又把刚服从过的删除撤掉一遍。
+        // 云端 records 里还有的同键以记录为准（数据赢过删除）
+        settings.setSyncDeletedCache(cloudDeleted.filterKeys { it !in cloudByKey })
+        settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
         // 显式声明「配置过」：不能靠 lastStatus 的 "restore@" 前缀间接让墓碑判定生效——
         // 将来改状态文案，墓碑会静默失效，已删记录下次推送就会被拉回来
         settings.setSyncEverConfigured()

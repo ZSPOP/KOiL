@@ -230,9 +230,11 @@ class SyncReconcileFlowTest {
     @Test
     fun `版本超前的快照算读不懂_不许按能读记录就放行`() = runBlocking {
         dao.insert(entity("2026-10-01", 1000.0))
-        // 结构完全合法、records 也读得出，但 version=2：本版写回时会丢掉 deleted。
-        // 「我能读 records」不等于「我能无损往返」——放行就是静默把 v2 降级成 v1
-        cloudBody = """{"version":2,"records":[{"date":"2026-10-02","mileage":1100,"oilAmount":40,"payableAmount":300}],"deleted":[{"key":"2026-09-01|900","at":123}]}"""
+        // 结构完全合法、records 也读得出，但 version=3（比本版新）：
+        // 「我能读 records」不等于「我能无损往返」——放行就是静默把更新版本降级写回。
+        // 这条守的是「超前版本必须拦住」，不是「v2 必须拦住」：PR ③ 升到 v2 后，
+        // v2 变成可往返的版本，护栏自动变成 v3。
+        cloudBody = """{"version":3,"records":[{"date":"2026-10-02","mileage":1100,"oilAmount":40,"payableAmount":300}],"deleted":[{"key":"2026-09-01|900","at":123}]}"""
         calls.clear()
 
         val probe = manager.probeReconcile()

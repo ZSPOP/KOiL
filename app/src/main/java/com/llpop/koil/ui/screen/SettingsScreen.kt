@@ -1343,6 +1343,9 @@ private fun SyncPanelBody(
                 val reason = syncUi.lastStatus.substringAfter("fail:")
                 if (reason == "conflict") {
                     stringResource(R.string.koil_sync_reconcile_stale)
+                } else if (reason == "corrupt") {
+                    // 云端是别的版本写的：自动推送不会覆盖它，等用户在对账面板里决定
+                    stringResource(R.string.koil_sync_status_corrupt)
                 } else {
                     stringResource(R.string.koil_sync_status_fail, reason)
                 }
