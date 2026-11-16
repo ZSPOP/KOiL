@@ -1338,8 +1338,15 @@ private fun SyncPanelBody(
                 )
             syncUi.lastStatus.startsWith("ok@") ->
                 stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
-            syncUi.lastStatus.startsWith("fail:") ->
-                stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
+            syncUi.lastStatus.startsWith("fail:") -> {
+                // 数据层只存 key，人类语言在这里出（否则英/繁中用户会看到一句中文）
+                val reason = syncUi.lastStatus.substringAfter("fail:")
+                if (reason == "conflict") {
+                    stringResource(R.string.koil_sync_reconcile_stale)
+                } else {
+                    stringResource(R.string.koil_sync_status_fail, reason)
+                }
+            }
             else -> stringResource(R.string.koil_sync_status_never)
         }
         val healthy = configured && !syncUi.passwordInvalid
@@ -1947,7 +1954,7 @@ private fun LocalBackupDialog(viewModel: SyncViewModel) {
                 val label = if (b.recordCount < 0) {
                     stringResource(R.string.koil_sync_backup_restore_broken)
                 } else {
-                    stringResource(R.string.koil_sync_backup_restore_item, b.stamp, b.recordCount)
+                    stringResource(R.string.koil_sync_backup_restore_item, b.displayTime, b.recordCount)
                 }
                 Text(
                     text = label,

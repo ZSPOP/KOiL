@@ -228,6 +228,20 @@ class SyncReconcileFlowTest {
     }
 
     @Test
+    fun `版本超前的快照算读不懂_不许按能读记录就放行`() = runBlocking {
+        dao.insert(entity("2026-10-01", 1000.0))
+        // 结构完全合法、records 也读得出，但 version=2：本版写回时会丢掉 deleted。
+        // 「我能读 records」不等于「我能无损往返」——放行就是静默把 v2 降级成 v1
+        cloudBody = """{"version":2,"records":[{"date":"2026-10-02","mileage":1100,"oilAmount":40,"payableAmount":300}],"deleted":[{"key":"2026-09-01|900","at":123}]}"""
+        calls.clear()
+
+        val probe = manager.probeReconcile()
+
+        assertTrue(probe is CloudSyncManager.ReconcileProbe.Corrupt)
+        assertEquals(0, calls.count { it.first == "PUT" })
+    }
+
+    @Test
     fun `截断的JSON也算读不懂`() = runBlocking {
         dao.insert(entity("2026-05-10", 1000.0))
         cloudBody = """{"records":[{"date":"2026-05-11","mileage":1200,"_cut""""
@@ -285,7 +299,7 @@ class SyncReconcileFlowTest {
         settings.markRecordDeleted("2026-08-03", 1200.0)   // 已删过的键不许复活
 
         val inserted = manager.restoreFromLocalBackup(
-            CloudSyncManager.LocalBackup(backup, "stamp", 2),
+            CloudSyncManager.LocalBackup(backup, "stamp", "08-01 12:00", 2),
         )
 
         assertEquals(1, inserted)
@@ -306,5 +320,7 @@ class SyncReconcileFlowTest {
         // 最新的在前
         assertEquals(-1, list.first().recordCount)
         assertEquals(1, list.last().recordCount)
+        // 展示时间不是 UTC 原串
+        assertTrue(list.last().displayTime != list.last().stamp)
     }
 }

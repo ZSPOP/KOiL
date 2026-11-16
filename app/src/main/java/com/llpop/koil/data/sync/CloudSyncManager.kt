@@ -348,9 +348,13 @@ class CloudSyncManager(
         }
         val parsed = BackupCodec.parse(body)
         val version = parsed.version
-        // 版本超出兼容集：明确拒绝，不去猜它的字段含义
-        if (version != null && !BackupCodec.isKnownBackupVersion(version)) {
-            return ReconcileProbe.Corrupt(body, "备份版本 $version 未知")
+        // 云同步要的不是「这个数字我认识」，而是「我能无损往返」：读进来再原样写回去，语义不能少。
+        // 只接受本版写出的版本（以及无 version 的旧格式）。用 isKnownBackupVersion 判会放过 v2：
+        // parse 只读 records、buildBackup 不写 deleted，结果是把别人的 v2 降级成 v1 写回云端，
+        // 那些 deleted 静默消失、删除扩散失效——不报错、不提示，比"读不懂"更难发现。
+        // PR ③ 把 BACKUP_VERSION 升到 2 并真的读写 deleted 之后，这条判定自动跟随，不用再改。
+        if (version != null && version != BackupCodec.BACKUP_VERSION) {
+            return ReconcileProbe.Corrupt(body, "备份版本 $version 超出本版能力")
         }
         val local = recordDao.getRange("1970-01-01", "2999-12-31")
         val tombstones = settings.syncDeletedKeys.first()
@@ -402,8 +406,9 @@ class CloudSyncManager(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: WebDavConflictException) {
-                // 面板可能停留很久，期间别的设备推过：这不是网络问题，调用方要重跑一次对账
-                settings.setSyncLastStatus("fail:云端已被其他设备更新")
+                // 面板可能停留很久，期间别的设备推过：这不是网络问题，调用方要重跑一次对账。
+                // 状态串只存 key：数据层不该产出人类语言（英/繁中用户会看到一句中文）
+                settings.setSyncLastStatus("fail:conflict")
                 throw e
             } catch (e: Exception) {
                 settings.setSyncLastStatus("fail:${e.message?.take(60) ?: "对账失败"}")
@@ -476,7 +481,27 @@ class CloudSyncManager(
     }
 
     /** 覆盖前另存的云端副本（设置页「从副本恢复」用） */
-    data class LocalBackup(val file: File, val stamp: String, val recordCount: Int)
+    data class LocalBackup(
+        val file: File,
+        /** 文件名里的 UTC 时间戳（裁剪排序靠它，别改格式） */
+        val stamp: String,
+        /** 展示用：本地时区的 MM-dd HH:mm（UTC 串直接给用户看，早晚差 8 小时对不上自己刚操作的时间） */
+        val displayTime: String,
+        val recordCount: Int,
+    )
+
+    /** 把文件名里的 UTC 时间戳转成本地可读时间；解析失败就原样返回（不吞掉信息） */
+    private fun formatBackupStamp(stamp: String): String {
+        return try {
+            val utc = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+            val parsed = utc.parse(stamp)
+            if (parsed == null) stamp
+            else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(parsed)
+        } catch (e: Exception) {
+            stamp
+        }
+    }
 
     /** 列出本地副本，最新的在前。recordCount = -1 表示这份副本本身读不懂 */
     suspend fun listLocalBackups(): List<LocalBackup> = withContext(Dispatchers.IO) {
@@ -496,9 +521,11 @@ class CloudSyncManager(
                 } else {
                     -1
                 }
+                val stamp = f.name.removePrefix(LOCAL_BACKUP_PREFIX).removeSuffix(".json")
                 LocalBackup(
                     file = f,
-                    stamp = f.name.removePrefix(LOCAL_BACKUP_PREFIX).removeSuffix(".json"),
+                    stamp = stamp,
+                    displayTime = formatBackupStamp(stamp),
                     recordCount = count,
                 )
             }
