@@ -417,4 +417,19 @@ class SyncTombstoneV2Test {
             settings.syncDeletedKeys.first().isEmpty(),
         )
     }
+
+    /** P2：恢复也是「读别人的文件」，读不懂就不许动本地库 */
+    @Test
+    fun `恢复预览遇到读不懂的快照时一条都不恢复`() = runBlocking {
+        dao.insert(entity("2026-11-21", 1200.0))
+        // v3 只增字段的典型形态：records 读得出、deleted 一个都读不出
+        cloudBody = """{"version":3,"records":[{"date":"2026-11-22","mileage":1210,
+            "oilAmount":40,"payableAmount":320}],"deleted":[]}"""
+
+        val result = manager.restorePreview()
+
+        assertTrue("读不懂必须明说，不能当成「云端是空的」", result!!.broken)
+        assertEquals(0, result.valid.size)
+        assertEquals(1, dao.getRange("1970-01-01", "2999-12-31").size)
+    }
 }

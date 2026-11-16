@@ -69,8 +69,9 @@ class CloudSyncManager(
         private val DEFAULT_RETRY_DELAYS_MS = longArrayOf(15_000L, 60_000L)
 
         /**
-         * 「云端快照读不懂」的状态键：写它的地方有 1 处、读它的地方有 3 处（设置页、补推循环、立即备份）。
-         * 字面量散在四处，谁改一边另一边就静默失效，所以提成常量。
+         * 「云端快照读不懂」的状态键：写 1 处、读 3 处（补推循环、立即备份、关开开关）。
+         * 注意设置页读的是 `fail:` **之后**那一段（`substringAfter("fail:") == "corrupt"`），
+         * 改常量时那半段也不能动，否则设置页掉进 else 分支、直接给用户看原始 key。
          */
         const val STATUS_FAIL_CORRUPT = "fail:corrupt"
 
@@ -95,6 +96,12 @@ class CloudSyncManager(
         val errors: Int,
         val cloudRecordCount: Int,
         val skippedByTombstone: Int = 0,
+        /**
+         * 云端快照读不懂（不是本版能无损往返的格式）。
+         * 此时**一条都不恢复**：v3 若只增字段，records 读得出、deleted 读不出，
+         * 用户点「从云端恢复」就会把已删记录当可恢复记录重新插回本地。
+         */
+        val broken: Boolean = false,
     )
 
     // ===== 启动接入（KOiLApplication）=====
@@ -400,6 +407,11 @@ class CloudSyncManager(
 
         val json = client.download(url, BackupCodec.CLOUD_FILE_NAME, username, password)
             ?.takeIf { it.isNotBlank() } ?: return null
+        // 恢复也是「读别人的文件」：读不懂就不许动本地库，否则 v3 的 deleted 读不出来，
+        // 已删记录会被当成可恢复记录重新插回来——推送那条路堵住了，这条没有
+        if (!isRoundTrippable(json)) {
+            return RestoreResult(emptyList(), 0, 0, 0, 0, broken = true)
+        }
         // 一次解析同时拿到总条数与有效记录（避免 countRecords + parseRecords 把大 JSON 解析两遍）
         val parsed = BackupCodec.parse(json)
         val total = parsed.total

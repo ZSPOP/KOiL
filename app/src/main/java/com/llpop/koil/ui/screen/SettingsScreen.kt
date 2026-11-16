@@ -2575,7 +2575,7 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 
 
 
-/** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
+/** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
 @Composable
 private fun formatSyncNotice(key: String): String {
     // 支持 "restore_done:12" 这种带参数形式（恢复完成后提示实际插入条数）
@@ -2593,6 +2593,8 @@ private fun formatSyncNotice(key: String): String {
         // inserted=0 的恢复：与设置页状态行同口径，不伪报「已恢复」
         "restore_none" -> stringResource(R.string.koil_sync_restore_none)
         "restore_failed" -> stringResource(R.string.koil_sync_restore_failed)
+        // 云端是别的版本写的：一条都没恢复，别让用户以为「云端是空的」
+        "restore_corrupt" -> stringResource(R.string.koil_sync_restore_corrupt)
         "config_saved" -> stringResource(R.string.koil_sync_config_saved)
         "config_test_failed" -> stringResource(R.string.koil_sync_config_test_failed)
         // 未配置时点开关：复用状态行同一句（三语文案已齐，不新增条目）

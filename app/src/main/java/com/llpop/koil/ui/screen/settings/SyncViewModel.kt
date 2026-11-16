@@ -209,6 +209,16 @@ class SyncViewModel(
                             _reconcileCorrupt.value = probe
                         }
                     }
+                } else if (settings.syncLastStatus.first() == CloudSyncManager.STATUS_FAIL_CORRUPT) {
+                    // 已配对过、但云端是别的版本写的：常规推送只会再 corrupt 一次。
+                    // 这里重新探一次并把面板挂出来，否则「关掉再打开」也回不到人工入口。
+                    when (val probe = manager.probeReconcile()) {
+                        is CloudSyncManager.ReconcileProbe.Corrupt -> {
+                            _reconcileCorrupt.value = probe
+                            _message.value = "backup_corrupt"
+                        }
+                        else -> manager.pushNow(force = true)
+                    }
                 } else {
                     // 已配对过：走常规推送
                     manager.pushNow(force = true)
@@ -401,11 +411,14 @@ class SyncViewModel(
                 val ok = manager.pushNow(force = true)
                 // 云端读不懂时账号和网络都是好的，不能弹「请检查账号与网络」——
                 // 那会和同一秒的状态行互相拆台
-                _message.value = when {
-                    ok -> "backup_done"
-                    settings.syncLastStatus.first() == CloudSyncManager.STATUS_FAIL_CORRUPT ->
-                        "backup_corrupt"
-                    else -> "backup_failed"
+                if (!ok && settings.syncLastStatus.first() == CloudSyncManager.STATUS_FAIL_CORRUPT) {
+                    _message.value = "backup_corrupt"
+                    // 文案把用户指到对账面板，而面板只在首连弹（syncEverConfigured 之后不再弹）。
+                    // 不在这里补一次，用户唯一的出路就是清应用数据。
+                    (manager.probeReconcile() as? CloudSyncManager.ReconcileProbe.Corrupt)
+                        ?.let { _reconcileCorrupt.value = it }
+                } else {
+                    _message.value = if (ok) "backup_done" else "backup_failed"
                 }
             } catch (e: Exception) {
                 _message.value = "backup_failed"
@@ -441,6 +454,11 @@ class SyncViewModel(
         val result = manager.restorePreview()
         if (result == null) {
             _message.value = "restore_no_cloud"
+            return
+        }
+        // 读不懂的云端快照一条都不恢复：宁可这次不恢复，也不能把已删记录插回来
+        if (result.broken) {
+            _message.value = "restore_corrupt"
             return
         }
         _restorePreview.value = SyncRestorePreview(
