@@ -293,6 +293,8 @@ class SyncViewModel(
                 } catch (_: Exception) {
                     null      // 重跑失败就只留提示，不重开面板
                 }
+                // 重跑没成就不能说「已重新对账」——面板已经关了，这句话必须成立
+                if (reprobe == null) _message.value = "reconcile_stale_retry"
                 if (reprobe != null) {
                     _reconcile.value = (reprobe as? CloudSyncManager.ReconcileProbe.Ready)?.preview
                     _reconcileCorrupt.value = reprobe as? CloudSyncManager.ReconcileProbe.Corrupt

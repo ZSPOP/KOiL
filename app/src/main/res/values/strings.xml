@@ -446,6 +446,7 @@
     <string name="koil_sync_reconcile_corrupt_msg">云端那份备份读不出来（可能来自更新版本，或文件被改动过）。本次没有改动任何数据。</string>
     <string name="koil_sync_reconcile_corrupt_overwrite">仍然覆盖（会先留副本）</string>
     <string name="koil_sync_reconcile_stale">云端已被其他设备更新，已重新对账</string>
+    <string name="koil_sync_reconcile_stale_retry">云端已被其他设备更新，请重新对账</string>
     <string name="koil_sync_backup_restore_entry">从本地副本恢复（%1$d）</string>
     <string name="koil_sync_backup_restore_title">本地副本</string>
     <string name="koil_sync_backup_restore_hint">覆盖云端前自动另存的快照。恢复只插入，不删本机记录。</string>

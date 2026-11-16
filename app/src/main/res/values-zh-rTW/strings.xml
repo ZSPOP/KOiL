@@ -442,6 +442,7 @@
     <string name="koil_sync_reconcile_corrupt_msg">雲端那份備份讀不出來（可能來自更新版本，或檔案被改動過）。本次沒有改動任何資料。</string>
     <string name="koil_sync_reconcile_corrupt_overwrite">仍然覆蓋（會先留副本）</string>
     <string name="koil_sync_reconcile_stale">雲端已被其他裝置更新，已重新對帳</string>
+    <string name="koil_sync_reconcile_stale_retry">雲端已被其他裝置更新，請重新對帳</string>
     <string name="koil_sync_backup_restore_entry">從本機副本還原（%1$d）</string>
     <string name="koil_sync_backup_restore_title">本機副本</string>
     <string name="koil_sync_backup_restore_hint">覆蓋雲端前自動另存的快照。還原只插入，不刪本機記錄。</string>

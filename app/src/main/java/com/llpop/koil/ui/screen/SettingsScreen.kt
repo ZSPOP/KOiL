@@ -2597,6 +2597,8 @@ private fun formatSyncNotice(key: String): String {
             if (arg != null) stringResource(R.string.koil_sync_first_upload, arg)
             else stringResource(R.string.koil_sync_first_upload, 0)
         "reconcile_stale" -> stringResource(R.string.koil_sync_reconcile_stale)
+        // 重跑没成功：不能说「已重新对账」
+        "reconcile_stale_retry" -> stringResource(R.string.koil_sync_reconcile_stale_retry)
         "local_backup_broken" -> stringResource(R.string.koil_local_backup_broken)
         "reconcile_done" -> stringResource(R.string.koil_sync_reconcile_done)
         "reconcile_failed" -> stringResource(R.string.koil_sync_reconcile_failed)
