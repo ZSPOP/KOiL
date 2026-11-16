@@ -421,4 +421,24 @@
     <string name="koil_detail_pct_down">−%1$s%%</string>
     <string name="koil_sync_password_invalid">应用密码已失效（换机或重装后加密密钥丢失），请重新输入</string>
     <string name="koil_sync_status_password_invalid">同步已暂停：应用密码需重新输入</string>
+
+    <string name="koil_sync_reconcile_title">首次配对：云端已有备份</string>
+    <string name="koil_sync_reconcile_counts">本机 %1$d 条 · 云端 %2$d 条</string>
+    <string name="koil_sync_reconcile_both">两边都有 %1$d 条（其中 %2$d 条内容不同）</string>
+    <string name="koil_sync_reconcile_cloud_only">云端独有 %1$d 条，本机还没有</string>
+    <string name="koil_sync_reconcile_local_only">本机独有 %1$d 条，云端还没有</string>
+    <string name="koil_sync_reconcile_skipped">已删跳过 %1$d 条（你本机删过，不会拉回来）</string>
+    <string name="koil_sync_reconcile_merge">合并（推荐）：把云端 %1$d 条补进本机，两边都不删</string>
+    <string name="koil_sync_reconcile_local_wins">以本机为准：用本机覆盖云端，云端独有 %1$d 条会消失</string>
+    <string name="koil_sync_reconcile_cloud_wins">以云端为准：用云端重建本机，本机独有 %1$d 条会消失</string>
+    <string name="koil_sync_reconcile_destructive_title">确认执行？</string>
+    <string name="koil_sync_reconcile_destructive_msg">执行前会把当前云端快照另存为本地副本（保留最近 3 份）。覆盖本身不可撤销。</string>
+    <string name="koil_sync_reconcile_confirm">继续</string>
+    <string name="koil_sync_first_upload">云端暂无备份，将上传 %1$d 条</string>
+    <string name="koil_sync_reconcile_done">已按你的选择完成对账</string>
+    <string name="koil_sync_reconcile_failed">对账失败，请检查账号与网络</string>
+
+    <string name="koil_sync_reconcile_merge_plain">合并（推荐）：两边都保留，不做任何删除</string>
+    <string name="koil_sync_reconcile_local_wins_plain">以本机为准：用本机覆盖云端（云端将被整体替换）</string>
+    <string name="koil_sync_reconcile_cloud_wins_plain">以云端为准：用云端重建本机（本机将被整体替换）</string>
 </resources>

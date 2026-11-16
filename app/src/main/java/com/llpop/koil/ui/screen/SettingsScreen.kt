@@ -124,6 +124,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.data.sync.SyncReconcile
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
@@ -1642,6 +1643,9 @@ private fun SyncPanelBody(
             }
         }
 
+        // 首次配对对账面板（PR ②）：云端已有快照、本机也非空时弹
+        SyncReconcileDialog(syncVm)
+
         // 云同步恢复确认弹窗（预览 valid/dup/errors，确认后不删本地）
         val syncRestorePreview by syncVm.restorePreview.collectAsStateWithLifecycle()
         syncRestorePreview?.let { preview ->
@@ -1700,6 +1704,158 @@ private fun SyncPanelBody(
                 }
     }
     }
+}
+
+/**
+ * 首次配对对账面板（PR ②）。
+ *
+ * 每个选项的文案自带后果（"云端独有 N 条会消失"），不靠用户去理解"以云端为准"是什么意思；
+ * 后两个是破坏性的，点下去先弹二次确认——覆盖不可撤销，多一次点击比少一次损失便宜。
+ */
+@Composable
+private fun SyncReconcileDialog(viewModel: SyncViewModel) {
+    val preview by viewModel.reconcile.collectAsStateWithLifecycle()
+    var pendingDestructive by remember { mutableStateOf<SyncReconcile.Mode?>(null) }
+
+    preview?.let { p ->
+        val st = p.stats
+        com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissReconcile) {
+            Column {
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_title),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_counts, st.localCount, st.cloudCount),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(6.dp))
+                if (st.bothCount > 0) {
+                    ReconcileLine(stringResource(R.string.koil_sync_reconcile_both, st.bothCount, st.conflictCount))
+                }
+                if (st.cloudOnlyCount > 0) {
+                    ReconcileLine(stringResource(R.string.koil_sync_reconcile_cloud_only, st.cloudOnlyCount))
+                }
+                if (st.localOnlyCount > 0) {
+                    ReconcileLine(stringResource(R.string.koil_sync_reconcile_local_only, st.localOnlyCount))
+                }
+                if (st.tombstoneSkippedCount > 0) {
+                    ReconcileLine(stringResource(R.string.koil_sync_reconcile_skipped, st.tombstoneSkippedCount))
+                }
+                Spacer(Modifier.height(12.dp))
+                // 默认选项（推荐）放最上：用户不进面板直接点第一个就是最安全的
+                Button(
+                    onClick = { viewModel.confirmReconcile(SyncReconcile.Mode.MERGE) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    // 数字为 0 时不说「补进 0 条」——按钮文案要能单独读懂
+                    Text(
+                        text = if (st.cloudOnlyCount > 0) {
+                            stringResource(R.string.koil_sync_reconcile_merge, st.cloudOnlyCount)
+                        } else {
+                            stringResource(R.string.koil_sync_reconcile_merge_plain)
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { pendingDestructive = SyncReconcile.Mode.LOCAL_WINS },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = if (st.cloudOnlyCount > 0) {
+                            stringResource(R.string.koil_sync_reconcile_local_wins, st.cloudOnlyCount)
+                        } else {
+                            stringResource(R.string.koil_sync_reconcile_local_wins_plain)
+                        },
+                        fontSize = 13.sp,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { pendingDestructive = SyncReconcile.Mode.CLOUD_WINS },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = if (st.localOnlyCount > 0) {
+                            stringResource(R.string.koil_sync_reconcile_cloud_wins, st.localOnlyCount)
+                        } else {
+                            stringResource(R.string.koil_sync_reconcile_cloud_wins_plain)
+                        },
+                        fontSize = 13.sp,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.koil_common_cancel),
+                    fontSize = 13.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.dismissReconcile() }
+                        .padding(vertical = 10.dp),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
+        }
+    }
+
+    pendingDestructive?.let { mode ->
+        com.llpop.koil.ui.component.KOiLGlassDialog(
+            show = true,
+            onDismissRequest = { pendingDestructive = null },
+        ) {
+            Column {
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_destructive_title),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_destructive_msg),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { pendingDestructive = null },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            pendingDestructive = null
+                            viewModel.confirmReconcile(mode)
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.koil_sync_reconcile_confirm), fontSize = 13.sp) }
+                }
+            }
+        }
+    }
+}
+
+/** 对账面板的一行说明（点号 + 一行字） */
+@Composable
+private fun ReconcileLine(text: String) {
+    Text(
+        text = "· $text",
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        color = MiuixTheme.colorScheme.onBackgroundVariant,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
 }
 
 /**
@@ -2311,6 +2467,12 @@ private fun formatSyncNotice(key: String): String {
         "config_test_failed" -> stringResource(R.string.koil_sync_config_test_failed)
         // 未配置时点开关：复用状态行同一句（三语文案已齐，不新增条目）
         "not_configured" -> stringResource(R.string.koil_sync_status_not_configured)
+        // 首次配对且云端还没快照：不弹面板，只提示一句再直接上传
+        "first_upload" ->
+            if (arg != null) stringResource(R.string.koil_sync_first_upload, arg)
+            else stringResource(R.string.koil_sync_first_upload, 0)
+        "reconcile_done" -> stringResource(R.string.koil_sync_reconcile_done)
+        "reconcile_failed" -> stringResource(R.string.koil_sync_reconcile_failed)
         else -> key
     }
 }

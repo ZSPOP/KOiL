@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -36,6 +39,8 @@ class CloudSyncManager(
     private val recordDao: KOiLRecordDao,
     private val client: WebDavClient,
     private val db: AppDatabase,
+    /** 「以本机/云端为准」覆盖前另存的快照副本落在应用私有目录，需要它 */
+    private val context: android.content.Context,
 ) {
 
     companion object {
@@ -293,6 +298,165 @@ class CloudSyncManager(
                 SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
         )
         return inserted
+    }
+
+
+    // ===== 首次配对对账（PR ②） =====
+
+    /** 对账预览：两边差集 + 云端原始快照 + 那张快照的 ETag（后续 PUT 直接复用它，不再多发一次 GET） */
+    data class ReconcilePreview(
+        val stats: SyncReconcile.Stats,
+        val cloudJson: String,
+        val etag: String?,
+    )
+
+    /**
+     * 拉云端快照并算差集。**不写库、不写云端。**
+     * 返回 null：未配置，或云端还没有快照（调用方按「首次上传」处理，不弹对账面板）。
+     */
+    suspend fun previewReconcile(): ReconcilePreview? {
+        if (!isConfigured()) return null
+        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
+        val password = getAppPassword()
+
+        val snapshot = client.downloadWithMeta(url, BackupCodec.CLOUD_FILE_NAME, username, password)
+        val body = snapshot.content?.takeIf { it.isNotBlank() } ?: return null
+        val parsed = try {
+            BackupCodec.parse(body)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return null
+        }
+        val local = recordDao.getRange("1970-01-01", "2999-12-31")
+        val tombstones = settings.syncDeletedKeys.first()
+        return ReconcilePreview(
+            stats = SyncReconcile.compute(local, parsed.records, tombstones),
+            cloudJson = body,
+            etag = snapshot.etag,
+        )
+    }
+
+    /**
+     * 执行用户的选择。
+     *
+     * - 合并：只把云端独有（且不是本机已删）的记录插进本地，再以本地全量写回云端——**不删任何东西**
+     * - 以本机为准：先把旧云端快照另存本地副本，再用本地全量覆盖云端
+     * - 以云端为准：先把旧云端快照另存本地副本，再按云端重建本地（删本机独有、用云端覆盖冲突）
+     */
+    suspend fun applyReconcile(preview: ReconcilePreview, mode: SyncReconcile.Mode): Boolean {
+        if (!isConfigured()) return false
+        return pushMutex.withLock {
+            try {
+                when (mode) {
+                    SyncReconcile.Mode.MERGE -> {
+                        mergeCloudIntoLocal(preview.cloudJson)
+                        uploadLocalSnapshot(preview.etag)
+                    }
+                    SyncReconcile.Mode.LOCAL_WINS -> {
+                        backupBeforeOverwrite(preview.cloudJson)
+                        uploadLocalSnapshot(preview.etag)
+                    }
+                    SyncReconcile.Mode.CLOUD_WINS -> {
+                        backupBeforeOverwrite(preview.cloudJson)
+                        applyCloudAsTruth(preview.cloudJson)
+                    }
+                }
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                settings.setSyncLastStatus("fail:${e.message?.take(60) ?: "对账失败"}")
+                false
+            }
+        }
+    }
+
+    /** 用本地全量覆盖云端；ETag 来自对账那次 GET，不额外请求 */
+    private suspend fun uploadLocalSnapshot(expectedEtag: String?) {
+        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
+        val password = getAppPassword()
+        val records = recordDao.getRange("1970-01-01", "2999-12-31").inChronologicalOrder()
+        client.upload(
+            url, BackupCodec.CLOUD_FILE_NAME,
+            BackupCodec.buildBackup(records, BuildConfig.VERSION_NAME),
+            username, password, expectedEtag = expectedEtag, cloudExists = true,
+        )
+        settings.setSyncLastPushAt(System.currentTimeMillis())
+        settings.setSyncEverConfigured()
+        settings.setSyncLastStatus(
+            "ok@" + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+        )
+    }
+
+    /**
+     * 以云端为准重建本地：删本机独有、冲突项用云端内容覆盖、补上云端独有。
+     *
+     * 同步侧的删除**不写墓碑**（v4 口径：因云端命中而删的本地记录不进墓碑、不进缓存、不进删除历史），
+     * 否则用户下次推送又会把它推回云端，等于「服从云端」只生效一次。
+     */
+    private suspend fun applyCloudAsTruth(cloudJson: String) {
+        val parsed = BackupCodec.parse(cloudJson)
+        val cloudByKey = LinkedHashMap<String, BackupCodec.RecordData>()
+        parsed.records.forEach {
+            cloudByKey.putIfAbsent(RecordMerger.keyOf(it.reoilDate, it.mileage), it)
+        }
+        val local = recordDao.getRange("1970-01-01", "2999-12-31")
+        val localKeys = HashSet<String>(local.size)
+        val toInsert = mutableListOf<KOiLRecordEntity>()
+        local.forEach { r ->
+            val key = RecordMerger.keyOf(r.reoilDate, r.mileage)
+            localKeys.add(key)
+            val c = cloudByKey[key]
+            when {
+                c == null -> recordDao.deleteById(r.id)          // 本机独有：跟随云端 → 丢弃
+                !SyncReconcile.sameContent(r, c) -> {            // 同键不同内容：以云端为准
+                    recordDao.deleteById(r.id)
+                    toInsert.add(c.toEntity())
+                }
+            }
+        }
+        cloudByKey.forEach { (key, c) -> if (key !in localKeys) toInsert.add(c.toEntity()) }
+        if (toInsert.isNotEmpty()) recordDao.insertAllIgnore(toInsert)
+
+        // 用户刚同意服从云端：撤销标记必须清掉，否则下次推送会把云端的删除又摘回来
+        settings.clearRevivedKeys()
+        settings.setSyncLastStatus(
+            "restore@" + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+        )
+    }
+
+    /**
+     * 破坏性覆盖前，把旧云端快照另存成本地副本（`koil_backup.before-<UTC>.json`），只保留最近 3 份。
+     * 覆盖是不可逆的：本机独有记录一旦被云端版本盖掉，没有副本就再也找不回来。
+     */
+    internal suspend fun backupBeforeOverwrite(cloudJson: String): File? = withContext(Dispatchers.IO) {
+        try {
+            val dir = File(context.filesDir, "sync-backups").apply { mkdirs() }
+            // UTC + 毫秒：同一秒内连点两次也不能互相覆盖，否则「保留最近 3 份」会退化成一个
+            val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .format(Date())
+            var file = File(dir, "koil_backup.before-$stamp.json")
+            var seq = 1
+            while (file.exists()) {
+                seq++
+                file = File(dir, "koil_backup.before-$stamp-$seq.json")
+            }
+            file.writeText(cloudJson)
+            val kept = dir.listFiles { f -> f.name.startsWith("koil_backup.before-") }
+                ?.sortedBy { it.name }
+                .orEmpty()
+            // 保留最近 3 份：按文件名（含时间戳）升序，删掉靠前的
+            if (kept.size > 3) kept.dropLast(3).forEach { it.delete() }
+            file
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /** 首拉自动恢复：本地空库且已配置 → 直接恢复（合并预览全 valid 场景） */

@@ -417,4 +417,24 @@
     <string name="koil_about_percent_with_size">%1$d%% (%2$sMB/%3$sMB)</string>
     <string name="koil_about_downloaded">已下載 %1$s MB</string>
     <string name="koil_ov_update_view">查看</string>
+
+    <string name="koil_sync_reconcile_title">首次配對：雲端已有備份</string>
+    <string name="koil_sync_reconcile_counts">本機 %1$d 筆 · 雲端 %2$d 筆</string>
+    <string name="koil_sync_reconcile_both">兩邊都有 %1$d 筆（其中 %2$d 筆內容不同）</string>
+    <string name="koil_sync_reconcile_cloud_only">雲端獨有 %1$d 筆，本機還沒有</string>
+    <string name="koil_sync_reconcile_local_only">本機獨有 %1$d 筆，雲端還沒有</string>
+    <string name="koil_sync_reconcile_skipped">已刪略過 %1$d 筆（你本機刪過，不會拉回來）</string>
+    <string name="koil_sync_reconcile_merge">合併（建議）：把雲端 %1$d 筆補進本機，兩邊都不刪</string>
+    <string name="koil_sync_reconcile_local_wins">以本機為準：用本機覆蓋雲端，雲端獨有 %1$d 筆會消失</string>
+    <string name="koil_sync_reconcile_cloud_wins">以雲端為準：用雲端重建本機，本機獨有 %1$d 筆會消失</string>
+    <string name="koil_sync_reconcile_destructive_title">確認執行？</string>
+    <string name="koil_sync_reconcile_destructive_msg">執行前會把目前雲端快照另存為本機副本（保留最近 3 份）。覆蓋本身無法復原。</string>
+    <string name="koil_sync_reconcile_confirm">繼續</string>
+    <string name="koil_sync_first_upload">雲端尚無備份，將上傳 %1$d 筆</string>
+    <string name="koil_sync_reconcile_done">已依你的選擇完成對帳</string>
+    <string name="koil_sync_reconcile_failed">對帳失敗，請檢查帳號與網路</string>
+
+    <string name="koil_sync_reconcile_merge_plain">合併（建議）：兩邊都保留，不做任何刪除</string>
+    <string name="koil_sync_reconcile_local_wins_plain">以本機為準：用本機覆蓋雲端（雲端將被整體替換）</string>
+    <string name="koil_sync_reconcile_cloud_wins_plain">以雲端為準：用雲端重建本機（本機將被整體替換）</string>
 </resources>

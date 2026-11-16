@@ -8,6 +8,7 @@ import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.sync.CryptoHelper
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.data.sync.SyncDraftWriter
+import com.llpop.koil.data.sync.SyncReconcile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -80,9 +82,13 @@ class SyncViewModel(
 
     private val _busy = MutableStateFlow(false)
     private val _restorePreview = MutableStateFlow<SyncRestorePreview?>(null)
+    private val _reconcile = MutableStateFlow<CloudSyncManager.ReconcilePreview?>(null)
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
     val restorePreview: StateFlow<SyncRestorePreview?> = _restorePreview.asStateFlow()
+
+    /** 首次配对对账面板的数据（非空即展示） */
+    val reconcile: StateFlow<CloudSyncManager.ReconcilePreview?> = _reconcile.asStateFlow()
 
     /** 解密后的密码 + 是否解不开（Keystore 主密钥丢失） */
     private data class PasswordInfo(val plain: String, val broken: Boolean)
@@ -170,8 +176,21 @@ class SyncViewModel(
                 if (recordDao.count() == 0) {
                     // 新机/空库：拉云端预览 → 确认弹窗（不直接写库）
                     loadRestorePreview()
+                    return@launch
+                }
+                // 非空库：首次配对先对账，用户选完才动数据。
+                // 旧实现在这里直接 pushNow，云端独有记录被静默吞掉、用户完全不知道发生了什么。
+                if (!settings.syncEverConfigured.first()) {
+                    val preview = manager.previewReconcile()
+                    if (preview == null) {
+                        // 云端还没有快照 = 没有对账对象，弹完整面板只是多一步
+                        _message.value = "first_upload:${recordDao.count()}"
+                        manager.pushNow(force = true)
+                    } else {
+                        _reconcile.value = preview
+                    }
                 } else {
-                    // 非空库：本地权威 → 立即推送到云端（镜像本地）
+                    // 已配对过：走常规推送
                     manager.pushNow(force = true)
                 }
             } catch (e: CancellationException) {
@@ -221,6 +240,30 @@ class SyncViewModel(
             settings.setSyncPasswordEncrypted(false)
             settings.setSyncPasswordEverSet(true)
             settings.setSyncEnabled(false)
+        }
+    }
+
+    /** 关闭对账面板（用户取消 = 什么都不做，云端与数据库零变化） */
+    fun dismissReconcile() {
+        _reconcile.value = null
+    }
+
+    /** 用户选定口径后执行；执行完关面板并给结果 */
+    fun confirmReconcile(mode: SyncReconcile.Mode) {
+        val preview = _reconcile.value ?: return
+        if (!_busy.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val ok = manager.applyReconcile(preview, mode)
+                _message.value = if (ok) "reconcile_done" else "reconcile_failed"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = "reconcile_failed"
+            } finally {
+                _busy.value = false
+                _reconcile.value = null
+            }
         }
     }
 
