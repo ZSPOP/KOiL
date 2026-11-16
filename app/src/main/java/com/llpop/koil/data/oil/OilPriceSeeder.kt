@@ -7,6 +7,7 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer.SeedState
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -119,8 +120,8 @@ internal class OilPriceSeeder(
             // 期望覆盖已过窗口日数（含搁浅窗口，搁浅入库后各省应含维持记录）；
             // 每省独立拉取，失败不影响其他省
             // 窗口日 24 点前不算已过 → 严格 < today（今天窗口日不计入期望覆盖）
-            val threshold = adjustDates.count { it < LocalDate.now().format(KOIL_DATE_FMT) }
-            lastSeedAttemptAt = System.currentTimeMillis()
+            val threshold = adjustDates.count { it < AppClock.today().format(KOIL_DATE_FMT) }
+            lastSeedAttemptAt = AppClock.millis()
             seedState = SeedState.RUNNING
             seedTotal = PROVINCES.size
             seedDoneCounter.set(0)
@@ -237,7 +238,7 @@ internal class OilPriceSeeder(
     suspend fun resumeSeedingIfNeeded(minIntervalMs: Long = 60_000L) {
         if (seedState == SeedState.RUNNING) return
         if (seedState != SeedState.GAVE_UP && seedState != SeedState.WAITING) return
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         if (now - lastSeedAttemptAt < minIntervalMs) return
         lastSeedAttemptAt = now
         runSeedRetryLoop(FOREGROUND_SEED_RETRY_MS)
@@ -249,7 +250,7 @@ internal class OilPriceSeeder(
      * 用于补灌触发判定，避免 covered 达标后搁浅被假记录挡住而永久缺失。
      */
     private suspend fun hasStrandedGap(province: String, adjustDates: List<String>): Boolean {
-        val today = LocalDate.now().format(KOIL_DATE_FMT)
+        val today = AppClock.today().format(KOIL_DATE_FMT)
         val grades = OilPriceNetwork.GRADE_LABELS.values.toList()
         // 一次取本省全部价格，在内存里判缺口：「4 油号 × 全部已过窗口」逐条查库
         //（约 25 窗口 × 4 × 2 条 SQL），31 省补灌时上万次查询，明显拖慢补全国。
@@ -308,8 +309,8 @@ internal class OilPriceSeeder(
                 Log.w("KOiL", "same-price cleanup failed", e)
             }
 
-            val today = LocalDate.now().format(KOIL_DATE_FMT)
-            val yearStart = "${LocalDate.now().year}-01-01"
+            val today = AppClock.today().format(KOIL_DATE_FMT)
+            val yearStart = "${AppClock.today().year}-01-01"
             // 幂等键：省|油号|生效日（重灌/补灌重复触发时不重复插入）；mutable：变化点覆盖搁浅时移除键
             val existing = priceDao.keysForProvince(province).toMutableSet()
             val entities = mutableListOf<KOiLPriceEntity>()

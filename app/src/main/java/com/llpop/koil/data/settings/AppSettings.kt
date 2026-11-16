@@ -13,6 +13,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.llpop.koil.data.sync.RecordMerger
+import com.llpop.koil.util.AppClock
+import com.llpop.koil.util.SystemLocaleBridge
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -54,6 +56,7 @@ class AppSettings(private val context: Context) {
 
         private val KEY_THEME_MODE = stringPreferencesKey("KOiL-theme-mode")
         private val KEY_LANGUAGE = stringPreferencesKey("KOiL-language")
+        private val KEY_LOCALE_MIRRORED = booleanPreferencesKey("KOiL-locale-mirrored")
         private val KEY_SUMMARY_RANGE = stringPreferencesKey("KOiL-summary-range")
         private val KEY_DEFAULT_PROVINCE = stringPreferencesKey("KOiL-default-province")
         private val KEY_DEFAULT_OIL_GRADE = stringPreferencesKey("KOiL-default-oil-grade")
@@ -177,6 +180,24 @@ class AppSettings(private val context: Context) {
 
     suspend fun setLanguage(lang: Language) {
         context.KOiLDataStore.edit { p -> p[KEY_LANGUAGE] = lang.toPrefValue() }
+        // 同步到系统「每应用语言」（Android 13+）。放在同一个写入口，App 内与系统侧不会分叉；
+        // 系统不支持/语言未声明时由桥内部吞掉异常，退回原先的「App 内自绘」路径
+        SystemLocaleBridge.apply(context, lang)
+    }
+
+    /**
+     * 是否已经把「App 内语言」同步给过系统一次（内部状态，不出现在设置界面）。
+     *
+     * 用途只有一个：升级到带 `localeConfig` 的版本后，系统侧还是空的（用户从没在系统里选过），
+     * 这时应该把用户以前在 App 内选的语言推上去，而不是反过来把用户的选择清成「跟随系统」。
+     * 推过一次之后系统侧成为可对照的镜像，之后就以系统为准。
+     */
+    val localeMirrorAdopted: Flow<Boolean> = context.KOiLDataStore.data.distinctValue {
+        it[KEY_LOCALE_MIRRORED] ?: false
+    }
+
+    suspend fun setLocaleMirrorAdopted() {
+        context.KOiLDataStore.edit { it[KEY_LOCALE_MIRRORED] = true }
     }
 
     // ---- 汇总区间（koil-summary-range）----
@@ -431,7 +452,7 @@ class AppSettings(private val context: Context) {
     suspend fun setForecastSnapshot(snapshot: String) {
         context.KOiLDataStore.edit {
             it[KEY_FORECAST_SNAPSHOT] = snapshot
-            it[KEY_FORECAST_SNAPSHOT_AT] = System.currentTimeMillis()
+            it[KEY_FORECAST_SNAPSHOT_AT] = AppClock.millis()
         }
     }
 

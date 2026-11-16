@@ -6,6 +6,7 @@ import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -165,7 +166,7 @@ internal class OilPriceAdjustCalendar(
     private suspend fun getAdjustDatesInner(): List<String> {
         // 1) 内存缓存优先（跨年时内存缓存同样失效——App 跨年不重启的场景——清掉走持久化/重算）
         cachedAdjustDates?.let { dates ->
-            if (dates.firstOrNull()?.take(4) == LocalDate.now().year.toString()) return dates
+            if (dates.firstOrNull()?.take(4) == AppClock.today().year.toString()) return dates
             cachedAdjustDates = null
         }
         // 2) 持久化缓存（App 重启后复用上次已推算的窗口日，杜绝次源临时失败导致空降级 → 假生效日）
@@ -178,7 +179,7 @@ internal class OilPriceAdjustCalendar(
             // 跨年检测：缓存窗口日历的年份 ≠ 今年 → 作废重算（跨年后自动滚动到新年日历，
             // 调价次数当年口径从零重计、新窗口正常增量入库，无需清库重装）
             val yearOfCache = persisted.firstOrNull()?.take(4)
-            val currentYear = LocalDate.now().year.toString()
+            val currentYear = AppClock.today().year.toString()
             if (yearOfCache != currentYear) {
                 // 只作废内存缓存，**不删持久化**：1 月 1 日弱网首启时若先清空，
                 // 一旦当年推算失败就彻底没日历可依——设置页「距下轮调价日」整行消失、
@@ -212,7 +213,7 @@ internal class OilPriceAdjustCalendar(
             return staleFromLastYear ?: emptyList()
         }
         settings.setPriceDbLastAnchorSource(anchorSource)
-        val todayYear = LocalDate.now().year
+        val todayYear = AppClock.today().year
         // 拉当年 + 前后各一年节假日（向前倒推/向后顺推可能跨年；缺失年份为空 → 该年按纯工作日推）
         val holidaySet = mutableSetOf<String>()
         val workdaySet = mutableSetOf<String>()
@@ -226,7 +227,7 @@ internal class OilPriceAdjustCalendar(
                 workdaySet.addAll(h.workdayDates)
             }
         }
-        val dates = calculateAdjustWindowDates(anchor, LocalDate.now().year, holidaySet, workdaySet)
+        val dates = calculateAdjustWindowDates(anchor, AppClock.today().year, holidaySet, workdaySet)
         if (dates.isNotEmpty()) {
             cachedAdjustDates = dates
             // 这一句同时完成「跨年旧缓存的清理」：写新年日历即覆盖，无需先清空
@@ -248,8 +249,8 @@ internal class OilPriceAdjustCalendar(
         // 只清「当年窗口日历范围内的假日期」：生效日在当年 1-1 ~ 12-31 且不在合法窗口+1 集合
         // （如降级灌入的 09-27）；往年日期一律保留 —— 灌库是一次性起点 + 持续增量模型，
         // 2026 起点灌库后跨年（2027）不重灌、不清库，历史记录持续累加。
-        val yearStart = "${LocalDate.now().year}-01-01"
-        val yearEnd = "${LocalDate.now().year}-12-31"
+        val yearStart = "${AppClock.today().year}-01-01"
+        val yearEnd = "${AppClock.today().year}-12-31"
         val badDates = priceDao.distinctEffectiveDates().filter {
             it in yearStart..yearEnd && it !in legal
         }
@@ -327,7 +328,7 @@ internal class OilPriceAdjustCalendar(
         // 跨年闸：持久化里还是去年的日历时，它的"合法生效日"全落在去年，
         // 拿它当白名单会把今年的每一条生效日都判成非法（只差安全闸门没删干净）。
         // 新年日历写入后这里自然放行。
-        if (dates.isNotEmpty() && dates.first().take(4) == LocalDate.now().year.toString()) {
+        if (dates.isNotEmpty() && dates.first().take(4) == AppClock.today().year.toString()) {
             purgeIllegalEffectiveDates(dates)
         }
     }

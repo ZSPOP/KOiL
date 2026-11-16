@@ -1,0 +1,57 @@
+# 依赖守门（B6）
+#
+# 为什么要有这个文件：依赖更新此前完全靠人想，`gradle/libs.versions.toml` 里的版本
+# 没有机制提醒升级；也没有机制提醒「某个依赖被上游废弃/爆 CVE」。
+#
+# 刻意保守，不制造 PR 洪水：
+# - 每周一次（周一上午），最多同时开 3 个 PR；
+# - 按生态分组，同一组只开一个 PR（十几个 androidx 包各开一个没人会看）；
+# - 不自动合并：这些 PR 与普通改动一样走 CI + 人工评审，守门只负责「把话说到」。
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      androidx:
+        patterns:
+          - "androidx.*"
+          - "com.google.android.*"
+      kotlin-and-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+      other:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "androidx.*"
+          - "com.google.android.*"
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns:
+          - "*"

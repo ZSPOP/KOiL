@@ -342,7 +342,7 @@ fun AddScreen(
                     onClick = viewModel::addRecord,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .heightIn(min = 52.dp),
                     enabled = uiState.precheck.isReady && !uiState.isAdding,
                     // 主按钮预设自带禁用态配色（深色下是深蓝，而不是纯黑）
                     colors = ButtonDefaults.buttonColorsPrimary(color = KOiLColors.Primary),
@@ -437,7 +437,7 @@ private fun ProvincePickerDialog(
                 onClick = onDismiss,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .heightIn(min = 44.dp),
             ) {
                 Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp)
             }
@@ -472,7 +472,7 @@ private fun PermissionDialog(
             ) {
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                     colors = ButtonDefaults.buttonColors(
                         color = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                         contentColor = MiuixTheme.colorScheme.onBackground,
@@ -482,7 +482,7 @@ private fun PermissionDialog(
                 }
                 Button(
                     onClick = onGrant,
-                    modifier = Modifier.weight(1f).height(44.dp),
+                    modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                     colors = ButtonDefaults.buttonColors(color = KOiLColors.Primary, contentColor = Color.White),
                 ) {
                     Text(stringResource(R.string.koil_add_loc_grant), fontSize = 14.sp, fontWeight = FontWeight.Medium)
@@ -1064,7 +1064,7 @@ private fun GradeField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MiuixTheme.colorScheme.secondaryContainer)
                 .clickable { showMenu.value = true }

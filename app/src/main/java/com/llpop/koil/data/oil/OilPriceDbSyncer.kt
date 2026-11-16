@@ -7,6 +7,7 @@ import com.llpop.koil.data.local.AppDatabase
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
@@ -123,7 +124,7 @@ class OilPriceDbSyncer(
             )
         }
         return try {
-            val now = System.currentTimeMillis()
+            val now = AppClock.millis()
 
             if (!force && !getAutoEnabled()) {
                 return OilPriceSyncResult(
@@ -152,11 +153,11 @@ class OilPriceDbSyncer(
             // 仅聚合接口 next_adjustment 文本解析 → 本地推算窗口日历下个未来窗口兜底）
             val nextRaw = result.nextAdjustment?.takeIf { it.isNotBlank() }
                 ?.let { OilPriceDateUtil.normalize(it) }
-                ?: calendar.getAdjustDates().firstOrNull { it >= LocalDate.now().format(KOIL_DATE_FMT) }
+                ?: calendar.getAdjustDates().firstOrNull { it >= AppClock.today().format(KOIL_DATE_FMT) }
             if (nextRaw != null) {
                 val newNext = OilPriceDateUtil.normalize(nextRaw)
                 if (newNext != null) {
-                    val today = LocalDate.now().format(KOIL_DATE_FMT)
+                    val today = AppClock.today().format(KOIL_DATE_FMT)
                     if (newNext < today) {
                         // 接口预告已过期（检测延迟/接口缓存旧值）：该窗口已过 → 直接作为 prev 存档，
                         // 避免"首次同步即拿到过期窗口 → prev 永久缺失 → 版本号 V——"；
@@ -227,7 +228,7 @@ class OilPriceDbSyncer(
         val total = priceDao.count()
         if (total > 0) {
             if (getInitAt() == 0L) {
-                settings.setPriceDbInitAt(System.currentTimeMillis())
+                settings.setPriceDbInitAt(AppClock.millis())
             }
             if (getLastUpdatedAt().isBlank()) {
                 val latest = priceDao.maxDate()
@@ -284,7 +285,7 @@ class OilPriceDbSyncer(
             )
         }
 
-        val today = LocalDate.now().format(KOIL_DATE_FMT)
+        val today = AppClock.today().format(KOIL_DATE_FMT)
         val nextAdjustment = samplePrimary.nextAdjustment ?: sampleSecondary.nextAdjustment
 
         // ── 跨天纠错：不依赖「是不是今天」 ──

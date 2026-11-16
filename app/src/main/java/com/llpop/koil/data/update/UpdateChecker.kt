@@ -3,6 +3,7 @@ package com.llpop.koil.data.update
 import android.util.Log
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -148,7 +149,7 @@ class UpdateChecker(private val settings: AppSettings) {
      */
     suspend fun checkIfDue(): UpdateTarget? {
         val last = settings.updateLastCheckAt.first()
-        val elapsed = System.currentTimeMillis() - last
+        val elapsed = AppClock.millis() - last
         if (last > 0 && elapsed in 0 until INTERVAL_MS) return null
         return (refresh() as? RefreshOutcome.Newer)?.target
     }
@@ -184,7 +185,7 @@ class UpdateChecker(private val settings: AppSettings) {
                 UpdatePersistAction.Keep -> Unit
             }
             // 只有 Write / Clear 才算一次成功检查并推进节流时间戳；Keep 不推进
-            if (action.advancesLastCheckAt) settings.setUpdateLastCheckAt(System.currentTimeMillis())
+            if (action.advancesLastCheckAt) settings.setUpdateLastCheckAt(AppClock.millis())
         }.onFailure { Log.w("KOiL", "persist update target failed: ${it.message}") }
         // 带上 newer：否则「确认没新版」和「查到新版」打出一模一样的日志，排查时分不清
         Log.i(
@@ -195,25 +196,49 @@ class UpdateChecker(private val settings: AppSettings) {
     }
 
     /**
-     * 读 Gitee 的 release **列表**，自己挑版本号最大的那条。
+     * 读两个源的 release **列表**，自己挑版本号最大的那条。
      *
      * 为什么不用 `/releases/latest`：它的「最新」是「最新创建」，不是「版本号最大」。
      * 补传一个旧版本（本仓库真发生过：1.1.7 之后决定"不补传 1.1.5 了"，但补传随时可能发生）
      * 会拿到新 id + 新 created_at，于是 latest 返回 V1.1.5 →
      * 与本机比较后 not newer → 清空落库 → **红点静默熄灭**，用户再也收不到提示。
      * 列表接口一页 20 条（keep=5）足够覆盖，几 KB 的响应换掉一整类静默失败。
+     *
+     * 为什么要两个源：Gitee 是主通道（国内直连快、APK 直链可用），但它可能限流、
+     * 镜像滞后或整站不可达；此前只有一个源，那种时候用户永远收不到新版提示。
+     * GitHub 作为备用源（同一份 tag 命名、同一套 assets 结构），两源都成功时取**版本号更大**的那条：
+     * 镜像滞后就取 GitHub 的，宁可直链慢一点，也不能把已发布的新版吞掉。
      */
     private fun fetchLatestTarget(): UpdateTarget? {
+        return pickNewestTarget(
+            gitee = fetchReleaseList(GITEE_RELEASE_LIST_API, "gitee"),
+            github = fetchReleaseList(GITHUB_RELEASE_LIST_API, "github"),
+        )
+    }
+
+    /** 拉一个源的 release 列表；失败（超时/限流/非 2xx/JSON 读不懂）返回 null，交给另一个源 */
+    private fun fetchReleaseList(api: String, source: String): UpdateTarget? {
         var conn: HttpURLConnection? = null
-        try {
-            conn = (URL(RELEASE_LIST_API).openConnection() as HttpURLConnection).apply {
+        return try {
+            conn = (URL(api).openConnection() as HttpURLConnection).apply {
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("User-Agent", "KOiL-Android")
+                // GitHub API 不带 Accept 也能用，但显式声明版本，避免将来默认版本变更；
+                // 只对 GitHub 发，别把 GitHub 的媒体类型塞给 Gitee
+                if (source == "github") setRequestProperty("Accept", "application/vnd.github+json")
             }
-            if (conn.responseCode !in 200..299) return null
-            val json = conn.inputStream.bufferedReader().use { it.readText() }
-            return selectLatestRelease(json)
+            val code = conn.responseCode
+            if (code !in 200..299) {
+                Log.w("KOiL", "release list $source http=$code")
+                null
+            } else {
+                val json = conn.inputStream.bufferedReader().use { it.readText() }
+                selectLatestRelease(json)?.also { Log.i("KOiL", "release list $source -> ${it.tag}") }
+            }
+        } catch (e: Exception) {
+            Log.w("KOiL", "release list $source failed: ${e.message}")
+            null
         } finally {
             runCatching { conn?.disconnect() }
         }
@@ -223,28 +248,51 @@ class UpdateChecker(private val settings: AppSettings) {
         /** 两次检查的最小间隔（45 分钟，见 [checkIfDue] 注释） */
         const val INTERVAL_MS = 45L * 60 * 1000
 
-        /** 列表接口（不是 /latest，原因见 [fetchLatestTarget]） */
-        const val RELEASE_LIST_API =
+        /** Gitee 列表接口（不是 /latest，原因见 [fetchLatestTarget]） */
+        const val GITEE_RELEASE_LIST_API =
             "https://gitee.com/api/v5/repos/ZSPOP/KOiL/releases?per_page=20"
+
+        /** GitHub 备用源；匿名调用有每小时 60 次的额度，45 分钟节流下远够用 */
+        const val GITHUB_RELEASE_LIST_API =
+            "https://api.github.com/repos/ZSPOP/KOiL/releases?per_page=20"
         private const val TIMEOUT_MS = 6000
     }
 }
 
 /**
- * 从 Gitee release **列表** JSON 里挑出版本号最大的一条，返回 tag 与 APK 直链。
+ * 两源都拿到时选哪一条：版本号更大的那条，同版本留 Gitee（直链国内可用）。
  *
- * 抽成顶层纯函数是为了能单测：线上只跑"正常响应"一条路径，
- * 而真正会翻车的是补传旧版、混进 prerelease、assets 里只有源码包这几种。
- *
- * 用 kotlinx.serialization 而不是正则扫全文：release 的 `body` 里若贴了下载链接，
- * 正则会把正文里的 URL 当成 asset；按结构解析则只认 assets 数组，不受正文影响。
+ * 抽成纯函数是因为这个取舍会决定「镜像滞后时用户还能不能收到新版」：
+ * 若一律以 Gitee 为准，Gitee 停在 V1.2.2、GitHub 已发 V1.2.3 时，红点永远不亮；
+ * 若一律以 GitHub 为准，国内用户要下 GitHub 直链，成功率反而下降。
+ * 所以按版本号取大，只有打平时才偏向 Gitee。
  */
+internal fun pickNewestTarget(gitee: UpdateTarget?, github: UpdateTarget?): UpdateTarget? = when {
+    gitee == null -> github
+    github == null -> gitee
+    compareVersionNames(gitee.tag, github.tag) >= 0 -> gitee
+    else -> github
+}
+
 /**
  * Release JSON 解析器。Json 是线程安全的不可变配置，建一次复用即可；
  * 每次解析都 new 一个属于无谓开销（K2: Redundant creation of Json format）。
  */
 private val releaseJson = Json { ignoreUnknownKeys = true }
 
+/**
+ * 从 release **列表** JSON 里挑出版本号最大的一条，返回 tag 与 APK 直链。
+ *
+ * 抽成顶层纯函数是为了能单测：线上只跑"正常响应"一条路径，
+ * 而真正会翻车的是补传旧版、混进 prerelease、assets 里只有源码包这几种。
+ *
+ * 用 kotlinx.serialization 而不是正则扫全文：release 的 `body` 里若贴了下载链接，
+ * 正则会把正文里的 URL 当成 asset；按结构解析则只认 assets 数组，不受正文影响。
+ *
+ * GitHub 与 Gitee 的 release 结构在用到的那几个字段上一致
+ * （`tag_name` / `prerelease` / `assets[].name` / `assets[].browser_download_url`），
+ * 所以两个源共用这一个解析器；多出来的字段由 `ignoreUnknownKeys` 忽略。
+ */
 internal fun selectLatestRelease(json: String): UpdateTarget? {
     val releases = runCatching {
         releaseJson.decodeFromString<List<GiteeRelease>>(json)

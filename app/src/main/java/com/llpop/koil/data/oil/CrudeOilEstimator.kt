@@ -2,6 +2,7 @@ package com.llpop.koil.data.oil
 
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -111,7 +112,7 @@ class CrudeOilEstimator(
             points: List<Pair<String, Double>>,
             adjustDates: List<String>,
             baseDate: String?,
-            today: String = LocalDate.now().toString(),
+            today: String = AppClock.today().toString(),
             fxRate: Double,
         ): CrudeOilCalcResult? {
             if (points.size < MIN_EIA_POINTS) return null
@@ -181,7 +182,7 @@ class CrudeOilEstimator(
     }
 
     suspend fun estimateDetailed(): EstimateOutcome {
-        val today = LocalDate.now().toString()
+        val today = AppClock.today().toString()
         var fxFailed = false
         // 数据源开关——关 = 直接用腾讯（不请求 EIA）；开 = EIA 主源 → 失败降级腾讯
         val eiaOn = settings.eiaEnabled.first()

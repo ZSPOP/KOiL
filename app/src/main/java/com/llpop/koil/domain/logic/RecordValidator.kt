@@ -1,5 +1,6 @@
 package com.llpop.koil.domain.logic
 
+import com.llpop.koil.util.AppClock
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -33,7 +34,7 @@ object RecordValidator {
      * UI 的日期选择器有 `maxDate=today`，但 CSV 导入、手动备份、云同步恢复都绕过 UI，
      * 未来记录会变成 `getLatest()` 的"上次里程"，反过来阻塞当天正常录入。
      */
-    fun isFutureDate(date: String, today: LocalDate = LocalDate.now()): Boolean =
+    fun isFutureDate(date: String, today: LocalDate = AppClock.today()): Boolean =
         runCatching { LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE) }
             .getOrNull()
             ?.isAfter(today) == true
@@ -56,7 +57,7 @@ object RecordValidator {
         payable: Double,
         actual: Double,
         allowFuture: Boolean = false,
-        today: LocalDate = LocalDate.now(),
+        today: LocalDate = AppClock.today(),
     ): Boolean =
         isRealDate(date) &&
             (allowFuture || !isFutureDate(date, today)) &&

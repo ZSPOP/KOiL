@@ -1,5 +1,7 @@
 package com.llpop.koil.data.oil
 
+import com.llpop.koil.util.AppClock
+
 /**
  * 预测幅度的本地快照：把上次成功估算的结论落盘，冷启动先显示、后台刷新再覆盖。
  *
@@ -29,7 +31,7 @@ internal object ForecastSnapshot {
      * @param at 快照写入时间（毫秒），0 或负数视为没写过
      * @param now 当前时间，仅测试注入
      */
-    fun decode(raw: String, at: Long, now: Long = System.currentTimeMillis()): CrudeOilEstimate? {
+    fun decode(raw: String, at: Long, now: Long = AppClock.millis()): CrudeOilEstimate? {
         if (raw.isBlank() || at <= 0L) return null
         if (now - at > MAX_AGE_MS) return null
         val parts = raw.split(SEPARATOR)

@@ -102,7 +102,15 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     // 使 stringResource 立即按目标 locale 取资源（无需重启 Activity）。
     val baseConfig = androidx.compose.ui.platform.LocalConfiguration.current
     val baseContext = androidx.compose.ui.platform.LocalContext.current
-    val locale = remember(language) { com.llpop.koil.util.LocaleManager.resolve(language) }
+    // 「跟随系统」时取窗口当前配置里的 locale，而不是 Locale.getDefault()：
+    // 系统语言变化（清单已声明 locale|layoutDirection 不重建 Activity）时前者一定是最新值，
+    // 后者依赖框架更新进程默认 Locale，时序上可能慢一拍。同时把它作为 remember key，
+    // 否则系统语言变了、language 仍是 SYSTEM，remember 命中旧值 → 界面停在上一种语言。
+    val systemLocales = baseConfig.locales
+    val locale = remember(language, systemLocales) {
+        if (language == AppSettings.Language.SYSTEM) systemLocales[0]
+        else com.llpop.koil.util.LocaleManager.resolve(language)
+    }
     val overrideConfig = remember(locale, baseConfig) {
         android.content.res.Configuration(baseConfig).apply { setLocale(locale) }
     }

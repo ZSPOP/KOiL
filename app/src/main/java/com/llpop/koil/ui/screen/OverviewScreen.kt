@@ -801,11 +801,11 @@ fun OverviewScreen(
                         Spacer(Modifier.height(20.dp))
                     }
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).height(44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
+                        Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).heightIn(min = 44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
                         Spacer(Modifier.width(12.dp))
                         Button(
                             onClick = viewModel::saveBackfill,
-                            modifier = Modifier.weight(1f).height(44.dp),
+                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                             enabled = dlg.backfillReady && !dlg.isSavingBackfill,
                             // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
                             colors = ButtonDefaults.buttonColors(
@@ -2191,12 +2191,12 @@ private fun EditRecordDialog(
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Button(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f).height(44.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                     ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
                     Spacer(Modifier.width(12.dp))
                     Button(
                         onClick = onSave,
-                        modifier = Modifier.weight(1f).height(44.dp),
+                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                         enabled = uiState.editReady && !uiState.isSavingEdit,
                         // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐补录卡/首页录入卡）
                         colors = ButtonDefaults.buttonColors(
@@ -2329,7 +2329,7 @@ private fun ProvinceSelectField(province: String, onProvinceChange: (String) -> 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
+                .heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MiuixTheme.colorScheme.secondaryContainer)
                 .onGloballyPositioned {
@@ -2585,7 +2585,7 @@ private fun GradePriceSelect(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp)
+                .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MiuixTheme.colorScheme.secondaryContainer)
                 .onGloballyPositioned {

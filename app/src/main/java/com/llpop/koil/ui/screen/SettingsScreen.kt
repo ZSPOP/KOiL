@@ -155,6 +155,7 @@ import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixIndication
 import java.util.Locale
+import com.llpop.koil.util.AppClock
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -948,22 +949,22 @@ private fun PriceDbSection(
             val tickNow: java.time.LocalDateTime? =
                 if (priceDbStatus.nextAdjustWindowDate != null) {
                     produceState(
-                        initialValue = java.time.LocalDateTime.now().withSecond(0).withNano(0),
+                        initialValue = AppClock.nowLocal().withSecond(0).withNano(0),
                         key1 = priceDbStatus.nextAdjustWindowDate,
                     ) {
                         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                             // 回到前台先对齐一次：STOPPED 期间 block 被取消，value 冻在离开前的时刻，
                             // 不先赋一次就得等下一整分钟，「已开」态会晚 0~60 秒才翻
-                            value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+                            value = AppClock.nowLocal().withSecond(0).withNano(0)
                             while (true) {
-                                delay(60_000L - System.currentTimeMillis() % 60_000L)
+                                delay(60_000L - AppClock.millis() % 60_000L)
                                 // 落在整分钟上：跨零点判定等价（deadline 就是 00:00:00）
-                                value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+                                value = AppClock.nowLocal().withSecond(0).withNano(0)
                             }
                         }
                     }.value
                 } else null
-            val nowLocal = tickNow ?: java.time.LocalDateTime.now()
+            val nowLocal = tickNow ?: AppClock.nowLocal()
             val todayLocal = nowLocal.toLocalDate()
 
             // 上次检查时间：今天只给时刻、昨天加前缀、更早带日期

@@ -14,6 +14,7 @@ import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.RecordValidator
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -119,7 +120,7 @@ class AddViewModel(
     private val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     /** 跨天信号：价格/趋势查询都必须使用“当天”截断，不能把 init 时的 today 捕获成常量 */
-    private val todayFlow = MutableStateFlow(LocalDate.now().format(dateFormatter))
+    private val todayFlow = MutableStateFlow(AppClock.today().format(dateFormatter))
 
     /** 用户是否手动切过「查看省份」：切过后默认省份变化不再覆盖它，避免把用户正在看的省顶掉 */
     private var viewProvincePinned = false
@@ -134,7 +135,7 @@ class AddViewModel(
     private var lastForecastAt = 0L
 
     init {
-        val today = LocalDate.now().format(dateFormatter)
+        val today = AppClock.today().format(dateFormatter)
         _uiState.update { it.copy(date = today) }
         scheduleDayRefresh()
 
@@ -267,14 +268,14 @@ class AddViewModel(
     private fun scheduleDayRefresh() {
         viewModelScope.launch {
             while (true) {
-                val nextMidnight = LocalDate.now()
+                val nextMidnight = AppClock.today()
                     .plusDays(1)
                     .atStartOfDay(ZoneId.systemDefault())
                     .toInstant()
                     .toEpochMilli()
-                delay((nextMidnight - System.currentTimeMillis()).coerceAtLeast(1_000L))
+                delay((nextMidnight - AppClock.millis()).coerceAtLeast(1_000L))
 
-                val newToday = LocalDate.now().format(dateFormatter)
+                val newToday = AppClock.today().format(dateFormatter)
                 todayFlow.value = newToday
                 _uiState.update { it.copy(date = newToday) }
                 loadPriceAdjustInfo()
@@ -484,7 +485,7 @@ class AddViewModel(
         // 节流：priceDbNextAdjustment / 灌库行数 / 跨天都会触发本方法，10 分钟内只真正请求一次网络；
         // 数据本身按 8h 周期刷新，不需要为此反复打 EIA 接口。
         // 只有成功拿到估算才占用窗口：一次网络失败不应把重试机会也吞掉。
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         if (lastForecastAt != 0L && now - lastForecastAt < FORECAST_MIN_INTERVAL_MS) return
         val outcome = runCatching { estimator.estimateDetailed() }
             .getOrNull() ?: CrudeOilEstimator.EstimateOutcome.Unavailable
