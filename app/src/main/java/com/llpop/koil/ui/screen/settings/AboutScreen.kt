@@ -419,9 +419,11 @@ private fun AboutContent(
         end = innerPadding.calculateEndPadding(layoutDirection),
     )
 
-    // hero 淡出到底（progress 到 1）就不再接收点击：它压在上层，继续接收会把卡片与滚动一起挡掉。
+    // progress 到 0.5 时 logo 与胶囊已经完全透明（alpha = (progress - 0.35) / 0.15），此后 hero 不再接收点击：
+    // 它压在上层，继续接收等于让一块「看不见的区域」吃掉卡片的点击。
+    // 阈值必须跟着淡出完成点走，写 1f 会留出半屏幽灵可点区（#81 一轮评审指出的就是这一处）。
     // derivedStateOf 只在跨阈值时翻转，不会跟着每一帧滚动重组。
-    val heroInteractive by remember { derivedStateOf { scrollProgress() < 1f } }
+    val heroInteractive by remember { derivedStateOf { scrollProgress() < 0.5f } }
 
     BgEffectBackground(
         dynamicBackground = effectBackground,
@@ -447,14 +449,15 @@ private fun AboutContent(
             item(key = "logoSpacer") {
                 // hero 的占位：hero 与列表是同一个 Box 的兄弟节点，两者必须严格重合，
                 // 否则卡片会压到胶囊上、或者中间留一条缝。这里只做占位、不接点击（点击由 hero 自己接）。
-                // 高度 = hero 内容高 + 顶部内边距 + 状态区到胶囊 + 胶囊 + 胶囊到卡片。两个易错点：
-                // 1) onSizeChanged 挂在 padding 之内，量到的是内容高、不含 padding，所以要补 logoPadding.top + 52dp；
+                // 高度 = hero 内容高 + hero 顶部内边距 + 胶囊到卡片。两个易错点：
+                // 1) onSizeChanged 挂在 padding 之内、量的是 Column 全部内容，所以 logoHeightDp 已经含
+                //    logo + 版本号 + 状态区 + 状态区到胶囊 + 胶囊本身 —— 这里不能再补 statusToCapsule
+                //    和胶囊高度，补一次就多出一整段空白（#81 一轮评审抓到的 114dp 错位就是这个）；
                 // 2) hero 从页面顶端起算，而这一项从 contentPadding 之后起算，两者差 scrollPadding.top，必须抵掉。
                 Spacer(
                     Modifier.height(
                         logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                            scrollPadding.calculateTopPadding() +
-                            statusToCapsule + 52.dp + heroToCard,
+                            scrollPadding.calculateTopPadding() + heroToCard,
                     ),
                 )
             }
