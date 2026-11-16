@@ -245,6 +245,7 @@
 
     <!-- ===== ViewModel 结果消息（key 由 VM 给出，UI 层翻译） ===== -->
     <string name="koil_msg_pdb_update_failed">更新失败：%1$s</string>
+    <string name="koil_msg_pdb_busy">油价库正在后台更新，稍等一下再看</string>
     <!-- 多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">同步来源：%1$s</string>
     <string name="koil_pdb_not_checked">尚未检测</string>
@@ -264,9 +265,6 @@
     <string name="koil_pdb_yesterday">昨天 %1$s</string>
 
     <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
-    <string name="koil_pdb_outcome_busy">上次核对没跑完：当时正在更新中</string>
-    <string name="koil_pdb_outcome_auto_off">上次未检测：自动更新已关闭</string>
-    <string name="koil_pdb_outcome_throttled">略过：距上次检查不足 %1$d 小时</string>
     <string name="koil_pdb_outcome_no_province">核对失败：省份列表为空</string>
     <string name="koil_pdb_outcome_fetch_failed">核对失败：实时油价不可用（%1$s）</string>
     <string name="koil_pdb_outcome_source_lagging">已核对至 %1$s，数据源日期滞后，跳过本次核验</string>

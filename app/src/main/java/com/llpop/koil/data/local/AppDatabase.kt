@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLPriceEntity
@@ -50,6 +51,16 @@ abstract class AppDatabase : RoomDatabase() {
         /** 独立库名：设备上无同名文件，安装即建空库；不读取、不改名任何既有数据文件 */
         const val DB_NAME = "KOiL.db"
 
+        /**
+         * 迁移链落点。**所有** schema 改动都必须 version+1 并在这里追加一条 Migration，
+         * 同时补迁移单测（规则见类注释）。
+         *
+         * 现在是空数组，因为 version 仍是 1、从未改过 schema——空着是正确状态，
+         * 不是「忘了写」。第一次加字段那天要做的是：version 改 2、写 `MIGRATION_1_2`、
+         * 把它放进这个数组，而不是去翻 builder 找在哪里注册。
+         */
+        private val MIGRATIONS: Array<Migration> = emptyArray()
+
         @Volatile
         private var instance: AppDatabase? = null
 
@@ -63,6 +74,7 @@ abstract class AppDatabase : RoomDatabase() {
                     // WAL：灌库/调价大批量写入时首页查询读旧快照不阻塞，避免"写入期间查询排队变慢"
                     .setJournalMode(androidx.room.RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                     // schema 迁移链：新版本只增不减，迁移逐段注册（schema 改动属高风险变更，见 docs/COLLABORATION.md 第十二节）
+                    .addMigrations(*MIGRATIONS)
                     .build()
                     .also { instance = it }
             }

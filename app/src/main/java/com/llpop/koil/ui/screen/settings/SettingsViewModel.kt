@@ -438,7 +438,12 @@ class SettingsViewModel(
         _priceDbUpdating.value = true
         viewModelScope.launch {
             try {
-                syncer.checkAndUpdate(force = true)
+                val result = syncer.checkAndUpdate(force = true)
+                // Busy = 后台 Worker 正在跑、这次被互斥挡下。按钮自己的转圈挡不住这种并发，
+                // 之前什么都不提示，用户会以为点了没反应、反复点。这是 Busy 唯一该被看见的地方。
+                if (result.outcome is PriceDbOutcome.Busy) {
+                    _exportMessage.value = ExportNotice("pdb_busy")
+                }
                 // 手动「立即更新」成功后也触发调价/窗口提醒（与周期 Worker 共用同一入口）
                 syncer.notifyPriceChanges(context)
             } catch (e: CancellationException) {

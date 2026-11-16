@@ -14,16 +14,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 
-/**
- * 油价库窗口日历引擎（从 OilPriceDbSyncer 拆出，M-09，行为不变）：
- * - 锚点链（apizero 接口已不可用，4 级）：
- *   ① xxapi date−1 → ② ruseo date−1（同源互备，xxapi 优先）→
- *   ③ abapi 全年曲线最近调价日（生效日−3）→ ④ calculateAdjustDates 本地推算全年窗口日历
- * - 内存 + 持久化缓存复用（重启不空降级）；缓存命中照常清假日期
- * - 幂等清理假生效日（purgeIllegalEffectiveDates）
- *
- * 机制细节见 docs/KOiL油价数据库机制.md。
- */
+/** 相邻两个窗口日的最大合理跨度：正常约 14 天，长假最多 24 天左右，超过即视为节假日集合异常 */
+private const val MAX_WINDOW_SPAN_DAYS = 30L
+
 /**
  * 从锚点推算指定年份的全年窗口日（升序，含历史与未来）。
  *
@@ -37,9 +30,6 @@ import java.time.LocalDate
  * @return 升序窗口日；锚点非法或节假日集合不可信（推进上界用尽）时返回 emptyList，
  *   调用方按「日历未就绪」降级到数据源原日期，**不要**用兜底值冒充窗口日
  */
-/** 相邻两个窗口日的最大合理跨度：正常约 14 天，长假最多 24 天左右，超过即视为节假日集合异常 */
-private const val MAX_WINDOW_SPAN_DAYS = 30L
-
 internal fun calculateAdjustWindowDates(
     anchor: String,
     year: Int,
@@ -106,6 +96,16 @@ internal fun calculateAdjustWindowDates(
     return result.toList()
 }
 
+/**
+ * 油价库窗口日历引擎（从 OilPriceDbSyncer 拆出，M-09，行为不变）：
+ * - 锚点链（apizero 接口已不可用，4 级）：
+ *   ① xxapi date−1 → ② ruseo date−1（同源互备，xxapi 优先）→
+ *   ③ abapi 全年曲线最近调价日（生效日−3）→ ④ calculateAdjustDates 本地推算全年窗口日历
+ * - 内存 + 持久化缓存复用（重启不空降级）；缓存命中照常清假日期
+ * - 幂等清理假生效日（purgeIllegalEffectiveDates）
+ *
+ * 机制细节见 docs/KOiL油价数据库机制.md。
+ */
 internal class OilPriceAdjustCalendar(
     private val network: OilPriceNetwork,
     private val settings: AppSettings,

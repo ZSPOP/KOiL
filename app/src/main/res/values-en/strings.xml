@@ -249,6 +249,7 @@
 
     <!-- ===== ViewModel result messages ===== -->
     <string name="koil_msg_pdb_update_failed">Update failed: %1$s</string>
+    <string name="koil_msg_pdb_busy">The price database is updating in the background — check again in a moment</string>
     <!-- 多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">Sync sources: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>
@@ -267,9 +268,6 @@
     <string name="koil_pdb_yesterday">Yesterday %1$s</string>
 
     <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
-    <string name="koil_pdb_outcome_busy">Last check did not finish: another one was already running</string>
-    <string name="koil_pdb_outcome_auto_off">Not checked: auto-update is off</string>
-    <string name="koil_pdb_outcome_throttled">Skipped: minimum interval not reached (hours: %1$d)</string>
     <string name="koil_pdb_outcome_no_province">Check failed: the province list is empty</string>
     <string name="koil_pdb_outcome_fetch_failed">Check failed: live prices unavailable (%1$s)</string>
     <string name="koil_pdb_outcome_source_lagging">Checked up to %1$s; the source date is lagging, so verification was skipped</string>

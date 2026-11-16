@@ -38,10 +38,11 @@ object CrashReporter {
      */
     fun install(context: Context) {
         val file = logFile(context)
+        val appDir = context.applicationContext.filesDir.absolutePath
         val prev = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             runCatching {
-                file.appendText(buildReport(thread, throwable))
+                file.appendText(buildReport(thread, throwable, appDir))
             }
             prev?.uncaughtException(thread, throwable) ?: run {
                 throwable.printStackTrace()
@@ -88,15 +89,32 @@ object CrashReporter {
         // split 以行首 "=== " 为分隔符并消费掉分隔文本，片段必然不带前缀——恒走补前缀分支，无需判断
         text.split(Regex("(?m)^=== ")).filter { it.isNotBlank() }.map { "=== $it" }
 
-    private fun buildReport(thread: Thread, throwable: Throwable): String {
+    private fun buildReport(thread: Thread, throwable: Throwable, appDir: String): String {
         val sw = StringWriter()
         throwable.printStackTrace(PrintWriter(sw))
         return buildString {
             appendLine()
-            appendLine("=== ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())} ===")
+            // 时间戳是给跨设备比对用的：固定 US 数字形态，避免跟随系统 locale 变成其它数字体系
+            appendLine("=== ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())} ===")
             appendLine("thread=${thread.name}")
-            append(sw.toString())
+            append(scrubPaths(sw.toString(), appDir))
         }
+    }
+
+    /**
+     * 脱敏本机绝对路径。
+     *
+     * 日志支持「一键导出到下载目录」，而用户导出后多半是发到群里求助：堆栈里的
+     * `/data/user/0/<包名>/files/...` 会连带暴露设备上的私有目录结构。路径对定位问题没有价值
+     * （同一处崩溃在任何设备上都长一样），换成占位符反而更利于跨设备比对。
+     */
+    internal fun scrubPaths(text: String, appDir: String): String {
+        var out = text
+        if (appDir.isNotBlank()) out = out.replace(appDir, "<app-data>")
+        // /data/data/<pkg> 是 /data/user/0/<pkg> 的软链，两种写法都要归一
+        out = out.replace(Regex("""/data/(?:user/\d+|data)/[A-Za-z0-9_.]+"""), "/data/<pkg>")
+        out = out.replace(Regex("""/storage/emulated/\d+"""), "/storage/emulated/<user>")
+        return out
     }
 
     /** 写公共下载目录（Android 10+ MediaStore 免权限）。返回是否写入成功 */

@@ -2089,18 +2089,53 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                 ) {
                     Column {
                         tabs[activeTab.intValue].second.forEach { r ->
-                            Row(
+                            // 四列等分（weight）而不是固定 dp：导入预览是用来逐条核对的行，
+                            // 列宽一旦固定，系统字体放大或里程到 6 位时数字会换行、四列错位，
+                            // 用户核对时容易看串行。改用权重后所有行列宽一致（行内不再有
+                            // 随内容伸缩的第五列），文字单行显示；错误/冲突提示另起一行。
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(r.date, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackground, modifier = Modifier.width(70.dp))
-                                Text("${r.mileage.toInt()}km", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(60.dp))
-                                Text("${NumberFormat.measure(r.oilAmount)}L", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
-                                Text("¥${NumberFormat.money(r.actualAmount)}", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = r.date,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackground,
+                                        modifier = Modifier.weight(1.5f),
+                                    )
+                                    Text(
+                                        text = "${r.mileage.toInt()}km",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                        modifier = Modifier.weight(1.3f),
+                                    )
+                                    Text(
+                                        text = "${NumberFormat.measure(r.oilAmount)}L",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Text(
+                                        text = "¥${NumberFormat.money(r.actualAmount)}",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                        modifier = Modifier.weight(1.2f),
+                                    )
+                                }
                                 r.errorKey?.let { key ->
-                                    Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = when (key) {
                                             "format_error" -> stringResource(R.string.koil_msg_format_error)
@@ -2109,10 +2144,10 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                         },
                                         fontSize = 10.sp,
                                         color = Color(0xFFE53935),
+                                        modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }
                                 r.conflictKey?.let { key ->
-                                    Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = when (key) {
                                             "lt_prev" -> stringResource(R.string.koil_msg_mileage_lt_prev, r.conflictArg)
@@ -2121,6 +2156,7 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                         },
                                         fontSize = 10.sp,
                                         color = Color(0xFFE65100),
+                                        modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }
                             }
@@ -2603,6 +2639,7 @@ private fun List<Any>.intAt(index: Int): Int = (getOrNull(index) as? Int) ?: (ge
 @Composable
 private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "pdb_update_failed" -> stringResource(R.string.koil_msg_pdb_update_failed, args.getOrElse(0) { "" })
+    "pdb_busy" -> stringResource(R.string.koil_msg_pdb_busy)
     "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
     "price_exported" -> pluralStringResource(
         R.plurals.koil_msg_price_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
@@ -2641,10 +2678,13 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
  * 分支语义（尤其是「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞。
  */
 @Composable
-private fun priceDbOutcomeText(outcome: PriceDbOutcome): String = when (outcome) {
-    PriceDbOutcome.Busy -> stringResource(R.string.koil_pdb_outcome_busy)
-    PriceDbOutcome.AutoUpdateOff -> stringResource(R.string.koil_pdb_outcome_auto_off)
-    is PriceDbOutcome.Throttled -> stringResource(R.string.koil_pdb_outcome_throttled, outcome.hours)
+private fun priceDbOutcomeText(outcome: PriceDbOutcome): String? = when (outcome) {
+    // 这三条在 Syncer 里是「还没走到写缓存就 return」的早退路径，永远不会落盘，
+    // 因此不可能出现在「上次核对结论」里。保留枚举分支、返回 null 表示「这一行不显示」，
+    // 而不是给它们配一份永远不会被读到的文案。Busy 另有出口：见 checkPriceDbNow 的提示。
+    PriceDbOutcome.Busy -> null
+    PriceDbOutcome.AutoUpdateOff -> null
+    is PriceDbOutcome.Throttled -> null
     PriceDbOutcome.NoProvince -> stringResource(R.string.koil_pdb_outcome_no_province)
     is PriceDbOutcome.FetchFailed -> stringResource(R.string.koil_pdb_outcome_fetch_failed, outcome.detail)
     is PriceDbOutcome.SourceLagging ->

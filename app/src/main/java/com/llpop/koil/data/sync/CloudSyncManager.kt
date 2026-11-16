@@ -282,7 +282,7 @@ class CloudSyncManager(
         // 首次真正推送成功 = "配置过同步"：墓碑判定据此生效
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "ok@${SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())}"
+            "ok@${SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())}"
         )
     }
 
@@ -471,7 +471,7 @@ class CloudSyncManager(
         // 设置页按前缀区分显示。两者都以 restore 开头：曾执行过恢复 = 曾配置过同步。
         settings.setSyncLastStatus(
             (if (inserted > 0) "restore@" else "restore-none@") +
-                SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+                SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())
         )
         return inserted
     }
@@ -653,7 +653,7 @@ class CloudSyncManager(
         settings.setSyncLastPushAt(System.currentTimeMillis())
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "ok@" + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+            "ok@" + SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())
         )
     }
 
@@ -709,7 +709,7 @@ class CloudSyncManager(
         // 将来改状态文案，墓碑会静默失效，已删记录下次推送就会被拉回来
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "restore@" + SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date())
+            "restore@" + SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())
         )
     }
 
@@ -730,7 +730,7 @@ class CloudSyncManager(
                 .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
             val parsed = utc.parse(stamp)
             if (parsed == null) stamp
-            else SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(parsed)
+            else SimpleDateFormat("MM-dd HH:mm", Locale.US).format(parsed)
         } catch (e: Exception) {
             stamp
         }

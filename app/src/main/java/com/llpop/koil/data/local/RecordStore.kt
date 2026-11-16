@@ -40,13 +40,21 @@ class RecordStore(
         dao.update(record)
     }
 
-    /** 用户删除。成功推送过云同步才留墓碑（否则无意义累积） */
+    /**
+     * 用户删除。成功推送过云同步才留墓碑（否则无意义累积）。
+     *
+     * **顺序不能反**：先删记录、再写墓碑。反过来的话，两步之间进程被杀会留下
+     * 「墓碑在 + 记录还在」的不一致态——同步侧 [RecordMerger.dataWinsOverDeletion]
+     * 见到本地仍有这条，会把刚写的墓碑登记成「撤销」并在下次推送摘掉云端的删除，
+     * 于是这次删除被永久撤销，用户再也删不掉这条。
+     * 按现在的顺序，崩溃后果只是「云端这条暂时还在」，下次推送用快照覆盖即可自愈。
+     */
     suspend fun delete(record: KOiLRecordEntity) {
+        dao.deleteById(record.id)
         // 判定读 hasEverConfiguredSync 标记：「URL 非空 + 用户名非空」会被内置默认地址架空
         if (settings.syncEverConfigured.first()) {
             settings.markRecordDeleted(record.reoilDate, record.mileage)
         }
-        dao.deleteById(record.id)
     }
 
     /**
