@@ -399,7 +399,14 @@ class SyncViewModel(
             try {
                 persistDrafts(urlDraft, usernameDraft, passwordDraft)
                 val ok = manager.pushNow(force = true)
-                _message.value = if (ok) "backup_done" else "backup_failed"
+                // 云端读不懂时账号和网络都是好的，不能弹「请检查账号与网络」——
+                // 那会和同一秒的状态行互相拆台
+                _message.value = when {
+                    ok -> "backup_done"
+                    settings.syncLastStatus.first() == CloudSyncManager.STATUS_FAIL_CORRUPT ->
+                        "backup_corrupt"
+                    else -> "backup_failed"
+                }
             } catch (e: Exception) {
                 _message.value = "backup_failed"
             } finally {

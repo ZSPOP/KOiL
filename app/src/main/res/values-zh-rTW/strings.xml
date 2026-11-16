@@ -379,6 +379,7 @@
     <string name="koil_sync_restore_confirm">復原 %1$d 筆</string>
     <string name="koil_sync_backup_done">已備份</string>
     <string name="koil_sync_backup_failed">備份失敗，請檢查帳號與網路</string>
+    <string name="koil_sync_backup_corrupt">雲端備份是其他版本寫的，本次沒有上傳；請到同步設定裡處理</string>
     <string name="koil_sync_restore_no_cloud">雲端暫無備份</string>
     <string name="koil_sync_restore_done">已復原</string>
     <string name="koil_sync_restore_none">雲端無新增紀錄，無需還原</string>

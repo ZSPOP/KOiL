@@ -2575,7 +2575,7 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 
 
 
-/** 云同步结果通知翻译（backup_done / backup_failed / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
+/** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
 @Composable
 private fun formatSyncNotice(key: String): String {
     // 支持 "restore_done:12" 这种带参数形式（恢复完成后提示实际插入条数）
@@ -2584,6 +2584,8 @@ private fun formatSyncNotice(key: String): String {
     return when (base) {
         "backup_done" -> stringResource(R.string.koil_sync_backup_done)
         "backup_failed" -> stringResource(R.string.koil_sync_backup_failed)
+        // 云端是别的版本写的：不是网络问题，别让用户去查账号密码
+        "backup_corrupt" -> stringResource(R.string.koil_sync_backup_corrupt)
         "restore_no_cloud" -> stringResource(R.string.koil_sync_restore_no_cloud)
         "restore_done" ->
             if (arg != null) pluralStringResource(R.plurals.koil_sync_restore_done_count, arg, arg)

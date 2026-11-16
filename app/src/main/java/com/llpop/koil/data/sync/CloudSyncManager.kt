@@ -69,6 +69,12 @@ class CloudSyncManager(
         private val DEFAULT_RETRY_DELAYS_MS = longArrayOf(15_000L, 60_000L)
 
         /**
+         * 「云端快照读不懂」的状态键：写它的地方有 1 处、读它的地方有 3 处（设置页、补推循环、立即备份）。
+         * 字面量散在四处，谁改一边另一边就静默失效，所以提成常量。
+         */
+        const val STATUS_FAIL_CORRUPT = "fail:corrupt"
+
+        /**
          * 距离允许下一次推送还需等待的毫秒数。
          * 节流期内收到变更时，不能直接丢事件，要等到窗口结束再推。
          */
@@ -179,7 +185,7 @@ class CloudSyncManager(
             }
             if (!ok) {
                 // 云端读不懂：重推不会让它变得可读，用户还没在对账面板上决定之前不要空转
-                if (settings.syncLastStatus.first() != "fail:corrupt") {
+                if (settings.syncLastStatus.first() != STATUS_FAIL_CORRUPT) {
                     kotlinx.coroutines.delay(FAILURE_RETRY_DELAY_MS)
                     pushRequests.trySend(Unit)
                 }
@@ -233,7 +239,7 @@ class CloudSyncManager(
         // 它一旦把 v3/v4 快照当「0 条」推上去，别人的删除和归档就没了。
         // 这里置 fail:corrupt 让设置页给出人工入口（「仍然覆盖（会先留副本）」）。
         if (cloudBody != null && !allowOverwriteCorrupt && !isRoundTrippable(cloudBody)) {
-            settings.setSyncLastStatus("fail:corrupt")
+            settings.setSyncLastStatus(STATUS_FAIL_CORRUPT)
             // 必须抛：正常 return 会让 pushWithRetry 认为「推成功了」，
             // 「立即备份」就会弹一句「备份完成」——实际一个字节都没上传。
             throw CorruptCloudSnapshotException()
@@ -469,18 +475,19 @@ class CloudSyncManager(
         data class Corrupt(val raw: String, val reason: String) : ReconcileProbe
     }
 
-    /**
-     * 这份云端文件能不能被本版**无损往返**：结构是备份 + 版本就是本版写出的那个
-     * （或没有 version 的旧格式）。自动推送与对账面板共用这一条判据，
-     * 否则两条路径会一个拦住、一个照样覆盖。
-     */
     /** 读不懂的具体原因。措辞只留这一处，两条路径才不会一处改了另一处没改 */
     private fun rejectReason(raw: String): String {
         if (!BackupCodec.looksLikeBackup(raw)) return "云端文件不是备份格式"
+        // 走到这里 version 一定非空：isRoundTrippable 对「没有 version」是放行的
         val version = BackupCodec.parse(raw).version
-        return if (version == null) "云端文件不是备份格式" else "备份版本 $version 超出本版能力"
+        return "备份版本 $version 超出本版能力"
     }
 
+    /**
+     * 这份云端文件能不能被本版**无损往返**：结构是备份 + 版本在本版能力范围内
+     * （没有 version 的旧格式按可往返处理）。自动推送与对账面板共用这一条判据，
+     * 否则两条路径会一个拦住、一个照样覆盖。
+     */
     private fun isRoundTrippable(raw: String): Boolean {
         if (!BackupCodec.looksLikeBackup(raw)) return false
         val version = BackupCodec.parse(raw).version ?: return true
@@ -651,6 +658,9 @@ class CloudSyncManager(
         // 缓存按云端重建：否则下次推送缓存的「自愈」又把刚服从过的删除撤掉一遍。
         // 云端 records 里还有的同键以记录为准（数据赢过删除）
         settings.setSyncDeletedCache(cloudDeleted.filterKeys { it !in cloudByKey })
+        // 这批本地墓碑已经作废：缓存按云端重建、记录以云端为准，
+        // 留着只是「永远不再生效」的一批键，白占 180 天窗口
+        settings.clearSyncDeletedKeys(settings.syncDeletedKeys.first())
         settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
         // 显式声明「配置过」：不能靠 lastStatus 的 "restore@" 前缀间接让墓碑判定生效——
         // 将来改状态文案，墓碑会静默失效，已删记录下次推送就会被拉回来

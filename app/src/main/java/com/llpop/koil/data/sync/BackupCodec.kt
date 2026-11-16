@@ -56,7 +56,8 @@ object BackupCodec {
         if (at > now + ONE_DAY_MS) now + ONE_DAY_MS else if (at < 0) now else at
 
     /**
-     * 删除标记的裁剪口径：键去重取 max → 去掉超窗口的 → 超量只留最近的 N 条。
+     * 删除标记的裁剪口径：**入参已是去重后的 Map**（同键取 max 在 [parse] 的 deletedMap 里做）
+     * → 逐条钳制 at → 去掉超窗口的 → 超量只留最近的 N 条。
      *
      * 写出去的 JSON 与本地缓存必须走**同一个**函数：只裁 JSON 不裁缓存，缓存里
      * 超窗口的键每次都被裁掉、下次又原样进来，永远循环、永远写不出去、永远占着。

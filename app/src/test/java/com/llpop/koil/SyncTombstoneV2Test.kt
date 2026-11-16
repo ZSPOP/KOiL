@@ -399,4 +399,22 @@ class SyncTombstoneV2Test {
         // 写出去的 JSON 与缓存同源
         assertEquals(cache.keys, BackupCodec.parse(lastPutBody).deleted.map { it.key }.toSet())
     }
+
+    /** 以云端为准之后，本地那批墓碑已作废（否则永远不再生效、白占窗口） */
+    @Test
+    fun `以云端为准会清掉作废的本地墓碑`() = runBlocking {
+        dao.insert(entity("2026-11-19", 1180.0))
+        val row = dao.getRange("1970-01-01", "2999-12-31").single()
+        store.delete(row)
+        assertTrue(settings.syncDeletedKeys.first().isNotEmpty())
+
+        cloudBody = BackupCodec.buildBackup(listOf(entity("2026-11-20", 1190.0)), "test")
+        val preview = (manager.probeReconcile() as CloudSyncManager.ReconcileProbe.Ready).preview
+        assertTrue(manager.applyReconcile(preview, com.llpop.koil.data.sync.SyncReconcile.Mode.CLOUD_WINS))
+
+        assertTrue(
+            "以云端为准之后本地墓碑没有生效对象，留着只是占窗口",
+            settings.syncDeletedKeys.first().isEmpty(),
+        )
+    }
 }
