@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.runtime.remember
@@ -108,6 +109,7 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
@@ -935,41 +937,80 @@ private fun PriceDbSection(
                     }
                 }
             }
+            // —— 这一行（倒计时 + 上次检查）共用一个时钟 ——
+            // 自走：原来只在重组时算一次，停在设置页跨过零点不会翻成「已开」。
+            // 只在该行有下一个窗口日时启动，睡到下一整分钟再更新（这条是 12sp 副标题，
+            // 最短一档是「Y 分」，秒级 tick 只会每分钟重组 60 次而不改一个像素）。
+            // 截到整分钟再赋值：否则 value 每次都是全精度新对象，相邻分钟文本一样的也照重组一次。
+            // 页面不可见时（按 Home / 切后台）挂起，不在后台空转——绑 STARTED，不绑组合本身。
+            val lifecycleOwner = LocalLifecycleOwner.current
+            val tickNow: java.time.LocalDateTime? =
+                if (priceDbStatus.nextAdjustWindowDate != null) {
+                    produceState(
+                        initialValue = java.time.LocalDateTime.now().withSecond(0).withNano(0),
+                        key1 = priceDbStatus.nextAdjustWindowDate,
+                    ) {
+                        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            // 回到前台先对齐一次：STOPPED 期间 block 被取消，value 冻在离开前的时刻，
+                            // 不先赋一次就得等下一整分钟，「已开」态会晚 0~60 秒才翻
+                            value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+                            while (true) {
+                                delay(60_000L - System.currentTimeMillis() % 60_000L)
+                                // 落在整分钟上：跨零点判定等价（deadline 就是 00:00:00）
+                                value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+                            }
+                        }
+                    }.value
+                } else null
+            val nowLocal = tickNow ?: java.time.LocalDateTime.now()
+            val todayLocal = nowLocal.toLocalDate()
+
             // 上次检查时间：今天只给时刻、昨天加前缀、更早带日期
             // （恒定 MM-dd HH:mm 会让"今天刚查过"和"三天前查的"看起来一样）
+            // 与倒计时同源取 nowLocal，避免同一行里两个时钟在零点附近各说各话
             val uiLocale = androidx.compose.ui.platform.LocalConfiguration.current.locales[0]
             val lastCheckedText: String? = if (priceDbStatus.lastCheckedAt > 0) {
-                val nowCal = java.util.Calendar.getInstance()
-                val atCal = java.util.Calendar.getInstance().apply { timeInMillis = priceDbStatus.lastCheckedAt }
-                val sameYear = nowCal.get(java.util.Calendar.YEAR) == atCal.get(java.util.Calendar.YEAR)
-                val dayDiff = nowCal.get(java.util.Calendar.DAY_OF_YEAR) - atCal.get(java.util.Calendar.DAY_OF_YEAR)
-                val hm = java.text.SimpleDateFormat("HH:mm", uiLocale).format(java.util.Date(priceDbStatus.lastCheckedAt))
-                when {
-                    sameYear && dayDiff == 0 -> hm
-                    sameYear && dayDiff == 1 -> stringResource(R.string.koil_pdb_yesterday, hm)
-                    else -> java.text.SimpleDateFormat("MM-dd HH:mm", uiLocale)
-                        .format(java.util.Date(priceDbStatus.lastCheckedAt))
+                val zone = java.time.ZoneId.systemDefault()
+                val at = java.time.LocalDateTime.ofInstant(
+                    java.time.Instant.ofEpochMilli(priceDbStatus.lastCheckedAt),
+                    zone,
+                )
+                val dayDiff = java.time.temporal.ChronoUnit.DAYS.between(at.toLocalDate(), todayLocal)
+                val hm = java.time.format.DateTimeFormatter.ofPattern("HH:mm", uiLocale).format(at)
+                when (dayDiff) {
+                    0L -> hm
+                    1L -> stringResource(R.string.koil_pdb_yesterday, hm)
+                    else -> java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm", uiLocale)
+                        .format(at)
                 }
             } else null
 
             // 距下次窗口：窗口日 24:00 生效 → 目标时刻取「窗口日次日 00:00」
-            val todayLocal = java.time.LocalDate.now()
+            // 这里直接产出整句（而不是只给时长再套模板）：窗口已经过去时那句话不能带
+            // 「距下轮调价日」前缀，否则会念成「距下轮调价日 本期窗口已开」，自相矛盾。
             val countdownText: String? = run {
                 val d = priceDbStatus.nextAdjustWindowDate ?: return@run null
                 val target = runCatching { java.time.LocalDate.parse(d) }.getOrNull() ?: return@run null
-                if (target == todayLocal) {
-                    stringResource(R.string.koil_pdb_countdown_today)
-                } else {
-                    val totalMin = java.time.Duration
-                        .between(java.time.LocalDateTime.now(), target.plusDays(1).atStartOfDay())
-                        .toMinutes().coerceAtLeast(0)
-                    val days = totalMin / (24 * 60)
-                    val hours = (totalMin % (24 * 60)) / 60
-                    val mins = totalMin % 60
-                    when {
-                        days > 0 -> stringResource(R.string.koil_pdb_dur_dh, days.toInt(), hours.toInt())
-                        hours > 0 -> stringResource(R.string.koil_pdb_dur_hm, hours.toInt(), mins.toInt())
-                        else -> stringResource(R.string.koil_pdb_dur_m, mins.toInt())
+                val deadline = target.plusDays(1).atStartOfDay()
+                val now = nowLocal
+                when {
+                    // 生效时刻已过：数据源还没翻到下一个窗口日，别再挂「今晚 24:00」骗人
+                    !now.isBefore(deadline) -> stringResource(R.string.koil_pdb_countdown_passed)
+                    // 三语的「今晚 24:00 …」本身都是完整句，直接出；
+                    // 套 countdown 模板会念成「Next price change in Price change tonight at 24:00」
+                    target == todayLocal -> stringResource(R.string.koil_pdb_countdown_today)
+                    else -> {
+                        val totalMin = java.time.Duration.between(now, deadline)
+                            .toMinutes().coerceAtLeast(0)
+                        val days = totalMin / (24 * 60)
+                        val hours = (totalMin % (24 * 60)) / 60
+                        val mins = totalMin % 60
+                        val dur = when {
+                            days > 0 -> stringResource(R.string.koil_pdb_dur_dh, days.toInt(), hours.toInt())
+                            hours > 0 -> stringResource(R.string.koil_pdb_dur_hm, hours.toInt(), mins.toInt())
+                            else -> stringResource(R.string.koil_pdb_dur_m, mins.toInt())
+                        }
+                        stringResource(R.string.koil_pdb_countdown, dur)
                     }
                 }
             }
@@ -1180,7 +1221,7 @@ private fun PriceDbSection(
                     ) {
                         if (countdownText != null) {
                             Text(
-                                text = stringResource(R.string.koil_pdb_countdown, countdownText),
+                                text = countdownText,
                                 fontSize = 12.sp,
                                 lineHeight = 15.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
@@ -2484,7 +2525,9 @@ private fun SettingSwitchRow(
         Text(
             text = subtitle,
             fontSize = MiuixTheme.textStyles.body2.fontSize,
-            color = MiuixTheme.colorScheme.onBackgroundVariant,
+            // 与 SwitchPreference 内部 summary 用同一个 token：这一行自带徽章时走自绘，
+            // 之前写的是 onBackgroundVariant，比同页其它副标题亮一档，看着像另一套配色。
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
     }
 }

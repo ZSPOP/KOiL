@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixIndication
@@ -37,8 +37,12 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
  * 加 60L 也可能未满；判定权完全在用户，不做任何基于油量的自动推断。
  * 油耗只在「满箱 → 满箱」区间结算，未满记录待下次加满后一次结算。
  *
- * 按压反馈：整行可点，开关本身不消费
- * 指针；行上显式挂 Miuix 按压指示，并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
+ * 勾选控件用 [Checkbox]（圆形打勾）而不是 `Switch`：这一项是表单里的「多选勾选」，
+ * 与设置页那种「开关即状态」的行不是一类。`onClick` 传 null —— 控件自身不消费指针，
+ * 点击统一由整行承担，和原来开关行的交互一致。
+ *
+ * 按压反馈：整行可点，控件本身不消费指针；行上显式挂 Miuix 按压指示，
+ * 并屏蔽 `BasicComponent` 内层默认指示，避免叠两层。
  *
  * 布局契约（块模型，以「预测模块底部圆角矩形」为基准）：
  * ① 上 12dp = 上方内容 → 块上缘，由调用方在**高亮之外**补（录入卡是表单 Column 的
@@ -52,9 +56,9 @@ import top.yukonga.miuix.kmp.utils.MiuixIndication
  * `padding(horizontal)` 会双重缩进、高亮跟着缩窄。高亮只是覆盖在布局上的颜色，不参与布局：
  * 所有间距都按上面 ①②③ 定死，不再出现「往高亮里塞间距」的补丁。
  *
- * 无障碍：开关状态用行级 `semantics { toggleableState }` 声明；内层 `Switch` 不再单独清理
- * 语义 —— 它与行 `clickable` 的 `mergeDescendants = true` 合并成同一个节点，TalkBack 读一行
- * 即可拿到「标题 + 副标题 + 开关 + 已开启/已关闭」。
+ * 无障碍：勾选状态用行级 `semantics { toggleableState }` 声明；内层 `Checkbox` 传了
+ * `onClick = null`，本身不挂交互语义，它与行 `clickable` 的 `mergeDescendants = true`
+ * 合并成同一个节点，TalkBack 读一行即可拿到「标题 + 副标题 + 勾选状态」。
  */
 @Composable
 fun FullTankSwitchRow(
@@ -68,8 +72,7 @@ fun FullTankSwitchRow(
         BasicComponent(
             modifier = modifier
                 .semantics {
-                    // 双保险：内层 Switch 在 onCheckedChange = null 时自身已挂
-                    // semantics { role = Switch; toggleableState }（Miuix 0.9.4 Switch.kt 的 else 分支），
+                    // 双保险：内层 Checkbox 自身也会挂 toggleableState（Miuix 0.9.4 Checkbox.kt），
                     // 经 clickable 的 mergeDescendants 合并进行节点，状态本已可读。这里再挂一份是同值覆盖，
                     // 只为防御 Miuix 内部实现变化；不要据此认为「状态可读性由本行负责」。
                     toggleableState = if (checked) ToggleableState.On else ToggleableState.Off
@@ -83,7 +86,7 @@ fun FullTankSwitchRow(
             // BasicComponent 的 56dp 最小行高只是下限，录入卡 8+37+16≈65dp 自然超过它。
             insideMargin = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = bottomInset),
             onClick = { onCheckedChange(!checked) },
-            role = Role.Switch,
+            role = Role.Checkbox,
             interactionSource = interactionSource,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -103,9 +106,10 @@ fun FullTankSwitchRow(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                Switch(
-                    checked = checked,
-                    onCheckedChange = null,
+                // onClick = null：控件不消费指针，整行点击才是唯一入口（与原来的开关行同一策略）
+                Checkbox(
+                    state = if (checked) ToggleableState.On else ToggleableState.Off,
+                    onClick = null,
                 )
             }
         }

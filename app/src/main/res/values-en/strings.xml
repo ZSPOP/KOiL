@@ -259,6 +259,7 @@
     <string name="koil_pdb_line_missing">No data for the %1$s window — pending backfill</string>
     <string name="koil_pdb_countdown">Next price change in %1$s</string>
     <string name="koil_pdb_countdown_today">Price change tonight at 24:00</string>
+    <string name="koil_pdb_countdown_passed">This window is open · waiting for the next release</string>
     <string name="koil_pdb_dur_dh">%1$d d %2$d h</string>
     <string name="koil_pdb_dur_hm">%1$d h %2$d m</string>
     <string name="koil_pdb_dur_m">%1$d min</string>
