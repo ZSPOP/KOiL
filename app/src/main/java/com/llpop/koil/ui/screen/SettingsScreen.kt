@@ -2408,13 +2408,15 @@ private fun StepperInputRow(
         }
         Spacer(Modifier.width(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // − 蓝圆（22dp）
+            // − 蓝圆（22dp）——纯符号按钮，补读屏动作标签（ TalkBack 否则只读出「−」不知用途）
             Box(
                 modifier = Modifier
                     .size(22.dp)
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
-                    .clickable {
+                    .clickable(
+                        onClickLabel = stringResource(R.string.koil_stepper_decrease, title),
+                    ) {
                         val base = draft.value?.toIntOrNull() ?: clamped
                         draft.value = null
                         fieldFocused.value = false
@@ -2508,13 +2510,15 @@ private fun StepperInputRow(
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(Modifier.width(8.dp))
-            // + 蓝圆（22dp）
+            // + 蓝圆（22dp）——纯符号按钮，补读屏动作标签（ TalkBack 否则只读出「+」不知用途）
             Box(
                 modifier = Modifier
                     .size(22.dp)
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
-                    .clickable {
+                    .clickable(
+                        onClickLabel = stringResource(R.string.koil_stepper_increase, title),
+                    ) {
                         val base = draft.value?.toIntOrNull() ?: clamped
                         draft.value = null
                         fieldFocused.value = false

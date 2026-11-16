@@ -489,4 +489,7 @@
     </plurals>
     <string name="koil_sync_backup_restore_broken">這份副本讀不出來</string>
     <string name="koil_local_backup_broken">這份副本無法解析，未做任何修改</string>
+    <!-- 數字設定步進按鈕的讀屏標籤，%1$s 為該設定項標題 -->
+    <string name="koil_stepper_decrease">減少%1$s</string>
+    <string name="koil_stepper_increase">增加%1$s</string>
 </resources>
