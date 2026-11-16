@@ -66,6 +66,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.runtime.remember
@@ -955,12 +956,28 @@ private fun PriceDbSection(
             // 距下次窗口：窗口日 24:00 生效 → 目标时刻取「窗口日次日 00:00」
             // 这里直接产出整句（而不是只给时长再套模板）：窗口已经过去时那句话不能带
             // 「距下轮调价日」前缀，否则会念成「距下轮调价日 本期窗口已开」，自相矛盾。
-            val todayLocal = java.time.LocalDate.now()
+            // 倒计时自走：原来只在重组时算一次，停在设置页跨过零点不会翻成「已开」。
+            // 只挂在有下一个窗口日的时候，睡到下一整分钟再更新——这条是 12sp 副标题，
+            // 分钟粒度足够，不为此挂秒级 ticker。
+            val tickNow: java.time.LocalDateTime? =
+                if (priceDbStatus.nextAdjustWindowDate != null) {
+                    produceState(
+                        initialValue = java.time.LocalDateTime.now(),
+                        key1 = priceDbStatus.nextAdjustWindowDate,
+                    ) {
+                        while (true) {
+                            delay(60_000L - System.currentTimeMillis() % 60_000L)
+                            value = java.time.LocalDateTime.now()
+                        }
+                    }.value
+                } else null
+            val nowLocal = tickNow ?: java.time.LocalDateTime.now()
+            val todayLocal = nowLocal.toLocalDate()
             val countdownText: String? = run {
                 val d = priceDbStatus.nextAdjustWindowDate ?: return@run null
                 val target = runCatching { java.time.LocalDate.parse(d) }.getOrNull() ?: return@run null
                 val deadline = target.plusDays(1).atStartOfDay()
-                val now = java.time.LocalDateTime.now()
+                val now = nowLocal
                 when {
                     // 生效时刻已过：数据源还没翻到下一个窗口日，别再挂「今晚 24:00」骗人
                     !now.isBefore(deadline) -> stringResource(R.string.koil_pdb_countdown_passed)

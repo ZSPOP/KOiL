@@ -419,8 +419,8 @@ fun OilPriceDetailScreen(
                 }
             }
             }
-            if (state.years.isNotEmpty()) {
-            } else {
+            // 年份筛选不出选项时补 2dp，避免控件区与下方内容贴在一起
+            if (state.years.isEmpty()) {
                 Spacer(Modifier.height(2.dp))
             }
 
