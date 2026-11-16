@@ -195,7 +195,10 @@ fun KOiLDatePickerDialog(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .clickable(enabled = !switching.value && canPrevMonth) { goMonth(-1) },
+                                .clickable(
+                                    enabled = !switching.value && canPrevMonth,
+                                    onClickLabel = stringResource(R.string.koil_cal_prev_month),
+                                ) { goMonth(-1) },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
@@ -218,7 +221,10 @@ fun KOiLDatePickerDialog(
                             modifier = Modifier
                                 .size(32.dp)
                                 .clip(CircleShape)
-                                .clickable(enabled = !switching.value && canNextMonth) { goMonth(1) },
+                                .clickable(
+                                    enabled = !switching.value && canNextMonth,
+                                    onClickLabel = stringResource(R.string.koil_cal_next_month),
+                                ) { goMonth(1) },
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(

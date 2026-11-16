@@ -265,6 +265,25 @@
     <string name="koil_pdb_dur_m">%1$d min</string>
     <string name="koil_pdb_checked">last checked %1$s</string>
     <string name="koil_pdb_yesterday">Yesterday %1$s</string>
+
+    <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
+    <string name="koil_pdb_outcome_busy">Last check did not finish: another one was already running</string>
+    <string name="koil_pdb_outcome_auto_off">Not checked: auto-update is off</string>
+    <string name="koil_pdb_outcome_throttled">Skipped: minimum interval not reached (hours: %1$d)</string>
+    <string name="koil_pdb_outcome_no_province">Check failed: the province list is empty</string>
+    <string name="koil_pdb_outcome_fetch_failed">Check failed: live prices unavailable (%1$s)</string>
+    <string name="koil_pdb_outcome_source_lagging">Checked up to %1$s; the source date is lagging, so verification was skipped</string>
+    <string name="koil_pdb_outcome_source_lagging_fixed">Checked up to %1$s; source date lagging, corrected from the live source: %2$d</string>
+    <string name="koil_pdb_outcome_window_day">%1$s is a price-adjustment window day; new prices apply after midnight</string>
+    <string name="koil_pdb_outcome_unchanged_unconfirmed">Checked up to %1$s; price unchanged but no live source, so a stranded window cannot be confirmed</string>
+    <string name="koil_pdb_outcome_stranded">Checked up to %1$s; price unchanged (stranded window)</string>
+    <string name="koil_pdb_outcome_unchanged">Checked up to %1$s; price unchanged (not a window day)</string>
+    <string name="koil_pdb_outcome_repaired_only">Corrected from the live source: %1$d (a record for today already existed)</string>
+    <string name="koil_pdb_outcome_already_adjusted">A record for today already exists; nothing added</string>
+    <string name="koil_pdb_outcome_updated">Records added: %1$d</string>
+    <string name="koil_pdb_outcome_updated_partial">Records added: %1$d · provinces failed: %2$d</string>
+    <string name="koil_pdb_outcome_no_new_records">No new records to add</string>
+    <string name="koil_pdb_outcome_failed">Check failed: %1$s</string>
     <string name="koil_pdb_auto_short">Auto</string>
     <string name="koil_pdb_detail_title">Price Adjustments</string>
     <string name="koil_pdb_detail_empty">No adjustment records yet</string>
@@ -318,6 +337,7 @@
     <string name="koil_msg_cannot_read">Cannot read file</string>
     <string name="koil_msg_file_empty">File empty or no data rows</string>
     <string name="koil_msg_missing_columns">Missing required columns (date/mileage/amount/paid)</string>
+    <string name="koil_msg_missing_columns_encoding">The header could not be recognized and the file contains garbled characters — it is probably not UTF-8. Re-save it as "CSV UTF-8" in Excel and try again.</string>
     <string name="koil_msg_format_error">Invalid format or required value</string>
     <string name="koil_msg_duplicate">Duplicate of an existing record</string>
     <string name="koil_msg_mileage_lt_prev">Mileage below previous %1$dkm</string>
@@ -342,6 +362,8 @@
     </string-array>
     <string name="koil_cal_month">%2$d / %1$d</string>
     <string name="koil_cal_today">Today</string>
+    <string name="koil_cal_prev_month">Previous month</string>
+    <string name="koil_cal_next_month">Next month</string>
 
     <!-- Cloud Sync (WebDAV) -->
     <string name="koil_set_about">About</string>
@@ -435,18 +457,36 @@
     <string name="koil_ov_update_view">View</string>
 
     <string name="koil_sync_reconcile_title">First pairing: cloud already has a backup</string>
-    <string name="koil_sync_reconcile_counts">%1$d here · %2$d in cloud</string>
-    <string name="koil_sync_reconcile_both">%1$d on both sides (%2$d of them differ in content)</string>
-    <string name="koil_sync_reconcile_cloud_only">%1$d only in cloud, not here yet (merge brings them in)</string>
-    <string name="koil_sync_reconcile_local_only">%1$d only here, not in cloud (lost if cloud wins)</string>
-    <string name="koil_sync_reconcile_skipped">%1$d skipped as deleted (you deleted them here, they stay out)</string>
-    <string name="koil_sync_reconcile_merge">Merge (recommended): add the %1$d cloud records here, nothing is deleted</string>
-    <string name="koil_sync_reconcile_local_wins">This device wins: overwrite the cloud, the %1$d cloud-only records will be gone</string>
-    <string name="koil_sync_reconcile_cloud_wins">Cloud wins: rebuild this device from cloud, the %1$d here-only records will be gone</string>
+    <string name="koil_sync_reconcile_counts">Here: %1$d · Cloud: %2$d</string>
+    <string name="koil_sync_reconcile_both">Both sides: %1$d · differing in content: %2$d</string>
+    <plurals name="koil_sync_reconcile_cloud_only">
+        <item quantity="one">%1$d record only in cloud, not here yet (merge brings it in)</item>
+        <item quantity="other">%1$d records only in cloud, not here yet (merge brings them in)</item>
+    </plurals>
+    <string name="koil_sync_reconcile_local_only">This device only: %1$d (lost if cloud wins)</string>
+    <plurals name="koil_sync_reconcile_skipped">
+        <item quantity="one">%1$d record skipped as deleted (you deleted it here, it stays out)</item>
+        <item quantity="other">%1$d records skipped as deleted (you deleted them here, they stay out)</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_merge">
+        <item quantity="one">Merge (recommended): add the %1$d cloud record here, nothing is deleted</item>
+        <item quantity="other">Merge (recommended): add the %1$d cloud records here, nothing is deleted</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_local_wins">
+        <item quantity="one">This device wins: overwrite the cloud, the %1$d cloud-only record will be gone</item>
+        <item quantity="other">This device wins: overwrite the cloud, the %1$d cloud-only records will be gone</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_cloud_wins">
+        <item quantity="one">Cloud wins: rebuild this device from cloud, the %1$d here-only record will be gone</item>
+        <item quantity="other">Cloud wins: rebuild this device from cloud, the %1$d here-only records will be gone</item>
+    </plurals>
     <string name="koil_sync_reconcile_destructive_title">Confirm?</string>
     <string name="koil_sync_reconcile_destructive_msg">The current cloud snapshot is saved as a local copy first (last 3 kept). Overwriting itself cannot be undone.</string>
     <string name="koil_sync_reconcile_confirm">Continue</string>
-    <string name="koil_sync_first_upload">No cloud backup yet, uploading %1$d records</string>
+    <plurals name="koil_sync_first_upload">
+        <item quantity="one">No cloud backup yet, uploading %1$d record</item>
+        <item quantity="other">No cloud backup yet, uploading %1$d records</item>
+    </plurals>
     <string name="koil_sync_reconcile_done">Reconcile finished as you chose</string>
     <string name="koil_sync_reconcile_failed">Reconcile failed, check account and network</string>
 
@@ -464,7 +504,10 @@
     <string name="koil_sync_backup_restore_entry">Restore from local copy (%1$d)</string>
     <string name="koil_sync_backup_restore_title">Local copies</string>
     <string name="koil_sync_backup_restore_hint">Snapshots saved automatically before overwriting the cloud. Restoring only adds records, nothing here is deleted.</string>
-    <string name="koil_sync_backup_restore_item">%1$s · %2$d records</string>
+    <plurals name="koil_sync_backup_restore_item">
+        <item quantity="one">%1$s · %2$d record</item>
+        <item quantity="other">%1$s · %2$d records</item>
+    </plurals>
     <string name="koil_sync_backup_restore_broken">This copy cannot be read</string>
     <string name="koil_local_backup_broken">This copy cannot be parsed; nothing was modified</string>
 </resources>

@@ -24,6 +24,88 @@ import java.time.LocalDate
  *
  * 机制细节见 docs/KOiL油价数据库机制.md。
  */
+/**
+ * 从锚点推算指定年份的全年窗口日（升序，含历史与未来）。
+ *
+ * 规则：每 10 个工作日一个窗口、24 时生效、遇节假日顺延、调休补班算工作日。
+ * 纯函数，不碰网络/存储/时钟（年份由调用方传入），因此可以直接单测——
+ * 这是本项目唯一完全没有测试覆盖的核心算法，而它算错会污染「调价次数」与
+ * `purgeIllegalEffectiveDates` 的合法生效日白名单。
+ *
+ * @param anchor 已知的一个窗口日（来自数据源）
+ * @param year 目标年份：只输出该年范围内的窗口日
+ * @return 升序窗口日；锚点非法或节假日集合不可信（推进上界用尽）时返回 emptyList，
+ *   调用方按「日历未就绪」降级到数据源原日期，**不要**用兜底值冒充窗口日
+ */
+/** 相邻两个窗口日的最大合理跨度：正常约 14 天，长假最多 24 天左右，超过即视为节假日集合异常 */
+private const val MAX_WINDOW_SPAN_DAYS = 30L
+
+internal fun calculateAdjustWindowDates(
+    anchor: String,
+    year: Int,
+    holidaySet: Set<String>,
+    workdaySet: Set<String>,
+): List<String> {
+    val yearStart = LocalDate.of(year, 1, 1)
+    val yearEnd = LocalDate.of(year, 12, 31)
+    val anchorDate = try { LocalDate.parse(anchor) } catch (e: Exception) { return emptyList() }
+    fun isWorkday(d: LocalDate): Boolean {
+        val s = d.toString()
+        if (s in workdaySet) return true
+        if (d.dayOfWeek.value >= 6) return false
+        return s !in holidaySet
+    }
+    // 走到 guard 上界说明节假日集合已经不可信（某年整年被标成假期，或 workdaySet 为空
+    // 且 holidaySet 覆盖全年）。此时**不能**用 ±14 天之类的东西充当窗口日：
+    // 返回值会被写进 DataStore 缓存、又当作 purgeIllegalEffectiveDates 的合法日白名单，
+    // 于是整年日历退化成"每 14 天一个窗口"，调价次数与合法生效日集合一起错。
+    // 返回 null 让整份日历作废，上层按"日历未就绪"降级到数据源原日期。
+    fun add10(from: LocalDate): LocalDate? {
+        var d = from.plusDays(1); var n = 0; var guard = 0
+        while (guard++ < 400) {
+            if (isWorkday(d)) n++
+            if (n == 10) {
+                // 跨度闸：正常窗口间隔约 14 天，长假最多 24 天左右。
+                // 若"第 10 个工作日"要跑过 30 天才到，说明这段区间的工作日被异常吃掉了
+                // （典型：上游把某年整年标成假期，于是要跳出这一年才凑够 10 天）。
+                // 只靠 guard 上界挡不住这种情况——跨年后日期不再落在 holidaySet 里，
+                // 第 10 个工作日会在 400 天内凑齐，结果就是"中间整段窗口凭空消失"。
+                return if (java.time.temporal.ChronoUnit.DAYS.between(from, d) <= MAX_WINDOW_SPAN_DAYS) d else null
+            }
+            d = d.plusDays(1)
+        }
+        return null
+    }
+    fun sub10(from: LocalDate): LocalDate? {
+        var d = from.minusDays(1); var n = 0; var guard = 0
+        while (guard++ < 400) {
+            if (isWorkday(d)) n++
+            if (n == 10) {
+                return if (java.time.temporal.ChronoUnit.DAYS.between(d, from) <= MAX_WINDOW_SPAN_DAYS) d else null
+            }
+            d = d.minusDays(1)
+        }
+        return null
+    }
+    val result = sortedSetOf<String>()
+    // 向后顺推（含锚点本身若在本年）
+    var cur = anchorDate
+    if (!cur.isBefore(yearStart) && !cur.isAfter(yearEnd)) result.add(cur.toString())
+    while (true) {
+        cur = add10(cur) ?: return emptyList()
+        if (cur.isAfter(yearEnd)) break
+        result.add(cur.toString())
+    }
+    // 向前倒推
+    cur = anchorDate
+    while (true) {
+        cur = sub10(cur) ?: return emptyList()
+        if (cur.isBefore(yearStart)) break
+        result.add(cur.toString())
+    }
+    return result.toList()
+}
+
 internal class OilPriceAdjustCalendar(
     private val network: OilPriceNetwork,
     private val settings: AppSettings,
@@ -90,14 +172,20 @@ internal class OilPriceAdjustCalendar(
         val persisted = settings.priceDbAdjustDates.first().let { s ->
             if (s.isBlank()) emptyList() else s.split(",").map { it.trim() }.filter { it.isNotBlank() }
         }
+        // 跨年时暂存的旧年日历：只在本次推算失败时兜底返回，绝不写进缓存、绝不用于清理
+        var staleFromLastYear: List<String>? = null
         if (persisted.isNotEmpty()) {
-            // 跨年检测：缓存窗口日历的年份 ≠ 今年 → 清缓存重算（跨年后自动滚动到新年日历，
+            // 跨年检测：缓存窗口日历的年份 ≠ 今年 → 作废重算（跨年后自动滚动到新年日历，
             // 调价次数当年口径从零重计、新窗口正常增量入库，无需清库重装）
             val yearOfCache = persisted.firstOrNull()?.take(4)
             val currentYear = LocalDate.now().year.toString()
             if (yearOfCache != currentYear) {
+                // 只作废内存缓存，**不删持久化**：1 月 1 日弱网首启时若先清空，
+                // 一旦当年推算失败就彻底没日历可依——设置页「距下轮调价日」整行消失、
+                // 调价次数回退到会被假生效日污染的 DISTINCT 口径。
+                // 新年日历算出并写入时会自然覆盖旧值，清理不需要提前做。
                 cachedAdjustDates = null
-                settings.setPriceDbAdjustDates(emptyList())
+                staleFromLastYear = persisted
             } else {
                 cachedAdjustDates = persisted
                 // 读缓存不做全表 DISTINCT / 删除：getAdjustDates 在同步、补灌判定、
@@ -118,9 +206,10 @@ internal class OilPriceAdjustCalendar(
             ?: runCatching { network.fetchNdrcAdjustDates() }.getOrNull()
                 ?.lastOrNull()?.also { anchorSource = "ndrc" }
         if (anchor == null) {
-            // 从未成功推算且次源失败 → 空降级（seedProvince 用 abapi 原日期）
+            // 从未成功推算且次源失败 → 降级（seedProvince 用 abapi 原日期）。
+            // 跨年场景下旧年日历仍可用于「最近窗口」判定，比彻底空手强，但不参与清理。
             settings.setPriceDbLastAnchorSource("无")
-            return emptyList()
+            return staleFromLastYear ?: emptyList()
         }
         settings.setPriceDbLastAnchorSource(anchorSource)
         val todayYear = LocalDate.now().year
@@ -137,48 +226,16 @@ internal class OilPriceAdjustCalendar(
                 workdaySet.addAll(h.workdayDates)
             }
         }
-        val dates = calculateAdjustDates(anchor, holidaySet, workdaySet)
+        val dates = calculateAdjustWindowDates(anchor, LocalDate.now().year, holidaySet, workdaySet)
         if (dates.isNotEmpty()) {
             cachedAdjustDates = dates
+            // 这一句同时完成「跨年旧缓存的清理」：写新年日历即覆盖，无需先清空
             settings.setPriceDbAdjustDates(dates)
             purgeIllegalEffectiveDates(dates)
+            return dates
         }
-        return dates
-    }
-
-    /** 从锚点推算"今年"全年窗口日（升序，含历史与未来）。锚点非法返回 emptyList。 */
-    private fun calculateAdjustDates(anchor: String, holidaySet: Set<String>, workdaySet: Set<String>): List<String> {
-        val yearStart = LocalDate.of(LocalDate.now().year, 1, 1)
-        val yearEnd = LocalDate.of(LocalDate.now().year, 12, 31)
-        val anchorDate = try { LocalDate.parse(anchor) } catch (e: Exception) { return emptyList() }
-        fun isWorkday(d: LocalDate): Boolean {
-            val s = d.toString()
-            if (s in workdaySet) return true
-            if (d.dayOfWeek.value >= 6) return false
-            return s !in holidaySet
-        }
-        // 两个推进函数都加上界。节假日集合来自网络，若上游把连续区间误标成假期
-        // （或 workdaySet 为空且假期覆盖整年），不加上界会在此死循环——协程永远不返回，
-        // 补灌与启动同步全部挂住，表现为"油价库一直不更新"。
-        fun add10(from: LocalDate): LocalDate {
-            var d = from.plusDays(1); var n = 0; var guard = 0
-            while (guard++ < 400) { if (isWorkday(d)) n++; if (n == 10) return d; d = d.plusDays(1) }
-            return from.plusDays(14)
-        }
-        fun sub10(from: LocalDate): LocalDate {
-            var d = from.minusDays(1); var n = 0; var guard = 0
-            while (guard++ < 400) { if (isWorkday(d)) n++; if (n == 10) return d; d = d.minusDays(1) }
-            return from.minusDays(14)
-        }
-        val result = sortedSetOf<String>()
-        // 向后顺推（含锚点本身若在本年）
-        var cur = anchorDate
-        if (!cur.isBefore(yearStart) && !cur.isAfter(yearEnd)) result.add(cur.toString())
-        while (true) { cur = add10(cur); if (cur.isAfter(yearEnd)) break; result.add(cur.toString()) }
-        // 向前倒推
-        cur = anchorDate
-        while (true) { cur = sub10(cur); if (cur.isBefore(yearStart)) break; result.add(cur.toString()) }
-        return result.toList()
+        // 推算失败（锚点异常 / 节假日集合不可信）：旧年日历只读兜底，不写缓存也不参与清理
+        return staleFromLastYear ?: emptyList()
     }
 
     /**
@@ -267,6 +324,11 @@ internal class OilPriceAdjustCalendar(
     suspend fun purgeIllegalEffectiveDatesIfReady() {
         val dates = settings.priceDbAdjustDates.first()
             .split(",").map { it.trim() }.filter { it.isNotBlank() }
-        if (dates.isNotEmpty()) purgeIllegalEffectiveDates(dates)
+        // 跨年闸：持久化里还是去年的日历时，它的"合法生效日"全落在去年，
+        // 拿它当白名单会把今年的每一条生效日都判成非法（只差安全闸门没删干净）。
+        // 新年日历写入后这里自然放行。
+        if (dates.isNotEmpty() && dates.first().take(4) == LocalDate.now().year.toString()) {
+            purgeIllegalEffectiveDates(dates)
+        }
     }
 }

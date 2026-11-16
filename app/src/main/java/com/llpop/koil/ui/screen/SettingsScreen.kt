@@ -114,6 +114,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.OilPriceDbSyncer
+import com.llpop.koil.data.oil.PriceDbOutcome
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
@@ -1245,6 +1246,19 @@ private fun PriceDbSection(
                         }
                     }
                 }
+                // —— 行 3：上次核对结论 ——
+                // 光有「最近检查 21:44」看不出那次到底怎么了：是入库了、搁浅了、源滞后跳过，
+                // 还是直接失败。这些结论以前只写进 DataStore 没人读，用户只能猜。
+                val outcomeText = priceDbStatus.lastOutcome?.let { priceDbOutcomeText(it) }
+                if (outcomeText != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = outcomeText,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
+                    )
+                }
                 Spacer(Modifier.height(14.dp))
 
                 // —— 底部双按钮：左「自动更新」（状态色，非实心）/ 右「立即更新」（卡内唯一实心主色）——
@@ -1886,13 +1900,13 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                         ReconcileLine(stringResource(R.string.koil_sync_reconcile_both, st.bothCount, st.conflictCount))
                     }
                     if (st.cloudOnlyCount > 0) {
-                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_cloud_only, st.cloudOnlyCount))
+                        ReconcileLine(pluralStringResource(R.plurals.koil_sync_reconcile_cloud_only, st.cloudOnlyCount, st.cloudOnlyCount))
                     }
                     if (st.localOnlyCount > 0) {
                         ReconcileLine(stringResource(R.string.koil_sync_reconcile_local_only, st.localOnlyCount))
                     }
                     if (st.tombstoneSkippedCount > 0) {
-                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_skipped, st.tombstoneSkippedCount))
+                        ReconcileLine(pluralStringResource(R.plurals.koil_sync_reconcile_skipped, st.tombstoneSkippedCount, st.tombstoneSkippedCount))
                     }
                     Spacer(Modifier.height(12.dp))
                     // 默认选项（推荐）放最上：用户不进面板直接点第一个就是最安全的
@@ -1903,7 +1917,7 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                         // 数字为 0 时不说「补进 0 条」——按钮文案要能单独读懂
                         Text(
                             text = if (st.cloudOnlyCount > 0) {
-                                stringResource(R.string.koil_sync_reconcile_merge, st.cloudOnlyCount)
+                                pluralStringResource(R.plurals.koil_sync_reconcile_merge, st.cloudOnlyCount, st.cloudOnlyCount)
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_merge_plain)
                             },
@@ -1918,7 +1932,7 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     ) {
                         Text(
                             text = if (st.cloudOnlyCount > 0) {
-                                stringResource(R.string.koil_sync_reconcile_local_wins, st.cloudOnlyCount)
+                                pluralStringResource(R.plurals.koil_sync_reconcile_local_wins, st.cloudOnlyCount, st.cloudOnlyCount)
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_local_wins_plain)
                             },
@@ -1932,7 +1946,7 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     ) {
                         Text(
                             text = if (st.localOnlyCount > 0) {
-                                stringResource(R.string.koil_sync_reconcile_cloud_wins, st.localOnlyCount)
+                                pluralStringResource(R.plurals.koil_sync_reconcile_cloud_wins, st.localOnlyCount, st.localOnlyCount)
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_cloud_wins_plain)
                             },
@@ -1998,7 +2012,7 @@ private fun LocalBackupDialog(viewModel: SyncViewModel) {
                 val label = if (b.recordCount < 0) {
                     stringResource(R.string.koil_sync_backup_restore_broken)
                 } else {
-                    stringResource(R.string.koil_sync_backup_restore_item, b.displayTime, b.recordCount)
+                    pluralStringResource(R.plurals.koil_sync_backup_restore_item, b.recordCount, b.displayTime, b.recordCount)
                 }
                 Text(
                     text = label,
@@ -2601,6 +2615,8 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "cannot_read" -> stringResource(R.string.koil_msg_cannot_read)
     "file_empty" -> stringResource(R.string.koil_msg_file_empty)
     "missing_columns" -> stringResource(R.string.koil_msg_missing_columns)
+    // 带乱码的"缺列"其实是编码问题，别让用户去核对列名
+    "missing_columns_encoding" -> stringResource(R.string.koil_msg_missing_columns_encoding)
     "parse_failed" -> stringResource(R.string.koil_msg_parse_failed, args.getOrElse(0) { "" })
     "import_done" -> stringResource(R.string.koil_msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
     "backup_no_records" -> stringResource(R.string.koil_msg_backup_no_records)
@@ -2617,6 +2633,44 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 }
 
 
+
+/**
+ * 上次核对结论 → 三语文案。
+ *
+ * 每一条都对应 [PriceDbOutcome] 的一个分支：**不要**在这里再拼状态判断，
+ * 分支语义（尤其是「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞。
+ */
+@Composable
+private fun priceDbOutcomeText(outcome: PriceDbOutcome): String = when (outcome) {
+    PriceDbOutcome.Busy -> stringResource(R.string.koil_pdb_outcome_busy)
+    PriceDbOutcome.AutoUpdateOff -> stringResource(R.string.koil_pdb_outcome_auto_off)
+    is PriceDbOutcome.Throttled -> stringResource(R.string.koil_pdb_outcome_throttled, outcome.hours)
+    PriceDbOutcome.NoProvince -> stringResource(R.string.koil_pdb_outcome_no_province)
+    is PriceDbOutcome.FetchFailed -> stringResource(R.string.koil_pdb_outcome_fetch_failed, outcome.detail)
+    is PriceDbOutcome.SourceLagging ->
+        if (outcome.repaired > 0) {
+            stringResource(R.string.koil_pdb_outcome_source_lagging_fixed, outcome.date, outcome.repaired)
+        } else {
+            stringResource(R.string.koil_pdb_outcome_source_lagging, outcome.date)
+        }
+    is PriceDbOutcome.WindowDay -> stringResource(R.string.koil_pdb_outcome_window_day, outcome.date)
+    is PriceDbOutcome.UnchangedUnconfirmed ->
+        stringResource(R.string.koil_pdb_outcome_unchanged_unconfirmed, outcome.date)
+    is PriceDbOutcome.Stranded -> stringResource(R.string.koil_pdb_outcome_stranded, outcome.date)
+    is PriceDbOutcome.Unchanged -> stringResource(R.string.koil_pdb_outcome_unchanged, outcome.date)
+    is PriceDbOutcome.RepairedOnly -> stringResource(R.string.koil_pdb_outcome_repaired_only, outcome.repaired)
+    PriceDbOutcome.AlreadyAdjusted -> stringResource(R.string.koil_pdb_outcome_already_adjusted)
+    is PriceDbOutcome.Updated ->
+        if (outcome.failedProvinces > 0) {
+            stringResource(
+                R.string.koil_pdb_outcome_updated_partial, outcome.records, outcome.failedProvinces,
+            )
+        } else {
+            stringResource(R.string.koil_pdb_outcome_updated, outcome.records)
+        }
+    PriceDbOutcome.NoNewRecords -> stringResource(R.string.koil_pdb_outcome_no_new_records)
+    is PriceDbOutcome.Failed -> stringResource(R.string.koil_pdb_outcome_failed, outcome.detail)
+}
 
 /** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
 @Composable
@@ -2644,8 +2698,7 @@ private fun formatSyncNotice(key: String): String {
         "not_configured" -> stringResource(R.string.koil_sync_status_not_configured)
         // 首次配对且云端还没快照：不弹面板，只提示一句再直接上传
         "first_upload" ->
-            if (arg != null) stringResource(R.string.koil_sync_first_upload, arg)
-            else stringResource(R.string.koil_sync_first_upload, 0)
+            pluralStringResource(R.plurals.koil_sync_first_upload, arg ?: 0, arg ?: 0)
         "reconcile_stale" -> stringResource(R.string.koil_sync_reconcile_stale)
         // 重跑没成功：不能说「已重新对账」
         "reconcile_stale_retry" -> stringResource(R.string.koil_sync_reconcile_stale_retry)

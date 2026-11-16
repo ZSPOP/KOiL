@@ -16,7 +16,9 @@ import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.sync.BackupCodec
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.oil.OilPriceNetwork
+import com.llpop.koil.data.oil.PriceDbOutcome
 import com.llpop.koil.data.oil.Provinces
+import com.llpop.koil.data.oil.decodePriceDbOutcome
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.DerivedCalculator
@@ -35,6 +37,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -55,7 +59,6 @@ data class SettingsUiState(
     val locationEnabled: Boolean = false,
     val priceDbAutoUpdate: Boolean = false,
     val deviationThreshold: Double = AppSettings.DEFAULT_DEVIATION_THRESHOLD,
-    val priceDbCache: String = "",
     val exportMessage: String = "",
     val priceDbLatestDate: String = "",
     val priceDbTotal: Int = 0,
@@ -145,7 +148,8 @@ class SettingsViewModel(
         val initializedAt: Long = 0,
         val autoUpdateEnabled: Boolean = false,
         val checkIntervalHours: Int = 8,
-        val lastUpdateMessage: String? = null,
+        /** 上次核对结论（结构化）；读不懂或从未检测过为 null */
+        val lastOutcome: PriceDbOutcome? = null,
         val isStranded: Boolean = false,
         // 调价窗口（方案 B：10 个工作日推算）
         val adjustWindowDate: String? = null,       // 最近调价窗口日（从最近实际调价日推 10 工作日）
@@ -407,7 +411,7 @@ class SettingsViewModel(
             initializedAt = initAt,
             autoUpdateEnabled = autoEnabled,
             checkIntervalHours = (OilPriceDbSyncer.CHECK_INTERVAL_MS / (60 * 60 * 1000)).toInt(),
-            lastUpdateMessage = lastMsg.ifBlank { null },
+            lastOutcome = decodePriceDbOutcome(lastMsg),
             isStranded = isStranded,
             adjustWindowDate = adjustWindowDate,
             adjustWindowEffectiveDate = adjustWindowEffectiveDate,
@@ -505,7 +509,6 @@ class SettingsViewModel(
         settings.locationEnabled,
         settings.priceDbAutoUpdate,
         settings.deviationThreshold,
-        settings.priceDbCache,
         settings.floatingBottomBar,
         settings.floatingBottomBarStyle,
         settings.bottomBarMode,
@@ -523,10 +526,9 @@ class SettingsViewModel(
             locationEnabled = args[9] as Boolean,
             priceDbAutoUpdate = args[10] as Boolean,
             deviationThreshold = args[11] as Double,
-            priceDbCache = args[12] as String,
-            floatingBottomBar = args[13] as Boolean,
-            floatingBottomBarStyle = args[14] as String,
-            bottomBarMode = args[15] as String,
+            floatingBottomBar = args[12] as Boolean,
+            floatingBottomBarStyle = args[13] as String,
+            bottomBarMode = args[14] as String,
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
@@ -705,16 +707,19 @@ class SettingsViewModel(
         viewModelScope.launch {
             try {
                 val content = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    context.contentResolver.openInputStream(uri)?.use { decodeTextSmart(it.readBytes()) }
                 } ?: run { _exportMessage.value = ExportNotice("cannot_read"); return@launch }
 
-                val lines = withContext(Dispatchers.Default) { content.lines().filter { it.isNotBlank() } }
-                if (lines.size < 2) {
+                // 整文件状态机切记录：引号内的换行不切行。csvEscape 会给含 \n/\r 的字段加引号，
+                // 若先 lines() 再逐行解析，一条记录会被切成两条残缺行（多出来的进 format_error）。
+                val records = withContext(Dispatchers.Default) { splitCsvRecords(content) }
+                if (records.size < 2) {
                     _exportMessage.value = ExportNotice("file_empty")
                     return@launch
                 }
 
-                val headers = lines[0].split(",").map { it.trim().removeBOM() }
+                // 表头也走同一套字段解析（原来用 split(",")，带引号的表头会解析错误）
+                val headers = records[0].map { it.trim().removeBOM() }
                 val dateIdx = findColumn(headers, listOf("加油日期", "日期", "reoilDate", "date"))
                 val mileageIdx = findColumn(headers, listOf("本次里程", "里程", "里程表", "mileage"))
                 val oilAmountIdx = findColumn(headers, listOf("加油量", "油量", "oilAmount", "fuel"))
@@ -726,7 +731,12 @@ class SettingsViewModel(
                 val fullTankIdx = findColumn(headers, listOf("本次加满", "加满", "isFullTank", "fullTank"))
 
                 if (dateIdx < 0 || mileageIdx < 0 || oilAmountIdx < 0 || actualIdx < 0) {
-                    _exportMessage.value = ExportNotice("missing_columns")
+                    // 首行带替换字符 = 解码失败：用户多半是被 Excel 存成了 ANSI(GBK)，
+                    // 若只说「缺少必需列」他会一直去核对列名，永远查不到原因
+                    val garbled = records[0].any { it.contains('\uFFFD') }
+                    _exportMessage.value = ExportNotice(
+                        if (garbled) "missing_columns_encoding" else "missing_columns"
+                    )
                     return@launch
                 }
 
@@ -741,9 +751,7 @@ class SettingsViewModel(
                     val errors = mutableListOf<ParsedRecord>()
                     // 第一遍：按文件原顺序解析；格式错误直接入 errors，合法行保序暂存
                     val parsed = mutableListOf<ParsedRecord>()
-                    for (line in lines.drop(1)) {
-                        // 最小 CSV 解析（支持引号包裹字段与 "" 转义）；KOiL 自导出无引号，行为与 split 一致
-                        val cols = parseCsvLine(line)
+                    for (cols in records.drop(1)) {
                         val date = cols.getOrNull(dateIdx)?.trim()?.normalizeDate() ?: ""
                         val mileage = cols.getOrNull(mileageIdx)?.toDoubleOrNull()
                         val oilAmount = cols.getOrNull(oilAmountIdx)?.toDoubleOrNull()
@@ -870,8 +878,10 @@ class SettingsViewModel(
         viewModelScope.launch {
             val outcome = withContext(Dispatchers.IO) {
                 runCatching {
+                    // 与 CSV 导入同一套编码探测：备份虽由本应用写成 UTF-8，但用户可能用编辑器
+                    // 「另存为 ANSI」再传回来，按 UTF-8 硬读会得到一屏替换字符然后报"版本不支持"
                     val content = context.contentResolver.openInputStream(uri)
-                        ?.bufferedReader()?.use { it.readText() }
+                        ?.use { decodeTextSmart(it.readBytes()) }
                         ?: return@runCatching BackupOutcome.Failure("cannot_read")
                     val json = org.json.JSONObject(content)
                     // 显式 version 必须是已知格式（M-05）；缺 version 的旧格式按宽松口径继续解析
@@ -1139,8 +1149,9 @@ private const val CSV_CONFLICT = 2
 
 /**
  * CSV 字段转义（M-06）：含逗号/引号/换行的字段用双引号包裹、内部 " 翻倍；
- * 与 [parseCsvLine] 严格互逆，保证「导出 → 再导入」等价。导出侧曾直接 joinToString(",")，
- * 字段里出现逗号或换行时列错位，回环丢数据。
+ * 与整文件切分 [splitCsvRecords] 严格互逆，保证「导出 → 再导入」等价（字段含换行也不裂行）。
+ * 注意单行版 [parseCsvLine] 只处理"不含换行"的输入，别拿它去解析整份文件。
+ * 导出侧曾直接 joinToString(",")，字段里出现逗号或换行时列错位，回环丢数据。
  * 文件级 internal 纯函数：可直接单测。
  */
 internal fun csvEscape(field: String): String =
@@ -1174,6 +1185,83 @@ internal fun parseCsvLine(line: String): List<String> {
     }
     out.add(sb.toString())
     return out
+}
+
+/**
+ * 文本解码：按 BOM → 严格 UTF-8 → GBK 的顺序探测。
+ *
+ * 导出侧一律写 UTF-8 + BOM，但用户常把 CSV 用 Excel 打开改数后「另存为 CSV」——
+ * Windows Excel 会写成 ANSI(GBK) 并丢掉 BOM。此时按 UTF-8 硬读，中文表头全变成 U+FFFD，
+ * 列名匹配全部失败，界面只报「缺少必需列」，用户根本联想不到是编码问题。
+ * 顺序不能颠倒：GBK 解码几乎不会失败（任意字节都能映射到某个汉字），
+ * 所以必须先做一次**严格** UTF-8 解码，失败才回退 GBK。
+ */
+internal fun decodeTextSmart(bytes: ByteArray): String {
+    if (bytes.isEmpty()) return ""
+    // 1) BOM 优先
+    if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
+        return String(bytes, 3, bytes.size - 3, Charsets.UTF_8)
+    }
+    if (bytes.size >= 2 && bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
+        return String(bytes, 2, bytes.size - 2, Charsets.UTF_16LE)
+    }
+    if (bytes.size >= 2 && bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
+        return String(bytes, 2, bytes.size - 2, Charsets.UTF_16BE)
+    }
+    // 2) 严格 UTF-8（REPORT 而不是 REPLACE：要能失败，才能判断"不是 UTF-8"）
+    val strict = Charsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+    runCatching { strict.decode(ByteBuffer.wrap(bytes)).toString() }.getOrNull()?.let { return it }
+    // 3) 回退 GBK（Excel 默认落盘编码）；再不行按宽松 UTF-8 收尾，保证总有结果
+    runCatching { String(bytes, charset("GBK")) }.getOrNull()?.let { return it }
+    return String(bytes, Charsets.UTF_8)
+}
+
+/**
+ * 整文件 CSV 切分：返回「记录 → 字段」。
+ *
+ * 与 [parseCsvLine] 的差别只有一条：**引号内的换行不切行**。[csvEscape] 会给含 `\n`/`\r`
+ * 的字段加引号，但先 `lines()` 再逐行解析时，那条记录已经在换行处被劈成两半，
+ * 前半截列数不足、后半截落进 format_error，注释里声称的"导出→导入等价"并不成立。
+ *
+ * 空行（所有字段都是空白）整条丢弃；文件末尾没有换行时最后一条照常收下。
+ * 文件级 internal 纯函数：可直接单测。
+ */
+internal fun splitCsvRecords(text: String): List<List<String>> {
+    val records = mutableListOf<List<String>>()
+    var fields = mutableListOf<String>()
+    val sb = StringBuilder()
+    var inQuotes = false
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        when {
+            inQuotes -> {
+                if (c == '"') {
+                    if (i + 1 < text.length && text[i + 1] == '"') { sb.append('"'); i++ }
+                    else inQuotes = false
+                } else sb.append(c)
+            }
+            c == '"' -> inQuotes = true
+            c == ',' -> { fields.add(sb.toString()); sb.setLength(0) }
+            c == '\r' || c == '\n' -> {
+                fields.add(sb.toString()); sb.setLength(0)
+                records.add(fields)
+                fields = mutableListOf()
+                // CRLF 只算一个行尾
+                if (c == '\r' && i + 1 < text.length && text[i + 1] == '\n') i++
+            }
+            else -> sb.append(c)
+        }
+        i++
+    }
+    // 收尾：最后一条没有换行结尾
+    if (sb.isNotEmpty() || fields.isNotEmpty()) {
+        fields.add(sb.toString())
+        records.add(fields)
+    }
+    return records.filter { rec -> rec.any { it.isNotBlank() } }
 }
 
 /**

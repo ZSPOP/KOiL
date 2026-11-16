@@ -85,7 +85,7 @@
     <item quantity="other">%1$d筆 · 共 ¥%2$s · %3$sL</item>
     </plurals>
     <string name="koil_ov_first_tag">首次記錄</string>
-    <string name="koil_ov_detail_this">本区间</string>
+    <string name="koil_ov_detail_this">本區間</string>
     <string name="koil_ov_detail_avg">近%1$d次均值</string>
     <string name="koil_ov_detail_saved">較油站單價已省 ¥%1$s</string>
     <string name="koil_ov_detail_over">較油站單價多付 ¥%1$s</string>
@@ -261,6 +261,25 @@
     <string name="koil_pdb_dur_m">%1$d 分</string>
     <string name="koil_pdb_checked">最近檢查 %1$s</string>
     <string name="koil_pdb_yesterday">昨天 %1$s</string>
+
+    <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
+    <string name="koil_pdb_outcome_busy">上次核對沒跑完：當時正在更新中</string>
+    <string name="koil_pdb_outcome_auto_off">上次未偵測：自動更新已關閉</string>
+    <string name="koil_pdb_outcome_throttled">略過：距上次檢查不足 %1$d 小時</string>
+    <string name="koil_pdb_outcome_no_province">核對失敗：省份清單為空</string>
+    <string name="koil_pdb_outcome_fetch_failed">核對失敗：即時油價不可用（%1$s）</string>
+    <string name="koil_pdb_outcome_source_lagging">已核對至 %1$s，資料來源日期落後，略過本次核驗</string>
+    <string name="koil_pdb_outcome_source_lagging_fixed">已核對至 %1$s，資料來源日期落後；順帶依即時來源校正 %2$d 筆</string>
+    <string name="koil_pdb_outcome_window_day">%1$s 是調價視窗日，價格 24 點後生效</string>
+    <string name="koil_pdb_outcome_unchanged_unconfirmed">已核對至 %1$s，價格未變但即時來源不可用，無法確認是否擱淺</string>
+    <string name="koil_pdb_outcome_stranded">已核對至 %1$s，油價無變化（擱淺）</string>
+    <string name="koil_pdb_outcome_unchanged">已核對至 %1$s，油價無變化（非視窗日，維持）</string>
+    <string name="koil_pdb_outcome_repaired_only">已依即時來源校正 %1$d 筆（今日已有調價記錄）</string>
+    <string name="koil_pdb_outcome_already_adjusted">今日已有調價記錄，未重複入庫</string>
+    <string name="koil_pdb_outcome_updated">已入庫 %1$d 筆</string>
+    <string name="koil_pdb_outcome_updated_partial">已入庫 %1$d 筆，%2$d 省失敗</string>
+    <string name="koil_pdb_outcome_no_new_records">沒有新記錄需要入庫</string>
+    <string name="koil_pdb_outcome_failed">核對失敗：%1$s</string>
     <string name="koil_pdb_auto_short">自動更新</string>
     <string name="koil_pdb_detail_title">調價記錄</string>
     <string name="koil_pdb_detail_empty">暫無調價記錄</string>
@@ -310,6 +329,7 @@
     <string name="koil_msg_cannot_read">無法讀取檔案</string>
     <string name="koil_msg_file_empty">檔案為空或無資料列</string>
     <string name="koil_msg_missing_columns">缺少必填欄位（日期/里程/加油量/實付金額）</string>
+    <string name="koil_msg_missing_columns_encoding">表頭認不出來，且檔案裡有亂碼——多半不是 UTF-8 編碼。請在 Excel 裡「另存新檔 → CSV UTF-8」後再試。</string>
     <string name="koil_msg_format_error">格式錯誤或必填值無效</string>
     <string name="koil_msg_duplicate">與已有記錄重複</string>
     <string name="koil_msg_mileage_lt_prev">里程小於前一筆 %1$dkm</string>
@@ -332,6 +352,8 @@
     </string-array>
     <string name="koil_cal_month">%1$d年%2$d月</string>
     <string name="koil_cal_today">今天</string>
+    <string name="koil_cal_prev_month">上個月</string>
+    <string name="koil_cal_next_month">下個月</string>
 
     <!-- 雲端同步（堅果雲 WebDAV） -->
     <string name="koil_set_about">關於</string>
@@ -424,16 +446,28 @@
     <string name="koil_sync_reconcile_title">首次配對：雲端已有備份</string>
     <string name="koil_sync_reconcile_counts">本機 %1$d 筆 · 雲端 %2$d 筆</string>
     <string name="koil_sync_reconcile_both">兩邊都有 %1$d 筆（其中 %2$d 筆內容不同）</string>
-    <string name="koil_sync_reconcile_cloud_only">雲端獨有 %1$d 筆，本機還沒有（合併會補進來）</string>
+    <plurals name="koil_sync_reconcile_cloud_only">
+        <item quantity="other">雲端獨有 %1$d 筆，本機還沒有（合併會補進來）</item>
+    </plurals>
     <string name="koil_sync_reconcile_local_only">本機獨有 %1$d 筆，雲端還沒有（以雲端為準會丟）</string>
-    <string name="koil_sync_reconcile_skipped">已刪略過 %1$d 筆（你本機刪過，不會拉回來）</string>
-    <string name="koil_sync_reconcile_merge">合併（建議）：把雲端 %1$d 筆補進本機，兩邊都不刪</string>
-    <string name="koil_sync_reconcile_local_wins">以本機為準：用本機覆蓋雲端，雲端獨有 %1$d 筆會消失</string>
-    <string name="koil_sync_reconcile_cloud_wins">以雲端為準：用雲端重建本機，本機獨有 %1$d 筆會消失</string>
+    <plurals name="koil_sync_reconcile_skipped">
+        <item quantity="other">已刪略過 %1$d 筆（你本機刪過，不會拉回來）</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_merge">
+        <item quantity="other">合併（建議）：把雲端 %1$d 筆補進本機，兩邊都不刪</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_local_wins">
+        <item quantity="other">以本機為準：用本機覆蓋雲端，雲端獨有 %1$d 筆會消失</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_cloud_wins">
+        <item quantity="other">以雲端為準：用雲端重建本機，本機獨有 %1$d 筆會消失</item>
+    </plurals>
     <string name="koil_sync_reconcile_destructive_title">確認執行？</string>
     <string name="koil_sync_reconcile_destructive_msg">執行前會把目前雲端快照另存為本機副本（保留最近 3 份）。覆蓋本身無法復原。</string>
     <string name="koil_sync_reconcile_confirm">繼續</string>
-    <string name="koil_sync_first_upload">雲端尚無備份，將上傳 %1$d 筆</string>
+    <plurals name="koil_sync_first_upload">
+        <item quantity="other">雲端尚無備份，將上傳 %1$d 筆</item>
+    </plurals>
     <string name="koil_sync_reconcile_done">已依你的選擇完成對帳</string>
     <string name="koil_sync_reconcile_failed">對帳失敗，請檢查帳號與網路</string>
 
@@ -451,7 +485,9 @@
     <string name="koil_sync_backup_restore_entry">從本機副本還原（%1$d）</string>
     <string name="koil_sync_backup_restore_title">本機副本</string>
     <string name="koil_sync_backup_restore_hint">覆蓋雲端前自動另存的快照。還原只插入，不刪本機記錄。</string>
-    <string name="koil_sync_backup_restore_item">%1$s · %2$d 筆</string>
+    <plurals name="koil_sync_backup_restore_item">
+        <item quantity="other">%1$s · %2$d 筆</item>
+    </plurals>
     <string name="koil_sync_backup_restore_broken">這份副本讀不出來</string>
     <string name="koil_local_backup_broken">這份副本無法解析，未做任何修改</string>
 </resources>

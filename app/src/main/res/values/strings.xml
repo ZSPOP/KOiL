@@ -262,6 +262,25 @@
     <string name="koil_pdb_dur_m">%1$d 分</string>
     <string name="koil_pdb_checked">最近检查 %1$s</string>
     <string name="koil_pdb_yesterday">昨天 %1$s</string>
+
+    <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
+    <string name="koil_pdb_outcome_busy">上次核对没跑完：当时正在更新中</string>
+    <string name="koil_pdb_outcome_auto_off">上次未检测：自动更新已关闭</string>
+    <string name="koil_pdb_outcome_throttled">略过：距上次检查不足 %1$d 小时</string>
+    <string name="koil_pdb_outcome_no_province">核对失败：省份列表为空</string>
+    <string name="koil_pdb_outcome_fetch_failed">核对失败：实时油价不可用（%1$s）</string>
+    <string name="koil_pdb_outcome_source_lagging">已核对至 %1$s，数据源日期滞后，跳过本次核验</string>
+    <string name="koil_pdb_outcome_source_lagging_fixed">已核对至 %1$s，数据源日期滞后；顺带按实时源校正 %2$d 条</string>
+    <string name="koil_pdb_outcome_window_day">%1$s 是调价窗口日，价格 24 点后生效</string>
+    <string name="koil_pdb_outcome_unchanged_unconfirmed">已核对至 %1$s，价格未变但实时源不可用，无法确认是否搁浅</string>
+    <string name="koil_pdb_outcome_stranded">已核对至 %1$s，油价无变化（搁浅）</string>
+    <string name="koil_pdb_outcome_unchanged">已核对至 %1$s，油价无变化（非窗口日，维持）</string>
+    <string name="koil_pdb_outcome_repaired_only">已按实时源校正 %1$d 条（今日已有调价记录）</string>
+    <string name="koil_pdb_outcome_already_adjusted">今日已有调价记录，未重复入库</string>
+    <string name="koil_pdb_outcome_updated">已入库 %1$d 条</string>
+    <string name="koil_pdb_outcome_updated_partial">已入库 %1$d 条，%2$d 省失败</string>
+    <string name="koil_pdb_outcome_no_new_records">没有新记录需要入库</string>
+    <string name="koil_pdb_outcome_failed">核对失败：%1$s</string>
     <string name="koil_pdb_auto_short">自动更新</string>
     <string name="koil_pdb_detail_title">调价记录</string>
     <string name="koil_pdb_detail_empty">暂无调价记录</string>
@@ -311,6 +330,7 @@
     <string name="koil_msg_cannot_read">无法读取文件</string>
     <string name="koil_msg_file_empty">文件为空或无数据行</string>
     <string name="koil_msg_missing_columns">缺少必填列（日期/里程/加油量/实付金额）</string>
+    <string name="koil_msg_missing_columns_encoding">表头认不出来，且文件里有乱码——多半不是 UTF-8 编码。请在 Excel 里「另存为 → CSV UTF-8」后再试。</string>
     <string name="koil_msg_format_error">格式错误或必填值无效</string>
     <string name="koil_msg_duplicate">与已有记录重复</string>
     <string name="koil_msg_mileage_lt_prev">里程小于前一条 %1$dkm</string>
@@ -333,6 +353,8 @@
     </string-array>
     <string name="koil_cal_month">%1$d年%2$d月</string>
     <string name="koil_cal_today">今天</string>
+    <string name="koil_cal_prev_month">上个月</string>
+    <string name="koil_cal_next_month">下个月</string>
 
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_set_about">关于</string>
@@ -428,16 +450,28 @@
     <string name="koil_sync_reconcile_title">首次配对：云端已有备份</string>
     <string name="koil_sync_reconcile_counts">本机 %1$d 条 · 云端 %2$d 条</string>
     <string name="koil_sync_reconcile_both">两边都有 %1$d 条（其中 %2$d 条内容不同）</string>
-    <string name="koil_sync_reconcile_cloud_only">云端独有 %1$d 条，本机还没有（合并会补进来）</string>
+    <plurals name="koil_sync_reconcile_cloud_only">
+        <item quantity="other">云端独有 %1$d 条，本机还没有（合并会补进来）</item>
+    </plurals>
     <string name="koil_sync_reconcile_local_only">本机独有 %1$d 条，云端还没有（以云端为准会丢）</string>
-    <string name="koil_sync_reconcile_skipped">已删跳过 %1$d 条（你本机删过，不会拉回来）</string>
-    <string name="koil_sync_reconcile_merge">合并（推荐）：把云端 %1$d 条补进本机，两边都不删</string>
-    <string name="koil_sync_reconcile_local_wins">以本机为准：用本机覆盖云端，云端独有 %1$d 条会消失</string>
-    <string name="koil_sync_reconcile_cloud_wins">以云端为准：用云端重建本机，本机独有 %1$d 条会消失</string>
+    <plurals name="koil_sync_reconcile_skipped">
+        <item quantity="other">已删跳过 %1$d 条（你本机删过，不会拉回来）</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_merge">
+        <item quantity="other">合并（推荐）：把云端 %1$d 条补进本机，两边都不删</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_local_wins">
+        <item quantity="other">以本机为准：用本机覆盖云端，云端独有 %1$d 条会消失</item>
+    </plurals>
+    <plurals name="koil_sync_reconcile_cloud_wins">
+        <item quantity="other">以云端为准：用云端重建本机，本机独有 %1$d 条会消失</item>
+    </plurals>
     <string name="koil_sync_reconcile_destructive_title">确认执行？</string>
     <string name="koil_sync_reconcile_destructive_msg">执行前会把当前云端快照另存为本地副本（保留最近 3 份）。覆盖本身不可撤销。</string>
     <string name="koil_sync_reconcile_confirm">继续</string>
-    <string name="koil_sync_first_upload">云端暂无备份，将上传 %1$d 条</string>
+    <plurals name="koil_sync_first_upload">
+        <item quantity="other">云端暂无备份，将上传 %1$d 条</item>
+    </plurals>
     <string name="koil_sync_reconcile_done">已按你的选择完成对账</string>
     <string name="koil_sync_reconcile_failed">对账失败，请检查账号与网络</string>
 
@@ -455,7 +489,9 @@
     <string name="koil_sync_backup_restore_entry">从本地副本恢复（%1$d）</string>
     <string name="koil_sync_backup_restore_title">本地副本</string>
     <string name="koil_sync_backup_restore_hint">覆盖云端前自动另存的快照。恢复只插入，不删本机记录。</string>
-    <string name="koil_sync_backup_restore_item">%1$s · %2$d 条</string>
+    <plurals name="koil_sync_backup_restore_item">
+        <item quantity="other">%1$s · %2$d 条</item>
+    </plurals>
     <string name="koil_sync_backup_restore_broken">这份副本读不出来</string>
     <string name="koil_local_backup_broken">这份副本无法解析，未做任何修改</string>
 </resources>

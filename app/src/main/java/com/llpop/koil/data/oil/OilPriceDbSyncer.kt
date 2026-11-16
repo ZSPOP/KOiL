@@ -118,7 +118,7 @@ class OilPriceDbSyncer(
         if (!checking.compareAndSet(false, true)) {
             return OilPriceSyncResult(
                 success = false,
-                message = "正在更新中，请稍后再试",
+                outcome = PriceDbOutcome.Busy,
                 latestDate = getLastUpdatedAt().ifBlank { null },
             )
         }
@@ -127,7 +127,7 @@ class OilPriceDbSyncer(
 
             if (!force && !getAutoEnabled()) {
                 return OilPriceSyncResult(
-                    success = true, message = "自动更新已关闭，跳过检测",
+                    success = true, outcome = PriceDbOutcome.AutoUpdateOff,
                         latestDate = getLastUpdatedAt().ifBlank { null },
                 )
             }
@@ -138,7 +138,8 @@ class OilPriceDbSyncer(
                 // （窗口日 24 时生效，用户早上开机就该看到新价，而不是等满 8 小时）。
                 if (!pastLastEffectiveWindow(lastCheck) && now - lastCheck < CHECK_INTERVAL_MS) {
                     return OilPriceSyncResult(
-                        success = true, message = "距上次检查不足 8 小时，跳过",
+                        success = true,
+                        outcome = PriceDbOutcome.Throttled((CHECK_INTERVAL_MS / (60 * 60 * 1000)).toInt()),
                                 latestDate = getLastUpdatedAt().ifBlank { null },
                     )
                 }
@@ -180,7 +181,7 @@ class OilPriceDbSyncer(
             if (shouldWriteLastCheckAt(result)) {
                 settings.setPriceDbLastCheckAt(now)
             }
-            settings.setPriceDbCache(result.message)
+            settings.setPriceDbCache(result.outcome.encode())
             // 多源一致性快照已由 performPriceCheck 在选定核验源时写入（带真实源标签）
             // 有实际写入（新增调价 或 跨天纠错）就推进"最近更新"，否则仅纠正了数据也显示旧日期
             if ((result.newAdjustments > 0 || result.newRecords > 0) && result.latestDate != null) {
@@ -209,11 +210,11 @@ class OilPriceDbSyncer(
             // 失败不写 lastCheckAt，避免失败也打 8h 节流时间戳：
             // 一次瞬时失败会把自动检测锁死 8 小时（配合无重试的补灌链，用户只能手动点立即更新）；
             // 失败后保持旧时间戳，下次启动/周期 Worker 可立即重试，直到成功才写节流
-            val message = "更新失败：${e.message ?: e.javaClass.simpleName}"
-            settings.setPriceDbCache(message)
+            val detail = e.message ?: e.javaClass.simpleName
+            settings.setPriceDbCache(PriceDbOutcome.Failed(detail).encode())
             OilPriceSyncResult(
                 success = false,
-                message = "油价检测失败",
+                outcome = PriceDbOutcome.Failed(detail),
                 latestDate = getLastUpdatedAt().ifBlank { null },
             )
         } finally {
@@ -264,7 +265,7 @@ class OilPriceDbSyncer(
 
     private suspend fun performPriceCheck(): OilPriceSyncResult {
         if (PROVINCES.isEmpty()) {
-            return OilPriceSyncResult(success = false, message = "省份列表为空")
+            return OilPriceSyncResult(success = false, outcome = PriceDbOutcome.NoProvince)
         }
 
         // 采样省份：默认省份（用户相关），缺省回退列表第一个
@@ -276,7 +277,9 @@ class OilPriceDbSyncer(
             settings.setPriceDbLastSources("锚点:— · 今日价:不可用")
             return OilPriceSyncResult(
                 success = false,
-                message = samplePrimary.error ?: sampleSecondary.error ?: "实时油价获取失败",
+                outcome = PriceDbOutcome.FetchFailed(
+                    samplePrimary.error ?: sampleSecondary.error ?: "实时油价获取失败"
+                ),
                 latestDate = getLastUpdatedAt().ifBlank { null },
             )
         }
@@ -309,10 +312,7 @@ class OilPriceDbSyncer(
             settings.setPriceDbLastSources("锚点:$lagAnchor · 今日价:$lagLiveSrc（date 滞后）")
             return OilPriceSyncResult(
                 success = true,
-                message = buildString {
-                    append("数据源日期滞后（$lagDate），跳过本次核验")
-                    if (repaired > 0) append("；已按实时源校正 $repaired 条")
-                },
+                outcome = PriceDbOutcome.SourceLagging(lagDate, repaired),
                 latestDate = recon.effectiveDate ?: getLastUpdatedAt().ifBlank { null },
                 newRecords = repaired,
                 nextAdjustment = nextAdjustment,
@@ -354,7 +354,7 @@ class OilPriceDbSyncer(
             if (calendar.getAdjustDates().contains(today)) {
                 return OilPriceSyncResult(
                     success = true,
-                    message = "今天是调价窗口日（$today），价格待 24 点后生效",
+                    outcome = PriceDbOutcome.WindowDay(today),
                     latestDate = latestDate,
                     nextAdjustment = nextAdjustment,
                 )
@@ -369,7 +369,7 @@ class OilPriceDbSyncer(
                 if (sampledChange == null) {
                     return OilPriceSyncResult(
                         success = true,
-                        message = "已核对至 $today，数据源价格未变，无法确认是否搁浅（实时源不可用）",
+                        outcome = PriceDbOutcome.UnchangedUnconfirmed(today),
                         latestDate = latestDate,
                         nextAdjustment = nextAdjustment,
                     )
@@ -383,7 +383,7 @@ class OilPriceDbSyncer(
                 } else 0
                 return OilPriceSyncResult(
                     success = true,
-                    message = "已核对至 $today，油价无变化（搁浅）",
+                    outcome = PriceDbOutcome.Stranded(today, inserted),
                     latestDate = if (inserted > 0) today else latestDate,
                     newRecords = inserted,
                     strandedWindowDate = today,
@@ -392,7 +392,7 @@ class OilPriceDbSyncer(
             }
             return OilPriceSyncResult(
                 success = true,
-                message = "已核对至 $today，油价无变化（非窗口日，正常维持）",
+                outcome = PriceDbOutcome.Unchanged(today),
                 latestDate = latestDate,
                 nextAdjustment = nextAdjustment,
             )
@@ -406,11 +406,8 @@ class OilPriceDbSyncer(
             // 若仍报「跳过」，用户会以为没干活（其实改对了 4 条），设置页「最近更新」也不推进。
             return OilPriceSyncResult(
                 success = true,
-                message = if (repaired > 0) {
-                    "已按实时源校正 $repaired 条（今日已有调价记录）"
-                } else {
-                    "今日已有调价记录，跳过"
-                },
+                outcome = if (repaired > 0) PriceDbOutcome.RepairedOnly(repaired)
+                else PriceDbOutcome.AlreadyAdjusted,
                 newRecords = repaired,
                 latestDate = today,
                 nextAdjustment = nextAdjustment,
@@ -437,14 +434,10 @@ class OilPriceDbSyncer(
         // 两者取大：统计的是同一批（省|油号|生效日）记录，不会重复计入。
         val effectiveRecords = maxOf(repaired, verifiedRecords)
         val hasNew = effectiveRecords > 0
-        val parts = mutableListOf<String>()
-        if (effectiveRecords > 0) parts.add("已入库 $effectiveRecords 条")
-        if (failedProvinces > 0) parts.add("$failedProvinces 省失败")
-        val message = if (parts.isNotEmpty()) parts.joinToString("、") else "无新记录追加"
-
         return OilPriceSyncResult(
             success = true,
-            message = message,
+            outcome = if (hasNew) PriceDbOutcome.Updated(effectiveRecords, failedProvinces)
+            else PriceDbOutcome.NoNewRecords,
             newAdjustments = if (hasNew) 1 else 0,
             newRecords = effectiveRecords,
             // 生效日与实际写入对齐（B8 纪律）：checkAndUpdate 会据此写
