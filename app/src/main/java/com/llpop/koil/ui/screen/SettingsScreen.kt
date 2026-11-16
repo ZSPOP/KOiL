@@ -953,23 +953,33 @@ private fun PriceDbSection(
             } else null
 
             // 距下次窗口：窗口日 24:00 生效 → 目标时刻取「窗口日次日 00:00」
+            // 这里直接产出整句（而不是只给时长再套模板）：窗口已经过去时那句话不能带
+            // 「距下轮调价日」前缀，否则会念成「距下轮调价日 本期窗口已开」，自相矛盾。
             val todayLocal = java.time.LocalDate.now()
             val countdownText: String? = run {
                 val d = priceDbStatus.nextAdjustWindowDate ?: return@run null
                 val target = runCatching { java.time.LocalDate.parse(d) }.getOrNull() ?: return@run null
-                if (target == todayLocal) {
-                    stringResource(R.string.koil_pdb_countdown_today)
-                } else {
-                    val totalMin = java.time.Duration
-                        .between(java.time.LocalDateTime.now(), target.plusDays(1).atStartOfDay())
-                        .toMinutes().coerceAtLeast(0)
-                    val days = totalMin / (24 * 60)
-                    val hours = (totalMin % (24 * 60)) / 60
-                    val mins = totalMin % 60
-                    when {
-                        days > 0 -> stringResource(R.string.koil_pdb_dur_dh, days.toInt(), hours.toInt())
-                        hours > 0 -> stringResource(R.string.koil_pdb_dur_hm, hours.toInt(), mins.toInt())
-                        else -> stringResource(R.string.koil_pdb_dur_m, mins.toInt())
+                val deadline = target.plusDays(1).atStartOfDay()
+                val now = java.time.LocalDateTime.now()
+                when {
+                    // 生效时刻已过：数据源还没翻到下一个窗口日，别再挂「今晚 24:00」骗人
+                    !now.isBefore(deadline) -> stringResource(R.string.koil_pdb_countdown_passed)
+                    target == todayLocal -> stringResource(
+                        R.string.koil_pdb_countdown,
+                        stringResource(R.string.koil_pdb_countdown_today),
+                    )
+                    else -> {
+                        val totalMin = java.time.Duration.between(now, deadline)
+                            .toMinutes().coerceAtLeast(0)
+                        val days = totalMin / (24 * 60)
+                        val hours = (totalMin % (24 * 60)) / 60
+                        val mins = totalMin % 60
+                        val dur = when {
+                            days > 0 -> stringResource(R.string.koil_pdb_dur_dh, days.toInt(), hours.toInt())
+                            hours > 0 -> stringResource(R.string.koil_pdb_dur_hm, hours.toInt(), mins.toInt())
+                            else -> stringResource(R.string.koil_pdb_dur_m, mins.toInt())
+                        }
+                        stringResource(R.string.koil_pdb_countdown, dur)
                     }
                 }
             }
@@ -1180,7 +1190,7 @@ private fun PriceDbSection(
                     ) {
                         if (countdownText != null) {
                             Text(
-                                text = stringResource(R.string.koil_pdb_countdown, countdownText),
+                                text = countdownText,
                                 fontSize = 12.sp,
                                 lineHeight = 15.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
@@ -2484,7 +2494,9 @@ private fun SettingSwitchRow(
         Text(
             text = subtitle,
             fontSize = MiuixTheme.textStyles.body2.fontSize,
-            color = MiuixTheme.colorScheme.onBackgroundVariant,
+            // 与 SwitchPreference 内部 summary 用同一个 token：这一行自带徽章时走自绘，
+            // 之前写的是 onBackgroundVariant，比同页其它副标题亮一档，看着像另一套配色。
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
     }
 }

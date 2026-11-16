@@ -439,18 +439,27 @@ fun OilPriceDetailScreen(
                     )
                 }
             } else {
-                // —— 涨跌汇总卡（卡片容器是 Box 布局，多个子项必须包 Column 防止重叠）——
-                // 分两段：最新价与净涨跌 / 调价次数统计（段间不画线，靠行内距区分）
+                // —— 涨跌汇总卡：两行（最新价与净涨跌 / 调价次数统计）合成一段卡片 ——
+                // 别再拆成上下两段：分段拼接会在接缝处漏出一条贯穿卡片全宽的浅线
+                // （两段各自 squircleSurface 抗锯齿的结果），它盖住真正的分割线，
+                // 看起来就像「分割线顶到了卡片两边」。合并成单段后接缝不存在，
+                // 分割线按行内边距内缩，与单元格文字左右对齐。
                 CardSegment(
                     isFirst = true,
-                    isLast = false,
+                    isLast = true,
+                    outerBottomPadding = 12.dp,
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                    // 水平内距交给容器（与数据页一致）：线本身不写水平内距，跟着容器走
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                    ) {
                         // —— 第一行：最新价格（前，大号突出）+ 今年净涨跌（后）——
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(vertical = 12.dp),
                         ) {
                             SummaryCell(
                                 modifier = Modifier.weight(1f),
@@ -469,24 +478,14 @@ fun OilPriceDetailScreen(
                                 valueColor = if (state.netChange >= 0) UpColor else DownColor,
                             )
                         }
-                    }
-                }
-                // 两格（最新价 / 净涨跌）与三格（上调 / 下调 / 搁浅）之间画一条分割线。
-                // 内缩 28dp = 卡片外边距 12 + 行内边距 16，线与单元格文字左右对齐。
-                KOiLHorizontalDivider(
-                    Modifier.padding(start = 28.dp, end = 28.dp)
-                )
-                CardSegment(
-                    isFirst = false,
-                    isLast = true,
-                    outerBottomPadding = 12.dp,
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // 两格（最新价 / 净涨跌）与三格（上调 / 下调 / 搁浅）之间的分割线：
+                        // 水平内缩由上面的 Column 给（与数据页的分割线同一套用法）。
+                        KOiLHorizontalDivider()
                         // —— 第二行：上调次数 / 下调次数 / 搁浅次数 ——
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                                .padding(vertical = 12.dp),
                         ) {
                             SummaryCell(
                                 modifier = Modifier.weight(1f),

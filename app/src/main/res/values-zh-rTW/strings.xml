@@ -255,6 +255,7 @@
     <string name="koil_pdb_line_missing">%1$s 視窗尚無紀錄 · 待補灌或核驗</string>
     <string name="koil_pdb_countdown">距下輪調價日 %1$s</string>
     <string name="koil_pdb_countdown_today">今晚 24:00 調價視窗</string>
+    <string name="koil_pdb_countdown_passed">本期視窗已開 · 等下一次發布</string>
     <string name="koil_pdb_dur_dh">%1$d 天 %2$d 時</string>
     <string name="koil_pdb_dur_hm">%1$d 時 %2$d 分</string>
     <string name="koil_pdb_dur_m">%1$d 分</string>
