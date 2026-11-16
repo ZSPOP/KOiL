@@ -24,11 +24,14 @@ object SyncDraftWriter {
         usernameDraft: String?,
         passwordDraft: String?,
     ) {
-        if (urlDraft != null && !SyncConfig.isBuiltInUrl(urlDraft)) {
-            settings.setSyncUrl(urlDraft)
+        // 命中内置默认值时写**空串**而不是跳过：跳过会让界面把草稿拉回存储的旧值，
+        // 用户看到「改回默认又自己弹回去」。写空串语义是「回到默认」，
+        // 读取侧本来就会把空串当默认兜底，同时保证默认值不落盘。
+        if (urlDraft != null) {
+            settings.setSyncUrl(if (SyncConfig.isBuiltInUrl(urlDraft)) "" else urlDraft)
         }
-        if (usernameDraft != null && !SyncConfig.isBuiltInUsername(usernameDraft)) {
-            settings.setSyncUsername(usernameDraft)
+        if (usernameDraft != null) {
+            settings.setSyncUsername(if (SyncConfig.isBuiltInUsername(usernameDraft)) "" else usernameDraft)
         }
         if (!passwordDraft.isNullOrBlank() && !SyncConfig.isBuiltInPassword(passwordDraft)) {
             val encrypted = CryptoHelper.encrypt(passwordDraft)
@@ -42,12 +45,5 @@ object SyncDraftWriter {
             // 经「保存并测试」写入的密码同样算「设置过」：否则换机后解密失败会静默回落默认密码
             settings.setSyncPasswordEverSet(true)
         }
-    }
-
-    /** 当前存储里是否有用户自己填的地址/账号（判断「用户真的配过」时用，不算默认） */
-    suspend fun hasUserConfig(settings: AppSettings): Boolean {
-        val url = settings.syncUrl.first()
-        val username = settings.syncUsername.first()
-        return !SyncConfig.isBuiltInUrl(url) || !SyncConfig.isBuiltInUsername(username)
     }
 }

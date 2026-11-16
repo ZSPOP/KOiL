@@ -1,6 +1,7 @@
 package com.llpop.koil.data.settings
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
@@ -464,11 +465,54 @@ class AppSettings(private val context: Context) {
         context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted }
     }
 
-    /** 是否设置过应用密码（与密码同存凭据文件；缺省 false = 从未设置，可回落内置默认） */
-    val syncPasswordEverSet: Flow<Boolean> =
-        context.KOiLSecretStore.data.distinctValue { it[KEY_SYNC_PASSWORD_EVER_SET] ?: false }
+    /**
+     * 是否设置过应用密码（与密码同存凭据文件）。
+     *
+     * 键缺省时**不是**直接 false，而是看密码：旧版本没有这个标记，而旧版本「清空密码」写的是空串、
+     * 「设置密码」写的是非空串——所以只要存着非空密码，就一定是用户设置过的。
+     * 这就是老用户的升级路径：升级后第一次读，立刻按已有数据推出正确结论，不需要额外迁移任务。
+     * （反过来「存储为空且无标记」仍按从未设置处理，可回落内置默认——全新安装即此。）
+     */
+    val syncPasswordEverSet: Flow<Boolean> = context.KOiLSecretStore.data.distinctValue { p ->
+        p[KEY_SYNC_PASSWORD_EVER_SET]
+            ?: !p[KEY_SYNC_APP_PASSWORD].isNullOrBlank()
+    }
     suspend fun setSyncPasswordEverSet(everSet: Boolean) {
         context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_EVER_SET] = everSet }
+    }
+
+    /**
+     * 原始存储值（**不经过任何默认兜底**），只给测试用。
+     *
+     * 为什么需要它：`syncUrl` 等 Flow 自带默认兜底，读出来永远非空，没法用来证明
+     * 「默认值没有被写进存储」。要钉住这件事，必须看键的原始值。
+     */
+    /**
+     * 清空凭据文件，只给测试用。
+     *
+     * 凭据 DataStore 是进程级单例，跨测试方法共享状态（`preferencesDataStore` 委托只创建一次），
+     * 不清理会发现「上个用例写的密码漏到下个用例」。
+     */
+    @VisibleForTesting
+    internal suspend fun clearSyncSecretForTest() {
+        // 地址/账号在普通设置文件，密码/标记在凭据文件，两处都要清
+        context.KOiLDataStore.edit {
+            it.remove(KEY_SYNC_URL)
+            it.remove(KEY_SYNC_USERNAME)
+        }
+        context.KOiLSecretStore.edit { it.clear() }
+    }
+
+    @VisibleForTesting
+    internal suspend fun rawSyncConfig(): Triple<String?, String?, String?> {
+        // 地址/账号存普通设置文件，密码存凭据文件——两处各读各的
+        val prefs = context.KOiLDataStore.data.first()
+        val secret = context.KOiLSecretStore.data.first()
+        return Triple(
+            prefs[KEY_SYNC_URL],
+            prefs[KEY_SYNC_USERNAME],
+            secret[KEY_SYNC_APP_PASSWORD],
+        )
     }
 
     val syncLastPushAt: Flow<Long> =
