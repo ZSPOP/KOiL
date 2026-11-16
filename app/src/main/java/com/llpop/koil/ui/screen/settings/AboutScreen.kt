@@ -332,12 +332,16 @@ private fun AboutContent(
 
     // hero 区是「logo → 版本号 → 状态文案」，胶囊紧贴在它下方、但留在列表层（不下沉进 hero，
     // 否则点击会被列表的命中链抢走）。段内比例沿用参考图口径：版本号底边到卡片顶边原为
-    // 102dp + 胶囊 52dp + 36dp。状态区固定 26dp（6dp 间距 + 20dp 行高，有没有文案都占位，
-    // 胶囊不跳），状态区到胶囊取 62dp（比原 102 少 14dp，胶囊随之上移 14dp）；
-    // 胶囊底到卡片补到 50dp（36 + 14）把上移量还回去 —— 卡片位置一丝不动。
+    // 状态区固定 26dp（6dp 间距 + 20dp 行高，有没有文案都占位，胶囊不跳）；
+    // 状态区到胶囊槽位、槽位到卡片都取 50dp，槽位独占 89dp（胶囊 52 + 下载进度 37）。
+    // 于是「已是最新版本」那行到底、胶囊整块、信息卡的三段间距左右对称，下载中进度条只占槽位内部。
     val statusGapTop = 6.dp
     val statusAreaHeight = 26.dp
-    val statusToCapsule = 62.dp
+    // 状态区底到胶囊槽位顶：与「槽位底 → 信息卡」取同一个 50dp，胶囊整块上下等距。
+    val statusToCapsule = 50.dp
+    // 胶囊槽位 = 胶囊本体 52 + 下载进度区 37。整块高度恒定，下载时进度条长在预留位里，
+    // 槽位底边不动，信息卡不会被推下去。
+    val capsuleSlotHeight = 89.dp
     val heroToCard = 50.dp
 
     val backdrop = rememberLayerBackdrop()
@@ -592,6 +596,7 @@ private fun AboutContent(
             statusGapTop = statusGapTop,
             statusAreaHeight = statusAreaHeight,
             statusToCapsule = statusToCapsule,
+            capsuleSlotHeight = capsuleSlotHeight,
             // 与胶囊自身的渲染条件同源：非 Hidden 就等于「这一块会显示」。
             // 单写 status is Newer 靠的是「失败态下 status 不再是 Newer」这条跨文件不变量，改起来容易静默破坏。
             hasCapsule = resolveCapsuleState(
@@ -655,6 +660,8 @@ private fun BoxScope.AboutHero(
     statusGapTop: Dp,
     statusAreaHeight: Dp,
     statusToCapsule: Dp,
+    /** 胶囊槽位高度：52 胶囊 + 37 下载进度预留，恒定，下载时进度条只填内部 */
+    capsuleSlotHeight: Dp,
     /** 胶囊与下载进度条：属于 hero 内容，跟着 hero 一起淡出、不上滑 */
     capsule: @Composable () -> Unit,
     /**
@@ -761,14 +768,22 @@ private fun BoxScope.AboutHero(
         }
         // 状态区到胶囊顶：胶囊属于 hero，上滑时跟着整块一起淡出，不随列表上移
         Spacer(Modifier.height(statusToCapsule))
-        if (hasCapsule && interactive) {
-            capsule()
-        } else {
-            // 胶囊这段高度恒定占着，有没有新版都一样：hero 总高不因版本状态变化，
-            // 信息卡永远停在同一个位置，不会因为「有没有新版」上下跳 52dp。
-            // interactive == false 时不组合胶囊：alpha 已经到 0，留着会变成看不见却能点的幽灵按钮，
-            // 挡住滑上来的卡片。占位照补，滚动态与静止态高度一致，列表不会跳。
-            Spacer(Modifier.height(52.dp))
+        // 胶囊 + 下载进度条当成一整块：槽位恒为 52 + 37 = 89dp，内容在槽位里居中。
+        // 平时只有 52 的胶囊，上下各空 18.5；下载时进度条长在这块预留位里，填满 89，槽位纹丝不动。
+        // 无论有没有新版、是否滚动，槽位都是同一个高度——hero 总高不跳，信息卡不上下移动。
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(capsuleSlotHeight),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (hasCapsule && interactive) {
+                capsule()
+            } else {
+                // interactive == false 时不组合胶囊：alpha 已经到 0，留着会变成看不见却能点的幽灵按钮，
+                // 挡住滑上来的卡片。占位照补，滚动态与静止态高度一致，列表不会跳。
+                Spacer(Modifier.height(52.dp))
+            }
         }
     }
 }
