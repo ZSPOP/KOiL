@@ -349,9 +349,7 @@
     <string name="koil_set_about_terms">Terms of use</string>
     <string name="koil_set_about_privacy">Privacy policy</string>
     <string name="koil_set_about_feedback">Send feedback</string>
-    <string name="koil_set_about_feedback_sub">Includes version and device model</string>
-    <string name="koil_set_about_diag">Diagnostics</string>
-    <string name="koil_set_about_open_failed">No app can open this link</string>
+    <string name="koil_set_about_feedback_sub">Includes version and device model</string>    <string name="koil_set_about_open_failed">No app can open this link</string>
     <string name="koil_common_close">Close</string>
     <string name="koil_ov_update_new">New version %1$s available</string>
     <string name="koil_ov_update_dismiss">Dismiss update notice</string>
