@@ -109,6 +109,13 @@ class UpdateChecker(private val settings: AppSettings) {
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
 
     /**
+     * 最近一次**失败**检查的时间戳（0=当前没有未恢复的失败）。
+     * 后台静默检查失败时用户什么都看不到（不弹、不亮红点），Gitee 长期不可用就会表现为
+     * 「永远没有新版本」。设置页用这个值提示一句，成功一次即清零。
+     */
+    fun lastFailedAt(): Flow<Long> = settings.updateLastFailedAt
+
+    /**
      * 用户已知晓的版本 tag（原始形式）。与 [updateTarget] 配合判定红点：
      * 两者不等 = 有新版本且用户还没被告知过。写入时机见 [markSeen]。
      */
@@ -163,7 +170,14 @@ class UpdateChecker(private val settings: AppSettings) {
         val target = runCatching { fetchLatestTarget() }
             .onFailure { Log.w("KOiL", "update check failed: ${it.message}") }
             .getOrNull()
-            ?: return@withContext RefreshOutcome.Failed
+            ?: run {
+                // 失败时留时间戳：后台检查全程静默，不留记录就等于「什么都没发生」
+                runCatching { settings.setUpdateLastFailedAt(System.currentTimeMillis()) }
+                return@withContext RefreshOutcome.Failed
+            }
+        // 请求成功即说明源可用，把失败标记清掉。
+        // 放在这里而不是 persist 之后：即使这一轮是 Keep（直链没就绪），源本身也是通的。
+        runCatching { settings.setUpdateLastFailedAt(0L) }
 
         // 只认严格比本机更新的 Release：不更新的 tag 一律不落库，
         // 设置页因此不存在任何指向更低版本的提示/跳转入口

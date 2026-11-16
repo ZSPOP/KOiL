@@ -130,6 +130,9 @@ class AppSettings(private val context: Context) {
         private val KEY_UPDATE_LATEST_TAG = stringPreferencesKey("KOiL-update-latest-tag")
         private val KEY_UPDATE_LAST_CHECK_AT = longPreferencesKey("KOiL-update-last-check-at")
 
+        /** 最近一次检查失败的时间戳（0=最近一次是成功的）。用来把「一直在失败」和「刚查过、没问题」分开 */
+        private val KEY_UPDATE_LAST_FAILED_AT = longPreferencesKey("KOiL-update-last-failed-at")
+
         /** 最新版 APK 的直链（Gitee 资产）。APK 名带 versionCode，App 无法自己拼，
          *  只能每次检查时从 Release 的 assets 里取。 */
         private val KEY_UPDATE_APK_URL = stringPreferencesKey("KOiL-update-apk-url")
@@ -671,6 +674,19 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_CHECK_AT] ?: 0L }
     suspend fun setUpdateLastCheckAt(at: Long) {
         context.KOiLDataStore.edit { it[KEY_UPDATE_LAST_CHECK_AT] = at }
+    }
+
+    /**
+     * 最近一次**失败**检查的时间戳（毫秒，0=没有未恢复的失败）。
+     *
+     * [updateLastCheckAt] 只在成功时推进，单看它分不出「刚查过、一切正常」和「连续查不通」：
+     * Gitee 长期不可用时，用户看到的只是「永远没有新版本」，App 侧没有任何解释。
+     * 这个值失败时写入、成功时清零，UI 据非零状态提示一句「检查失败」。
+     */
+    val updateLastFailedAt: Flow<Long> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_LAST_FAILED_AT] ?: 0L }
+    suspend fun setUpdateLastFailedAt(at: Long) {
+        context.KOiLDataStore.edit { it[KEY_UPDATE_LAST_FAILED_AT] = at }
     }
 
     /**

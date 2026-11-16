@@ -5,9 +5,15 @@ import com.llpop.koil.domain.logic.DerivedCalculator
 import com.llpop.koil.domain.logic.RecordValidator
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/**
+ * 备份 JSON 的 `exportTime`：默认时区、固定 US 数字形态。
+ * 只给人读（恢复流程不解析它），但导出文件不会随语言切换而变形，便于跨设备比对。
+ */
+private val EXPORT_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss", Locale.US)
 
 /**
  * 云同步备份编解码（对齐 §7.10 手动备份 JSON 格式）：
@@ -158,7 +164,7 @@ object BackupCodec {
 
         val backup = JSONObject()
             .put("version", BACKUP_VERSION)
-            .put("exportTime", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+            .put("exportTime", EXPORT_TIME.format(LocalDateTime.now()))
             .put("recordCount", records.size)
             .put("records", recordsArr)
             .put("deleted", deletedArr)

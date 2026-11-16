@@ -2228,11 +2228,19 @@ fun LazyListScope.aboutSection(
                 }
                 val target by updateChecker.updateTarget()
                     .collectAsStateWithLifecycle(initialValue = null)
+                // 后台静默检查失败是完全无声的：不弹、不亮红点，Gitee 长期不可用时用户只会觉得
+                // 「永远没有新版本」。这里借右侧文字位提示一句；任意一次检查成功即清零，不需要已读机制。
+                val lastFailedAt by updateChecker.lastFailedAt()
+                    .collectAsStateWithLifecycle(initialValue = 0L)
                 SettingRow(
                     // 标题是「关于 KOiL」，副标题仍是当前版本号（不因有新版本而变化）
                     title = stringResource(R.string.koil_set_about_koil),
                     subtitle = stringResource(R.string.koil_set_about_version, com.llpop.koil.BuildConfig.VERSION_NAME, com.llpop.koil.BuildConfig.VERSION_CODE),
-                    value = "",
+                    value = if (lastFailedAt > 0) {
+                        stringResource(R.string.koil_set_update_check_failed)
+                    } else {
+                        ""
+                    },
                     onClick = onOpenAbout,
                     badgeDot = com.llpop.koil.data.update.shouldBadgeUpdate(
                         target?.tag.orEmpty(),

@@ -20,10 +20,21 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+
+/** 状态串里的人读时间：默认时区 + 固定 US 数字形态（串会被持久化，切语言后新旧串的读法要一致） */
+private val STATUS_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.US)
+
+/**
+ * 备份文件名里的时间戳：UTC + 毫秒。文件名排序即时间序，**格式已经写进磁盘过，不要改**。
+ * 不用带时区的 formatter 是为了让 `parse` 直接得到 `LocalDateTime`，再显式换算到本地时区。
+ */
+private val STAMP_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMdd-HHmmss-SSS", Locale.US)
 
 /**
  * 云同步编排（docs/KOiL云同步设计.md）：
@@ -34,6 +45,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * - 恢复：仅两条受控路径——①本地空库首次自动恢复；②手动「从云端恢复」（预览合并，不删本地）
  * - 明确不做：油价库上传、设置同步、删除自动同步（删除不自动扩散，靠受控恢复人工确认）
  * - 失败重试：指数退避（15s → 60s，共 3 次尝试）后记状态，下次启动/变更自动重试
+ *
+ * 时间格式化统一走 `java.time`（与 `ui/`、`data/oil/` 同一套），不再引 `SimpleDateFormat`：
+ * 两个 API 并存时，同一屏里两处时间会各按自己的时区/locale 规则算，出过分歧。
  */
 @OptIn(kotlinx.coroutines.FlowPreview::class)
 class CloudSyncManager(
@@ -282,7 +296,7 @@ class CloudSyncManager(
         // 首次真正推送成功 = "配置过同步"：墓碑判定据此生效
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "ok@${SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())}"
+            "ok@${STATUS_TIME.format(LocalDateTime.now())}"
         )
     }
 
@@ -471,7 +485,7 @@ class CloudSyncManager(
         // 设置页按前缀区分显示。两者都以 restore 开头：曾执行过恢复 = 曾配置过同步。
         settings.setSyncLastStatus(
             (if (inserted > 0) "restore@" else "restore-none@") +
-                SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())
+                STATUS_TIME.format(LocalDateTime.now())
         )
         return inserted
     }
@@ -653,7 +667,7 @@ class CloudSyncManager(
         settings.setSyncLastPushAt(System.currentTimeMillis())
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "ok@" + SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())
+            "ok@" + STATUS_TIME.format(LocalDateTime.now())
         )
     }
 
@@ -709,7 +723,7 @@ class CloudSyncManager(
         // 将来改状态文案，墓碑会静默失效，已删记录下次推送就会被拉回来
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "restore@" + SimpleDateFormat("MM-dd HH:mm", Locale.US).format(Date())
+            "restore@" + STATUS_TIME.format(LocalDateTime.now())
         )
     }
 
@@ -726,11 +740,8 @@ class CloudSyncManager(
     /** 把文件名里的 UTC 时间戳转成本地可读时间；解析失败就原样返回（不吞掉信息） */
     private fun formatBackupStamp(stamp: String): String {
         return try {
-            val utc = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US)
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-            val parsed = utc.parse(stamp)
-            if (parsed == null) stamp
-            else SimpleDateFormat("MM-dd HH:mm", Locale.US).format(parsed)
+            val utc = LocalDateTime.parse(stamp, STAMP_TIME)
+            STATUS_TIME.format(utc.atZone(ZoneOffset.UTC).withZoneSameInstant(ZoneId.systemDefault()))
         } catch (e: Exception) {
             stamp
         }
@@ -796,9 +807,7 @@ class CloudSyncManager(
         try {
             val dir = File(context.filesDir, "sync-backups").apply { mkdirs() }
             // UTC + 毫秒：同一秒内连点两次也不能互相覆盖，否则「保留最近 3 份」会退化成一个
-            val stamp = SimpleDateFormat("yyyyMMdd-HHmmss-SSS", Locale.US)
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .format(Date())
+            val stamp = STAMP_TIME.format(LocalDateTime.now(ZoneOffset.UTC))
             var file = File(dir, LOCAL_BACKUP_PREFIX + "$stamp.json")
             var seq = 1
             while (file.exists()) {

@@ -8,9 +8,12 @@ import android.provider.MediaStore
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.text.SimpleDateFormat
-import java.util.Date
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+/** 崩溃条目时间戳：默认时区、固定 US 数字形态（日志导出后常被贴到群里，格式要稳定） */
+private val CRASH_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss", Locale.US)
 
 /**
  * 全局未捕获异常捕获器（本地崩溃日志）。
@@ -95,7 +98,7 @@ object CrashReporter {
         return buildString {
             appendLine()
             // 时间戳是给跨设备比对用的：固定 US 数字形态，避免跟随系统 locale 变成其它数字体系
-            appendLine("=== ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())} ===")
+            appendLine("=== ${CRASH_TIME.format(LocalDateTime.now())} ===")
             appendLine("thread=${thread.name}")
             append(scrubPaths(sw.toString(), appDir))
         }

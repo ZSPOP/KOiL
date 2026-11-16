@@ -1,30 +1,38 @@
 package com.llpop.koil.ui.screen.settings
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import android.app.Application
 import android.content.Context
 import android.net.Uri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.llpop.koil.R
-import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.RecordStore
+import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
-import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.data.location.LocationHelper
-import com.llpop.koil.data.oil.OilPriceDbSyncer
-import com.llpop.koil.data.sync.BackupCodec
 import com.llpop.koil.data.oil.OilPriceDateUtil
+import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.oil.PriceDbOutcome
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.oil.decodePriceDbOutcome
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.data.sync.BackupCodec
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.DerivedCalculator
+import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.domain.logic.RecordValidator
 import com.llpop.koil.domain.logic.inChronologicalOrder
 import com.llpop.koil.util.ExportHelper
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Date
+import java.util.Locale
+import java.util.TreeSet
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,14 +45,12 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.nio.ByteBuffer
-import java.nio.charset.CodingErrorAction
-import java.text.SimpleDateFormat
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Date
-import java.util.Locale
-import java.util.TreeSet
+
+/** 导出文件名时间戳：本地时区、固定 US 数字形态（文件名会留在磁盘，格式不要改） */
+private val EXPORT_STAMP: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMdd-HHmmss", Locale.US)
+
+/** 备份 JSON 的 exportTime：本地时区、固定 US 数字形态（只给人读） */
+private val EXPORT_TIME_TEXT: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss", Locale.US)
 
 data class SettingsUiState(
     val themeMode: AppSettings.ThemeMode = AppSettings.ThemeMode.SYSTEM,
@@ -481,7 +487,7 @@ class SettingsViewModel(
                             ).joinToString(",") { csvEscape(it) }
                         )
                     }
-                    val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                    val timestamp = EXPORT_STAMP.format(LocalDateTime.now())
                     val fileName = "KOiL-oil-price-history-$timestamp.csv"
                     // 输出到用户可浏览的公共位置（Download/KOiL/，不写入私有 files 目录）
                     val saved = ExportHelper.saveToDownloads(context, fileName, "\uFEFF" + lines.joinToString("\n"))
@@ -683,7 +689,7 @@ class SettingsViewModel(
                         )
                     }
 
-                    val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                    val timestamp = EXPORT_STAMP.format(LocalDateTime.now())
                     val fileName = "KOiL-records-$timestamp.csv"
                     // 输出到用户可浏览的公共位置（Download/KOiL/，不写入私有 files 目录）
                     val saved = ExportHelper.saveToDownloads(context, fileName, "\uFEFF" + lines.joinToString("\n"))
@@ -1094,7 +1100,7 @@ class SettingsViewModel(
                         // 与云快照按文件结构（有无 settings）分流，解析入口各自独立。
                         // 版本常量收在 BackupCodec：导出侧写、导入侧读同一个来源（M-05）。
                         "version" to BackupCodec.MANUAL_BACKUP_VERSION,
-                        "exportTime" to SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()),
+                        "exportTime" to EXPORT_TIME_TEXT.format(LocalDateTime.now()),
                         "recordCount" to records.size,
                         "records" to recordList,
                         "settings" to settingsMap,
@@ -1102,7 +1108,7 @@ class SettingsViewModel(
 
                     // 手动构建 JSON（避免额外依赖）
                     val json = buildJsonString(backup)
-                    val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                    val timestamp = EXPORT_STAMP.format(LocalDateTime.now())
                     val fileName = "KOiL_完整备份_$timestamp.json"
                     // 输出到用户可浏览的公共位置（Download/KOiL/，不写入私有 files 目录）
                     val saved = ExportHelper.saveToDownloads(context, fileName, json)
