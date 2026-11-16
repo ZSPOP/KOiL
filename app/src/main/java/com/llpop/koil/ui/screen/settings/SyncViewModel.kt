@@ -8,6 +8,8 @@ import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.sync.CryptoHelper
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.data.sync.SyncDraftWriter
+import com.llpop.koil.data.sync.SyncReconcile
+import com.llpop.koil.data.sync.WebDavConflictException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -16,6 +18,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -80,9 +83,26 @@ class SyncViewModel(
 
     private val _busy = MutableStateFlow(false)
     private val _restorePreview = MutableStateFlow<SyncRestorePreview?>(null)
+    private val _reconcile = MutableStateFlow<CloudSyncManager.ReconcilePreview?>(null)
+    private val _reconcileCorrupt = MutableStateFlow<CloudSyncManager.ReconcileProbe.Corrupt?>(null)
+    private val _localBackups = MutableStateFlow<List<CloudSyncManager.LocalBackup>>(emptyList())
+    private val _backupCount = MutableStateFlow(0)
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
     val restorePreview: StateFlow<SyncRestorePreview?> = _restorePreview.asStateFlow()
+
+    /** 首次配对对账面板的数据（非空即展示） */
+    val reconcile: StateFlow<CloudSyncManager.ReconcilePreview?> = _reconcile.asStateFlow()
+
+    /** 云端快照读不懂时的确认入口（非空即展示） */
+    val reconcileCorrupt: StateFlow<CloudSyncManager.ReconcileProbe.Corrupt?> =
+        _reconcileCorrupt.asStateFlow()
+
+    /** 「从副本恢复」面板的列表（非空即展示） */
+    val localBackups: StateFlow<List<CloudSyncManager.LocalBackup>> = _localBackups.asStateFlow()
+
+    /** 本地副本份数：入口只在 >0 时出现，免得给一个永远空的面板 */
+    val backupCount: StateFlow<Int> = _backupCount.asStateFlow()
 
     /** 解密后的密码 + 是否解不开（Keystore 主密钥丢失） */
     private data class PasswordInfo(val plain: String, val broken: Boolean)
@@ -170,8 +190,27 @@ class SyncViewModel(
                 if (recordDao.count() == 0) {
                     // 新机/空库：拉云端预览 → 确认弹窗（不直接写库）
                     loadRestorePreview()
+                    return@launch
+                }
+                // 非空库：首次配对先对账，用户选完才动数据。
+                // 旧实现在这里直接 pushNow，云端独有记录被静默吞掉、用户完全不知道发生了什么。
+                if (!settings.syncEverConfigured.first()) {
+                    when (val probe = manager.probeReconcile()) {
+                        // 云端还没有快照 = 没有对账对象，弹完整面板只是多一步
+                        CloudSyncManager.ReconcileProbe.NoCloud -> {
+                            _message.value = "first_upload:${recordDao.count()}"
+                            manager.pushNow(force = true)
+                        }
+                        is CloudSyncManager.ReconcileProbe.Ready -> {
+                            _reconcile.value = probe.preview
+                        }
+                        // 文件在、但读不懂：一个字都不写，交给用户决定是否覆盖
+                        is CloudSyncManager.ReconcileProbe.Corrupt -> {
+                            _reconcileCorrupt.value = probe
+                        }
+                    }
                 } else {
-                    // 非空库：本地权威 → 立即推送到云端（镜像本地）
+                    // 已配对过：走常规推送
                     manager.pushNow(force = true)
                 }
             } catch (e: CancellationException) {
@@ -221,6 +260,126 @@ class SyncViewModel(
             settings.setSyncPasswordEncrypted(false)
             settings.setSyncPasswordEverSet(true)
             settings.setSyncEnabled(false)
+        }
+    }
+
+    /** 关闭对账面板（用户取消 = 什么都不做，云端与数据库零变化） */
+    fun dismissReconcile() {
+        _reconcile.value = null
+    }
+
+    /** 用户选定口径后执行；执行完关面板并给结果 */
+    fun confirmReconcile(mode: SyncReconcile.Mode) {
+        val preview = _reconcile.value ?: return
+        if (!_busy.compareAndSet(false, true)) return
+        var reopened = false
+        viewModelScope.launch {
+            try {
+                val ok = manager.applyReconcile(preview, mode)
+                if (ok) refreshBackupCount()
+                _message.value = if (ok) "reconcile_done" else "reconcile_failed"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: WebDavConflictException) {
+                // 面板可能停留很久，期间别的设备推过：账号网络都正常，缺的是「重新对一次」。
+                // catch 块里只允许做不会失败的事——重跑本身要再发一次 GET，而 412 的成因
+                // （别的设备在写、网络在抖）恰恰让这次 GET 也可能失败。不包就会从
+                // viewModelScope 一路抛成未捕获异常，用户看到的是「点了合并，应用闪一下没了」。
+                _message.value = "reconcile_stale"
+                val reprobe = try {
+                    manager.probeReconcile()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null      // 重跑失败就只留提示，不重开面板
+                }
+                // 重跑没成就不能说「已重新对账」——面板已经关了，这句话必须成立
+                if (reprobe == null) _message.value = "reconcile_stale_retry"
+                if (reprobe != null) {
+                    _reconcile.value = (reprobe as? CloudSyncManager.ReconcileProbe.Ready)?.preview
+                    _reconcileCorrupt.value = reprobe as? CloudSyncManager.ReconcileProbe.Corrupt
+                    // 只有真拿到新预览才留着面板；重跑失败就关掉——留着旧数字比关掉更误导
+                    if (reprobe is CloudSyncManager.ReconcileProbe.Ready) reopened = true
+                }
+            } catch (_: Exception) {
+                _message.value = "reconcile_failed"
+            } finally {
+                _busy.value = false
+                // 重跑成功时保留新面板：文案说「已重新对账」，面板却关掉的话，那句话就是假的
+                if (!reopened) _reconcile.value = null
+            }
+        }
+    }
+
+    /** 用户放弃覆盖读不懂的云端快照：什么都不做 */
+    fun dismissReconcileCorrupt() {
+        _reconcileCorrupt.value = null
+    }
+
+    /** 用户坚持覆盖：先留副本，再推 */
+    fun confirmReconcileCorrupt() {
+        val corrupt = _reconcileCorrupt.value ?: return
+        if (!_busy.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val ok = manager.forceOverwriteCorrupt(corrupt.raw)
+                _message.value = if (ok) "reconcile_done" else "reconcile_failed"
+                // 失败就留着面板：重试不该需要用户先关开关再打开
+                if (ok) {
+                    _reconcileCorrupt.value = null
+                    // 这条也产生副本（forceOverwriteCorrupt 第一句就是 backupBeforeOverwrite）
+                    refreshBackupCount()
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = "reconcile_failed"
+            } finally {
+                _busy.value = false
+            }
+        }
+    }
+
+    /** 刷新副本份数（进设置页时调一次） */
+    fun refreshBackupCount() {
+        viewModelScope.launch {
+            _backupCount.value = manager.listLocalBackups().size
+        }
+    }
+
+    /** 打开「从副本恢复」列表 */
+    fun loadLocalBackups() {
+        viewModelScope.launch {
+            val list = manager.listLocalBackups()
+            _backupCount.value = list.size
+            _localBackups.value = list
+        }
+    }
+
+    fun dismissLocalBackups() {
+        _localBackups.value = emptyList()
+    }
+
+    /** 从某份副本恢复（只插入、不删本地） */
+    fun restoreLocalBackup(backup: CloudSyncManager.LocalBackup) {
+        if (!_busy.compareAndSet(false, true)) return
+        viewModelScope.launch {
+            try {
+                val inserted = manager.restoreFromLocalBackup(backup)
+                _backupCount.value = manager.listLocalBackups().size
+                _message.value = when {
+                    inserted < 0 -> "local_backup_broken"
+                    inserted == 0 -> "restore_none"
+                    else -> "restore_done:$inserted"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _message.value = "restore_failed"
+            } finally {
+                _busy.value = false
+                _localBackups.value = emptyList()
+            }
         }
     }
 

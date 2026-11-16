@@ -124,6 +124,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.data.sync.SyncReconcile
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
@@ -1337,8 +1338,15 @@ private fun SyncPanelBody(
                 )
             syncUi.lastStatus.startsWith("ok@") ->
                 stringResource(R.string.koil_sync_status_ok, syncUi.lastStatus.substringAfter("ok@"))
-            syncUi.lastStatus.startsWith("fail:") ->
-                stringResource(R.string.koil_sync_status_fail, syncUi.lastStatus.substringAfter("fail:"))
+            syncUi.lastStatus.startsWith("fail:") -> {
+                // 数据层只存 key，人类语言在这里出（否则英/繁中用户会看到一句中文）
+                val reason = syncUi.lastStatus.substringAfter("fail:")
+                if (reason == "conflict") {
+                    stringResource(R.string.koil_sync_reconcile_stale)
+                } else {
+                    stringResource(R.string.koil_sync_status_fail, reason)
+                }
+            }
             else -> stringResource(R.string.koil_sync_status_never)
         }
         val healthy = configured && !syncUi.passwordInvalid
@@ -1401,6 +1409,21 @@ private fun SyncPanelBody(
                             )
                         }
                     }
+                }
+
+                // 有副本时多给一行入口；没有就不占位（不给一个永远空的面板）
+                val backupCount by syncVm.backupCount.collectAsStateWithLifecycle()
+                if (backupCount > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.koil_sync_backup_restore_entry, backupCount),
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { syncVm.loadLocalBackups() }
+                            .padding(vertical = 4.dp),
+                    )
                 }
 
                 Spacer(Modifier.height(10.dp))
@@ -1642,6 +1665,12 @@ private fun SyncPanelBody(
             }
         }
 
+        // 首次配对对账面板（PR ②）：云端已有快照、本机也非空时弹
+        SyncReconcileDialog(syncVm)
+        // 覆盖前副本的恢复入口（有副本才渲染）
+        LocalBackupDialog(syncVm)
+        LaunchedEffect(Unit) { syncVm.refreshBackupCount() }
+
         // 云同步恢复确认弹窗（预览 valid/dup/errors，确认后不删本地）
         val syncRestorePreview by syncVm.restorePreview.collectAsStateWithLifecycle()
         syncRestorePreview?.let { preview ->
@@ -1699,6 +1728,258 @@ private fun SyncPanelBody(
                     }
                 }
     }
+    }
+}
+
+/**
+ * 首次配对对账面板（PR ②）。
+ *
+ * 每个选项的文案自带后果（"云端独有 N 条会消失"），不靠用户去理解"以云端为准"是什么意思；
+ * 后两个是破坏性的，点下去先弹二次确认——覆盖不可撤销，多一次点击比少一次损失便宜。
+ *
+ * **同一时刻只渲染一层弹窗**：对账面板 / 二次确认 / "云端备份读不懂"三态互斥。
+ * 两个 KOiLGlassDialog 同时 show=true 会叠两层遮罩，视觉上像弹窗叠弹窗。
+ */
+@Composable
+private fun SyncReconcileDialog(viewModel: SyncViewModel) {
+    val preview by viewModel.reconcile.collectAsStateWithLifecycle()
+    val corrupt by viewModel.reconcileCorrupt.collectAsStateWithLifecycle()
+    var pendingDestructive by remember { mutableStateOf<SyncReconcile.Mode?>(null) }
+
+    when {
+        // ① 云端那份读不懂：只说「没动数据」，覆盖入口放在次要位置
+        corrupt != null -> com.llpop.koil.ui.component.KOiLGlassDialog(
+            show = true,
+            onDismissRequest = viewModel::dismissReconcileCorrupt,
+        ) {
+            Column {
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_corrupt_title),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_corrupt_msg),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = viewModel::dismissReconcileCorrupt,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = viewModel::confirmReconcileCorrupt,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.koil_sync_reconcile_corrupt_overwrite), fontSize = 12.sp) }
+                }
+            }
+        }
+
+        // ② 破坏性二次确认
+        pendingDestructive != null -> com.llpop.koil.ui.component.KOiLGlassDialog(
+            show = true,
+            onDismissRequest = { pendingDestructive = null },
+        ) {
+            Column {
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_destructive_title),
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MiuixTheme.colorScheme.onBackground,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    stringResource(R.string.koil_sync_reconcile_destructive_msg),
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = { pendingDestructive = null },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = {
+                            val mode = pendingDestructive
+                            pendingDestructive = null
+                            if (mode != null) viewModel.confirmReconcile(mode)
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text(stringResource(R.string.koil_sync_reconcile_confirm), fontSize = 13.sp) }
+                }
+            }
+        }
+
+        // ③ 对账面板本体
+        preview != null -> {
+            val st = preview!!.stats
+            com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissReconcile) {
+                Column {
+                    Text(
+                        stringResource(R.string.koil_sync_reconcile_title),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        stringResource(R.string.koil_sync_reconcile_counts, st.localCount, st.cloudCount),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onBackground,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    if (st.bothCount > 0) {
+                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_both, st.bothCount, st.conflictCount))
+                    }
+                    if (st.cloudOnlyCount > 0) {
+                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_cloud_only, st.cloudOnlyCount))
+                    }
+                    if (st.localOnlyCount > 0) {
+                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_local_only, st.localOnlyCount))
+                    }
+                    if (st.tombstoneSkippedCount > 0) {
+                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_skipped, st.tombstoneSkippedCount))
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    // 默认选项（推荐）放最上：用户不进面板直接点第一个就是最安全的
+                    Button(
+                        onClick = { viewModel.confirmReconcile(SyncReconcile.Mode.MERGE) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        // 数字为 0 时不说「补进 0 条」——按钮文案要能单独读懂
+                        Text(
+                            text = if (st.cloudOnlyCount > 0) {
+                                stringResource(R.string.koil_sync_reconcile_merge, st.cloudOnlyCount)
+                            } else {
+                                stringResource(R.string.koil_sync_reconcile_merge_plain)
+                            },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { pendingDestructive = SyncReconcile.Mode.LOCAL_WINS },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = if (st.cloudOnlyCount > 0) {
+                                stringResource(R.string.koil_sync_reconcile_local_wins, st.cloudOnlyCount)
+                            } else {
+                                stringResource(R.string.koil_sync_reconcile_local_wins_plain)
+                            },
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = { pendingDestructive = SyncReconcile.Mode.CLOUD_WINS },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = if (st.localOnlyCount > 0) {
+                                stringResource(R.string.koil_sync_reconcile_cloud_wins, st.localOnlyCount)
+                            } else {
+                                stringResource(R.string.koil_sync_reconcile_cloud_wins_plain)
+                            },
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = stringResource(R.string.koil_common_cancel),
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.dismissReconcile() }
+                            .padding(vertical = 10.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** 对账面板的一行说明（点号 + 一行字） */
+@Composable
+private fun ReconcileLine(text: String) {
+    Text(
+        text = "· $text",
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        color = MiuixTheme.colorScheme.onBackgroundVariant,
+        modifier = Modifier.padding(bottom = 4.dp),
+    )
+}
+
+/**
+ * 「从本地副本恢复」（PR ② 评审 P1-4）。
+ *
+ * 覆盖云端前会自动另存一份快照，但如果用户在应用里找不到它，那份副本就只对开发者有意义。
+ * 这里把它变成可点的一行：时间 · 条数，点一下按「只插入、不删本地」的口径恢复。
+ */
+@Composable
+private fun LocalBackupDialog(viewModel: SyncViewModel) {
+    val backups by viewModel.localBackups.collectAsStateWithLifecycle()
+    if (backups.isEmpty()) return
+    com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissLocalBackups) {
+        Column {
+            Text(
+                stringResource(R.string.koil_sync_backup_restore_title),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = MiuixTheme.colorScheme.onBackground,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.koil_sync_backup_restore_hint),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+            )
+            Spacer(Modifier.height(10.dp))
+            backups.forEach { b ->
+                val label = if (b.recordCount < 0) {
+                    stringResource(R.string.koil_sync_backup_restore_broken)
+                } else {
+                    stringResource(R.string.koil_sync_backup_restore_item, b.displayTime, b.recordCount)
+                }
+                Text(
+                    text = label,
+                    fontSize = 13.sp,
+                    color = if (b.recordCount < 0) MiuixTheme.colorScheme.onBackgroundVariant
+                    else MiuixTheme.colorScheme.onBackground,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(enabled = b.recordCount >= 0) { viewModel.restoreLocalBackup(b) }
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = stringResource(R.string.koil_common_cancel),
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onBackgroundVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { viewModel.dismissLocalBackups() }
+                    .padding(vertical = 10.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
     }
 }
 
@@ -2311,6 +2592,16 @@ private fun formatSyncNotice(key: String): String {
         "config_test_failed" -> stringResource(R.string.koil_sync_config_test_failed)
         // 未配置时点开关：复用状态行同一句（三语文案已齐，不新增条目）
         "not_configured" -> stringResource(R.string.koil_sync_status_not_configured)
+        // 首次配对且云端还没快照：不弹面板，只提示一句再直接上传
+        "first_upload" ->
+            if (arg != null) stringResource(R.string.koil_sync_first_upload, arg)
+            else stringResource(R.string.koil_sync_first_upload, 0)
+        "reconcile_stale" -> stringResource(R.string.koil_sync_reconcile_stale)
+        // 重跑没成功：不能说「已重新对账」
+        "reconcile_stale_retry" -> stringResource(R.string.koil_sync_reconcile_stale_retry)
+        "local_backup_broken" -> stringResource(R.string.koil_local_backup_broken)
+        "reconcile_done" -> stringResource(R.string.koil_sync_reconcile_done)
+        "reconcile_failed" -> stringResource(R.string.koil_sync_reconcile_failed)
         else -> key
     }
 }

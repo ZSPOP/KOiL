@@ -163,6 +163,20 @@ object BackupCodec {
      * 并设合理上界——云端文件可能被手工改坏或由不同版本生成，脏值一旦入库会污染整条派生链
      * （油耗、每公里成本、异常判定全部基于相邻记录差值）。
      */
+    /**
+     * 结构自检：这段文本能不能被认作备份文件（不看记录是否有效）。
+     *
+     * 为什么必须单独有它：[parse] 是「永不抛异常」的宽松解析（坏 JSON / 少字段都退化成 0 条），
+     * 但「0 条」和「读不懂」在同步里是两件相反的事——前者是空备份，可以覆盖；后者是别人的
+     * 数据（错误页、截断的文件、别的格式），覆盖了就没了。把两者都当 0 条处理，就是
+     * 「未知错误当成空集」。
+     */
+    fun looksLikeBackup(jsonText: String): Boolean {
+        val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: return false
+        // 至少要有一个 records 数组：合法空备份也是 records: []，而不是连这个键都没有
+        return root.has("records") && root.optJSONArray("records") != null
+    }
+
     fun parse(jsonText: String): ParseResult {
         val root = runCatching { JSONObject(jsonText) }.getOrNull() ?: return ParseResult(0, emptyList())
         val arr = root.optJSONArray("records") ?: return ParseResult(0, emptyList())

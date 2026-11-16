@@ -109,6 +109,8 @@ class AppSettings(private val context: Context) {
         private val KEY_SYNC_LAST_PUSH_AT = longPreferencesKey("KOiL-sync-last-push-at")
         private val KEY_SYNC_LAST_STATUS = stringPreferencesKey("KOiL-sync-last-status")
         private val KEY_SYNC_DELETED_KEYS = stringSetPreferencesKey("KOiL-sync-deleted-keys")
+        /** 撤销标记（PR ③ 起写入；PR ② 的「以云端为准」需要清空它，字段先落地，避免再走一次迁移） */
+        private val KEY_SYNC_REVIVED_KEYS = stringSetPreferencesKey("KOiL-sync-revived-keys")
         /** 是否成功推送过云端快照（墓碑判定用；键缺失按 false 处理，下一次成功推送自动补上） */
         private val KEY_SYNC_EVER_CONFIGURED = booleanPreferencesKey("KOiL-sync-ever-configured")
         const val DEFAULT_SYNC_URL = "https://dav.jianguoyun.com/dav/KOiL/"
@@ -577,6 +579,16 @@ class AppSettings(private val context: Context) {
             if (remaining.isEmpty()) prefs.remove(KEY_SYNC_DELETED_KEYS)
             else prefs[KEY_SYNC_DELETED_KEYS] = remaining
         }
+    }
+
+    /** 撤销标记（用户重新录入、需要从云端 deleted 里摘掉的键）。PR ③ 写入；这里供「以云端为准」清空 */
+    val syncRevivedKeys: Flow<Set<String>> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_SYNC_REVIVED_KEYS] ?: emptySet() }
+    suspend fun setSyncRevivedKeys(keys: Set<String>) {
+        context.KOiLDataStore.edit { it[KEY_SYNC_REVIVED_KEYS] = keys }
+    }
+    suspend fun clearRevivedKeys() {
+        setSyncRevivedKeys(emptySet())
     }
 
     // ---- 应用更新检查 ----
