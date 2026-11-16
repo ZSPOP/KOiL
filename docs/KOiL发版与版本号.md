@@ -4,11 +4,22 @@
 
 ## 发版流程
 
-1. **改版本名与发布日期**：`app/build.gradle.kts` 里的 `versionName` 手动递增（当前基线 `1.0.0`），
-   同时把 `buildConfigField("String", "KOIL_RELEASE_DATE", "\"YYYY-MM-DD\"")` 改成**本次打 tag 当天**的日期
-   （关于页「发布日期」显示的就是它；不改会被 CI 的发布日期闸门拦下）；`versionCode` 不要手改
+1. **推进版本名与发布日期**：在仓库根目录跑
+
+   ```bash
+   python3 scripts/bump_version.py                 # 先看预览：当前 → 下一个 + tag 名
+   python3 scripts/bump_version.py --apply         # 真正落盘
+   python3 scripts/bump_version.py --apply --date 2026-12-01   # 打 tag 会跨天时显式指定
+   ```
+
+   脚本按二十进制规则算出下一个 `versionName`，并一并改好三处：`versionName`、
+   `KOIL_RELEASE_DATE`（关于页「发布日期」显示的就是它，必须是**打 tag 当天**，否则被 CI
+   的发布日期闸门拦下）、`CHANGELOG.md` 的段标题。`versionCode` 不要手改。
+   **不要手算进位**：手写成 `1.1.20 → 1.1.21` 就违反了本口径，而 CI 要等打 tag 才拦得住。
+   `--apply` 只插 CHANGELOG 标题不写内容，条目仍要人补。
 2. **合 main**：功能分支合并到 `main` 并推送
-3. **打标签**：`git tag -a V1.0.0 -m "KOiL V1.0.0"` → `git push origin V1.0.0`
+3. **打标签**：`git tag -a V<versionName> -m "KOiL V<versionName>"` → `git push origin V<versionName>`
+   （如本次是 `1.2.0`，就写 `V1.2.0`）
 4. CI 自动构建、校验签名、生成 `KOiL-V*-vc*-release.apk`，挂到同名 Release
 
 标签推送即发版，没有二次确认。推之前务必确认 `versionName` 已递增。
@@ -17,7 +28,7 @@
 
 | 项 | 规则 |
 |---|---|
-| `versionName` | 手动递增，纯数字（`1.0.0`）；写 `V1.0.0` 会导致 CI 断言失败 |
+| `versionName` | 纯数字、不带 `V`（写 `V1.2.0` 会让 CI 断言失败）；按**二十进制**推进，三段各自取值 `0..20`、满 `20` 进位：`1.1.19 → 1.1.20`、`1.1.20 → 1.2.0`、`1.2.20 → 1.3.0`、`1.20.20 → 2.0.0`；用 `scripts/bump_version.py` 推进 |
 | `versionCode` | 只增不减：Build 用 `run_number`；Release 用 `max(已发布最大 -vcN, 最近 Build run_number) + 1`；不要手改 |
 | 标签 | 大写 `V`（`V1.0.0`）；去掉 V 必须等于 `versionName` |
 | 附件名 | `KOiL-<tag>-vc<versionCode>-release.apk` |

@@ -1807,8 +1807,8 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
 }
 
 /**
- * 诊断 + 關於两块，直接产出 lazy item 的 LazyListScope 扩展，
- * 组底距统一走 groupedCardItems 的 outerBottomPadding，不再手写 CardSegment。
+ * 「其它」一块（崩溃日志 / 问题反馈 / 关于 KOiL 三行连排），直接产出 lazy item 的
+ * LazyListScope 扩展；组底距统一走 groupedCardItems 的 outerBottomPadding，不再手写 CardSegment。
  */
 fun LazyListScope.aboutSection(
     crashCount: Int,

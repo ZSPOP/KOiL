@@ -112,6 +112,8 @@ def main() -> None:
     if not args.no_changelog:
         print(f"  CHANGELOG.md          新增段标题「## {new_name}」")
     print("\n还要人工做：")
+    print(f"  0. 若合并 / 打 tag 会跨天，日期要用打 tag 那天的：--date <当天>"
+          f"（CI 只接受 tag 提交日或次日，默认今天在跨天发版时会踩坑）")
     print(f"  1. 在 CHANGELOG 的「## {new_name}」下补条目（脚本只插标题）")
     print(f"  2. 发版时打 tag：{tag}")
 
