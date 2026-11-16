@@ -432,4 +432,24 @@ class SyncTombstoneV2Test {
         assertEquals(0, result.valid.size)
         assertEquals(1, dao.getRange("1970-01-01", "2999-12-31").size)
     }
+
+    /** P1 出口的决策本体：该探才探、探到不读不懂就不挂空面板 */
+    @Test
+    fun `只有上次是corrupt时才重探_且只把读不懂的返回给UI`() = runBlocking {
+        // 1) 没有 corrupt 状态：不发这次 GET（省一次网络，也不该无端弹面板）
+        calls.clear()
+        assertEquals(null, manager.reprobeCorruptIfNeeded())
+        assertEquals(0, calls.count { it == "GET" })
+
+        // 2) 上次 corrupt、云端仍是读不懂的 v3 → 返回 Corrupt，UI 据此挂面板
+        settings.setSyncLastStatus(CloudSyncManager.STATUS_FAIL_CORRUPT)
+        cloudBody = """{"version":3,"records":[]}"""
+        val probe = manager.reprobeCorruptIfNeeded()
+        assertEquals(CloudSyncManager.STATUS_FAIL_CORRUPT, settings.syncLastStatus.first())
+        assertTrue("读不懂才该返回，否则面板是空的", probe is CloudSyncManager.ReconcileProbe.Corrupt)
+
+        // 3) 上次 corrupt、但云端已被别的设备改回可读 → 返回 null，调用方继续常规推送
+        cloudBody = BackupCodec.buildBackup(listOf(entity("2026-11-23", 1220.0)), "test")
+        assertEquals(null, manager.reprobeCorruptIfNeeded())
+    }
 }

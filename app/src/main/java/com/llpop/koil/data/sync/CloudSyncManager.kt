@@ -398,7 +398,13 @@ class CloudSyncManager(
 
     // ===== 恢复 =====
 
-    /** 下载云端快照并生成合并预览（不写库）。云端无备份/未配置返回 null */
+    /**
+     * 下载云端快照并生成合并预览（不写库）。
+     *
+     * 返回 null：未配置，或云端没有备份。
+     * 返回 `broken = true`：文件在、但本版读不懂（不是能无损往返的格式）——一条都不许恢复，
+     * 否则 v3 的 `deleted` 读不出来，已删记录会被当成可恢复记录插回本地。
+     */
     suspend fun restorePreview(): RestoreResult? {
         if (!isConfigured()) return null
         val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
@@ -541,6 +547,19 @@ class CloudSyncManager(
                 etag = snapshot.etag,
             )
         )
+    }
+
+    /**
+     * 已配对设备遇到「云端读不懂」时的唯一出路：重新探一次，**读不懂才返回**，
+     * 由调用方把面板挂出来；云端已被别的设备改回可读（Ready）或文件没了（NoCloud）就返回 null，
+     * 调用方继续常规推送，不用挂一个没有内容的 corrupt 面板。
+     *
+     * 只在上次状态确实是 corrupt 时才发这次 GET——决策独立于 ViewModel，
+     * 所以它能在 manager 层被钉住（UI 层没有 coroutines-test，测不到）。
+     */
+    suspend fun reprobeCorruptIfNeeded(): ReconcileProbe.Corrupt? {
+        if (settings.syncLastStatus.first() != STATUS_FAIL_CORRUPT) return null
+        return probeReconcile() as? ReconcileProbe.Corrupt
     }
 
     /**

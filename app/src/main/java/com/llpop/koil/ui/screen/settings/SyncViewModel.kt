@@ -209,19 +209,17 @@ class SyncViewModel(
                             _reconcileCorrupt.value = probe
                         }
                     }
-                } else if (settings.syncLastStatus.first() == CloudSyncManager.STATUS_FAIL_CORRUPT) {
-                    // 已配对过、但云端是别的版本写的：常规推送只会再 corrupt 一次。
-                    // 这里重新探一次并把面板挂出来，否则「关掉再打开」也回不到人工入口。
-                    when (val probe = manager.probeReconcile()) {
-                        is CloudSyncManager.ReconcileProbe.Corrupt -> {
-                            _reconcileCorrupt.value = probe
-                            _message.value = "backup_corrupt"
-                        }
-                        else -> manager.pushNow(force = true)
-                    }
                 } else {
-                    // 已配对过：走常规推送
-                    manager.pushNow(force = true)
+                    // 已配对过：走常规推送。若上次是 corrupt，reprobeCorruptIfNeeded 会先探一次——
+                    // 读不懂就挂面板（否则「关掉再打开」也回不到人工入口），
+                    // 云端已被别的设备改回可读/删掉就直接推，不用挂一个空面板。
+                    val corrupt = manager.reprobeCorruptIfNeeded()
+                    if (corrupt != null) {
+                        _reconcileCorrupt.value = corrupt
+                        _message.value = "backup_corrupt"
+                    } else {
+                        manager.pushNow(force = true)
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -409,17 +407,17 @@ class SyncViewModel(
             try {
                 persistDrafts(urlDraft, usernameDraft, passwordDraft)
                 val ok = manager.pushNow(force = true)
+                // 先拿到结果再说话：文案说「下面有面板」就必须真有面板。
+                // 先发 backup_corrupt 再探，探空/探不到时那句话就成了假话（PR ② 第五轮 P3-11 同一形状）。
+                val corrupt = if (!ok) manager.reprobeCorruptIfNeeded() else null
                 // 云端读不懂时账号和网络都是好的，不能弹「请检查账号与网络」——
                 // 那会和同一秒的状态行互相拆台
-                if (!ok && settings.syncLastStatus.first() == CloudSyncManager.STATUS_FAIL_CORRUPT) {
-                    _message.value = "backup_corrupt"
-                    // 文案把用户指到对账面板，而面板只在首连弹（syncEverConfigured 之后不再弹）。
-                    // 不在这里补一次，用户唯一的出路就是清应用数据。
-                    (manager.probeReconcile() as? CloudSyncManager.ReconcileProbe.Corrupt)
-                        ?.let { _reconcileCorrupt.value = it }
-                } else {
-                    _message.value = if (ok) "backup_done" else "backup_failed"
+                _message.value = when {
+                    corrupt != null -> "backup_corrupt"
+                    ok -> "backup_done"
+                    else -> "backup_failed"
                 }
+                corrupt?.let { _reconcileCorrupt.value = it }
             } catch (e: Exception) {
                 _message.value = "backup_failed"
             } finally {
