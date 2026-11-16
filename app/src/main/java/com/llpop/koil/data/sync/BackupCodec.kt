@@ -55,6 +55,24 @@ object BackupCodec {
     fun clampAt(at: Long, now: Long = System.currentTimeMillis()): Long =
         if (at > now + ONE_DAY_MS) now + ONE_DAY_MS else if (at < 0) now else at
 
+    /**
+     * 删除标记的裁剪口径：键去重取 max → 去掉超窗口的 → 超量只留最近的 N 条。
+     *
+     * 写出去的 JSON 与本地缓存必须走**同一个**函数：只裁 JSON 不裁缓存，缓存里
+     * 超窗口的键每次都被裁掉、下次又原样进来，永远循环、永远写不出去、永远占着。
+     */
+    fun pruneTombstones(
+        deleted: Map<String, Long>,
+        now: Long = System.currentTimeMillis(),
+    ): Map<String, Long> =
+        deleted.entries
+            .associate { it.key to clampAt(it.value, now) }
+            .filterValues { it >= now - TOMBSTONE_WINDOW_MS }
+            .entries
+            .sortedByDescending { it.value }
+            .take(TOMBSTONE_MAX)
+            .associateTo(LinkedHashMap()) { it.key to it.value }
+
     /** 解析后的单条记录（与 KOiLRecordEntity 字段一一对应，id 不跨设备传递） */
     data class RecordData(
         val reoilDate: String,
@@ -107,11 +125,8 @@ object BackupCodec {
     ): String {
         val now = System.currentTimeMillis()
         // 按键去重取 max → 裁剪窗口 → 才能在 push 时「一次摘净」，也让文件不无限增长
-        val deduped = deleted.associate { it.key to clampAt(it.at, now) }
+        val deduped = pruneTombstones(deleted.associate { it.key to it.at }, now)
             .map { (key, at) -> DeletedEntry(key, at) }
-            .filter { it.at >= now - TOMBSTONE_WINDOW_MS }
-            .sortedByDescending { it.at }
-            .take(TOMBSTONE_MAX)
         val deletedArr = JSONArray()
         deduped.forEach { deletedArr.put(JSONObject().put("key", it.key).put("at", it.at)) }
         val recordsArr = JSONArray()
@@ -254,7 +269,10 @@ object BackupCodec {
             for (i in 0 until dArr.length()) {
                 val o = dArr.optJSONObject(i) ?: continue
                 val key = o.optString("key").takeIf { it.isNotBlank() } ?: continue
-                val at = clampAt(o.optLong("at", 0L))
+                // 缺 at（手改过、恢复工具产出）以前会读成 0 → 下一秒被窗口裁掉 → 删除静默消失。
+                // 缺省按 now：宁可用现在的时间扩散，也不能把这条删除丢掉。
+                val rawAt = o.optLong("at", 0L)
+                val at = clampAt(if (rawAt <= 0L) System.currentTimeMillis() else rawAt)
                 val prev = deletedMap[key]
                 if (prev == null || at > prev) deletedMap[key] = at
             }

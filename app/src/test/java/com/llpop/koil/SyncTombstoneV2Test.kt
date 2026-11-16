@@ -85,7 +85,10 @@ class SyncTombstoneV2Test {
                 else -> respond("", HttpStatusCode.OK)
             }
         }
-        manager = CloudSyncManager(settings, dao, WebDavClient(engine), db, context)
+        manager = CloudSyncManager(settings, dao, WebDavClient(engine), db, context).apply {
+            // 重试间隔置 0：412 那条测试否则要真睡 15s+60s
+            retryDelaysMs = longArrayOf(0L, 0L)
+        }
 
         settings.setSyncEnabled(true)
         settings.setSyncUrl(SyncConfig.DEFAULT_URL)
@@ -300,6 +303,7 @@ class SyncTombstoneV2Test {
         // 模拟「v2 快照被 v1 客户端抹掉」：云端没有 deleted，但本机缓存有
         cloudBody = BackupCodec.buildBackup(listOf(entity("2026-11-13", 1120.0)), "test")
             .replace(",\"deleted\":[]", "")
+            .replace("\"version\":2", "\"version\":1")
         // at 取「刚刚」：超过 180 天窗口的删除标记会被裁掉（设计如此）
         settings.setSyncDeletedCache(
             mapOf(key("2026-11-14", 1130.0) to System.currentTimeMillis() - 1000),
@@ -331,5 +335,68 @@ class SyncTombstoneV2Test {
         // 云端那条删除被摘掉
         val pushed = BackupCodec.parse(lastPutBody)
         assertFalse(pushed.deleted.any { it.key == key("2026-11-15", 1140.0) })
+    }
+
+    /** P1-1：云端读不懂 → 「立即备份」必须报失败，且一个字节都没上传 */
+    @Test
+    fun `云端读不懂时立即备份必须报失败`() = runBlocking {
+        cloudBody = """{"version":3,"records":[{"date":"2026-11-16","mileage":1150,
+            "oilAmount":40,"payableAmount":320}],"deleted":[]}"""
+        calls.clear()
+
+        val ok = manager.pushNow(force = true)
+
+        assertFalse("不能让上层以为推成功了", ok)
+        assertEquals("fail:corrupt", settings.syncLastStatus.first())
+        assertEquals("读不懂的云端文件一个字节都不许动", 0, calls.count { it == "PUT" })
+    }
+
+    /** P1-2：正常推送不带历史缓存——缓存只在「云端可能被旧版抹掉」时参与 */
+    @Test
+    fun `正常推送不带上历史缓存`() = runBlocking {
+        val old = key("2026-10-01", 900.0)
+        val day = 24L * 60 * 60 * 1000
+        settings.setSyncDeletedCache(mapOf(old to System.currentTimeMillis() - day))
+
+        // 云端已是 v2，本机也写过 v2 → 缓存不参与
+        cloudBody = BackupCodec.buildBackup(listOf(entity("2026-11-17", 1160.0)), "test")
+        settings.setLastPushedBackupVersion(2)
+        assertTrue(manager.pushNow(force = true))
+
+        val pushed = BackupCodec.parse(lastPutBody)
+        assertFalse(
+            "缓存是修复用的，不该变成常驻第四源：正常同步只写墓碑 ∪ 云端",
+            pushed.deleted.any { it.key == old },
+        )
+
+        // 同一个键，换成「本机还没写过 v2」→ 缓存必须参与，否则一次故障就永久丢删除
+        settings.setLastPushedBackupVersion(0)
+        assertTrue(manager.pushNow(force = true))
+        assertTrue(
+            BackupCodec.parse(lastPutBody).deleted.any { it.key == old },
+        )
+    }
+
+    /** P2-3：缓存与写出去的 JSON 同一口径，不随历史无限增长 */
+    @Test
+    fun `缓存超过上限会被裁剪`() = runBlocking {
+        val now = System.currentTimeMillis()
+        val day = 24L * 60 * 60 * 1000
+        val huge = LinkedHashMap<String, Long>()
+        repeat(1005) { huge["2026-00-00|$it"] = now - day }
+        // 两条超窗口的：它们永远写不出去，也不能永远占着缓存
+        huge["2025-01-01|1"] = now - 400 * day
+        huge["2025-01-02|2"] = now - 500 * day
+        settings.setSyncDeletedCache(huge)
+        settings.setLastPushedBackupVersion(0)
+        cloudBody = ""
+
+        assertTrue(manager.pushNow(force = true))
+
+        val cache = settings.syncDeletedCache.first()
+        assertTrue("缓存不得超上限，实际 ${cache.size}", cache.size <= 1000)
+        assertFalse("超窗口的删除不该留在缓存里", cache.containsKey("2025-01-01|1"))
+        // 写出去的 JSON 与缓存同源
+        assertEquals(cache.keys, BackupCodec.parse(lastPutBody).deleted.map { it.key }.toSet())
     }
 }

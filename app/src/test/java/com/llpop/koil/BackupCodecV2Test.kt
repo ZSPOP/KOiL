@@ -5,6 +5,7 @@ import com.llpop.koil.data.sync.BackupCodec
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -135,5 +136,20 @@ class BackupCodecV2Test {
         val json = BackupCodec.buildBackup(emptyList(), "test")
         assertTrue(json.contains("\"deleted\":[]"))
         assertTrue(BackupCodec.looksLikeBackup(json))
+    }
+
+    /** P2-4：缺 at 的删除标记以前读成 0 → 被窗口裁掉 → 删除静默消失 */
+    @Test
+    fun `缺at的删除标记按现在的时间保留`() {
+        val now = System.currentTimeMillis()
+        val json = """{"version":2,"records":[],"deleted":[{"key":"2026-11-18|1170.0"}]}"""
+
+        val parsed = BackupCodec.parse(json)
+
+        assertEquals(1, parsed.deleted.size)
+        assertTrue(
+            "缺 at 不能读成 0（1970），否则下一秒就被 180 天窗口裁掉",
+            abs(parsed.deleted.single().at - now) < 5_000L,
+        )
     }
 }

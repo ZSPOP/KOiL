@@ -83,7 +83,9 @@ class SyncReconcileFlowTest {
                 else -> respond("", HttpStatusCode.OK)
             }
         }
-        manager = CloudSyncManager(settings, dao, WebDavClient(engine), db, context)
+        manager = CloudSyncManager(settings, dao, WebDavClient(engine), db, context).apply {
+            retryDelaysMs = longArrayOf(0L, 0L)
+        }
 
         settings.setSyncEnabled(true)
         settings.setSyncUrl(SyncConfig.DEFAULT_URL)

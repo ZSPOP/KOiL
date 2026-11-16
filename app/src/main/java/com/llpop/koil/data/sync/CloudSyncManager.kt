@@ -1,5 +1,6 @@
 package com.llpop.koil.data.sync
 
+import androidx.annotation.VisibleForTesting
 import androidx.room.withTransaction
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.local.AppDatabase
@@ -44,6 +45,19 @@ class CloudSyncManager(
     private val context: android.content.Context,
 ) {
 
+    /**
+     * 云端快照读不懂（结构不是备份 / 版本超出本版能力）。
+     * 单独一个类型，是为了让上层区分「网络失败可以重试」与「别人的文件不能覆盖」。
+     */
+    internal class CorruptCloudSnapshotException : Exception("cloud snapshot is not round-trippable")
+
+    /**
+     * 失败重试间隔。默认就是生产行为；测试把它置空/置 0，避免 412 那条用例真睡 75 秒。
+     * 不做构造参数是因为 Koin `singleOf(::CloudSyncManager)` 要求每个参数都能从容器解析。
+     */
+    @VisibleForTesting
+    internal var retryDelaysMs: LongArray = DEFAULT_RETRY_DELAYS_MS
+
     companion object {
         /** 变更推送最小间隔（30s）：连续录入抖动合并为一次推送的兜底频率闸 */
         private const val MIN_PUSH_INTERVAL_MS = 30_000L
@@ -52,7 +66,7 @@ class CloudSyncManager(
         internal const val LOCAL_BACKUP_PREFIX = "koil_backup.before-"
         /** 进度推送失败后的进程内补推间隔（避免一次失败后只能等下次启动） */
         private const val FAILURE_RETRY_DELAY_MS = 60_000L
-        private val RETRY_DELAYS_MS = longArrayOf(15_000L, 60_000L)
+        private val DEFAULT_RETRY_DELAYS_MS = longArrayOf(15_000L, 60_000L)
 
         /**
          * 距离允许下一次推送还需等待的毫秒数。
@@ -164,8 +178,11 @@ class CloudSyncManager(
                 false
             }
             if (!ok) {
-                kotlinx.coroutines.delay(FAILURE_RETRY_DELAY_MS)
-                pushRequests.trySend(Unit)
+                // 云端读不懂：重推不会让它变得可读，用户还没在对账面板上决定之前不要空转
+                if (settings.syncLastStatus.first() != "fail:corrupt") {
+                    kotlinx.coroutines.delay(FAILURE_RETRY_DELAY_MS)
+                    pushRequests.trySend(Unit)
+                }
             }
         }
     }
@@ -179,10 +196,13 @@ class CloudSyncManager(
                     return true
                 } catch (e: CancellationException) {
                     throw e
+                } catch (_: CorruptCloudSnapshotException) {
+                    // 重试不会让别人的文件变得可读；状态行已写好，直接失败退出
+                    return false
                 } catch (e: Exception) {
                     attempt++
-                    if (attempt <= RETRY_DELAYS_MS.size) {
-                        kotlinx.coroutines.delay(RETRY_DELAYS_MS[attempt - 1])
+                    if (attempt <= retryDelaysMs.size) {
+                        kotlinx.coroutines.delay(retryDelaysMs[attempt - 1])
                     } else {
                         settings.setSyncLastStatus("fail:${e.message?.take(60) ?: "网络错误"}")
                         return false
@@ -214,13 +234,22 @@ class CloudSyncManager(
         // 这里置 fail:corrupt 让设置页给出人工入口（「仍然覆盖（会先留副本）」）。
         if (cloudBody != null && !allowOverwriteCorrupt && !isRoundTrippable(cloudBody)) {
             settings.setSyncLastStatus("fail:corrupt")
-            return
+            // 必须抛：正常 return 会让 pushWithRetry 认为「推成功了」，
+            // 「立即备份」就会弹一句「备份完成」——实际一个字节都没上传。
+            throw CorruptCloudSnapshotException()
         }
-        val cloudDeleted = cloudBody?.let { BackupCodec.parse(it).deleted } ?: emptyList()
+        val cloudParsed = cloudBody?.let { BackupCodec.parse(it) }
+        val cloudDeleted = cloudParsed?.deleted ?: emptyList()
         if (cloudBody != null) mergeCloudIntoLocal(cloudBody)
 
         val records = recordDao.getRange("1970-01-01", "2999-12-31").inChronologicalOrder()
-        val plan = prepareSnapshot(records, cloudDeleted, tombstonesAtStart, revivedAtStart, cacheAtStart)
+        // v4 口径：缓存是**修复用**的，不是常驻第四源。只有云端可能被旧版抹掉时它才参与，
+        // 否则每次正常同步都要多写几百个历史上的删除（见 prepareSnapshot 注释）。
+        val cache = cacheForRepair(cloudParsed?.version, cacheAtStart)
+        val plan = prepareSnapshot(
+            records, cloudDeleted, tombstonesAtStart, revivedAtStart, cache,
+            history = cacheAtStart,
+        )
 
         client.upload(
             url, BackupCodec.CLOUD_FILE_NAME, plan.json, username, password,
@@ -232,7 +261,7 @@ class CloudSyncManager(
         settings.clearSyncDeletedKeys(tombstonesAtStart)
         // 缓存 = 本轮真正写出去的删除历史。v1 客户端读到 deleted 会整块抹掉（它重建 JSON），
         // 下次推送靠这份缓存把它补回去——不能靠「缓存为空」判首次，因为从没删过东西的设备也是空。
-        settings.setSyncDeletedCache(plan.deleted)
+        settings.setSyncDeletedCache(plan.cache)
         settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
         // 只清本轮真的从云端摘掉的那批撤销；推送期间新打的标记留到下一轮
         settings.setSyncRevivedKeys(settings.syncRevivedKeys.first() - plan.clearedRevived)
@@ -244,10 +273,37 @@ class CloudSyncManager(
         )
     }
 
-    /** 一次推送要写出去的东西：JSON、本次生效的删除集、本轮真摘掉的撤销键 */
+    /**
+     * 删除历史缓存什么时候参与合并 —— 它只承担**修复**职责，不是常驻第四源。
+     *
+     * 触发条件（v4 冻结方案）：云端可能被旧版客户端抹掉（version 为 1 或没有 version），
+     * 或本机从没写出过 v2（`lastPushedBackupVersion < BACKUP_VERSION`）。
+     * 其余情况缓存原样存着但不参与 —— 为一次偶发故障让每次正常同步都多写几百个
+     * 历史上的删除，代价和收益不成比例。
+     *
+     * 判据用标记而不是「缓存非空」：从没删过东西的设备缓存也是空的，用它判首次等于永远不修复。
+     */
+    private suspend fun cacheForRepair(
+        cloudVersion: Int?,
+        cache: Map<String, Long>,
+    ): Map<String, Long> {
+        if (cache.isEmpty()) return emptyMap()
+        val lastPushed = settings.lastPushedBackupVersion.first()
+        val cloudMightBeWiped = cloudVersion == null || cloudVersion < BackupCodec.BACKUP_VERSION
+        return if (cloudMightBeWiped || lastPushed < BackupCodec.BACKUP_VERSION) cache else emptyMap()
+    }
+
+    /**
+     * 一次推送要写出去的东西：JSON、**本次真的写进 JSON** 的删除集、
+     * 该存回本地的删除历史、本轮真摘掉的撤销键。
+     *
+     * `deleted` 与 `cache` 是两个集合不能合并：写出去只有墓碑 ∪ 云端（修复时才多一份缓存），
+     * 而缓存要留住历史——拿「写出去的集合」覆盖缓存，正常推送一次就把修复能力清零了。
+     */
     private data class SnapshotPlan(
         val json: String,
         val deleted: Map<String, Long>,
+        val cache: Map<String, Long>,
         val clearedRevived: Set<String>,
     )
 
@@ -266,19 +322,33 @@ class CloudSyncManager(
         cloudDeleted: List<BackupCodec.DeletedEntry>,
         tombstones: Set<String>,
         revived: Set<String>,
+        /** 本次**参与**合并的缓存（不参与时传空） */
         cache: Map<String, Long>,
         now: Long = System.currentTimeMillis(),
+        /** 本地留存的全部删除历史：只用来算「该记住什么」，不参与写出 */
+        history: Map<String, Long> = emptyMap(),
     ): SnapshotPlan {
         val localKeys = records.map { RecordMerger.keyOf(it.reoilDate, it.mileage) }.toHashSet()
-        val merged = RecordMerger.mergeTombstones(tombstones, cloudDeleted, cache, now)
-        val dataWins = RecordMerger.dataWinsOverDeletion(merged, localKeys, revived)
-        val target = merged.filterKeys { it !in revived && it !in dataWins }
+        // 先按窗口/上限裁一遍：写出去的 JSON 与本地缓存必须同一口径，否则超窗口的键
+        // 每次被裁掉、下次又原样进来，永远循环、永远写不出去、永远占着
+        val mergedForWrite = BackupCodec.pruneTombstones(
+            RecordMerger.mergeTombstones(tombstones, cloudDeleted, cache, now),
+            now,
+        )
+        // 缓存要「全部历史」：缓存参与与否只决定写不写出去，不决定记不记得住
+        val mergedAll = if (history.isEmpty()) mergedForWrite else BackupCodec.pruneTombstones(
+            RecordMerger.mergeTombstones(tombstones, cloudDeleted, history, now),
+            now,
+        )
+        val dataWins = RecordMerger.dataWinsOverDeletion(mergedAll, localKeys, revived)
+        val target = mergedForWrite.filterKeys { it !in revived && it !in dataWins }
+        val cacheOut = mergedAll.filterKeys { it !in revived && it !in dataWins }
         val json = BackupCodec.buildBackup(
             records.toList(),
             BuildConfig.VERSION_NAME,
             target.map { BackupCodec.DeletedEntry(it.key, it.value) },
         )
-        return SnapshotPlan(json, target, revived + dataWins)
+        return SnapshotPlan(json, target, cacheOut, revived + dataWins)
     }
 
     /**
@@ -297,7 +367,7 @@ class CloudSyncManager(
         val local = recordDao.getRange("1970-01-01", "2999-12-31")
         val localKeys = local.map { RecordMerger.keyOf(it.reoilDate, it.mileage) }.toHashSet()
         val tombstones = settings.syncDeletedKeys.first()
-        val cache = settings.syncDeletedCache.first()
+        val cache = cacheForRepair(parsed.version, settings.syncDeletedCache.first())
         val revived = settings.syncRevivedKeys.first()
         // 有效墓碑不只本地那一份：云端 deleted 与缓存里的删除同样要挡，
         // 否则「只拉不推」的设备（B 打开应用、不写云端）看到 v1 快照就会把已删记录复活
@@ -404,6 +474,13 @@ class CloudSyncManager(
      * （或没有 version 的旧格式）。自动推送与对账面板共用这一条判据，
      * 否则两条路径会一个拦住、一个照样覆盖。
      */
+    /** 读不懂的具体原因。措辞只留这一处，两条路径才不会一处改了另一处没改 */
+    private fun rejectReason(raw: String): String {
+        if (!BackupCodec.looksLikeBackup(raw)) return "云端文件不是备份格式"
+        val version = BackupCodec.parse(raw).version
+        return if (version == null) "云端文件不是备份格式" else "备份版本 $version 超出本版能力"
+    }
+
     private fun isRoundTrippable(raw: String): Boolean {
         if (!BackupCodec.looksLikeBackup(raw)) return false
         val version = BackupCodec.parse(raw).version ?: return true
@@ -426,20 +503,16 @@ class CloudSyncManager(
         val body = snapshot.content?.takeIf { it.isNotBlank() } ?: return ReconcileProbe.NoCloud
         // 文件在、但结构不是备份（错误页 / 截断 / 别的格式）→ 一个字都不许写。
         // 不能用「parse 出 0 条」来判断：合法空备份也是 0 条，两者混同就是拿别人的数据去覆盖。
-        // 判据与自动推送共用 isRoundTrippable，两条路径不能各算各的
-        if (!BackupCodec.looksLikeBackup(body)) {
-            return ReconcileProbe.Corrupt(body, "云端文件不是备份格式")
+        // 判据与自动推送**共用** isRoundTrippable，两条路径不能各算各的
+        if (!isRoundTrippable(body)) {
+            return ReconcileProbe.Corrupt(body, rejectReason(body))
         }
         val parsed = BackupCodec.parse(body)
-        val version = parsed.version
         // 云同步要的不是「这个数字我认识」，而是「我能无损往返」：读进来再原样写回去，语义不能少。
         // 只接受本版写出的版本（以及无 version 的旧格式）。用 isKnownBackupVersion 判会放过 v2：
         // parse 只读 records、buildBackup 不写 deleted，结果是把别人的 v2 降级成 v1 写回云端，
         // 那些 deleted 静默消失、删除扩散失效——不报错、不提示，比"读不懂"更难发现。
-        // PR ③ 把 BACKUP_VERSION 升到 2 并真的读写 deleted 之后，这条判定自动跟随，不用再改。
-        if (version != null && version !in 1..BackupCodec.BACKUP_VERSION) {
-            return ReconcileProbe.Corrupt(body, "备份版本 $version 超出本版能力")
-        }
+        // PR ③ 把 BACKUP_VERSION 升到 2 并真的读写 deleted 之后，这条判定自动跟随。
         val local = recordDao.getRange("1970-01-01", "2999-12-31")
         val tombstones = settings.syncDeletedKeys.first()
         return ReconcileProbe.Ready(
@@ -511,15 +584,20 @@ class CloudSyncManager(
         val revivedAtStart = settings.syncRevivedKeys.first()
         val cacheAtStart = settings.syncDeletedCache.first()
         val records = recordDao.getRange("1970-01-01", "2999-12-31").inChronologicalOrder()
-        val cloudDeleted = cloudJson?.let { BackupCodec.parse(it).deleted } ?: emptyList()
-        val plan = prepareSnapshot(records, cloudDeleted, tombstonesAtStart, revivedAtStart, cacheAtStart)
+        val cloudParsed = cloudJson?.let { BackupCodec.parse(it) }
+        val cloudDeleted = cloudParsed?.deleted ?: emptyList()
+        val cache = cacheForRepair(cloudParsed?.version, cacheAtStart)
+        val plan = prepareSnapshot(
+            records, cloudDeleted, tombstonesAtStart, revivedAtStart, cache,
+            history = cacheAtStart,
+        )
         client.upload(
             url, BackupCodec.CLOUD_FILE_NAME,
             plan.json,
             username, password, expectedEtag = expectedEtag, cloudExists = true,
         )
         settings.clearSyncDeletedKeys(tombstonesAtStart)
-        settings.setSyncDeletedCache(plan.deleted)
+        settings.setSyncDeletedCache(plan.cache)
         settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
         settings.setSyncRevivedKeys(settings.syncRevivedKeys.first() - plan.clearedRevived)
         settings.setSyncLastPushAt(System.currentTimeMillis())
