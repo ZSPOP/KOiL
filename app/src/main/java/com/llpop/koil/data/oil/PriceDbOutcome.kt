@@ -19,7 +19,16 @@ package com.llpop.koil.data.oil
  */
 sealed interface PriceDbOutcome {
 
-    /** 上一轮还没跑完（并发互斥挡下） */
+    /*
+     * 下面三条是「这次没干活」的早退路径：Syncer 在写缓存之前就 return 了，
+     * 所以它们既不落盘、也不会出现在「上次核对结论」里（界面翻译返回 null）。
+     *
+     * 保留它们不是为了给谁读：`OilPriceSyncWorker` 只看 `result.success`，全仓没有
+     * `outcome` 的消费者。保留的理由是「结果类型要能描述所有真实走法」，比裸 boolean 清楚，
+     * 将来接别的出口也不用改签名 —— 但别去找一个不存在的调用方。
+     */
+
+    /** 上一轮还没跑完（并发互斥挡下）；「立即更新」会用它给一句提示 */
     data object Busy : PriceDbOutcome
 
     /** 自动更新开关关着，本次跳过 */

@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -57,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.llpop.koil.R
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.util.AppClock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -86,11 +89,11 @@ fun KOiLDatePickerDialog(
     anchorBounds: IntRect? = null,
 ) {
     val initial = remember(initialDate) {
-        runCatching { LocalDate.parse(initialDate) }.getOrDefault(LocalDate.now())
+        runCatching { LocalDate.parse(initialDate) }.getOrDefault(AppClock.today())
     }
     var selected by remember { mutableStateOf(initial) }
     var viewMonth by remember { mutableStateOf(YearMonth.from(initial)) }
-    val today = LocalDate.now()
+    val today = AppClock.today()
     val dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
     // 三语文案
@@ -262,7 +265,12 @@ fun KOiLDatePickerDialog(
                     // backdrop-filter 元素（柔光玻璃纪律：transform 与 backdrop-filter 冲突）
                     // 高度策略：拖动/切月动画中容器高度直接取"目标月行数"——预览层与容器同高、
                     // 全程不被裁剪、复位时高度已就位无过渡抖动；空闲时跟随当前月行数（5~6 行）
-                    val cellH = 44.dp
+                    // 字号放大时单元跟着长：网格容器高度由 cellH 推导，两者必须同源，
+                    // 否则外层 height(gridH) + clipToBounds 会把放大的数字裁掉。
+                    // 上限 1.5 倍：再高这个弹窗就放不下了。
+                    val gridFontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
+                        .coerceIn(1f, 1.5f)
+                    val cellH = 44.dp * gridFontScale
                     val cardBg = MiuixTheme.colorScheme.background
                     val gridRows = curCells.size / 7
                     val previewDelta = when {
@@ -491,12 +499,12 @@ private fun CalendarGrid(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(cellHeight),
+                            .heightIn(min = cellHeight),
                         contentAlignment = Alignment.Center,
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(34.dp)
+                                .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
                                 .clip(CircleShape)
                                 .background(if (isSelected) KOiLColors.Primary else Color.Transparent)
                                 .clickable(enabled = !isFuture) { onPick(date) },

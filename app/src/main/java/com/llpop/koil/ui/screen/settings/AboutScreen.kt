@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
@@ -752,7 +753,9 @@ private fun BoxScope.AboutHero(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(statusAreaHeight)
+                    // 状态行按最小高度占位：三种文案在 1.0 倍下等高、胶囊不跳；
+                    // 字号放大后允许撑高（hero 高度是量出来的，列表占位会跟着重算）
+                    .heightIn(min = statusAreaHeight)
                     .padding(top = statusGapTop),
                 contentAlignment = Alignment.Center,
             ) {

@@ -2,6 +2,8 @@ package com.llpop.koil
 
 import android.app.Activity
 import android.app.Application
+import android.content.ComponentCallbacks
+import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import androidx.work.BackoffPolicy
@@ -18,6 +20,7 @@ import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.di.appModule
 import com.llpop.koil.util.CrashReporter
+import com.llpop.koil.util.SystemLocaleBridge
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +63,30 @@ class KOiLApplication : Application() {
         }
     )
 
+    /** 上一次已对账的系统语言列表（见 onConfigurationChanged 里的早退判断） */
+    @Volatile
+    private var lastSeenLocales: String? = null
+
+    /**
+     * 启动时把系统侧语言与 DataStore 对齐一次。
+     *
+     * 监听器只在进程活着时有效，用户完全可能关掉 App 后去系统设置里改语言，所以必须再对一次账。
+     * 第一次升级到带 `localeConfig` 的版本时（[AppSettings.localeMirrorAdopted] 为 false），
+     * 系统侧必然是空的——这时**不能**把它当成「用户选了跟随系统」，否则会把用户以前在
+     * App 内选的语言悄悄清掉。正确方向是把旧选择推给系统，推过一次之后就以系统为准。
+     */
+    private suspend fun adoptSystemLocale() {
+        val settings = GlobalContext.get().get<AppSettings>()
+        val system = SystemLocaleBridge.read(this) ?: return
+        val stored = settings.language.first()
+        if (!settings.localeMirrorAdopted.first()) {
+            SystemLocaleBridge.apply(this, stored)
+            settings.setLocaleMirrorAdopted()
+            return
+        }
+        if (system != stored) settings.setLanguage(system)
+    }
+
     override fun onCreate() {
         super.onCreate()
         // 全局崩溃捕获统一在 Application 最早安装（覆盖启动期崩溃）；
@@ -71,6 +98,34 @@ class KOiLApplication : Application() {
         startKoin {
             androidContext(this@KOiLApplication)
             modules(appModule)
+        }
+
+        // 系统「每应用语言」（Android 13+）与 App 内设置的对账，见 adoptSystemLocale。
+        // 改「每应用语言」必然伴随一次配置变更（公开 SDK 没有 OnLocaleChangedListener，
+        // 配置回调是公开且等价的入口）；进程已死时的那次改动由启动时的一次比对兜住。
+        // 两条路都只写 DataStore，界面仍只读 DataStore —— 不允许出现「系统改了但界面没变」。
+        lastSeenLocales = resources.configuration.locales.toLanguageTags()
+        registerComponentCallbacks(object : ComponentCallbacks {
+            override fun onConfigurationChanged(newConfig: Configuration) {
+                // 配置变更很频繁（旋转、深浅色、字体缩放），语言没变就别去读 DataStore；
+                // 只有 LocaleList 真的变了才是「系统里改了语言」这一个需要处理的事件
+                val tag = newConfig.locales.toLanguageTags()
+                if (tag == lastSeenLocales) return
+                lastSeenLocales = tag
+                appScope.launch {
+                    runCatching { adoptSystemLocale() }
+                        .onFailure { Log.w("KOiL", "system locale sync failed: ${it.message}") }
+                }
+            }
+
+            // 接口要求实现的空实现；onLowMemory 自 API 35 起已弃用（系统改为按进程优先级回收），
+            // 这里保留但不做事，也不需要为它编译告警
+            @Suppress("OVERRIDE_DEPRECATION")
+            override fun onLowMemory() = Unit
+        })
+        appScope.launch {
+            runCatching { adoptSystemLocale() }
+                .onFailure { Log.w("KOiL", "adopt system locale failed: ${it.message}") }
         }
 
         // 方案X：油价库首次联网灌库——先灌当前省一整年曲线（即时可用），其余省份由 seedRemainingProvinces 后台补全。

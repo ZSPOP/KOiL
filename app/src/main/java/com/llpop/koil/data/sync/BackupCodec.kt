@@ -3,17 +3,10 @@ package com.llpop.koil.data.sync
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.domain.logic.DerivedCalculator
 import com.llpop.koil.domain.logic.RecordValidator
+import com.llpop.koil.util.AppClock
+import com.llpop.koil.util.TimeFormats
 import org.json.JSONArray
 import org.json.JSONObject
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
-/**
- * 备份 JSON 的 `exportTime`：默认时区、固定 US 数字形态。
- * 只给人读（恢复流程不解析它），但导出文件不会随语言切换而变形，便于跨设备比对。
- */
-private val EXPORT_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss", Locale.US)
 
 /**
  * 云同步备份编解码（对齐 §7.10 手动备份 JSON 格式）：
@@ -58,7 +51,7 @@ object BackupCodec {
     data class DeletedEntry(val key: String, val at: Long)
 
     /** `at` 钳制：不得晚于 now+1d（容忍时钟小幅超前的设备，不给它永久优势） */
-    fun clampAt(at: Long, now: Long = System.currentTimeMillis()): Long =
+    fun clampAt(at: Long, now: Long = AppClock.millis()): Long =
         if (at > now + ONE_DAY_MS) now + ONE_DAY_MS else if (at < 0) now else at
 
     /**
@@ -70,7 +63,7 @@ object BackupCodec {
      */
     fun pruneTombstones(
         deleted: Map<String, Long>,
-        now: Long = System.currentTimeMillis(),
+        now: Long = AppClock.millis(),
     ): Map<String, Long> =
         deleted.entries
             .associate { it.key to clampAt(it.value, now) }
@@ -130,7 +123,7 @@ object BackupCodec {
         appVersion: String,
         deleted: List<DeletedEntry> = emptyList(),
     ): String {
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         // 按键去重取 max → 裁剪窗口 → 才能在 push 时「一次摘净」，也让文件不无限增长
         val deduped = pruneTombstones(deleted.associate { it.key to it.at }, now)
             .map { (key, at) -> DeletedEntry(key, at) }
@@ -164,7 +157,7 @@ object BackupCodec {
 
         val backup = JSONObject()
             .put("version", BACKUP_VERSION)
-            .put("exportTime", EXPORT_TIME.format(LocalDateTime.now()))
+            .put("exportTime", TimeFormats.second())
             .put("recordCount", records.size)
             .put("records", recordsArr)
             .put("deleted", deletedArr)
@@ -279,7 +272,7 @@ object BackupCodec {
                 // 缺 at（手改过、恢复工具产出）以前会读成 0 → 下一秒被窗口裁掉 → 删除静默消失。
                 // 缺省按 now：宁可用现在的时间扩散，也不能把这条删除丢掉。
                 val rawAt = o.optLong("at", 0L)
-                val at = clampAt(if (rawAt <= 0L) System.currentTimeMillis() else rawAt)
+                val at = clampAt(if (rawAt <= 0L) AppClock.millis() else rawAt)
                 val prev = deletedMap[key]
                 if (prev == null || at > prev) deletedMap[key] = at
             }

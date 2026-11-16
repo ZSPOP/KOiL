@@ -8,6 +8,8 @@ import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.inChronologicalOrder
+import com.llpop.koil.util.AppClock
+import com.llpop.koil.util.TimeFormats
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -20,21 +22,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.time.LocalDateTime
-import java.time.ZoneId
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
-
-/** 状态串里的人读时间：默认时区 + 固定 US 数字形态（串会被持久化，切语言后新旧串的读法要一致） */
-private val STATUS_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.US)
-
-/**
- * 备份文件名里的时间戳：UTC + 毫秒。文件名排序即时间序，**格式已经写进磁盘过，不要改**。
- * 不用带时区的 formatter 是为了让 `parse` 直接得到 `LocalDateTime`，再显式换算到本地时区。
- */
-private val STAMP_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("uuuuMMdd-HHmmss-SSS", Locale.US)
 
 /**
  * 云同步编排（docs/KOiL云同步设计.md）：
@@ -182,7 +170,7 @@ class CloudSyncManager(
         if (!isConfigured()) return false
         if (!force) {
             val last = settings.syncLastPushAt.first()
-            if (System.currentTimeMillis() - last < MIN_PUSH_INTERVAL_MS) return false
+            if (AppClock.millis() - last < MIN_PUSH_INTERVAL_MS) return false
         }
         return pushWithRetry(allowOverwriteCorrupt)
     }
@@ -195,7 +183,7 @@ class CloudSyncManager(
         for (ignored in pushRequests) {
             if (!isConfigured()) continue
             val last = settings.syncLastPushAt.first()
-            val wait = pushWaitMs(last, System.currentTimeMillis())
+            val wait = pushWaitMs(last, AppClock.millis())
             if (wait > 0) kotlinx.coroutines.delay(wait)
             val ok = try {
                 pushWithRetry()
@@ -292,11 +280,11 @@ class CloudSyncManager(
         settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
         // 只清本轮真的从云端摘掉的那批撤销；推送期间新打的标记留到下一轮
         settings.setSyncRevivedKeys(settings.syncRevivedKeys.first() - plan.clearedRevived)
-        settings.setSyncLastPushAt(System.currentTimeMillis())
+        settings.setSyncLastPushAt(AppClock.millis())
         // 首次真正推送成功 = "配置过同步"：墓碑判定据此生效
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "ok@${STATUS_TIME.format(LocalDateTime.now())}"
+            "ok@${TimeFormats.minute()}"
         )
     }
 
@@ -351,7 +339,7 @@ class CloudSyncManager(
         revived: Set<String>,
         /** 本次**参与**合并的缓存（不参与时传空） */
         cache: Map<String, Long>,
-        now: Long = System.currentTimeMillis(),
+        now: Long = AppClock.millis(),
         /** 本地留存的全部删除历史：只用来算「该记住什么」，不参与写出 */
         history: Map<String, Long> = emptyMap(),
     ): SnapshotPlan {
@@ -399,7 +387,7 @@ class CloudSyncManager(
         // 有效墓碑不只本地那一份：云端 deleted 与缓存里的删除同样要挡，
         // 否则「只拉不推」的设备（B 打开应用、不写云端）看到 v1 快照就会把已删记录复活
         val merged = RecordMerger.mergeTombstones(
-            tombstones, parsed.deleted, cache, System.currentTimeMillis(),
+            tombstones, parsed.deleted, cache, AppClock.millis(),
         )
         // 数据赢过删除：本地还有这条 → 登记撤销，下次推送把云端那条删除摘掉
         RecordMerger.dataWinsOverDeletion(merged, localKeys, revived)
@@ -485,7 +473,7 @@ class CloudSyncManager(
         // 设置页按前缀区分显示。两者都以 restore 开头：曾执行过恢复 = 曾配置过同步。
         settings.setSyncLastStatus(
             (if (inserted > 0) "restore@" else "restore-none@") +
-                STATUS_TIME.format(LocalDateTime.now())
+                TimeFormats.minute()
         )
         return inserted
     }
@@ -664,10 +652,10 @@ class CloudSyncManager(
         settings.setSyncDeletedCache(plan.cache)
         settings.setLastPushedBackupVersion(BackupCodec.BACKUP_VERSION)
         settings.setSyncRevivedKeys(settings.syncRevivedKeys.first() - plan.clearedRevived)
-        settings.setSyncLastPushAt(System.currentTimeMillis())
+        settings.setSyncLastPushAt(AppClock.millis())
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "ok@" + STATUS_TIME.format(LocalDateTime.now())
+            "ok@" + TimeFormats.minute()
         )
     }
 
@@ -723,7 +711,7 @@ class CloudSyncManager(
         // 将来改状态文案，墓碑会静默失效，已删记录下次推送就会被拉回来
         settings.setSyncEverConfigured()
         settings.setSyncLastStatus(
-            "restore@" + STATUS_TIME.format(LocalDateTime.now())
+            "restore@" + TimeFormats.minute()
         )
     }
 
@@ -738,14 +726,8 @@ class CloudSyncManager(
     )
 
     /** 把文件名里的 UTC 时间戳转成本地可读时间；解析失败就原样返回（不吞掉信息） */
-    private fun formatBackupStamp(stamp: String): String {
-        return try {
-            val utc = LocalDateTime.parse(stamp, STAMP_TIME)
-            STATUS_TIME.format(utc.atZone(ZoneOffset.UTC).withZoneSameInstant(ZoneId.systemDefault()))
-        } catch (e: Exception) {
-            stamp
-        }
-    }
+    private fun formatBackupStamp(stamp: String): String =
+        TimeFormats.parseFileStampUtc(stamp)?.let { TimeFormats.minute(it) } ?: stamp
 
     /** 列出本地副本，最新的在前。recordCount = -1 表示这份副本本身读不懂 */
     suspend fun listLocalBackups(): List<LocalBackup> = withContext(Dispatchers.IO) {
@@ -807,7 +789,7 @@ class CloudSyncManager(
         try {
             val dir = File(context.filesDir, "sync-backups").apply { mkdirs() }
             // UTC + 毫秒：同一秒内连点两次也不能互相覆盖，否则「保留最近 3 份」会退化成一个
-            val stamp = STAMP_TIME.format(LocalDateTime.now(ZoneOffset.UTC))
+            val stamp = TimeFormats.fileStampUtc()
             var file = File(dir, LOCAL_BACKUP_PREFIX + "$stamp.json")
             var seq = 1
             while (file.exists()) {

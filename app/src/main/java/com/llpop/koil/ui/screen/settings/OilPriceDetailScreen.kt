@@ -95,6 +95,7 @@ import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
 import com.llpop.koil.ui.theme.KOiLColors
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
@@ -169,7 +170,7 @@ fun OilPriceDetailScreen(
     // 同页面内 pill 的 350ms 去抖问题（Popup 因外部点击收起后，同一击又落到 pill 上 → 弹回）
     var stickyDismissAt by remember { mutableLongStateOf(0L) }
     fun toggleStickyMenu(expanded: Boolean, set: (Boolean) -> Unit) {
-        val justDismissed = stickyDismissAt > 0 && System.currentTimeMillis() - stickyDismissAt < 350
+        val justDismissed = stickyDismissAt > 0 && AppClock.millis() - stickyDismissAt < 350
         stickyDismissAt = 0L
         if (!justDismissed) set(!expanded)
     }
@@ -215,15 +216,15 @@ fun OilPriceDetailScreen(
                 onToggleYear = { toggleStickyMenu(stickyYearExpanded) { stickyYearExpanded = it } },
                 onDismissProvince = {
                     stickyProvinceExpanded = false
-                    stickyDismissAt = System.currentTimeMillis()
+                    stickyDismissAt = AppClock.millis()
                 },
                 onDismissGrade = {
                     stickyGradeExpanded = false
-                    stickyDismissAt = System.currentTimeMillis()
+                    stickyDismissAt = AppClock.millis()
                 },
                 onDismissYear = {
                     stickyYearExpanded = false
-                    stickyDismissAt = System.currentTimeMillis()
+                    stickyDismissAt = AppClock.millis()
                 },
                 onSelectProvince = {
                     stickyProvinceExpanded = false
@@ -309,7 +310,7 @@ fun OilPriceDetailScreen(
                         expanded = provinceMenuExpanded,
                         onToggle = {
                             val justDismissed = provinceDismissAt > 0 &&
-                                System.currentTimeMillis() - provinceDismissAt < 350
+                                AppClock.millis() - provinceDismissAt < 350
                             provinceDismissAt = 0L
                             if (!justDismissed) provinceMenuExpanded = !provinceMenuExpanded
                         },
@@ -320,7 +321,7 @@ fun OilPriceDetailScreen(
                         anchorBounds = provinceAnchor.value,
                         onDismissRequest = {
                             provinceMenuExpanded = false
-                            provinceDismissAt = System.currentTimeMillis()
+                            provinceDismissAt = AppClock.millis()
                         },
                         maxHeight = 380.dp,
                     ) {
@@ -352,7 +353,7 @@ fun OilPriceDetailScreen(
                             expanded = yearMenuExpanded,
                             onToggle = {
                                 val justDismissed = yearDismissAt > 0 &&
-                                    System.currentTimeMillis() - yearDismissAt < 350
+                                    AppClock.millis() - yearDismissAt < 350
                                 yearDismissAt = 0L
                                 if (!justDismissed) yearMenuExpanded = !yearMenuExpanded
                             },
@@ -362,7 +363,7 @@ fun OilPriceDetailScreen(
                             anchorBounds = yearAnchor.value,
                             onDismissRequest = {
                                 yearMenuExpanded = false
-                                yearDismissAt = System.currentTimeMillis()
+                                yearDismissAt = AppClock.millis()
                             },
                         ) {
                             AnchoredDropdownColumn {
