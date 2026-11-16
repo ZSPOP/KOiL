@@ -285,7 +285,8 @@ class SyncViewModel(
                 // catch 块里只允许做不会失败的事——重跑本身要再发一次 GET，而 412 的成因
                 // （别的设备在写、网络在抖）恰恰让这次 GET 也可能失败。不包就会从
                 // viewModelScope 一路抛成未捕获异常，用户看到的是「点了合并，应用闪一下没了」。
-                _message.value = "reconcile_stale"
+                // 另外：等重跑有结果再一次性赋值。先发「已重新对账」再更正，用户会连看两条
+                // 互相矛盾的 Toast（消费端是 LaunchedEffect 立刻 consumeMessage）
                 val reprobe = try {
                     manager.probeReconcile()
                 } catch (e: CancellationException) {
@@ -293,8 +294,11 @@ class SyncViewModel(
                 } catch (_: Exception) {
                     null      // 重跑失败就只留提示，不重开面板
                 }
-                // 重跑没成就不能说「已重新对账」——面板已经关了，这句话必须成立
-                if (reprobe == null) _message.value = "reconcile_stale_retry"
+                _message.value = when {
+                    reprobe == null -> "reconcile_stale_retry"      // 没对成
+                    reprobe is CloudSyncManager.ReconcileProbe.NoCloud -> "reconcile_stale_gone"
+                    else -> "reconcile_stale"                       // 对成了
+                }
                 if (reprobe != null) {
                     _reconcile.value = (reprobe as? CloudSyncManager.ReconcileProbe.Ready)?.preview
                     _reconcileCorrupt.value = reprobe as? CloudSyncManager.ReconcileProbe.Corrupt

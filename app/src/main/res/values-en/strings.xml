@@ -456,6 +456,7 @@
     <string name="koil_sync_reconcile_corrupt_overwrite">Overwrite anyway (a copy is kept first)</string>
     <string name="koil_sync_reconcile_stale">The cloud was updated by another device; reconciled again</string>
     <string name="koil_sync_reconcile_stale_retry">The cloud was updated by another device; reconcile again</string>
+    <string name="koil_sync_reconcile_stale_gone">The cloud backup was removed by another device; reconcile again</string>
     <string name="koil_sync_backup_restore_entry">Restore from local copy (%1$d)</string>
     <string name="koil_sync_backup_restore_title">Local copies</string>
     <string name="koil_sync_backup_restore_hint">Snapshots saved automatically before overwriting the cloud. Restoring only adds records, nothing here is deleted.</string>
