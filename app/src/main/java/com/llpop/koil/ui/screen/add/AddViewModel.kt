@@ -3,6 +3,7 @@ package com.llpop.koil.ui.screen.add
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.llpop.koil.data.local.dao.KOiLPriceDao
+import com.llpop.koil.data.local.RecordStore
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.CrudeOilEstimator
@@ -100,6 +101,7 @@ private val GRADE_LABELS = mapOf(
 @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class AddViewModel(
     private val recordDao: KOiLRecordDao,
+    private val recordStore: RecordStore,
     private val priceDao: KOiLPriceDao,
     private val settings: AppSettings,
     private val locationHelper: LocationHelper,
@@ -800,7 +802,8 @@ class AddViewModel(
                     source = "entry_page",
                     isFullTank = state.isFullTank,
                 )
-                recordDao.insert(record)
+                // 走 RecordStore：删过又重录时打撤销标记，否则下次推送会把它再删掉
+                recordStore.insert(record)
                 // 成功态与提示由 UI 消费后显式清除——若在同一协程里先置 true 再立刻 false，StateFlow 会合并成一次发射，
                 // UI 就看不到成功态；且紧接着的 runPrecheck() 会把 "已添加" 横幅冲成 "default"。
                 // 输入区清空后不重跑预检。

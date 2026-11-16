@@ -9,6 +9,7 @@ import com.llpop.koil.data.oil.CrudeOilEstimator
 import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
+import com.llpop.koil.data.local.RecordStore
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.update.ApkUpdater
@@ -44,6 +45,8 @@ val appModule = module {
     // 不能用 singleOf(::WebDavClient)：Koin 构造注入会去容器里解析 HttpClientEngine?，
     // 而工程没有（也不需要）注册该类型，解析失败会让 SyncViewModel 创建失败、设置页首帧闪退。
     single { WebDavClient() }
+    // 用户写入的唯一入口：墓碑/撤销标记只由人的动作触发，同步写库走裸 DAO
+    singleOf(::RecordStore)
     singleOf(::CloudSyncManager)
     singleOf(::UpdateChecker)
     // 下载器持有应用级 scope：页面被销毁时下载不应中断，所以不能挂在 ViewModel 上

@@ -2,6 +2,7 @@ package com.llpop.koil.ui.screen.overview
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.llpop.koil.data.local.RecordStore
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
@@ -154,6 +155,7 @@ data class DialogUiState(
 @OptIn(kotlinx.coroutines.FlowPreview::class)
 class OverviewViewModel(
     private val recordDao: KOiLRecordDao,
+    private val recordStore: RecordStore,
     private val settings: AppSettings,
     private val syncer: OilPriceDbSyncer,
     private val priceDao: KOiLPriceDao,
@@ -573,7 +575,7 @@ class OverviewViewModel(
                     return@launch
                 }
                 val province = fresh.editProvince.ifBlank { settings.defaultProvince.first() }
-                recordDao.update(
+                recordStore.update(
                     r.copy(
                         reoilDate = fresh.editDate,
                         mileage = mileage,
@@ -849,7 +851,7 @@ class OverviewViewModel(
                 }
                 val payable = fresh.backfillPayableAmount.toDoubleOrNull() ?: curActual
                 val province = fresh.backfillProvince.ifBlank { settings.defaultProvince.first() }
-                recordDao.insert(
+                recordStore.insert(
                     KOiLRecordEntity(
                         reoilDate = fresh.backfillDate,
                         mileage = curMileage,
@@ -878,14 +880,8 @@ class OverviewViewModel(
     fun deleteRecord(id: Long) {
         viewModelScope.launch {
             val record = recordDao.getById(id) ?: return@launch
-            // 成功推送过云同步（即使当前关闭）才留墓碑：关同步期间删除、之后重开同步时，
-            // 云端旧快照里的同键记录不能被合并回来。未成功推送过则不写墓碑，避免无意义累积。
-            // 判定读 hasEverConfiguredSync 标记——"URL 非空 + 用户名非空"会被默认 URL 架空。
-            val everConfigured = settings.syncEverConfigured.first()
-            if (everConfigured) {
-                settings.markRecordDeleted(record.reoilDate, record.mileage)
-            }
-            recordDao.deleteById(id)
+            // 墓碑与「清撤销标记」都在 RecordStore.delete 里：两件事必须同一个动作
+            recordStore.delete(record)
         }
     }
 

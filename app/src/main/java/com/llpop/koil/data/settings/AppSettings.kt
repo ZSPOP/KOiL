@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -113,6 +114,16 @@ class AppSettings(private val context: Context) {
         private val KEY_SYNC_REVIVED_KEYS = stringSetPreferencesKey("KOiL-sync-revived-keys")
         /** 是否成功推送过云端快照（墓碑判定用；键缺失按 false 处理，下一次成功推送自动补上） */
         private val KEY_SYNC_EVER_CONFIGURED = booleanPreferencesKey("KOiL-sync-ever-configured")
+        /**
+         * 删除历史缓存（key → at，序列化成 JSON 数组）。
+         *
+         * 存在的唯一理由：v1 客户端读到 `deleted` 会把整块抹掉（它重建 JSON）。
+         * 所以本机记住自己知道过的删除，下次推送把它补回云端——
+         * 用「缓存为空」判首次是不行的（从没删过东西的设备缓存也是空）。
+         */
+        private val KEY_SYNC_DELETED_CACHE = stringPreferencesKey("KOiL-sync-deleted-cache")
+        /** 本机上一次成功推送出去的快照版本；< 2 表示还没写过 v2，需要做一次修复性合并 */
+        private val KEY_LAST_PUSHED_BACKUP_VERSION = intPreferencesKey("KOiL-last-pushed-backup-version")
         const val DEFAULT_SYNC_URL = "https://dav.jianguoyun.com/dav/KOiL/"
 
         // ---- 应用更新检查（冷启动静默查 GitHub Releases；45min 节流 + 回前台也查；查到新版本设置页挂红点）----
@@ -568,9 +579,13 @@ class AppSettings(private val context: Context) {
     val syncDeletedKeys: Flow<Set<String>> =
         context.KOiLDataStore.data.distinctValue { it[KEY_SYNC_DELETED_KEYS] ?: emptySet() }
     suspend fun markRecordDeleted(reoilDate: String, mileage: Double) {
+        val key = RecordMerger.keyOf(reoilDate, mileage)
         context.KOiLDataStore.edit { prefs ->
             val cur = prefs[KEY_SYNC_DELETED_KEYS] ?: emptySet()
-            prefs[KEY_SYNC_DELETED_KEYS] = cur + RecordMerger.keyOf(reoilDate, mileage)
+            prefs[KEY_SYNC_DELETED_KEYS] = cur + key
+            // 删除必须同时撤掉这个键的撤销标记：先重录（打标记）、再删（清标记），
+            // 留下标记的话下次推送会把云端的删除摘掉，等于「删了又活过来」
+            prefs[KEY_SYNC_REVIVED_KEYS] = (prefs[KEY_SYNC_REVIVED_KEYS] ?: emptySet()) - key
         }
     }
     suspend fun clearSyncDeletedKeys(pushedKeys: Set<String>) {
@@ -589,6 +604,64 @@ class AppSettings(private val context: Context) {
     }
     suspend fun clearRevivedKeys() {
         setSyncRevivedKeys(emptySet())
+    }
+
+    /** 用户重录命中墓碑 → 打撤销标记（RecordStore 内调用；同步插入不许走这里） */
+    suspend fun markRecordRevived(key: String) {
+        context.KOiLDataStore.edit { prefs ->
+            prefs[KEY_SYNC_REVIVED_KEYS] = (prefs[KEY_SYNC_REVIVED_KEYS] ?: emptySet()) + key
+        }
+    }
+
+    // ---- 删除历史缓存（v1 客户端抹掉 deleted 之后靠它把删除补回云端）----
+
+    /** key → at；解析失败按空集（缓存坏了不能把同步卡死） */
+    val syncDeletedCache: Flow<Map<String, Long>> =
+        context.KOiLDataStore.data.distinctValue { prefs ->
+            runCatching {
+                val raw = prefs[KEY_SYNC_DELETED_CACHE] ?: return@runCatching emptyMap()
+                val arr = org.json.JSONArray(raw)
+                val out = HashMap<String, Long>(arr.length())
+                for (i in 0 until arr.length()) {
+                    val o = arr.optJSONObject(i) ?: continue
+                    val key = o.optString("key").takeIf { it.isNotBlank() } ?: continue
+                    val at = o.optLong("at", 0L)
+                    val prev = out[key]
+                    if (prev == null || at > prev) out[key] = at
+                }
+                out
+            }.getOrDefault(emptyMap())
+        }
+
+    suspend fun setSyncDeletedCache(cache: Map<String, Long>) {
+        context.KOiLDataStore.edit { prefs ->
+            if (cache.isEmpty()) {
+                prefs.remove(KEY_SYNC_DELETED_CACHE)
+            } else {
+                val arr = org.json.JSONArray()
+                cache.forEach { (k, at) -> arr.put(org.json.JSONObject().put("key", k).put("at", at)) }
+                prefs[KEY_SYNC_DELETED_CACHE] = arr.toString()
+            }
+        }
+    }
+
+    /** 测试隔离：DataStore 是进程级单例，墓碑/撤销/缓存会跨测试方法泄漏 */
+    @VisibleForTesting
+    suspend fun clearSyncTombstonesForTest() {
+        context.KOiLDataStore.edit { prefs ->
+            prefs.remove(KEY_SYNC_DELETED_KEYS)
+            prefs.remove(KEY_SYNC_REVIVED_KEYS)
+            prefs.remove(KEY_SYNC_DELETED_CACHE)
+            prefs.remove(KEY_LAST_PUSHED_BACKUP_VERSION)
+            prefs.remove(KEY_SYNC_EVER_CONFIGURED)
+        }
+    }
+
+    /** 0 = 从未推送过；< BACKUP_VERSION 表示本机还没写出过新格式，推送前要做修复性合并 */
+    val lastPushedBackupVersion: Flow<Int> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_LAST_PUSHED_BACKUP_VERSION] ?: 0 }
+    suspend fun setLastPushedBackupVersion(version: Int) {
+        context.KOiLDataStore.edit { it[KEY_LAST_PUSHED_BACKUP_VERSION] = version }
     }
 
     // ---- 应用更新检查 ----
