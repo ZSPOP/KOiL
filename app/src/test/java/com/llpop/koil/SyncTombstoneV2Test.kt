@@ -445,8 +445,12 @@ class SyncTombstoneV2Test {
         settings.setSyncLastStatus(CloudSyncManager.STATUS_FAIL_CORRUPT)
         cloudBody = """{"version":3,"records":[]}"""
         val probe = manager.reprobeCorruptIfNeeded()
-        // 重探是纯读：不该有任何 PUT（DELETE 也一样），否则「只是探一下」会把云端改了
-        assertEquals(0, calls.count { it == "PUT" })
+        // 重探是纯读：写类方法一个都不许出现（今天 probeReconcile 只发 GET，
+        // 这条断言是给以后加逻辑的人看的——顺手写一次云端就再也不是「探一下」）
+        assertTrue(
+            "重探不该发任何写类请求",
+            calls.none { it in setOf("PUT", "DELETE", "MKCOL", "MOVE", "PROPPATCH") },
+        )
         assertEquals("探完也不该自己去改状态，文案由调用方按返回结果决定",
             CloudSyncManager.STATUS_FAIL_CORRUPT, settings.syncLastStatus.first())
         assertTrue("读不懂才该返回，否则面板是空的", probe is CloudSyncManager.ReconcileProbe.Corrupt)
