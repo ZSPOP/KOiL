@@ -10,6 +10,12 @@ package com.llpop.koil.data.oil
  *
  * 编码格式：`code` 与各参数用 U+001F（单元分隔符）连接，见 [encode] / [decodePriceDbOutcome]。
  * 不用 JSON 是因为这里只有一个判别码和最多两个短参数，序列化框架反而要先配多态注册。
+ *
+ * 落盘范围：`Busy` / `AutoUpdateOff` / `Throttled` 只出现在 `OilPriceDbSyncer` 的早退路径
+ * （在写缓存**之前** return），因此永远不会被 [encode] 存下来，设置页也永远不显示它们。
+ * 其中只有 `Busy` 有 UI 出口（手动「立即更新」被互斥挡下时提示一句）；另两个目前没有任何
+ * 消费者——`OilPriceSyncWorker` 只读 `result.success`，不读 outcome。保留这两个值是为了
+ * 语义清楚，不是为了被读取。
  */
 sealed interface PriceDbOutcome {
 

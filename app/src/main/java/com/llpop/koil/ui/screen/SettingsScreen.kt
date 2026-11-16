@@ -2672,10 +2672,12 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 
 
 /**
- * 上次核对结论 → 三语文案。
+ * 上次核对结论 → 三语文案；返回 null 表示「这一行不显示」。
  *
- * 每一条都对应 [PriceDbOutcome] 的一个分支：**不要**在这里再拼状态判断，
- * 分支语义（尤其是「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞。
+ * 只有**会落盘**的结论才有文案。`Busy` / `AutoUpdateOff` / `Throttled` 是 Syncer 里
+ * 「还没走到写缓存就 return」的早退路径，永远进不了「上次核对结论」，所以这三分支返回
+ * null，而不是配一份谁也读不到的字符串。**不要**在这里再拼状态判断：分支语义（尤其是
+ * 「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞与是否显示。
  */
 @Composable
 private fun priceDbOutcomeText(outcome: PriceDbOutcome): String? = when (outcome) {
