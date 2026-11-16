@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
@@ -158,6 +159,11 @@ fun KoilAboutUpdateButton(
                 },
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                // 槽位高度定死 89dp（52 + 37）：这行一旦换行会多占一行（~17dp），
+                // 大字号下累计溢出会吃到下方 50dp 间距。限成单行，最坏情况封死在这一行里。
+                // 用 Ellipsis 而不是默认的 Clip：真放不下时省略号收尾，比把字形硬切一半好读。
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
