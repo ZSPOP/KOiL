@@ -45,6 +45,10 @@ android {
         versionCode = System.getenv("KOIL_CI_VERSION_CODE")?.toIntOrNull()
             ?: System.getenv("KOIL_CI_RUN_NUMBER")?.toIntOrNull() ?: 1
         // versionName 与 tag 严格对齐（CI 已有「tag 去 V == versionName」断言，不一致直接 fail）
+        // 推进规则是「二十进制」：三段各自取值 0..20，满 20 进位。
+        //   1.1.19 → 1.1.20 → 1.2.0 → … → 1.20.20 → 2.0.0
+        // 不要手算，用 scripts/bump_version.py（默认只打印预览，--apply 才写文件，
+        // 会一并改这里的 versionName、下面的发布日期与 CHANGELOG 段标题）。
         versionName = "1.1.20"
 
         // 关于页「发布日期」信息行：编译期常量，每次发版随 versionName 一起改。
