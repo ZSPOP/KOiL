@@ -95,12 +95,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.platform.LocalContext
+import com.llpop.koil.data.update.AboutCapsuleState
 import com.llpop.koil.data.update.AboutUpdateStatus
 import com.llpop.koil.data.update.ApkUpdater
 import com.llpop.koil.data.update.RefreshOutcome
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateFailure
+import com.llpop.koil.data.update.resolveCapsuleState
 import com.llpop.koil.data.update.formatReleaseDate
 import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
@@ -590,7 +592,14 @@ private fun AboutContent(
             statusGapTop = statusGapTop,
             statusAreaHeight = statusAreaHeight,
             statusToCapsule = statusToCapsule,
-            hasCapsule = status is AboutUpdateStatus.Newer,
+            // 与胶囊自身的渲染条件同源：非 Hidden 就等于「这一块会显示」。
+            // 单写 status is Newer 靠的是「失败态下 status 不再是 Newer」这条跨文件不变量，改起来容易静默破坏。
+            hasCapsule = resolveCapsuleState(
+                status = status,
+                downloadState = downloadState,
+                readyTag = apkUpdater.readyTagSnapshot,
+                extraFailed = downloadFailed,
+            ) != AboutCapsuleState.Hidden,
             capsule = {
                 KoilAboutUpdateButton(
                     status = status,
@@ -648,7 +657,10 @@ private fun BoxScope.AboutHero(
     statusToCapsule: Dp,
     /** 胶囊与下载进度条：属于 hero 内容，跟着 hero 一起淡出、不上滑 */
     capsule: @Composable () -> Unit,
-    /** 当前是否真有胶囊（有新版本才出现）：滚动后不组合胶囊时，只有它存在才需要补占位 */
+    /**
+     * 当前是否真有胶囊：与 [resolveCapsuleState] 同源（非 Hidden 即有）。
+     * 它只决定「要不要组合胶囊」；占位恒为 52dp、与它无关——hero 总高固定，信息卡不因版本状态上下跳。
+     */
     hasCapsule: Boolean,
     /**
      * 这一整块是否接收点击。列表滚动后 hero 已经淡出，这时它仍压在上层，
