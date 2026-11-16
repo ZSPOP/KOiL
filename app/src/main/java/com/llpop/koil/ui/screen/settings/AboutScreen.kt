@@ -666,7 +666,8 @@ private fun BoxScope.AboutHero(
     capsule: @Composable () -> Unit,
     /**
      * 当前是否真有胶囊：与 [resolveCapsuleState] 同源（非 Hidden 即有）。
-     * 它只决定「要不要组合胶囊」；占位恒为 52dp、与它无关——hero 总高固定，信息卡不因版本状态上下跳。
+     * 它只决定「要不要组合胶囊」；槽位恒为 [capsuleSlotHeight]（89dp）、与它无关——
+     * hero 总高固定，信息卡不因版本状态上下跳。
      */
     hasCapsule: Boolean,
     /**
@@ -781,7 +782,9 @@ private fun BoxScope.AboutHero(
                 capsule()
             } else {
                 // interactive == false 时不组合胶囊：alpha 已经到 0，留着会变成看不见却能点的幽灵按钮，
-                // 挡住滑上来的卡片。占位照补，滚动态与静止态高度一致，列表不会跳。
+                // 挡住滑上来的卡片。
+                // 这里的 Spacer 不决定槽位高度（高度由外层 height(capsuleSlotHeight) 定死），
+                // 只是标记「这里原本要放胶囊」，同时让居中逻辑在空档期也有内容可居中。
                 Spacer(Modifier.height(52.dp))
             }
         }

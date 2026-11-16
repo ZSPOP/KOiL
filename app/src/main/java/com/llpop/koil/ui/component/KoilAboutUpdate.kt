@@ -158,6 +158,9 @@ fun KoilAboutUpdateButton(
                 },
                 fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                // 槽位高度定死 89dp（52 + 37）：这行一旦换行会多占一行（~17dp），
+                // 大字号下累计溢出会吃到下方 50dp 间距。限成单行，最坏情况封死在这一行里。
+                maxLines = 1,
             )
         }
     }
