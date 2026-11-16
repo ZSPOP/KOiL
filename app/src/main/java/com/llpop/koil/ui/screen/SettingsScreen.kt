@@ -951,6 +951,9 @@ private fun PriceDbSection(
                         key1 = priceDbStatus.nextAdjustWindowDate,
                     ) {
                         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                            // 回到前台先对齐一次：STOPPED 期间 block 被取消，value 冻在离开前的时刻，
+                            // 不先赋一次就得等下一整分钟，「已开」态会晚 0~60 秒才翻
+                            value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
                             while (true) {
                                 delay(60_000L - System.currentTimeMillis() % 60_000L)
                                 // 落在整分钟上：跨零点判定等价（deadline 就是 00:00:00）
