@@ -114,6 +114,7 @@ import com.llpop.koil.R
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.KOiLCheckMark
 import com.llpop.koil.ui.component.KOiLGlassDialog
@@ -123,7 +124,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import com.llpop.koil.ui.screen.settings.SettingsUiState
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
-import com.llpop.koil.ui.screen.settings.DEFAULT_SYNC_APP_PASSWORD
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
@@ -161,8 +161,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 private val PROVINCES = Provinces.ALL
 private val GRADES = listOf("92", "95", "98", "0")
 
-/** 云同步自用默认值（作者私有账号；应用密码泄露可去坚果云官网单独撤销重新生成） */
-private const val DEFAULT_SYNC_USERNAME = "Kay@LLPop.CoM"
+/** 云同步的默认值统一在 com.llpop.koil.data.sync.SyncConfig 兜底，界面不再各存一份 */
 
 /**
  * 设置页（M4：14 项设置完整实现）
@@ -262,8 +261,8 @@ fun SettingsScreen(
         val crashScope = rememberCoroutineScope()
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
-        val syncHealthy = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() &&
-            syncUi.passwordSet && !syncUi.passwordInvalid
+        // 健康判定与「已設定完整」同一口径：只用数据层算好的 configured，界面不再自己拼
+        val syncHealthy = syncUi.configured
 
         LazyColumn(
             modifier = Modifier
@@ -653,17 +652,9 @@ fun SettingsScreen(
                                 subtitle = stringResource(R.string.koil_sync_switch_sub),
                                 checked = syncUi.enabled,
                                 onCheckedChange = { on ->
-                                    // 本地没存过密码时传内置默认密码：否则 persistDrafts 跳过空值，
-                                    // isConfigured() 一直 false，全新安装打开开关既连不上也不弹「N 条待同步」。
-                                    syncVm.setEnabled(
-                                        on,
-                                        syncUi.url.ifBlank { AppSettings.DEFAULT_SYNC_URL },
-                                        // 用户名同样要兜底：全新安装时 syncUi.username 是空串，
-                                        // 界面上那个 Kay@LLPop.CoM 只是渲染时 ifBlank 出来的。
-                                        // 空串一旦落盘，isConfigured() 的 username.isBlank() 就把整条连接挡掉。
-                                        syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME },
-                                        syncUi.effectivePasswordDraft,
-                                    )
+                                    // 不再把默认值当草稿传下去：有效配置由 SyncConfig 在数据层兜底，
+                                    // 默认值永不落盘。开关只负责「开 / 关 + 触发一次同步」。
+                                    syncVm.setEnabled(on)
                                 },
                                 trailingContent = null,
                                 titleTrailing = if (syncUi.enabled) ({ SyncStatusBadge(syncHealthy) }) else null,
@@ -1297,29 +1288,29 @@ private fun SyncPanelBody(
 ) {
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
-        var urlDraft by remember { mutableStateOf(syncUi.url) }
-        var usernameDraft by remember { mutableStateOf(syncUi.username.ifBlank { DEFAULT_SYNC_USERNAME }) }
+        var urlDraft by remember { mutableStateOf(syncUi.effectiveUrl) }
+        var usernameDraft by remember { mutableStateOf(syncUi.effectiveUsername) }
         // 密码草稿 = 存储里的真实密码（异步到达后回填一次），眼睛关闭时掩码、点亮显示明文。
-        // 本地没有存过密码时预填内置默认密码：与地址栏（数据层兜底）、用户名栏（UI 层 ifBlank 兜底）
-        // 保持同一套口径 —— 否则全新安装打开只有密码框是空的，看着像「默认值被删了」。
+        // 没设置过时预填内置默认密码：口径统一由 SyncConfig 给，界面不再自己算一遍。
         var pwdDraft by remember(syncUi.password) {
             mutableStateOf(syncUi.effectivePasswordDraft)
         }
         val effectivePwd: String? = when {
             pwdDraft.isNotBlank() -> pwdDraft
             syncUi.passwordSet -> null
-            else -> DEFAULT_SYNC_APP_PASSWORD
+            else -> SyncConfig.DEFAULT_APP_PASSWORD
         }
-        LaunchedEffect(syncUi.url) { if (urlDraft != syncUi.url) urlDraft = syncUi.url }
-        LaunchedEffect(syncUi.username) {
-            if (syncUi.username.isNotBlank() && usernameDraft != syncUi.username) {
-                usernameDraft = syncUi.username
-            }
+        LaunchedEffect(syncUi.effectiveUrl) {
+            if (urlDraft != syncUi.effectiveUrl) urlDraft = syncUi.effectiveUrl
+        }
+        LaunchedEffect(syncUi.effectiveUsername) {
+            if (usernameDraft != syncUi.effectiveUsername) usernameDraft = syncUi.effectiveUsername
         }
         var formExpanded by remember { mutableStateOf(false) }
 
-        // 状态判定放在开关行之前：徽章挂在「云同步」标题右侧，与开关键同一行
-        val configured = syncUi.url.isNotBlank() && syncUi.username.isNotBlank() && syncUi.passwordSet
+        // 状态判定放在开关行之前：徽章挂在「云同步」标题右侧，与开关键同一行。
+        // 只认数据层算好的 configured（三项有效配置），界面不再自己拼判定。
+        val configured = syncUi.configured
         val statusText = when {
             // 密码解不开时其余状态都是假的（lastStatus 可能还停在上次成功备份）
             syncUi.passwordInvalid -> stringResource(R.string.koil_sync_status_password_invalid)

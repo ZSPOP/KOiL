@@ -97,6 +97,14 @@ class AppSettings(private val context: Context) {
         // 应用密码：优先 Android Keystore 密文，Keystore 不可用时明文回退（KOiL-sync-password-encrypted=false）
         private val KEY_SYNC_APP_PASSWORD = stringPreferencesKey("KOiL-sync-app-password")
         private val KEY_SYNC_PASSWORD_ENCRYPTED = booleanPreferencesKey("KOiL-sync-password-encrypted")
+        /**
+         * 是否「设置过」应用密码。
+         *
+         * 用来区分两件长得一样的事：从没设置过（可以回落内置默认密码）／
+         * 设置过又被用户清空（视为主动停用，不得再拿默认密码连上去）。
+         * 只看密码是否为空区分不出这两种，旧实现正是因此把「清空」当成了「从没设置」。
+         */
+        private val KEY_SYNC_PASSWORD_EVER_SET = booleanPreferencesKey("KOiL-sync-password-ever-set")
         private val KEY_SYNC_LAST_PUSH_AT = longPreferencesKey("KOiL-sync-last-push-at")
         private val KEY_SYNC_LAST_STATUS = stringPreferencesKey("KOiL-sync-last-status")
         private val KEY_SYNC_DELETED_KEYS = stringSetPreferencesKey("KOiL-sync-deleted-keys")
@@ -454,6 +462,13 @@ class AppSettings(private val context: Context) {
         context.KOiLSecretStore.data.distinctValue { it[KEY_SYNC_PASSWORD_ENCRYPTED] ?: false }
     suspend fun setSyncPasswordEncrypted(encrypted: Boolean) {
         context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_ENCRYPTED] = encrypted }
+    }
+
+    /** 是否设置过应用密码（与密码同存凭据文件；缺省 false = 从未设置，可回落内置默认） */
+    val syncPasswordEverSet: Flow<Boolean> =
+        context.KOiLSecretStore.data.distinctValue { it[KEY_SYNC_PASSWORD_EVER_SET] ?: false }
+    suspend fun setSyncPasswordEverSet(everSet: Boolean) {
+        context.KOiLSecretStore.edit { it[KEY_SYNC_PASSWORD_EVER_SET] = everSet }
     }
 
     val syncLastPushAt: Flow<Long> =
