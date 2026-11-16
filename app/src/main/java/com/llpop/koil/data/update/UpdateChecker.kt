@@ -5,6 +5,8 @@ import com.llpop.koil.BuildConfig
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -223,12 +225,11 @@ class UpdateChecker(private val settings: AppSettings) {
      * GitHub 作为备用源（同一份 tag 命名、同一套 assets 结构），两源都成功时取**版本号更大**的那条：
      * 镜像滞后就取 GitHub 的，宁可直链慢一点，也不能把已发布的新版吞掉。
      */
-    private fun fetchLatestTarget(): UpdateTarget? {
-        return pickNewestTarget(
-            gitee = fetchReleaseList(GITEE_RELEASE_LIST_API, "gitee"),
-            github = fetchReleaseList(GITHUB_RELEASE_LIST_API, "github"),
-        )
-    }
+    private suspend fun fetchLatestTarget(): UpdateTarget? = fetchBothSources(
+        gitee = { fetchReleaseList(GITEE_RELEASE_LIST_API, "gitee") },
+        github = { fetchReleaseList(GITHUB_RELEASE_LIST_API, "github") },
+        pick = { g, h -> pickNewestTarget(g, h) },
+    )
 
     /** 拉一个源的 release 列表；失败（超时/限流/非 2xx/JSON 读不懂）返回 null，交给另一个源 */
     private fun fetchReleaseList(api: String, source: String): UpdateTarget? {
@@ -271,6 +272,24 @@ class UpdateChecker(private val settings: AppSettings) {
             "https://api.github.com/repos/ZSPOP/KOiL/releases?per_page=20"
         private const val TIMEOUT_MS = 6000
     }
+}
+
+/**
+ * 并行拉两个源，结果交给 [pick] 取舍。
+ *
+ * 抽成顶层函数是为了能单测「并行」这件事本身：串行时两源都超时要 12 秒（各 6 秒），
+ * 关于页进页自动查那段全是转圈。把两个源的读取注入成 suspend lambda，就能在 JVM 里
+ * 用 delay 模拟耗时、断言总耗时接近单源 —— 否则有人改回串行也不会被发现。
+ * 每个源的 lambda 自己吞异常返回 null，所以一个 async 失败不会拖垮另一个。
+ */
+internal suspend fun <T> fetchBothSources(
+    gitee: suspend () -> T?,
+    github: suspend () -> T?,
+    pick: (T?, T?) -> T?,
+): T? = coroutineScope {
+    val g = async(Dispatchers.IO) { gitee() }
+    val h = async(Dispatchers.IO) { github() }
+    pick(g.await(), h.await())
 }
 
 /**
@@ -327,9 +346,6 @@ internal fun selectLatestRelease(json: String): UpdateTarget? {
         ?.url.orEmpty()
     return UpdateTarget(best.tagName, apkUrl)
 }
-
-/** 版本页地址。用 Gitee 而不是 GitHub：GitHub 在国内经常打不开。当前无生产调用方（预留），仅测试覆盖格式 */
-fun releasePageUrl(tag: String): String = "https://gitee.com/ZSPOP/KOiL/releases/tag/$tag"
 
 /** 去掉 V/v 前缀，得到可比较的版本号（"V1.0.0" → "1.0.0"） */
 fun normalizeVersion(tag: String): String = tag.trim().trimStart('V', 'v')

@@ -3,7 +3,6 @@ package com.llpop.koil
 import com.llpop.koil.data.update.compareVersionNames
 import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
-import com.llpop.koil.data.update.releasePageUrl
 import com.llpop.koil.data.update.shouldBadgeUpdate
 import com.llpop.koil.data.update.shouldShowBanner
 import org.junit.Assert.assertEquals
@@ -65,14 +64,6 @@ class UpdateVersionTest {
         // "-beta" 这类后缀不参与比较（GitHub 上偶尔会出现预发布标签）
         assertEquals(0, compareVersionNames("2.0.0-beta", "2.0.0"))
         assertTrue(compareVersionNames("2.0.1-beta", "2.0.0") > 0)
-    }
-
-    @Test
-    fun `releasePageUrl 拼出 Gitee 的 tag 页地址`() {
-        assertEquals(
-            "https://gitee.com/ZSPOP/KOiL/releases/tag/V2.0.0",
-            releasePageUrl("V2.0.0"),
-        )
     }
 
     @Test
