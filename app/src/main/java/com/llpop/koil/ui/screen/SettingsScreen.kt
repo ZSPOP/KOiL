@@ -1345,57 +1345,7 @@ private fun SyncPanelBody(
         val healthy = configured && !syncUi.passwordInvalid
         val unhealthy = !healthy || syncUi.lastStatus.startsWith("fail:")
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                // —— 状态行：备份状态在左，管理/收起贴着同一行右侧 ——
-                // 徽章挂在开关标题旁，这一行只留「文本 + 管理」，少一行高度。
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = statusText,
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
-                        color = if (unhealthy) KOiLColors.Warning
-                        else MiuixTheme.colorScheme.onBackgroundVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    // 「管理 ⌄」与油价卡「详细 ›」同族——同字号 14sp、同图标 18dp，
-                    // 且箭头右缘都贴到「卡片边 - 16dp」，与「导出与备份 / 崩溃日志」
-                    // 等 SettingRow 行的箭头同一条线、纵向对齐。
-                    // 命中区只包住「文字 + 箭头」：整行可点会让点状态文字也展开，不自然。
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { formExpanded = !formExpanded }
-                            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
-                            else stringResource(R.string.koil_sync_manage),
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                            maxLines = 1,
-                        )
-                        Spacer(Modifier.width(2.dp))
-                        val arrowRotation by animateFloatAsState(
-                            targetValue = if (formExpanded) 180f else 0f,
-                            label = "syncManageArrow",
-                        )
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .rotate(arrowRotation),
-                        )
-                    }
-                }
-
                 // —— 两个常用动作：常态可见 ——
-                Spacer(Modifier.height(10.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     Box(
                         modifier = Modifier
@@ -1451,6 +1401,56 @@ private fun SyncPanelBody(
                                 color = MiuixTheme.colorScheme.onSecondaryContainer,
                             )
                         }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                // —— 状态行：备份状态在左，管理/收起贴着同一行右侧 ——
+                // 徽章挂在开关标题旁，这一行只留「文本 + 管理」，少一行高度。
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = statusText,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        color = if (unhealthy) KOiLColors.Warning
+                        else MiuixTheme.colorScheme.onBackgroundVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    // 「管理 ⌄」与油价卡「详细 ›」同族——同字号 14sp、同图标 18dp，
+                    // 且箭头右缘都贴到「卡片边 - 16dp」，与「导出与备份 / 崩溃日志」
+                    // 等 SettingRow 行的箭头同一条线、纵向对齐。
+                    // 命中区只包住「文字 + 箭头」：整行可点会让点状态文字也展开，不自然。
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { formExpanded = !formExpanded }
+                            .padding(start = 8.dp, top = 4.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
+                            else stringResource(R.string.koil_sync_manage),
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            maxLines = 1,
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        val arrowRotation by animateFloatAsState(
+                            targetValue = if (formExpanded) 180f else 0f,
+                            label = "syncManageArrow",
+                        )
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .rotate(arrowRotation),
+                        )
                     }
                 }
 
@@ -1807,8 +1807,8 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
 }
 
 /**
- * 诊断 + 關於两块，直接产出 lazy item 的 LazyListScope 扩展，
- * 组底距统一走 groupedCardItems 的 outerBottomPadding，不再手写 CardSegment。
+ * 「其它」一块（崩溃日志 / 问题反馈 / 关于 KOiL 三行连排），直接产出 lazy item 的
+ * LazyListScope 扩展；组底距统一走 groupedCardItems 的 outerBottomPadding，不再手写 CardSegment。
  */
 fun LazyListScope.aboutSection(
     crashCount: Int,
@@ -1817,14 +1817,17 @@ fun LazyListScope.aboutSection(
 ) {
     item {
         SmallTitle(
-            text = stringResource(R.string.koil_set_about_diag),
+            // 「关于」二字留给行标题（关于 KOiL），分组名改成「其他」，
+            // 否则屏幕上会出现「关于」→「关于 KOiL」两级同名
+            text = stringResource(R.string.koil_set_other),
             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
         )
     }
     groupedCardItems(
-        keyPrefix = "about_diag",
+        keyPrefix = "about_app",
         outerBottomPadding = 12.dp,
         items = listOf(
+            // 崩溃日志 / 问题反馈并入「其它」，排在「关于 KOiL」之上；原「诊断」分组撤销
             CardItem("crashLog") {
                 SettingRow(
                     title = stringResource(R.string.koil_set_crash_log),
@@ -1842,20 +1845,6 @@ fun LazyListScope.aboutSection(
                     onClick = { openExternalUrl(context, "$KOIL_REPO_URL/issues/new") },
                 )
             },
-        ),
-    )
-    item {
-        SmallTitle(
-            // 「关于」二字留给行标题（关于 KOiL），分组名改成「其他」，
-            // 否则屏幕上会出现「关于」→「关于 KOiL」两级同名
-            text = stringResource(R.string.koil_set_other),
-            insideMargin = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        )
-    }
-    groupedCardItems(
-        keyPrefix = "about_app",
-        outerBottomPadding = 12.dp,
-        items = listOf(
             CardItem("about") {
                 // 红点只看「有没有新版本」，**不看 seenTag**：首页横幅的 × 只收起那条提醒，
                 // 不代表用户不想知道有更新；红点要一直亮到装上最新版为止

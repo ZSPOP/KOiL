@@ -43,7 +43,7 @@
 ## 三、发布与交付口径
 
 - Release tag 使用大写 `V` + 三段版本号（`^V[0-9]+\.[0-9]+\.[0-9]+$`，如 `V1.6.0`），且必须与 `versionName` 完全一致（CI 有断言，不一致直接失败）。
-- App 内版本展示以现有实现为准：简中/繁中为 `V{versionName}（{versionCode}）`（全角，如 `V1.0.0（1）`），英文为 `V{versionName} ({versionCode})`（半角，如 `V1.0.0 (1)`）；见 `values/`、`values-zh-rTW/`、`values-en/` 下 `koil_set_about_version`。
+- App 内版本展示：三语统一为 `V{versionName} ({versionCode})`（半角括号、括号前一个空格，如 `V1.0.0 (1)`），前言大写 `V`；见 `values/`、`values-zh-rTW/`、`values-en/` 下 `koil_set_about_version`。
 - 交付构建产物直接给 APK，不打包 zip。
 - 日常开发只做源码与文档改动，不产出安装包；正式包由 CI/Release 单独产出。
 - **versionCode 口径**：Build workflow 用 `github.run_number`；Release 用 `max(已发布 Release 附件 -vcN, 最近 Build run_number) + 1`。正式版必须高于设备上可能已安装的任意包（含日常 Build 产物），否则系统会判「不可降级」拒装。

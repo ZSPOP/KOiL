@@ -339,7 +339,7 @@
     <string name="koil_set_other">其他</string>
     <string name="koil_set_about_koil">关于 KOiL</string>
     <string name="koil_about_open_source">开源项目</string>
-    <string name="koil_set_about_version">V%1$s（%2$d）</string>
+    <string name="koil_set_about_version">V%1$s (%2$d)</string>
     <!-- 关于页 logo 下方：只留版本号本身，不带 V、不带括号里的 versionCode -->
     <string name="koil_about_version_plain">%1$s</string>
     <!-- 有新版本时：本机版本 → 新版本 -->
@@ -359,7 +359,6 @@
     <string name="koil_set_about_privacy">隐私政策</string>
     <string name="koil_set_about_feedback">问题反馈</string>
     <string name="koil_set_about_feedback_sub">附带版本号与机型，便于定位</string>
-    <string name="koil_set_about_diag">诊断</string>
     <string name="koil_set_about_open_failed">没有可打开该链接的应用</string>
     <string name="koil_common_close">关闭</string>
     <string name="koil_ov_update_new">发现新版本 %1$s</string>
