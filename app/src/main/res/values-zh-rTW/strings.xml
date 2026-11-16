@@ -379,6 +379,8 @@
     <string name="koil_sync_restore_confirm">復原 %1$d 筆</string>
     <string name="koil_sync_backup_done">已備份</string>
     <string name="koil_sync_backup_failed">備份失敗，請檢查帳號與網路</string>
+    <string name="koil_sync_backup_corrupt">雲端備份是其他版本寫的，本次沒有上傳；可在下面的面板裡決定是否覆蓋</string>
+    <string name="koil_sync_restore_corrupt">雲端備份是其他版本寫的，為避免把已刪記錄恢復回來，本次沒有恢復</string>
     <string name="koil_sync_restore_no_cloud">雲端暫無備份</string>
     <string name="koil_sync_restore_done">已復原</string>
     <string name="koil_sync_restore_none">雲端無新增紀錄，無需還原</string>
@@ -443,6 +445,8 @@
     <string name="koil_sync_reconcile_corrupt_overwrite">仍然覆蓋（會先留副本）</string>
     <string name="koil_sync_reconcile_stale">雲端已被其他裝置更新，已重新對帳</string>
     <string name="koil_sync_reconcile_stale_retry">雲端已被其他裝置更新，請重新對帳</string>
+    <string name="koil_sync_reconcile_stale_gone">雲端備份已被其他裝置移除，請重新對帳</string>
+    <string name="koil_sync_status_corrupt">雲端備份是其他版本寫的，本次沒有上傳；請到對帳面板決定</string>
     <string name="koil_sync_backup_restore_entry">從本機副本還原（%1$d）</string>
     <string name="koil_sync_backup_restore_title">本機副本</string>
     <string name="koil_sync_backup_restore_hint">覆蓋雲端前自動另存的快照。還原只插入，不刪本機記錄。</string>

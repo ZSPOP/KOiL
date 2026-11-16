@@ -399,6 +399,8 @@
     <string name="koil_sync_restore_confirm">恢复 %1$d 条</string>
     <string name="koil_sync_backup_done">已备份</string>
     <string name="koil_sync_backup_failed">备份失败，请检查账号与网络</string>
+    <string name="koil_sync_backup_corrupt">云端备份是其他版本写的，本次没有上传；可在下面的面板里决定是否覆盖</string>
+    <string name="koil_sync_restore_corrupt">云端备份是其他版本写的，为避免把已删记录恢复回来，本次没有恢复</string>
     <string name="koil_sync_restore_no_cloud">云端暂无备份</string>
     <string name="koil_sync_restore_done">已恢复</string>
     <string name="koil_sync_restore_none">云端无新增记录，无需恢复</string>
@@ -447,6 +449,8 @@
     <string name="koil_sync_reconcile_corrupt_overwrite">仍然覆盖（会先留副本）</string>
     <string name="koil_sync_reconcile_stale">云端已被其他设备更新，已重新对账</string>
     <string name="koil_sync_reconcile_stale_retry">云端已被其他设备更新，请重新对账</string>
+    <string name="koil_sync_reconcile_stale_gone">云端备份已被其他设备移除，请重新对账</string>
+    <string name="koil_sync_status_corrupt">云端备份是其他版本写的，本次没有上传；请到对账面板决定</string>
     <string name="koil_sync_backup_restore_entry">从本地副本恢复（%1$d）</string>
     <string name="koil_sync_backup_restore_title">本地副本</string>
     <string name="koil_sync_backup_restore_hint">覆盖云端前自动另存的快照。恢复只插入，不删本机记录。</string>

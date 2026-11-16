@@ -27,6 +27,37 @@ object RecordMerger {
         return records.filterNot { isTombstoned(it.reoilDate, it.mileage, tombstones) }
     }
 
+    // ===== 删除扩散（快照 v2） =====
+
+    /**
+     * 合并三处删除来源：本地墓碑（无时间，按 [now] 计）、云端 `deleted`、本地缓存。
+     * **同键取最晚 `at`** —— 早的那条已被晚的覆盖，留着只会在摘除时摘一条漏一条。
+     */
+    fun mergeTombstones(
+        local: Set<String>,
+        cloud: List<BackupCodec.DeletedEntry>,
+        cache: Map<String, Long>,
+        now: Long,
+    ): Map<String, Long> {
+        val out = HashMap<String, Long>(local.size + cloud.size + cache.size)
+        cache.forEach { (key, at) -> out[key] = at }
+        cloud.forEach { e -> out[e.key] = maxOf(out[e.key] ?: Long.MIN_VALUE, e.at) }
+        local.forEach { key -> if (key !in out) out[key] = now }
+        return out
+    }
+
+    /**
+     * 有效墓碑 = (本地 ∪ 云端 ∪ 缓存) − 撤销。顺序固定：撤销永远高于墓碑。
+     * 只有这一处过滤，读路径（合并/恢复预览）与写路径（推送）都从这里取，
+     * 它们一旦各算各的，就会出现「拉的时候跳过了、推的时候又写回去」。
+     */
+    fun effectiveTombstones(merged: Map<String, Long>, revived: Set<String>): Set<String> =
+        merged.keys - revived
+
+    /** 云端 `deleted` 命中的键里，本地仍有记录的：数据赢过删除，登记为撤销（复活能再删，丢记录找不回） */
+    fun dataWinsOverDeletion(merged: Map<String, Long>, localKeys: Set<String>, revived: Set<String>): Set<String> =
+        merged.keys.filter { it in localKeys && it !in revived }.toSet()
+
     fun missing(
         cloud: List<BackupCodec.RecordData>,
         local: List<KOiLRecordEntity>,

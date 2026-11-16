@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.llpop.koil.R
 import com.llpop.koil.data.local.dao.KOiLPriceDao
+import com.llpop.koil.data.local.RecordStore
 import com.llpop.koil.data.local.dao.KOiLRecordDao
 import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.domain.logic.NumberFormat
@@ -102,6 +103,7 @@ data class ParsedRecord(
 class SettingsViewModel(
     private val settings: AppSettings,
     private val recordDao: KOiLRecordDao,
+    private val recordStore: RecordStore,
     private val priceDao: KOiLPriceDao,
     private val syncer: OilPriceDbSyncer,
     private val locationHelper: LocationHelper,
@@ -845,7 +847,7 @@ class SettingsViewModel(
             // 单事务批量插入；IGNORE 兜底唯一索引冲突（预览后数据被改动），rowId=-1 即跳过
             val imported = if (entities.isEmpty()) 0
             else withContext(Dispatchers.Default) {
-                recordDao.insertAllIgnore(entities).count { it != -1L }
+                recordStore.insertAll(entities)
             }
             _importPreview.value = null
             val skipped = preview.duplicates.size + preview.mileageConflicts.size + preview.errors.size
@@ -920,7 +922,7 @@ class SettingsViewModel(
                     }
 
                     val inserted = if (entities.isEmpty()) 0
-                    else recordDao.insertAllIgnore(entities).count { it != -1L }
+                    else recordStore.insertAll(entities)
                     // 命中唯一索引被忽略的行也算跳过（并发/重复备份）
                     skipped += entities.size - inserted
 

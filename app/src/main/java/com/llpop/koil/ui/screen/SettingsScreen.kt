@@ -1343,6 +1343,9 @@ private fun SyncPanelBody(
                 val reason = syncUi.lastStatus.substringAfter("fail:")
                 if (reason == "conflict") {
                     stringResource(R.string.koil_sync_reconcile_stale)
+                } else if (reason == "corrupt") {
+                    // 云端是别的版本写的：自动推送不会覆盖它，等用户在对账面板里决定
+                    stringResource(R.string.koil_sync_status_corrupt)
                 } else {
                     stringResource(R.string.koil_sync_status_fail, reason)
                 }
@@ -2572,7 +2575,7 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 
 
 
-/** 云同步结果通知翻译（backup_done / backup_failed / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
+/** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
 @Composable
 private fun formatSyncNotice(key: String): String {
     // 支持 "restore_done:12" 这种带参数形式（恢复完成后提示实际插入条数）
@@ -2581,6 +2584,8 @@ private fun formatSyncNotice(key: String): String {
     return when (base) {
         "backup_done" -> stringResource(R.string.koil_sync_backup_done)
         "backup_failed" -> stringResource(R.string.koil_sync_backup_failed)
+        // 云端是别的版本写的：不是网络问题，别让用户去查账号密码
+        "backup_corrupt" -> stringResource(R.string.koil_sync_backup_corrupt)
         "restore_no_cloud" -> stringResource(R.string.koil_sync_restore_no_cloud)
         "restore_done" ->
             if (arg != null) pluralStringResource(R.plurals.koil_sync_restore_done_count, arg, arg)
@@ -2588,6 +2593,8 @@ private fun formatSyncNotice(key: String): String {
         // inserted=0 的恢复：与设置页状态行同口径，不伪报「已恢复」
         "restore_none" -> stringResource(R.string.koil_sync_restore_none)
         "restore_failed" -> stringResource(R.string.koil_sync_restore_failed)
+        // 云端是别的版本写的：一条都没恢复，别让用户以为「云端是空的」
+        "restore_corrupt" -> stringResource(R.string.koil_sync_restore_corrupt)
         "config_saved" -> stringResource(R.string.koil_sync_config_saved)
         "config_test_failed" -> stringResource(R.string.koil_sync_config_test_failed)
         // 未配置时点开关：复用状态行同一句（三语文案已齐，不新增条目）
@@ -2599,6 +2606,7 @@ private fun formatSyncNotice(key: String): String {
         "reconcile_stale" -> stringResource(R.string.koil_sync_reconcile_stale)
         // 重跑没成功：不能说「已重新对账」
         "reconcile_stale_retry" -> stringResource(R.string.koil_sync_reconcile_stale_retry)
+        "reconcile_stale_gone" -> stringResource(R.string.koil_sync_reconcile_stale_gone)
         "local_backup_broken" -> stringResource(R.string.koil_local_backup_broken)
         "reconcile_done" -> stringResource(R.string.koil_sync_reconcile_done)
         "reconcile_failed" -> stringResource(R.string.koil_sync_reconcile_failed)
