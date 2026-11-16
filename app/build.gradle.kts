@@ -49,7 +49,7 @@ android {
         //   1.1.19 → 1.1.20 → 1.2.0 → … → 1.20.20 → 2.0.0
         // 不要手算，用 scripts/bump_version.py（默认只打印预览，--apply 才写文件，
         // 会一并改这里的 versionName、下面的发布日期与 CHANGELOG 段标题）。
-        versionName = "1.2.1"
+        versionName = "1.2.2"
 
         // 关于页「发布日期」信息行：编译期常量，每次发版随 versionName 一起改。
         // 不读 git 提交时间/构建时间 —— 那会把构建机时钟与时区差异带进包里，
