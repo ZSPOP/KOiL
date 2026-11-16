@@ -419,6 +419,10 @@ private fun AboutContent(
         end = innerPadding.calculateEndPadding(layoutDirection),
     )
 
+    // hero 淡出到底（progress 到 1）就不再接收点击：它压在上层，继续接收会把卡片与滚动一起挡掉。
+    // derivedStateOf 只在跨阈值时翻转，不会跟着每一帧滚动重组。
+    val heroInteractive by remember { derivedStateOf { scrollProgress() < 1f } }
+
     BgEffectBackground(
         dynamicBackground = effectBackground,
         modifier = Modifier.fillMaxSize(),
@@ -427,23 +431,6 @@ private fun AboutContent(
         effectBackground = effectBackground,
         alpha = { 1f - scrollProgress() },
     ) {
-        AboutHero(
-            logoPadding = logoPadding,
-            layoutDirection = layoutDirection,
-            density = density,
-            blurEnabled = blurEnabled,
-            backdrop = backdrop,
-            logoBlend = logoBlend,
-            iconProgress = iconProgress,
-            versionCodeProgress = versionCodeProgress,
-            versionLabel = heroVersionLabel,
-            statusLabel = shownStatusLabel,
-            statusAlpha = { statusAlpha.value },
-            statusGapTop = statusGapTop,
-            statusAreaHeight = statusAreaHeight,
-            onMeasured = { logoHeightDp = it },
-        )
-
         LazyColumn(
             state = lazyListState,
             modifier = Modifier
@@ -458,68 +445,20 @@ private fun AboutContent(
             ),
         ) {
             item(key = "logoSpacer") {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        // 检查入口挂在这里，而不是 hero 上：hero 与 LazyColumn 是同一个 Box 的兄弟节点，
-                        // LazyColumn 声明在后、绘制在上层且 fillMaxSize，点的命中会先落到列表的空白 item
-                        // 上，hero 自己的 clickable 收不到 —— 表现为「点 logo 没反应」。
-                        // 这一项的位置与视觉 hero 完全重合（高度就按 hero 实测算），由它接住点击，
-                        // 体验上就是「点 hero 区触发检查」；滚动后它随列表移出、hero 同时淡出，不脱节。
-                        // 这是关于页唯一的 hero 区检查入口（hero 自身不再挂 clickable）。
-                        .clickable(onClick = { check() })
-                        .height(
-                            // hero（logo + 版本号 + 状态区）的实测高度。三个易错点：
-                            // 1) onSizeChanged 挂在 padding 之内，量到的是内容高、不含 padding，所以要补回
-                            //    logoPadding.top + 52dp 才是 hero 底边的绝对位置；
-                            // 2) hero 从页面顶端起算，而这一项从 LazyColumn 的 contentPadding 之后起算，
-                            //    两者差 scrollPadding.top，必须抵掉；
-                            // 3) 最后补的是「hero 底边（= 状态区底）到胶囊顶」的 statusToCapsule，
-                            //    胶囊本身不在 hero 里，所以这里只算到它的顶边。
-                            logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                                scrollPadding.calculateTopPadding() + statusToCapsule,
-                        ),
-                    contentAlignment = Alignment.TopCenter,
-                    content = { },
+                // hero 的占位：hero 与列表是同一个 Box 的兄弟节点，两者必须严格重合，
+                // 否则卡片会压到胶囊上、或者中间留一条缝。这里只做占位、不接点击（点击由 hero 自己接）。
+                // 高度 = hero 内容高 + 顶部内边距 + 状态区到胶囊 + 胶囊 + 胶囊到卡片。两个易错点：
+                // 1) onSizeChanged 挂在 padding 之内，量到的是内容高、不含 padding，所以要补 logoPadding.top + 52dp；
+                // 2) hero 从页面顶端起算，而这一项从 contentPadding 之后起算，两者差 scrollPadding.top，必须抵掉。
+                Spacer(
+                    Modifier.height(
+                        logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
+                            scrollPadding.calculateTopPadding() +
+                            statusToCapsule + 52.dp + heroToCard,
+                    ),
                 )
             }
 
-            item(key = "updateButton") {
-                // 胶囊留在列表层，不下沉进 hero：hero 是这一层下面的兄弟节点，放进去之后
-                // 点击会被列表的命中链抢走 —— 「有新版本」点不动，取消/安装同样点不动。
-                // 视觉上仍然紧贴状态区下方（由上面那项的高度 + 这里的间距决定），滚动手感一致。
-                Box(
-                    modifier = Modifier.graphicsLayer {
-                        // 跟 logo 同一套淡出：滚动时整块一起收，不让胶囊孤零零留在原位被卡片盖过
-                        val p = iconProgress()
-                        alpha = 1 - p
-                        scaleX = 1 - (p * 0.05f)
-                        scaleY = 1 - (p * 0.05f)
-                    },
-                ) {
-                    KoilAboutUpdateButton(
-                        status = status,
-                        downloadState = downloadState,
-                        // 用 ApkUpdater 的快照而不是从 state 推：失败态下 state 里没有 tag，
-                        // 但盘上的包可能仍然可用（下完没装成）
-                        readyTag = apkUpdater.readyTagSnapshot,
-                        extraFailed = downloadFailed,
-                        onDownload = { downloadOrRecheck() },
-                        onCancel = { apkUpdater.cancel() },
-                        onInstall = {
-                            (status as? AboutUpdateStatus.Newer)?.let { apkUpdater.installReady(it.tag) }
-                        },
-                        onRetry = {
-                            downloadFailed = false
-                            downloadOrRecheck()
-                        },
-                        // 胶囊底 → 信息卡顶：胶囊上移了多少，这里就补回多少，卡片位置不变
-                        modifier = Modifier.padding(bottom = heroToCard),
-                        blurBackdrop = if (blurEnabled) backdrop else null,
-                        blurBlendColors = cardBlendColors,
-                    )
-                }
-            }
 
             item(key = "updateInfo") {
                 Box(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
@@ -631,6 +570,49 @@ private fun AboutContent(
                 }
             }
         }
+        // hero 放在列表之后：绘制与命中都在上层，胶囊才像真的嵌在 hero 里、点得到。
+        // 滚动淡出到底后同时停止接收点击，卡片照常点、照常滚。
+        AboutHero(
+            logoPadding = logoPadding,
+            layoutDirection = layoutDirection,
+            density = density,
+            blurEnabled = blurEnabled,
+            backdrop = backdrop,
+            logoBlend = logoBlend,
+            iconProgress = iconProgress,
+            versionCodeProgress = versionCodeProgress,
+            versionLabel = heroVersionLabel,
+            statusLabel = shownStatusLabel,
+            statusAlpha = { statusAlpha.value },
+            statusGapTop = statusGapTop,
+            statusAreaHeight = statusAreaHeight,
+            statusToCapsule = statusToCapsule,
+            capsule = {
+                KoilAboutUpdateButton(
+                    status = status,
+                    downloadState = downloadState,
+                    // 用 ApkUpdater 的快照而不是从 state 推：失败态下 state 里没有 tag，
+                    // 但盘上的包可能仍然可用（下完没装成）
+                    readyTag = apkUpdater.readyTagSnapshot,
+                    extraFailed = downloadFailed,
+                    onDownload = { downloadOrRecheck() },
+                    onCancel = { apkUpdater.cancel() },
+                    onInstall = {
+                        (status as? AboutUpdateStatus.Newer)?.let { apkUpdater.installReady(it.tag) }
+                    },
+                    onRetry = {
+                        downloadFailed = false
+                        downloadOrRecheck()
+                    },
+                    blurBackdrop = if (blurEnabled) backdrop else null,
+                    blurBlendColors = cardBlendColors,
+                )
+            },
+            interactive = heroInteractive,
+            onClick = { check() },
+            onMeasured = { logoHeightDp = it },
+        )
+
         VerticalScrollBar(
             adapter = rememberScrollBarAdapter(lazyListState),
             modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
@@ -656,17 +638,34 @@ private fun BoxScope.AboutHero(
     statusLabel: String?,
     /** 状态文案的淡入淡出进度（0f 隐藏 / 1f 全显）：出结论 5 秒后由调用方收掉 */
     statusAlpha: () -> Float,
-    /** 状态区距版本号 / 状态区固定高度 */
+    /** 状态区距版本号 / 状态区固定高度 / 状态区到胶囊顶 */
     statusGapTop: Dp,
     statusAreaHeight: Dp,
+    statusToCapsule: Dp,
+    /** 胶囊与下载进度条：属于 hero 内容，跟着 hero 一起淡出、不上滑 */
+    capsule: @Composable () -> Unit,
+    /**
+     * 这一整块是否接收点击。列表滚动后 hero 已经淡出，这时它仍压在上层，
+     * 若继续接收点击会把卡片与滚动一起挡掉。
+     */
+    interactive: Boolean,
+    /** 点 hero 区（胶囊之外的地方）= 检查更新；胶囊自己有点击，内层优先 */
+    onClick: () -> Unit,
     onMeasured: (androidx.compose.ui.unit.Dp) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // 这里刻意不放 clickable：本组件与 LazyColumn 是同一个 Box 的兄弟节点，
-            // 列表声明在后、绘制在上层且 fillMaxSize，命中先落列表 —— 放这儿收不到事件，
-            // 只会变成一段没有效果的代码。检查入口统一由列表顶部的 logoSpacer 承接。
+            .then(
+                if (interactive) {
+                    Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        // indication = null：这块面积很大，默认的水波是一块亮白矩形，太抢眼
+                        indication = null,
+                        onClick = onClick,
+                    )
+                } else Modifier,
+            )
             .padding(
                 top = logoPadding.calculateTopPadding() + 52.dp,
                 start = logoPadding.calculateStartPadding(layoutDirection),
@@ -741,6 +740,15 @@ private fun BoxScope.AboutHero(
                     )
                 }
             }
+        }
+        // 状态区到胶囊顶：胶囊属于 hero，上滑时跟着整块一起淡出，不随列表上移
+        Spacer(Modifier.height(statusToCapsule))
+        if (interactive) {
+            capsule()
+        } else {
+            // 淡出到底后不再组合胶囊：alpha 已经到 0，留着只会变成看不见却能点的幽灵按钮，
+            // 挡住滑上来的卡片。占位照留，hero 高度不变，列表不会因此跳动。
+            Spacer(Modifier.height(52.dp))
         }
     }
 }
