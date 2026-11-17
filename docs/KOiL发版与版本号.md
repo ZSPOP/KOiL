@@ -13,8 +13,9 @@
    ```
 
    脚本按二十进制规则算出下一个 `versionName`，并一并改好三处：`versionName`、
-   `KOIL_RELEASE_DATE`（关于页「发布日期」显示的就是它，必须是**打 tag 当天或次日**，否
-   则被 CI 的发布日期闸门拦下）、`CHANGELOG.md` 的段标题。`versionCode` 不要手改。
+   `KOIL_RELEASE_DATE`（关于页「发布日期」显示的就是它，必须是 **tag 所指提交的日期**
+   —— 通常就是合 main 那天 —— 当天或次日，否则被 CI 的发布日期闸门拦下。注意不是「打 tag
+   的当天」：先合 main、隔一天再打 tag 时，这两个日期会不一样）、`CHANGELOG.md` 的段标题。`versionCode` 不要手改。
    **不要手算进位**：手写成 `1.1.20 → 1.1.21` 就违反了本口径，而 CI 要等打 tag 才拦得住。
    `--apply` 只插 CHANGELOG 标题不写内容，条目仍要人补。
 2. **合 main**：功能分支合并到 `main` 并推送
@@ -29,7 +30,7 @@
 | 项 | 规则 |
 |---|---|
 | `versionName` | 纯数字、不带 `V`（写 `V1.2.0` 会让 CI 断言失败）；按**二十进制**推进，三段各自取值 `0..20`、满 `20` 进位：`1.1.19 → 1.1.20`、`1.1.20 → 1.2.0`、`1.2.20 → 1.3.0`、`1.20.20 → 2.0.0`；用 `scripts/bump_version.py` 推进 |
-| `versionCode` | 只增不减：Build 用 `run_number`；Release 用 `max(已发布最大 -vcN, 最近 Build run_number) + 1`；不要手改 |
+| `versionCode` | 只增不减。设已发布版本数为 `N`：Build 号 = `run_number + N`；Release 号 = `Build 最大 run_number + N + 1`。两条线严格交替、永不同号；**不要用「已发布最大号」做基准**（原因见下）；不要手改 |
 | 标签 | 大写 `V`（`V1.0.0`）；去掉 V 必须等于 `versionName` |
 | 附件名 | `KOiL-<tag>-vc<versionCode>-release.apk` |
 
@@ -55,14 +56,20 @@ KOIL_CI_VERSION_CODE=<当前最大 run_number> ./gradlew :app:assembleRelease
 
 ### 本地包与 CI 的号段关系
 
+以真实号段举例（2026-11-17 发 V1.2.4 时的实际数字）：已发布 26 版、Build 最大 `run_number = 335`。
+
 | 环节 | versionCode |
 |---|---|
-| 已产出的最大 CI 运行（run N） | N |
-| 本地出测试包（可反复出多个） | ≤ N |
-| 发版第 1 步：合 `main` 触发 CI | N + 1（仅 artifact，不发布） |
-| 发版第 2 步：推 `V*` 标签 | N + 2（发布 Release） |
+| 最新一版 Build 产物（run 335） | `335 + 26 = 361` |
+| 本地出测试包（可反复出多个） | ≤ 361 |
+| 推 `V1.2.4` 标签 | `335 + 26 + 1 = 362`（发布 Release） |
+| 发版后下一次 Build（run 336，此时已发布 27 版） | `336 + 27 = 363` |
 
-`run_number` 按 CI 运行次数递增，任何 push 都会消耗一个号，所以正式版比本地包高 2 只是发版路径上的典型差值，不是固定规律。安全前提只有一条：本地包号不高于下一次 CI 的号。
+规律是**两条线交替**：Build 号随 `run_number` 递增、Release 号取「最大 Build 号 + 1」，而发版后已发布数 `N` 又涨 1，正好抵掉下一次 `run_number` 的 `+1`。
+
+**不要改用「已发布最大号 + 1」这类水位法**：发版后已发布号领先于 `run_number`，此后每个小于它的 Build 都会落到同一个号上，连续构建必然撞号。同理，看到号段异常时也别按水位法去「修正」，那会把正式号往回改。
+
+安全前提只有一条：本地包号不高于下一次 CI 的号。
 
 发过一版之后要重算：手机上换成正式版后，本地包不能再用低于已装版本的号（Android 禁止降级安装）。
 

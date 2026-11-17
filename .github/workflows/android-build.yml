@@ -29,8 +29,11 @@ concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
   cancel-in-progress: true
 
+# 最小权限：本 workflow 全程只读（读 Release 列表推算 versionCode、读源码构建、上传 artifact），
+# 没有任何 git push / gh release create。而 pr-check 编译的是外部 PR 的代码——给写 token
+# 等于把一个能改仓库的凭据交给别人的分支。发布动作只在 android-release.yml 里，那里才需要 write。
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # PR 事件跑轻量检查（编译+单测+lint，不签名、不消耗发版资源）；

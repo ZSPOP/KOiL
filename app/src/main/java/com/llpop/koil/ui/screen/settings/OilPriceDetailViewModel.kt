@@ -78,7 +78,8 @@ class OilPriceDetailViewModel(
     ) { p, g, y, d -> OilPriceDetailParams(p, g, y, d) }
         .flatMapLatest { params ->
             priceDao.observeByProvinceGrade(params.province, params.grade).map { records ->
-                buildUiState(params, records)            }
+                buildUiState(params, records)
+            }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OilPriceDetailUiState())
 
@@ -109,7 +110,9 @@ class OilPriceDetailViewModel(
         }
     }
 
-    private suspend fun buildUiState(
+    // 非 suspend：函数体只有过滤/排序/聚合，没有一处挂起调用。写成 suspend 会让调用方
+    // 误以为它可能切线程，实际上在哪个线程跑就在哪个线程算完。
+    private fun buildUiState(
         params: OilPriceDetailParams,
         records: List<KOiLPriceEntity>,
     ): OilPriceDetailUiState {

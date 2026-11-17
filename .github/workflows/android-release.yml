@@ -18,8 +18,16 @@ on:
   push:
     tags: ['V*']
 
+# 发版必须串行：group 用固定值，不用 ${{ github.ref }}。
+# tag 是 ref 的一部分，用 ref 做 group 会让「同时推两个 tag」落进两个 group、两次构建并发跑。
+# 两条并发构建读的是同一份快照（已发布版本数、Build 最大 run_number），会算出同一个号；
+# Verify 只比「本包号 vs 快照」，不比「这一次 vs 另一次」，于是双双通过，最终发出两个同
+# versionCode 的正式包 —— 公开后无法回收，只能靠下一版覆盖。这个缺口是本次审查发现的。
+# cancel-in-progress 保持 false：发版被后一个 tag 取消，比晚到一步更糟（半个发版无从判断）。
+# 已知取舍：同组最多「1 个在跑 + 1 个排队」，同时推 3 个 tag 时排队那个会被新 run 挤掉。
+# 所以流程上仍然一次只推一个 tag。
 concurrency:
-  group: "${{ github.workflow }}-${{ github.ref }}"
+  group: "${{ github.workflow }}-release"
   cancel-in-progress: false
 
 permissions:
