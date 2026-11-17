@@ -246,6 +246,9 @@
     <!-- ===== ViewModel 结果消息（key 由 VM 给出，UI 层翻译） ===== -->
     <string name="koil_msg_pdb_update_failed">更新失败：%1$s</string>
     <string name="koil_msg_pdb_busy">油价库正在后台更新，稍等一下再看</string>
+    <plurals name="koil_msg_pdb_update_ok">
+        <item quantity="other">已核验，入库 %1$d 条</item>
+    </plurals>
     <!-- 多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">同步来源：%1$s</string>
     <string name="koil_pdb_not_checked">尚未检测</string>
@@ -268,7 +271,9 @@
     <string name="koil_pdb_outcome_no_province">核对失败：省份列表为空</string>
     <string name="koil_pdb_outcome_fetch_failed">核对失败：实时油价不可用（%1$s）</string>
     <string name="koil_pdb_outcome_source_lagging">数据源尚未更新，跳过本次核验</string>
-    <string name="koil_pdb_outcome_source_lagging_fixed">数据源尚未更新；顺带按实时源校正 %1$d 条</string>
+    <plurals name="koil_pdb_outcome_source_lagging_fixed">
+        <item quantity="other">数据源尚未更新；顺带按实时源校正 %1$d 条</item>
+    </plurals>
     <string name="koil_pdb_outcome_window_day">%1$s 是调价窗口日，价格 24 点后生效</string>
     <string name="koil_pdb_outcome_unchanged_unconfirmed">已核对至 %1$s，价格未变但实时源不可用，无法确认是否搁浅</string>
     <string name="koil_pdb_outcome_stranded">已核对至 %1$s，油价无变化（搁浅）</string>
