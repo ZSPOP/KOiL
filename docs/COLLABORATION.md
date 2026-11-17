@@ -46,7 +46,7 @@
 - App 内版本展示：三语统一为 `V{versionName} ({versionCode})`（半角括号、括号前一个空格，如 `V1.0.0 (1)`），前言大写 `V`；见 `values/`、`values-zh-rTW/`、`values-en/` 下 `koil_set_about_version`。
 - 交付构建产物直接给 APK，不打包 zip。
 - 日常开发只做源码与文档改动，不产出安装包；正式包由 CI/Release 单独产出。
-- **versionCode 口径**：Build workflow 用 `github.run_number`；Release 用 `max(已发布 Release 附件 -vcN, 最近 Build run_number) + 1`。正式版必须高于设备上可能已安装的任意包（含日常 Build 产物），否则系统会判「不可降级」拒装。
+- **versionCode 口径**：设已发布版本数为 `N`，Build 号 = `github.run_number + N`，Release 号 = `Build 最大 run_number + N + 1`，两条线严格交替。不要用「已发布最大附件号」做基准（水位法会让后续 Build 全部落到同一个号上）。正式版必须高于设备上可能已安装的任意包（含日常 Build 产物），否则系统会判「不可降级」拒装；详见 `docs/KOiL发版与版本号.md`。
 - **已发布 tag / Release 不可静默重发**：移动或删除已推送 tag、替换同名 Release 附件，等于对已分发版本改口径，必须先在 PR 或 Release 说明中写明原因、影响范围与旧包处置方式，并经开发者同意；不得以「修 CI」为名直接重打。
 
 ## 四、分支约定
