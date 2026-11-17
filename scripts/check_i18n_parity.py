@@ -27,9 +27,11 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import re
 import sys
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -208,13 +210,15 @@ def self_test() -> int:
     这四种坏法就是本脚本存在的理由 —— 缺 key、多 key、占位符 arity 不同、
     plurals 缺 other。任何一条「改了脚本还全绿」都说明检查退化了。
     """
+    # 只解析一次真实文件：originals 既是最后「真实文件仍绿」的复核对象，也是各用例的拷贝源。
     originals = load_all()
 
     def clone() -> dict[str, LocaleFile]:
-        # 直接复用已解析的对象，坏法通过改副本里的字典实现，不写盘、不碰真实文件。
-        return {locale: LocaleFile(locale) for locale in LOCALES}
+        # 深拷贝一份已解析结果，坏法只改副本里的字典：不写盘、不碰真实文件，
+        # 也不必为每个用例再解析一遍 XML（四例 × 三语言 = 12 次多余解析）。
+        return copy.deepcopy(originals)
 
-    cases: list[tuple[str, str, callable]] = []
+    cases: list[tuple[str, str, Callable[[dict[str, LocaleFile]], None]]] = []
 
     def case_missing_key(files):
         del files["values-en"].strings["koil_pdb_countdown"]
