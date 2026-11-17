@@ -254,6 +254,7 @@
         <item quantity="one">Verified — saved %1$d record</item>
         <item quantity="other">Verified — saved %1$d records</item>
     </plurals>
+    <string name="koil_msg_pdb_update_none">Verified — no new records</string>
     <!-- 多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">Sync sources: %1$s</string>
     <string name="koil_pdb_not_checked">Not checked yet</string>
@@ -280,7 +281,7 @@
         <item quantity="other">Price source not updated yet; corrected %1$d records from the live source</item>
     </plurals>
     <string name="koil_pdb_outcome_window_day">%1$s is a price-adjustment window day; new prices apply after midnight</string>
-    <string name="koil_pdb_outcome_unchanged_unconfirmed">Checked up to %1$s; price unchanged but no live source, so a stranded window cannot be confirmed</string>
+    <string name="koil_pdb_outcome_unchanged_unconfirmed">Price unchanged, but no live source, so a stranded window cannot be confirmed</string>
     <string name="koil_pdb_outcome_stranded">Checked up to %1$s; price unchanged (stranded window)</string>
     <string name="koil_pdb_outcome_unchanged">Checked up to %1$s; price unchanged (not a window day)</string>
     <string name="koil_pdb_outcome_repaired_only">Corrected from the live source: %1$d (a record for today already existed)</string>

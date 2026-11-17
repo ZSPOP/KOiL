@@ -2681,6 +2681,7 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "pdb_update_ok" -> pluralStringResource(
         R.plurals.koil_msg_pdb_update_ok, args.intAt(0), args.getOrElse(0) { 0 },
     )
+    "pdb_update_none" -> stringResource(R.string.koil_msg_pdb_update_none)
     "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
     "price_exported" -> pluralStringResource(
         R.plurals.koil_msg_price_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
@@ -2755,7 +2756,7 @@ private fun presentOutcome(outcome: PriceDbOutcome): OutcomePresentation = when 
         OutcomeTier.NOTICE,
     )
     is PriceDbOutcome.UnchangedUnconfirmed ->
-        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_unchanged_unconfirmed, outcome.date), OutcomeTier.NOTICE)
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_unchanged_unconfirmed), OutcomeTier.NOTICE)
     is PriceDbOutcome.WindowDay ->
         OutcomePresentation(stringResource(R.string.koil_pdb_outcome_window_day, outcome.date), OutcomeTier.NOTICE)
     // 正常类：已入库/无变化/搁浅/维持等，行 1 + 行 2 已覆盖，不占行；文案仍生成以保留资源引用

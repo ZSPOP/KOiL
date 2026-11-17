@@ -249,6 +249,7 @@
     <plurals name="koil_msg_pdb_update_ok">
         <item quantity="other">已核验，入库 %1$d 条</item>
     </plurals>
+    <string name="koil_msg_pdb_update_none">已核验，无新增</string>
     <!-- 多源一致性（锚点/今日价来源快照） -->
     <string name="koil_pdb_sync_sources">同步来源：%1$s</string>
     <string name="koil_pdb_not_checked">尚未检测</string>
@@ -275,7 +276,7 @@
         <item quantity="other">数据源尚未更新；顺带按实时源校正 %1$d 条</item>
     </plurals>
     <string name="koil_pdb_outcome_window_day">%1$s 是调价窗口日，价格 24 点后生效</string>
-    <string name="koil_pdb_outcome_unchanged_unconfirmed">已核对至 %1$s，价格未变但实时源不可用，无法确认是否搁浅</string>
+    <string name="koil_pdb_outcome_unchanged_unconfirmed">价格未变，但实时源不可用，无法确认是否搁浅</string>
     <string name="koil_pdb_outcome_stranded">已核对至 %1$s，油价无变化（搁浅）</string>
     <string name="koil_pdb_outcome_unchanged">已核对至 %1$s，油价无变化（非窗口日，维持）</string>
     <string name="koil_pdb_outcome_repaired_only">已按实时源校正 %1$d 条（今日已有调价记录）</string>
