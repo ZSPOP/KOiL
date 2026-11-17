@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
+import android.util.Log
 import androidx.core.content.ContextCompat
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.util.AppClock
@@ -52,6 +53,11 @@ class LocationHelper(private val context: Context) {
 
     /**
      * 获取当前省份（suspend，三级降级）。
+     *
+     * 前面两级失败都要留痕：定位一路挂了、IP 一路也挂了，用户只看到「省份判不出来」，
+     * 日志里却一个字都没有，事后无从判断是哪一级的事（权限、Geocoder 无服务、接口限流
+     * 都会走到同一句 null）。所以这里只吞异常、不吞信息——降级链本身仍然吞掉失败，
+     * 调用方的行为一点不变。
      */
     suspend fun getCurrentProvince(): String? = withContext(Dispatchers.IO) {
         // 第一级：GPS + Geocoder
@@ -62,13 +68,17 @@ class LocationHelper(private val context: Context) {
                     val province = geocodeProvince(location.latitude, location.longitude)
                     if (Provinces.isValid(province)) return@withContext province
                 }
-            } catch (_: Exception) { }
+            } catch (e: Exception) {
+                Log.w("KOiL", "GPS 省份反查失败，降级到 IP 归属地: ${e.message}")
+            }
         }
         // 第二级：IP 归属地
         try {
             val province = getProvinceByIp()
             if (Provinces.isValid(province)) return@withContext province
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.w("KOiL", "IP 归属地失败，降级到默认省份: ${e.message}")
+        }
         // 第三级：null（调用方回退默认）
         null
     }
