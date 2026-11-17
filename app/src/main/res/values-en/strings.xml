@@ -459,6 +459,8 @@
     <string name="koil_about_action_cancel_download">Cancel download</string>
     <string name="koil_about_action_install">Install latest</string>
     <string name="koil_about_action_failed">Download failed</string>
+    <string name="koil_about_package_ready">Update package ready · %1$s MB</string>
+    <string name="koil_about_package_ready_plain">Update package ready</string>
     <string name="koil_about_percent_with_size">%1$d%% (%2$sMB/%3$sMB)</string>
     <string name="koil_about_downloaded">Downloaded %1$s MB</string>
     <string name="koil_ov_update_view">View</string>

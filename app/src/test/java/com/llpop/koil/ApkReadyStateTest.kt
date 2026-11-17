@@ -2,7 +2,6 @@ package com.llpop.koil
 
 import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.isReadyFor
-import com.llpop.koil.data.update.nextReadyTag
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -39,18 +38,6 @@ class ApkReadyStateTest {
     fun `tag 不一致不 ready`() {
         val f = tmp.newFile("KOiL-update.apk")
         assertFalse(isReadyFor("V1.1.10", "V1.1.9", f))
-    }
-
-    @Test
-    fun `缺授权保留 readyTag —— 授权回来直接进安装器`() {
-        assertEquals("V1.1.10", nextReadyTag("V1.1.10", UpdateFailure.NO_PERMISSION))
-    }
-
-    @Test
-    fun `其它失败一律清空 readyTag —— 下次点击从头下载`() {
-        listOf(UpdateFailure.DOWNLOAD, UpdateFailure.SIGNATURE, UpdateFailure.LAUNCH).forEach {
-            assertNull(nextReadyTag("V1.1.10", it))
-        }
     }
 
     @Test

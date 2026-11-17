@@ -189,14 +189,11 @@ class ApkUpdater(
         val running = job ?: return
         running.cancel()
         job = null
-        // 只有真的处在下载中才清 readyTag、删文件。
-        // job 也可能停在「等恢复」或「准备拉起安装器」上，那时包是完好的，
-        // 一并删掉就等于用户点一次取消，6.7MB 白下。
+        // 只删**这次下载**写的临时文件。正式包不在这次下载的写入路径上（见 partFile 的说明），
+        // 所以取消不该动它：用户可能刚下好一版还没装，取消另一次下载不该把那份也弄没。
+        // readyTag 同理保留——它指向的是正式包，与这次被取消的下载无关。
         if (_state.value is UpdateDownloadState.Downloading) {
-            readyTag = null
-            persistReadyTag(null)
-            // 半截文件删掉，不白占几 MB；正在写的流被 cancel 后由协程侧兜异常
-            apkFile()?.delete()
+            partFile()?.delete()
         }
         _state.value = UpdateDownloadState.Idle
     }
@@ -209,33 +206,27 @@ class ApkUpdater(
      *   无人订阅时 `tryEmit` 直接丢弃 → 用户切走后失败完全无提示。
      * 展示交给 UI 就地读 state：横幅显示「· 失败」并把动作换成「重试」，设置页显示原因。
      *
-     * NO_PERMISSION 不清 readyTag（包已下好，授权回来应直接安装）；其它失败清掉，下次从头下载。
+     * readyTag 一律保留：下载现在先写临时文件，任何失败都只删 `.part`，正式包根本没被碰过。
+     * 所以失败不代表包坏了，凭据也没有理由丢——丢掉它只会让盘上那个完好的包变成没人认领的孤儿
+     * （几 MB 一直占着，直到下次下载成功被覆盖）。真正不可用的包（文件在、拉不起安装器）
+     * 由 [download] 里那条 LAUNCH 分支显式删。
      */
     private fun fail(reason: UpdateFailure, detail: String? = null) {
-        readyTag = nextReadyTag(readyTag, reason)
-        persistReadyTag(readyTag)
         _state.value = UpdateDownloadState.Failed(reason, detail)
     }
 
     /**
-     * 检测到更新的版本时，把**旧版本**的包丢掉。
-     *
-     * 不丢的后果：盘上留着一个能通过签名校验的旧包，用户点「安装最新版」时
-     * 若 tag 判断出现偏差就得装回旧版；而且 6.7MB 会一直压在更新目录里。
-     * 只丢「与 [tag] 不同」的那一个：同 tag 的包正在装，不能删。
+     * 盘上正式包的字节数；没有包返回 null。
+     * 只给 UI 显示体积用（冷启动恢复态没有「本次下载」的采样，体积只能从文件读）。
      */
-    fun discardReadyExcept(tag: String) {
-        if (!shouldDiscardReady(readyTag, tag)) return
-        apkFile()?.delete()
-        readyTag = null
-        persistReadyTag(null)
-        if (_state.value is UpdateDownloadState.Ready) {
-            _state.value = UpdateDownloadState.Idle
-        }
-    }
+    fun readyPackageBytes(): Long? =
+        apkFile()?.takeIf { it.exists() }?.length()?.takeIf { it > 0 }
 
     /** 已下好则直接拉起安装器；返回 false 表示还没下好或没拉起来 */
     fun installReady(tag: String): Boolean {
+        // tag 对不上就不能装：正式路径上躺着的可能是**上一个**版本的包（新的还没下好），
+        // 拿它去装等于把用户装回旧版
+        if (!isReady(tag)) return false
         val file = apkFile() ?: return false
         if (!file.exists()) return false
         return install(file)
@@ -282,11 +273,22 @@ class ApkUpdater(
         return File(base, "updates/$APK_NAME")
     }
 
+    /**
+     * 下载中的临时文件。新包**先写这里**，校验（长度 / PK 魔数 / 签名）全过之后才原子替换正式包。
+     *
+     * 原来直接往正式路径写、开头先 `delete()`，等于「一开始下载新版就把上一个下好的包毁掉」：
+     * 已有 V1.2.4 待装、下 V1.2.5 中途失败或取消，盘上只剩半截文件，两个都装不了。
+     * 走临时文件后，正式包在整个下载过程中保持完好，替换那一瞬间才是「新包已落地」。
+     */
+    private fun partFile(): File? {
+        val base = app.getExternalFilesDir(null) ?: app.cacheDir
+        return File(base, "updates/$APK_PART_NAME")
+    }
+
     private suspend fun fetch(url: String): FetchResult {
-        val dest = apkFile() ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
+        val dest = partFile() ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
         dest.parentFile?.mkdirs()
-        // 显式删掉上一版残留的包：现在是覆盖写，删不删都能跑，但语义上「这次下载不继承任何旧字节」
-        // 更清楚，也避免用户长期不更新时白占 6.6MB
+        // 只清临时文件：这次下载不继承上一轮的半截字节。**正式包不动**，它可能正等着安装
         dest.delete()
 
         var current = url
@@ -359,7 +361,22 @@ class ApkUpdater(
                     dest.delete()
                     return it
                 }
-                return FetchResult.Ok(dest)
+                // 三项校验都过了才替换正式包：替换后 readyTag 才跟着换，
+                // 之前「下好没装」的旧包一直是磁盘上唯一可安装的那份
+                val final = apkFile() ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
+                val moved = runCatching {
+                    java.nio.file.Files.move(
+                        dest.toPath(),
+                        final.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    )
+                    true
+                }.getOrElse { false }
+                if (!moved) {
+                    dest.delete()
+                    return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法替换更新包")
+                }
+                return FetchResult.Ok(final)
             } finally {
                 runCatching { conn.disconnect() }
             }
@@ -400,6 +417,7 @@ class ApkUpdater(
     private companion object {
         const val APK_MIME = "application/vnd.android.package-archive"
         const val APK_NAME = "KOiL-update.apk"
+        const val APK_PART_NAME = "KOiL-update.part"
         const val MAX_REDIRECT = 5
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 30_000
@@ -416,9 +434,3 @@ class ApkUpdater(
 internal fun isReadyFor(tag: String, readyTag: String?, file: File?): Boolean =
     readyTag == tag && file?.exists() == true
 
-/**
- * 失败后 readyTag 的去留：只有「缺授权」保留（包已下好，授权回来应直接进安装器），
- * 其它失败一律清空，让下次点击从头下载。
- */
-internal fun nextReadyTag(current: String?, reason: UpdateFailure): String? =
-    if (reason == UpdateFailure.NO_PERMISSION) current else null

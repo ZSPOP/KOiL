@@ -66,12 +66,3 @@ fun resolveCapsuleState(
     if (newer != null && readyTag == newer.tag) return AboutCapsuleState.Install
     return AboutCapsuleState.Newer
 }
-
-/**
- * 检测到更新的版本时，盘上那个**旧包**是否该被丢掉。
- *
- * 只丢「与新版不同」的那一个：正在装/正要装的同 tag 包不能删。
- * 抽出来是为了让「删不删」这个判断能被测试钉住 —— 删错的代价是用户白等一次 6.7MB 下载。
- */
-fun shouldDiscardReady(currentTag: String?, newerTag: String): Boolean =
-    currentTag != null && currentTag != newerTag
