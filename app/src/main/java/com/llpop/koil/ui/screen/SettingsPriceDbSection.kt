@@ -62,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
 import com.llpop.koil.util.AppClock
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -218,7 +219,7 @@ internal fun PriceDbSection(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = stringResource(R.string.koil_pdb_db_title_short),
-                        fontSize = 17.sp,
+                        fontSize = KOiLType.TitleLarge,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -233,7 +234,7 @@ internal fun PriceDbSection(
                         ) {
                             Text(
                                 text = priceDbStatus.versionLabel,
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 fontWeight = FontWeight.Medium,
                                 color = KOiLColors.Primary,
                             )
@@ -252,7 +253,7 @@ internal fun PriceDbSection(
                     ) {
                         Text(
                             text = stringResource(R.string.koil_pdb_view_detail),
-                            fontSize = 14.sp,
+                            fontSize = KOiLType.BodyLarge,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
                         )
@@ -273,8 +274,8 @@ internal fun PriceDbSection(
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = pluralStringResource(R.plurals.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount, priceDbStatus.incompleteProvinceCount),
-                        fontSize = 12.sp,
-                        color = Color(0xFFE53935),
+                        fontSize = KOiLType.BodySmall,
+                        color = KOiLColors.Alert,
                     )
                     // 按真实补灌状态分文案——不用恒定一句"后台补灌中，完成后自动刷新"，
                     // 重试预算用尽后没任何东西在跑，恒定文案会让用户对着假进度干等。
@@ -295,7 +296,7 @@ internal fun PriceDbSection(
                                 }
                             else -> stringResource(R.string.koil_pdb_seeding)
                         },
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                     )
                 }
@@ -360,7 +361,7 @@ internal fun PriceDbSection(
                     }
                     Text(
                         text = line1,
-                        fontSize = 13.sp,
+                        fontSize = KOiLType.Body,
                         lineHeight = 17.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -377,7 +378,7 @@ internal fun PriceDbSection(
                         if (countdownText != null) {
                             Text(
                                 text = countdownText,
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 lineHeight = 15.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
                             )
@@ -385,7 +386,7 @@ internal fun PriceDbSection(
                         if (countdownText != null && lastCheckedText != null) {
                             Text(
                                 text = "·",
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 lineHeight = 15.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
                             )
@@ -393,7 +394,7 @@ internal fun PriceDbSection(
                         if (lastCheckedText != null) {
                             Text(
                                 text = stringResource(R.string.koil_pdb_checked, lastCheckedText),
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 lineHeight = 15.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
                             )
@@ -420,7 +421,7 @@ internal fun PriceDbSection(
                         Spacer(Modifier.width(5.dp))
                         Text(
                             text = presentation.text,
-                            fontSize = 12.sp,
+                            fontSize = KOiLType.BodySmall,
                             lineHeight = 15.sp,
                             color = if (presentation.tier == OutcomeTier.WARNING) KOiLColors.OutcomeWarning
                                    else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
@@ -452,7 +453,7 @@ internal fun PriceDbSection(
                     ) {
                         Text(
                             text = stringResource(R.string.koil_pdb_auto_short),
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Medium,
                             color = if (autoOn) KOiLColors.Primary else MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
@@ -498,7 +499,7 @@ internal fun PriceDbSection(
                         Spacer(Modifier.width(4.dp))
                         Text(
                             text = stringResource(if (priceDbUpdating) R.string.koil_pdb_updating else R.string.koil_pdb_update_now),
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Medium,
                             color = Color.White,
                             maxLines = 1,

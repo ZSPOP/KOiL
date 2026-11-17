@@ -30,6 +30,7 @@ import top.yukonga.miuix.kmp.basic.Checkbox
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixIndication
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 「本次加满（跳枪）」开关行：录入页 / 编辑弹窗 / 补录弹窗三处共用。
@@ -93,14 +94,14 @@ fun FullTankSwitchRow(
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.koil_add_full_tank),
-                        fontSize = 14.sp,
+                        fontSize = KOiLType.BodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Spacer(Modifier.height(2.dp))
                     Text(
                         text = stringResource(R.string.koil_add_full_tank_hint),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         lineHeight = 15.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )

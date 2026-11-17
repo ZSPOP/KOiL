@@ -52,6 +52,7 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -94,7 +95,7 @@ internal fun MonthHeaderRow(monthKey: String, count: Int, summary: String?) {
     ) {
         Text(
             text = monthTitle(monthKey),
-            fontSize = 16.sp,
+            fontSize = KOiLType.Title,
             fontWeight = FontWeight.Bold,
             color = MiuixTheme.colorScheme.onBackground,
             modifier = Modifier.padding(start = 4.dp),
@@ -103,7 +104,7 @@ internal fun MonthHeaderRow(monthKey: String, count: Int, summary: String?) {
         Text(
             // ④ 有月度小结时替代纯计数
             text = summary ?: stringResource(R.string.koil_ov_month_count, count),
-            fontSize = 13.sp,
+            fontSize = KOiLType.Body,
             fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
             maxLines = 1,
@@ -266,14 +267,14 @@ internal fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(R.string.koil_ov_empty_title),
-                fontSize = 15.sp,
+                fontSize = KOiLType.Subtitle,
                 fontWeight = FontWeight.SemiBold,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(Modifier.height(4.dp))
             Text(
                 text = stringResource(R.string.koil_ov_empty_hint),
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
             )
             // 空状态引导——可一键前往录入页（仅当宿主传入导航回调时显示）
@@ -288,7 +289,7 @@ internal fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
                 ) {
                     Text(
                         text = stringResource(R.string.koil_ov_empty_action),
-                        fontSize = 13.sp,
+                        fontSize = KOiLType.Body,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                     )

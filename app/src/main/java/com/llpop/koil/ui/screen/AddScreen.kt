@@ -100,6 +100,7 @@ import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 录入页（M2 完整实现）
@@ -349,7 +350,7 @@ fun AddScreen(
                 ) {
                     Text(
                         text = if (uiState.isAdding) stringResource(R.string.koil_add_adding) else stringResource(R.string.koil_add_add_record),
-                        fontSize = 16.sp,
+                        fontSize = KOiLType.Title,
                         fontWeight = FontWeight.Medium,
                             )
                         }
@@ -390,7 +391,7 @@ private fun ProvincePickerDialog(
         Column {
             Text(
                 text = stringResource(R.string.koil_add_pick_province),
-                fontSize = 18.sp,
+                fontSize = KOiLType.Headline,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
@@ -416,7 +417,7 @@ private fun ProvincePickerDialog(
                         ) {
                             Text(
                                 text = provinceLabel(province),
-                                fontSize = 14.sp,
+                                fontSize = KOiLType.BodyLarge,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = if (isSelected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackground,
                                 modifier = Modifier.weight(1f),
@@ -440,7 +441,7 @@ private fun ProvincePickerDialog(
                     .fillMaxWidth()
                     .heightIn(min = 44.dp),
             ) {
-                Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp)
+                Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.BodyLarge)
             }
         }
     }
@@ -456,14 +457,14 @@ private fun PermissionDialog(
         Column {
             Text(
                 text = stringResource(R.string.koil_add_loc_permission_title),
-                fontSize = 18.sp,
+                fontSize = KOiLType.Headline,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(10.dp))
             Text(
                 text = stringResource(R.string.koil_add_loc_permission_message),
-                fontSize = 13.sp,
+                fontSize = KOiLType.Body,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(Modifier.height(16.dp))
@@ -479,14 +480,14 @@ private fun PermissionDialog(
                         contentColor = MiuixTheme.colorScheme.onBackground,
                     ),
                 ) {
-                    Text(stringResource(R.string.koil_add_loc_cancel), fontSize = 14.sp)
+                    Text(stringResource(R.string.koil_add_loc_cancel), fontSize = KOiLType.BodyLarge)
                 }
                 Button(
                     onClick = onGrant,
                     modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                     colors = ButtonDefaults.buttonColors(color = KOiLColors.Primary, contentColor = Color.White),
                 ) {
-                    Text(stringResource(R.string.koil_add_loc_grant), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.koil_add_loc_grant), fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -508,7 +509,7 @@ private fun OilPriceCard(
     val accent = MiuixTheme.colorScheme.primary            // 深色=#0A84FF 柔和亮蓝 / 浅色=#0071E3
     val containerBg = if (dark) MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
     val containerText = if (dark) accent else KOiLColors.OnPrimaryContainer
-    val urgentColor = if (dark) Color(0xFFFF9F0A) else Color(0xFFE65100)
+    val urgentColor = if (dark) Color(0xFFFF9F0A) else KOiLColors.AttentionDay
     Column(modifier = Modifier.padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -527,7 +528,7 @@ private fun OilPriceCard(
                 var titleScale by remember { mutableFloatStateOf(1f) }
                 Text(
                     text = stringResource(R.string.koil_add_province_price, provinceLabel(uiState.viewProvince)),
-                    fontSize = 16.sp * titleScale,
+                    fontSize = KOiLType.Title * titleScale,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -536,7 +537,7 @@ private fun OilPriceCard(
                 )
                 Text(
                     text = stringResource(R.string.koil_add_price_db_version, uiState.versionLabel),
-                    fontSize = 11.sp,
+                    fontSize = KOiLType.CaptionLarge,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                     maxLines = 1,
                     softWrap = false,
@@ -590,7 +591,7 @@ private fun OilPriceCard(
                     Text(
                         // 省份是数据库主键（中文），显示层用本地化名
                         text = provinceLabel(uiState.viewProvince),
-                        fontSize = 14.sp,
+                        fontSize = KOiLType.BodyLarge,
                         fontWeight = FontWeight.Bold,
                         color = containerText,
                     )
@@ -729,7 +730,7 @@ private fun OilPriceCard(
                                 nextDate.let { if (it.length >= 5) it.substring(5) else it },
                             ),
                             // 与「機制預測」行同字号：两行是同一张卡里的并列结论，12sp 显得矮一截
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Medium,
                             color = textColor,
                             maxLines = 1,
@@ -782,7 +783,7 @@ private fun OilPriceCard(
                                 headRes,
                                 kotlin.math.abs(forecast).toInt().toString(),
                             ) + perLiterText,
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Medium,
                             color = textColor,
                         )
@@ -810,7 +811,7 @@ private fun OilPriceCard(
                                 text = meta.joinToString(
                                     stringResource(R.string.koil_add_forecast_meta_sep),
                                 ) + stringResource(R.string.koil_add_forecast_caveat_inline),
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 color = textColor.copy(alpha = 0.65f),
                             )
                         } else {
@@ -818,7 +819,7 @@ private fun OilPriceCard(
                             Spacer(Modifier.height(3.dp))
                             Text(
                                 text = stringResource(R.string.koil_add_forecast_caveat),
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 color = textColor.copy(alpha = 0.65f),
                             )
                         }
@@ -828,7 +829,7 @@ private fun OilPriceCard(
                             Spacer(Modifier.height(2.dp))
                             Text(
                                 text = stringResource(R.string.koil_add_forecast_fx_stale),
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 color = textColor.copy(alpha = 0.65f),
                             )
                         }
@@ -838,7 +839,7 @@ private fun OilPriceCard(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = stringResource(R.string.koil_add_forecast_fx_pending),
-                            fontSize = 11.sp,
+                            fontSize = KOiLType.CaptionLarge,
                             color = textColor.copy(alpha = 0.65f),
                         )
                     }
@@ -862,7 +863,7 @@ private fun AdjustBadge(
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = KOiLType.CaptionLarge,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
             color = color,
         )
@@ -882,19 +883,19 @@ private fun PriceCell(
     ) {
         Text(
             text = grade,
-            fontSize = 12.sp,
+            fontSize = KOiLType.BodySmall,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
         Spacer(Modifier.height(2.dp))
         Text(
             text = if (price != null) NumberFormat.measure(price) else "--",
-            fontSize = 18.sp,
+            fontSize = KOiLType.Headline,
             fontWeight = FontWeight.Bold,
             color = MiuixTheme.colorScheme.primary,
         )
         Text(
             text = stringResource(R.string.koil_add_unit_per_liter),
-            fontSize = 10.sp,
+            fontSize = KOiLType.Caption,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
     }
@@ -923,7 +924,7 @@ private fun LastRecordBar(
         Column(Modifier.weight(1f)) {
             Text(
                 text = stringResource(R.string.koil_add_last_refuel),
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             if (last != null) {
@@ -932,7 +933,7 @@ private fun LastRecordBar(
                     // 与全站金额口径（两位小数）不一致。
                     text = "${last.reoilDate.takeLast(5)} · ${NumberFormat.measure(last.mileage)} km · " +
                         "${NumberFormat.measure(last.oilAmount)} L · ¥${NumberFormat.money(last.actualAmount)}",
-                    fontSize = 13.sp,
+                    fontSize = KOiLType.Body,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -940,7 +941,7 @@ private fun LastRecordBar(
             } else {
                 Text(
                     text = stringResource(R.string.koil_add_no_record),
-                    fontSize = 13.sp,
+                    fontSize = KOiLType.Body,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
             }
@@ -955,7 +956,7 @@ private fun LastRecordBar(
             ) {
                 Text(
                     text = stringResource(R.string.koil_add_apply_last),
-                    fontSize = 12.sp,
+                    fontSize = KOiLType.BodySmall,
                     fontWeight = FontWeight.Medium,
                     color = Color.White,
                 )
@@ -986,7 +987,7 @@ private fun FormField(
     error: Boolean = false,
     placeholder: String? = null,
 ) {
-    val errorColor = Color(0xFFFF3B30)
+    val errorColor = KOiLColors.Error
     // 错误态：用 TextFieldColors 把边框/标签设为红色；正常态边框透明（无蓝色聚焦框）
     val tfColors = TextFieldDefaults.textFieldColors(
         backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
@@ -1004,7 +1005,7 @@ private fun FormField(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = if (error) errorColor else MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -1024,7 +1025,7 @@ private fun FormField(
             if (placeholder != null && value.isEmpty()) {
                 Text(
                     text = placeholder,
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -1056,7 +1057,7 @@ private fun GradeField(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.koil_add_grade_title),
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -1078,7 +1079,7 @@ private fun GradeField(
             ) {
                 Text(
                     text = "$grade# · $priceText",
-                    fontSize = 16.sp,
+                    fontSize = KOiLType.Title,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f),
@@ -1144,12 +1145,12 @@ private fun PrecheckBanner(uiState: AddUiState) {
     }
     val (bgColor, textColor) = when {
         precheck.isDuplicate || precheck.mileageDecreased ->
-            Color(0x1AFF3B30) to Color(0xFFFF3B30)
+            KOiLColors.ErrorContainer to KOiLColors.Error
         precheck.priceDeviationExceeded ->
-            Color(0x1AFF9500) to Color(0xFFFF9500)
+            KOiLColors.CautionContainer to KOiLColors.Caution
         // "已添加"与"可提交"同用绿色成功态（灰色默认态会像提示又像报错）
         precheck.isReady || precheck.messageKey == "added" ->
-            Color(0x1A34C759) to Color(0xFF34C759)
+            KOiLColors.SuccessContainer to KOiLColors.Success
         else ->
             // 在卡组内做凹槽底：用主题的次要禁用色，深色下比卡片亮一档、浅色下是浅灰
             MiuixTheme.colorScheme.disabledSecondaryVariant to MiuixTheme.colorScheme.onBackgroundVariant
@@ -1165,7 +1166,7 @@ private fun PrecheckBanner(uiState: AddUiState) {
             if (precheck.isReady) {
                 Text(
                     text = "✓",
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = textColor,
                 )
@@ -1173,7 +1174,7 @@ private fun PrecheckBanner(uiState: AddUiState) {
             }
             Text(
                 text = precheckText,
-                fontSize = 13.sp,
+                fontSize = KOiLType.Body,
                 color = textColor,
             )
         }

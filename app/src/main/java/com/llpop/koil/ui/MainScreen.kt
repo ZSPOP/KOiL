@@ -74,6 +74,7 @@ import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 主界面：三 Tab（录入 / 总览 / 设置）+ 底部导航 + 主题三档。
@@ -409,7 +410,7 @@ private fun MiuixFloatingNavigationBarItem(
             Text(
                 text = item.label,
                 color = tint,
-                fontSize = 11.sp,
+                fontSize = KOiLType.CaptionLarge,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

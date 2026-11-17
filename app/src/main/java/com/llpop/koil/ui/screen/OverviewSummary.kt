@@ -53,6 +53,7 @@ import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -92,7 +93,7 @@ internal fun SummaryGrid(
                     ) {
                         Text(
                             text = label,
-                            fontSize = 12.sp,
+                            fontSize = KOiLType.BodySmall,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
                         )
@@ -186,7 +187,7 @@ internal fun SummaryGrid(
                 ) {
                     Text(
                         text = stringResource(R.string.koil_ov_spark_label),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         maxLines = 1,
                         softWrap = false,
@@ -199,7 +200,7 @@ internal fun SummaryGrid(
                             NumberFormat.fixed2(sparkValues.min()),
                             NumberFormat.fixed2(sparkValues.max()),
                         ),
-                        fontSize = 9.5.sp,
+                        fontSize = KOiLType.Micro,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                         maxLines = 1,
                         softWrap = false,
@@ -207,7 +208,7 @@ internal fun SummaryGrid(
                     Spacer(Modifier.weight(1f))
                     Text(
                         text = NumberFormat.fixed2(sparkValues.last()),
-                        fontSize = 12.sp,
+                        fontSize = KOiLType.BodySmall,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                         maxLines = 1,
@@ -216,7 +217,7 @@ internal fun SummaryGrid(
                     Spacer(Modifier.width(2.dp))
                     Text(
                         text = "L/100km",
-                        fontSize = 9.5.sp,
+                        fontSize = KOiLType.Micro,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                         maxLines = 1,
                         softWrap = false,
@@ -234,7 +235,7 @@ internal fun SummaryGrid(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = pluralStringResource(R.plurals.koil_ov_total_count, stats.totalCount, stats.totalCount),
-                    fontSize = 12.sp,
+                    fontSize = KOiLType.BodySmall,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                     modifier = Modifier.weight(1f),
@@ -244,7 +245,7 @@ internal fun SummaryGrid(
                         R.string.koil_ov_avg_distance_line,
                         (stats.avgDistancePerReoil ?: 0.0).toInt(),
                     ),
-                    fontSize = 11.sp,
+                    fontSize = KOiLType.CaptionLarge,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f),
                 )
             }
@@ -261,7 +262,7 @@ internal fun SummaryGrid(
                     Spacer(Modifier.width(7.dp))
                     Text(
                         text = stringResource(R.string.koil_ov_stable_inline),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MiuixTheme.colorScheme.onBackground,
                         maxLines = 1,
@@ -269,7 +270,7 @@ internal fun SummaryGrid(
                     )
                     Text(
                         text = " · $stableNote",
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         maxLines = 1,
                         softWrap = false,
@@ -292,8 +293,8 @@ internal fun StatCell(
 ) {
     // 六个指标统一 21sp（避免字号差异误导重要性）；深色主题用亮色变体
     val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
-    val upColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
-    val downColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32)
+    val upColor = if (darkBg) KOiLColors.AttentionNight else KOiLColors.AttentionDay
+    val downColor = if (darkBg) KOiLColors.GoodNight else KOiLColors.GoodDay
     // 单元格内容水平居中——start 对齐会让三列内容都挤在格子左侧、
     // 右侧留白约 20% 屏宽，视觉整体偏左；居中后三列视觉完全平衡
     Column(modifier = modifier.padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -307,7 +308,7 @@ internal fun StatCell(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = label,
-                fontSize = 11.sp,
+                fontSize = KOiLType.CaptionLarge,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -316,7 +317,7 @@ internal fun StatCell(
             Text(
                 text = value,
                 // 六个指标统一 21sp（不用 24/19sp 混排）
-                fontSize = 21.sp,
+                fontSize = KOiLType.DisplayLarge,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
                 maxLines = 1,
@@ -326,7 +327,7 @@ internal fun StatCell(
                 Spacer(Modifier.width(2.dp))
                 Text(
                     text = unit,
-                    fontSize = 10.sp,
+                    fontSize = KOiLType.Caption,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                     modifier = Modifier.padding(bottom = 3.dp),
                     maxLines = 1,
@@ -340,7 +341,7 @@ internal fun StatCell(
                 val up = pct > 0
                 Text(
                     text = "${if (up) "↑" else "↓"}${NumberFormat.pct(abs(pct))}%",
-                    fontSize = 10.sp,
+                    fontSize = KOiLType.Caption,
                     fontWeight = FontWeight.Medium,
                     color = when {
                         neutral -> MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f)
@@ -352,7 +353,7 @@ internal fun StatCell(
                 // 「较上期」→「持平」，变化不足 0.5% 时说清是没变化，而不是让人猜在跟谁比
                 Text(
                     text = stringResource(R.string.koil_ov_flat),
-                    fontSize = 10.sp,
+                    fontSize = KOiLType.Caption,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                 )
             }
@@ -413,14 +414,14 @@ internal fun AbnormalAlertCard(
             Icon(
                 imageVector = Icons.Filled.Warning,
                 contentDescription = null,
-                tint = Color(0xFFE65100),
+                tint = KOiLColors.AttentionDay,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     text = pluralStringResource(R.plurals.koil_ov_abnormal_count, count, count),
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                 )
@@ -432,7 +433,7 @@ internal fun AbnormalAlertCard(
                             NumberFormat.fixed2(peakConsumption),
                             NumberFormat.fixed2(latestConsumption),
                         ),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         maxLines = 1,
                         softWrap = false,
@@ -443,7 +444,7 @@ internal fun AbnormalAlertCard(
             // 右侧不用「范围 + 条数」两行（跟顶部筛选器、摘要卡全重复），用明确的点击入口
             Text(
                 text = stringResource(R.string.koil_ov_detail_go) + " ›",
-                fontSize = 11.5.sp,
+                fontSize = KOiLType.CaptionXLarge,
                 fontWeight = FontWeight.Medium,
                 color = KOiLColors.Primary,
                 maxLines = 1,

@@ -70,6 +70,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import kotlin.math.ceil
 import java.util.Locale
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 自研日期选择弹窗（柔光玻璃风格）。
@@ -215,7 +216,7 @@ fun KOiLDatePickerDialog(
                         Spacer(Modifier.weight(1f))
                         Text(
                             text = String.format(Locale.ROOT, monthFormat, viewMonth.year, viewMonth.monthValue),
-                            fontSize = 16.sp,
+                            fontSize = KOiLType.Title,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onBackground,
                         )
@@ -251,7 +252,7 @@ fun KOiLDatePickerDialog(
                             ) {
                                 Text(
                                     text = w,
-                                    fontSize = 12.sp,
+                                    fontSize = KOiLType.BodySmall,
                                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 )
                             }
@@ -443,7 +444,7 @@ fun KOiLDatePickerDialog(
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text(
                             text = stringResource(R.string.koil_cal_today),
-                            fontSize = 14.sp,
+                            fontSize = KOiLType.BodyLarge,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.primary,
                             modifier = Modifier.clickable {
@@ -512,7 +513,7 @@ private fun CalendarGrid(
                         ) {
                             Text(
                                 text = date.dayOfMonth.toString(),
-                                fontSize = 14.sp,
+                                fontSize = KOiLType.BodyLarge,
                                 fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
                                 color = when {
                                     isSelected -> Color.White

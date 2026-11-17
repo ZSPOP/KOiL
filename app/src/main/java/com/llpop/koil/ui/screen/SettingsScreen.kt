@@ -91,6 +91,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -330,7 +331,7 @@ fun SettingsScreen(
                             add(CardItem("locationDenied") {
                                 Text(
                                     text = stringResource(R.string.koil_set_location_denied),
-                                    fontSize = 11.sp,
+                                    fontSize = KOiLType.CaptionLarge,
                                     lineHeight = 14.sp,
                                     color = KOiLColors.Warning,
                                     modifier = Modifier
@@ -525,7 +526,7 @@ fun SettingsScreen(
                         add(CardItem("pushDenied") {
                 Text(
                     text = stringResource(R.string.koil_set_price_push_denied),
-                    fontSize = 11.sp,
+                    fontSize = KOiLType.CaptionLarge,
                     lineHeight = 14.sp,
                     color = KOiLColors.Warning,
                     modifier = Modifier
@@ -540,7 +541,7 @@ fun SettingsScreen(
 
                 Text(
                     text = stringResource(R.string.koil_pdb_sync_sources, priceDbStatus.lastSyncSources),
-                    fontSize = 12.sp,
+                    fontSize = KOiLType.BodySmall,
                     lineHeight = 15.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -685,7 +686,7 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = stringResource(R.string.koil_set_crash_log),
-                            fontSize = 18.sp,
+                            fontSize = KOiLType.Headline,
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onBackground,
                             modifier = Modifier.weight(1f),
@@ -693,7 +694,7 @@ fun SettingsScreen(
                         if (crashCount > 0) {
                             Text(
                                 text = pluralStringResource(R.plurals.koil_set_crash_count, crashCount, crashCount),
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
                         }
@@ -702,14 +703,14 @@ fun SettingsScreen(
                     if (crashLogText.isBlank()) {
                         Text(
                             text = stringResource(R.string.koil_set_crash_none),
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
                     } else {
                         // 日志原文（等宽观感：小号字 + 按行呈现；GlassDialog 的 scrollable 负责滚动）
                         Text(
                             text = crashLogText,
-                            fontSize = 11.sp,
+                            fontSize = KOiLType.CaptionLarge,
                             lineHeight = 14.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
@@ -739,7 +740,7 @@ fun SettingsScreen(
                             ) {
                                 Text(
                                     text = stringResource(R.string.koil_set_crash_clear),
-                                    fontSize = 14.sp,
+                                    fontSize = KOiLType.BodyLarge,
                                     fontWeight = FontWeight.Medium,
                                     color = MiuixTheme.colorScheme.onBackground,
                                 )
@@ -765,7 +766,7 @@ fun SettingsScreen(
                         ) {
                             Text(
                                 text = stringResource(R.string.koil_set_crash_export),
-                                fontSize = 14.sp,
+                                fontSize = KOiLType.BodyLarge,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White,
                             )

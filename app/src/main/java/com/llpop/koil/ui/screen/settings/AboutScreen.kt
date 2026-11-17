@@ -122,6 +122,7 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 关于页：结构 / 尺寸 / 字号 / 间距 / 动效。
@@ -562,20 +563,20 @@ private fun AboutContent(
                 Column {
                     Text(
                         text = stringResource(titleRes),
-                        fontSize = 17.sp,
+                        fontSize = KOiLType.TitleLarge,
                         fontWeight = FontWeight.Bold,
                         color = colorScheme.onBackground,
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         text = stringResource(bodyRes),
-                        fontSize = 12.sp,
+                        fontSize = KOiLType.BodySmall,
                         lineHeight = 19.sp,
                         color = colorScheme.onBackgroundVariant,
                     )
                     Spacer(Modifier.height(14.dp))
                     Button(onClick = { sheet = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.koil_common_close), fontSize = 13.sp)
+                        Text(stringResource(R.string.koil_common_close), fontSize = KOiLType.Body)
                     }
                 }
             }
@@ -745,7 +746,7 @@ private fun BoxScope.AboutHero(
             Text(
                 color = colorScheme.onSurfaceVariantSummary,
                 text = versionLabel,
-                fontSize = 14.sp,
+                fontSize = KOiLType.BodyLarge,
                 textAlign = TextAlign.Center,
             )
             // 状态区高度固定：三种文案（正在检查… / 已是最新版本 / 检查失败）与无文案时都占同一份高度，
@@ -763,7 +764,7 @@ private fun BoxScope.AboutHero(
                     Text(
                         color = colorScheme.onSurfaceVariantSummary,
                         text = statusLabel,
-                        fontSize = 14.sp,
+                        fontSize = KOiLType.BodyLarge,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.graphicsLayer { alpha = statusAlpha() },
                     )
