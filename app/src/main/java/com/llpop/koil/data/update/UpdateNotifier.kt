@@ -102,7 +102,11 @@ class UpdateNotifier(
 
         ensureChannel()
         val launchIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            // SINGLE_TOP 与 CLEAR_TOP 必须成对：MainActivity 是默认 standard，
+            // 只有 CLEAR_TOP 时它会走「销毁 + 重建」而不是 onNewIntent
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
             // 点进来直接落在关于页：用户在这条通知上唯一的下一步就是「看看有什么 / 去更新」
             putExtra(EXTRA_OPEN_ABOUT, true)
             // 带上 tag：用户点开就算「已知晓」，据此刷新时间戳，7 天后不再追着提醒
