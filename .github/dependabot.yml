@@ -44,6 +44,14 @@ updates:
           - "org.jetbrains.kotlin*"
           - "com.google.devtools.ksp*"
         update-types: ["minor", "patch"]
+    ignore:
+      # gradle-wrapper 必须人工升级，交给 bot 只会每周红一次。
+      # 原因：`gradle/wrapper/gradle-wrapper.properties` 的 `distributionUrl` 指向腾讯云镜像
+      # （官方源 services.gradle.org 对 9.8.2 持续 504 那次的取舍），并锁了 `distributionSha256Sum`。
+      # dependabot 的 wrapper updater 只认官方地址与内置哈希：镜像 URL 它不认识，
+      # 镜像文件的 sha 也推不出来 → 每次运行都报 `unknown_error`（2026-11-17 实测，run 43987775308）。
+      # 升级 wrapper 时要在同一次提交里同时改 URL 与 sha256，这种事 bot 做不了。
+      - dependency-name: "gradle-wrapper"
 
   - package-ecosystem: "github-actions"
     directory: "/"
