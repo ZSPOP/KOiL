@@ -275,7 +275,7 @@ internal fun PriceDbSection(
                     Text(
                         text = pluralStringResource(R.plurals.koil_pdb_incomplete, priceDbStatus.incompleteProvinceCount, priceDbStatus.incompleteProvinceCount),
                         fontSize = KOiLType.BodySmall,
-                        color = KOiLColors.PriceUp,
+                        color = KOiLColors.Alert,
                     )
                     // 按真实补灌状态分文案——不用恒定一句"后台补灌中，完成后自动刷新"，
                     // 重试预算用尽后没任何东西在跑，恒定文案会让用户对着假进度干等。

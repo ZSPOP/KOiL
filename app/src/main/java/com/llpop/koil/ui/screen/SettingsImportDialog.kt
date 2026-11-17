@@ -144,7 +144,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                             else -> key
                                         },
                                         fontSize = KOiLType.Caption,
-                                        color = KOiLColors.PriceUp,
+                                        color = KOiLColors.Alert,
                                         modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }

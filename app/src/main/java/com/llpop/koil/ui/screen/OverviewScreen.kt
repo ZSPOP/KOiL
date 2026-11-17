@@ -390,7 +390,7 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Delete,
                             label = stringResource(R.string.koil_ov_delete),
-                            bg = KOiLColors.PriceUp,
+                            bg = KOiLColors.Danger,
                         ) {
                             val rec = actionRecord
                             moreMenuFor = null
@@ -557,7 +557,7 @@ fun OverviewScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(KOiLColors.PriceUp)
+                            .background(KOiLColors.Danger)
                             .clickable {
                                 pendingDelete = null
                                 viewModel.deleteRecord(rec.record.id)

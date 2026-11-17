@@ -108,7 +108,7 @@ internal fun SettingRow(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(KOiLColors.PriceUp),
+                        .background(KOiLColors.Alert),
                 )
                 Spacer(Modifier.width(6.dp))
             }
