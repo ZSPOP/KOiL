@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CancellationException
@@ -27,6 +26,7 @@ import kotlinx.serialization.json.Json
 import java.time.LocalDate
 import java.time.YearMonth
 import kotlin.math.abs
+import com.llpop.koil.data.net.KOiLHttpClient
 
 /**
  * 汇率缓存单独一个 DataStore 文件。
@@ -155,23 +155,9 @@ open class KOiLUsdCnyRateRepository(
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private val client: HttpClient = if (engine == null) {
-        HttpClient {
-            install(HttpTimeout) {
-                requestTimeoutMillis = FIRST_LOAD_TIMEOUT_MS
-                connectTimeoutMillis = FIRST_LOAD_TIMEOUT_MS
-                socketTimeoutMillis = FIRST_LOAD_TIMEOUT_MS
-            }
-        }
-    } else {
-        HttpClient(engine) {
-            install(HttpTimeout) {
-                requestTimeoutMillis = FIRST_LOAD_TIMEOUT_MS
-                connectTimeoutMillis = FIRST_LOAD_TIMEOUT_MS
-                socketTimeoutMillis = FIRST_LOAD_TIMEOUT_MS
-            }
-        }
-    }
+    // 15s 是首次同步拉的**天花板**：后台刷新另有外层 withTimeoutOrNull(8s) 收口，
+    // 两层各管一件事——client 超时管"单次请求别挂死"，外层管"整轮刷新别拖住"。
+    private val client: HttpClient = KOiLHttpClient.create(FIRST_LOAD_TIMEOUT_MS, engine)
 
     private val mutex = Mutex()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -1,9 +1,7 @@
 package com.llpop.koil.data.sync
 
 import io.ktor.client.HttpClient
-import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
 import io.ktor.client.request.put
 import io.ktor.client.request.get
@@ -16,6 +14,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.ContentType
 import java.util.Base64
+import com.llpop.koil.data.net.KOiLHttpClient
 
 /** 云端快照在推送前被其它设备改写：调用方须重新拉取并合并后再试 */
 class WebDavConflictException : IllegalStateException("WebDAV precondition failed (412): cloud snapshot changed")
@@ -39,17 +38,8 @@ class WebDavClient(engine: HttpClientEngine? = null) {
 
     // engine 仅供单测注入 MockEngine；生产调用方一律用无参构造，行为不变
     private val client: HttpClient by lazy {
-        val e = engine
-        if (e == null) HttpClient(config()) else HttpClient(e, config())
+        KOiLHttpClient.create(TIMEOUT_MS, engine)
     }
-
-    private fun config(): HttpClientConfig<*>.() -> Unit = {
-            install(HttpTimeout) {
-                requestTimeoutMillis = TIMEOUT_MS
-                connectTimeoutMillis = TIMEOUT_MS
-                socketTimeoutMillis = TIMEOUT_MS
-            }
-        }
 
     /** 目录 URL（如 https://dav.jianguoyun.com/dav/KOiL/）与文件名拼接为完整目标 URL */
     private fun targetUrl(dirUrl: String, fileName: String): String {
