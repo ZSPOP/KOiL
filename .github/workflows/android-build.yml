@@ -70,6 +70,18 @@ jobs:
       - name: gitee-mirror 失败路径演练
         run: bash .github/scripts/test-gitee-mirror.sh
 
+      # 三语一致性：values / values-en / values-zh-rTW 各 400 strings + 22 plurals。
+      # Android 的回落是静默的——values-en 少一条 key，英文界面不崩不报，只是悄悄显示简中。
+      # 这类缺陷只有在刷到那一屏时才看得见，所以必须机器兜住，不能靠人改的时候数一遍。
+      # 先跑 --self-test 演练四种坏法（缺 key/多 key/占位符 arity/plurals 缺 other），
+      # 确认检查本身没退化，再检查真实文件——和 gitee-mirror 的演练是同一个思路：
+      # 不让「改坏了还全绿」这种情况存在。
+      # 纯 Python 标准库，秒级，无 JDK 依赖，所以同样放在 Gradle 之前。
+      - name: 三语 strings.xml 一致性检查
+        run: |
+          python3 scripts/check_i18n_parity.py --self-test
+          python3 scripts/check_i18n_parity.py
+
       - name: Set up JDK 21
         uses: actions/setup-java@v6
         with:
