@@ -180,7 +180,10 @@ class KOiLApplication : Application() {
                     runCatching {
                         // 查到新版本就发一条系统通知（按 tag 去重、受设置页「系统通知」总开关约束）。
                         // 顺序固定：先落库再通知——通知点进来时关于页要靠库里那条 tag 撑起胶囊。
-                        GlobalContext.get().get<UpdateChecker>().checkIfDue()?.let { target ->
+                        // 节流命中（checkIfDue 返回 null）时退回库里已有的新版本：
+                        // 否则关于页红点/胶囊已经在说有新版，通知栏却要干等下一个 45 分钟窗口。
+                        val checker = GlobalContext.get().get<UpdateChecker>()
+                        (checker.checkIfDue() ?: checker.storedNewerTarget())?.let { target ->
                             GlobalContext.get().get<UpdateNotifier>().notifyIfNeeded(target)
                         }
                     }.onFailure { Log.w("KOiL", "Foreground update check failed: ${it.message}") }
@@ -203,7 +206,10 @@ class KOiLApplication : Application() {
         // 失败（离线 / 限流 / 超时）静默吞掉，保留上一次的 tag，不打扰、不显示假状态。
         appScope.launch {
             runCatching {
-                GlobalContext.get().get<UpdateChecker>().checkIfDue()?.let { target ->
+                // 节流命中（checkIfDue 返回 null）时退回库里已有的新版本：
+                // 否则关于页红点/胶囊已经在说有新版，通知栏却要干等下一个 45 分钟窗口。
+                val checker = GlobalContext.get().get<UpdateChecker>()
+                (checker.checkIfDue() ?: checker.storedNewerTarget())?.let { target ->
                     GlobalContext.get().get<UpdateNotifier>().notifyIfNeeded(target)
                 }
             }.onFailure { Log.w("KOiL", "Startup update check failed: ${it.message}") }

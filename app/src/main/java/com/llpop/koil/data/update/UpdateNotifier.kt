@@ -33,8 +33,8 @@ class UpdateNotifier(
     private val settings: AppSettings,
 ) {
 
-    /** 通道 ID：更新不是紧急事件，用 DEFAULT，不抢 heads-up */
     companion object {
+        /** 通道 ID 保持不变：改名只会让系统设置里多出一条删不掉的旧通道 */
         const val CHANNEL_ID = "app_update"
         private const val NOTIFICATION_ID = 1100
 
@@ -44,16 +44,34 @@ class UpdateNotifier(
         const val EXTRA_TAG = "com.llpop.koil.extra.UPDATE_TAG"
     }
 
-    private fun ensureChannel() {
+    /**
+     * 建通道。ID 始终是 [CHANNEL_ID]，不换名。
+     *
+     * 难点是「重要性一经创建不可修改」：旧版按 DEFAULT 建过这条通道，
+     * 现在要顶部弹出就必须是 HIGH。做法是**只做一次**「删掉旧通道再按 HIGH 重建」，
+     * 并用一个落盘标记记住已迁移过——否则每次冷启动都会把用户在系统设置里手改的
+     * 重要性再顶回 HIGH，等于把用户的选择反复抹掉。
+     */
+    private suspend fun ensureChannel() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (!settings.notifyChannelMigrated.first()) {
+            val existing = nm.getNotificationChannel(CHANNEL_ID)
+            if (existing != null && existing.importance < NotificationManager.IMPORTANCE_HIGH) {
+                nm.deleteNotificationChannel(CHANNEL_ID)
+            }
+            settings.setNotifyChannelMigrated(true)
+        }
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.koil_noti_update_channel),
-                // 更新提醒不该打断手上正在做的事：DEFAULT 出声但不弹横幅
-                NotificationManager.IMPORTANCE_DEFAULT,
+                // IMPORTANCE_HIGH：顶部弹出的横幅 + 提示音，同时保留在通知栏里。
+                // 「有新版本」是用户需要当场决定装不装的事，值得打断一次；点开或划掉就没了。
+                NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = context.getString(R.string.koil_noti_update_channel_desc)
+                // 不开「长按可改锁屏可见性」之外的额外开关：横幅 + 声音由 HIGH 自带
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
             nm.createNotificationChannel(channel)
         }
@@ -126,7 +144,10 @@ class UpdateNotifier(
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // API 26+ 由通道 IMPORTANCE_HIGH 决定 heads-up，这行是给旧版本兜底；
+            // 显式 PRIORITY_HIGH 保证「顶部弹出 + 通知栏常驻」两件事同时成立
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)

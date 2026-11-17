@@ -73,6 +73,16 @@ class ApkUpdater(
     private val _state = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
     val state: StateFlow<UpdateDownloadState> = _state.asStateFlow()
 
+    /**
+     * 「刚点过安装、但缺『安装未知应用』授权」：**不是失败**。
+     *
+     * 包已经落在盘上、`Ready` 这个事实没有变，授权只是流程被打断了一次。
+     * 以前这里直接 fail(NO_PERMISSION)，`Ready` 被打成 `Failed`，
+     * 关于页状态行的「安装包已就绪」随之淡出、只剩胶囊——用户以为包没了，冷启动才又冒出来。
+     */
+    private val _pendingPermission = MutableStateFlow(false)
+    val pendingPermission: StateFlow<Boolean> = _pendingPermission.asStateFlow()
+
     private var job: Job? = null
 
     /** 已下好的 tag（用于「已下好就再拉一次安装器」，避免重复下载几 MB）
@@ -101,16 +111,20 @@ class ApkUpdater(
     init {
         scope.launch {
             try {
+                // 历史遗留的单文件包（不带版本）先删掉：它既无法辨认版本，也没人认领
+                apkDir()?.resolve(LEGACY_APK_NAME)?.delete()
                 val saved = settings.updateReadyTag.first()
                 if (saved.isNotBlank()) {
-                    if (isReadyFor(saved, saved, apkFile())) {
+                    if (isReadyFor(saved, saved, apkFile(saved))) {
                         readyTag = saved
                         _state.value = UpdateDownloadState.Ready(saved)
                     } else {
-                        // 文件已被系统清掉（外部存储 evict / 清数据）→ 落盘 tag 一并失效
+                        // 文件已被系统清掉（外部存储 evict / 清数据 / 用户手动删除）→ 落盘 tag 一并失效
                         settings.setUpdateReadyTag(null)
                     }
                 }
+                // 只留当前 tag 的那一份：盘上最多一个包，用户不用猜哪个该删
+                prunePackages(keep = readyTag?.let { apkFile(it) })
             } finally {
                 // 无论成功失败都要放行 download()：卡住它等于「点了更新没反应」
                 restored.complete(Unit)
@@ -123,7 +137,7 @@ class ApkUpdater(
         scope.launch { settings.setUpdateReadyTag(tag) }
     }
 
-    private fun isReady(tag: String): Boolean = isReadyFor(tag, readyTag, apkFile())
+    private fun isReady(tag: String): Boolean = isReadyFor(tag, readyTag, apkFile(tag))
 
     /**
      * 开始下载。[url] 是 UpdateChecker 落库的 Gitee 资产直链。
@@ -145,7 +159,7 @@ class ApkUpdater(
                     (_state.value as? UpdateDownloadState.Failed)?.reason == UpdateFailure.LAUNCH
                 ) {
                     // 只剩「文件在但拉不起安装器」：包不可用，删掉让下一次点击重下
-                    apkFile()?.delete()
+                    apkFile(tag)?.delete()
                     readyTag = null
                     persistReadyTag(null)
                 }
@@ -154,7 +168,7 @@ class ApkUpdater(
             // 不能用 runCatching 包 fetch：它会把 CancellationException 也吞成 null，
             // 于是「用户取消」被报成 DOWNLOAD 失败，横幅从「发现新版本」变成「下载失败」。
             val result = try {
-                fetch(url)
+                fetch(tag, url)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -223,16 +237,38 @@ class ApkUpdater(
      * 只给 UI 显示体积用（冷启动恢复态没有「本次下载」的采样，体积只能从文件读）。
      */
     fun readyPackageBytes(): Long? =
-        apkFile()?.takeIf { it.exists() }?.length()?.takeIf { it > 0 }
+        readyTag?.let { apkFile(it) }?.takeIf { it.exists() }?.length()?.takeIf { it > 0 }
 
     /** 已下好则直接拉起安装器；返回 false 表示还没下好或没拉起来 */
     fun installReady(tag: String): Boolean {
         // tag 对不上就不能装：正式路径上躺着的可能是**上一个**版本的包（新的还没下好），
         // 拿它去装等于把用户装回旧版
-        if (!isReady(tag)) return false
-        val file = apkFile() ?: return false
-        if (!file.exists()) return false
+        if (!isReady(tag)) {
+            // 盘上已经没有这份包（用户手动删、系统清理了外部存储）：内存与落盘记录一起作废，
+            // UI 下一帧就会收起「安装包已就绪」。留着一个不存在的包继续显示，是在骗人。
+            verifyReady()
+            return false
+        }
+        val file = apkFile(tag) ?: return false
         return install(file)
+    }
+
+    /**
+     * 用磁盘事实校正「已下好」：文件不在了就把 [readyTag]、落盘标记与 `Ready` 状态一起清掉。
+     *
+     * 之前只信内存里的 `readyTag`，用户在文件管理器里删掉 APK 后回来看，
+     * 关于页照旧写着「安装包已就绪」，点「安装最新版」也毫无反应——因为 [installReady] 里
+     * `file.exists()` 为 false 就静默 return 了。
+     *
+     * @return 仍然有效时返回该 tag，否则 null
+     */
+    fun verifyReady(): String? {
+        val tag = readyTag ?: return null
+        if (isReadyFor(tag, tag, apkFile(tag))) return tag
+        readyTag = null
+        persistReadyTag(null)
+        _state.value = UpdateDownloadState.Idle
+        return null
     }
 
     private fun install(file: File): Boolean {
@@ -240,8 +276,9 @@ class ApkUpdater(
         if (!app.packageManager.canRequestPackageInstalls()) {
             // 没有「安装未知应用」授权时系统安装器直接拒，用户看不出原因。
             // 先跳到本应用的授权页，回来后再点一次；不做静默重试。
-            // 保留 readyTag：文件已经下好了，用户授权回来再点就应直接进安装器
-            fail(UpdateFailure.NO_PERMISSION)
+            // **不调 fail()**：Ready 是磁盘事实，打成 Failed 会把状态行的「安装包已就绪」打没；
+            // 用 pendingPermission 记下「等授权」，页面 ON_RESUME 拿到授权后自动续装。
+            _pendingPermission.value = true
             runCatching {
                 app.startActivity(
                     Intent(
@@ -253,6 +290,7 @@ class ApkUpdater(
             return false
         }
 
+        _pendingPermission.value = false
         val uri = FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, APK_MIME)
@@ -271,9 +309,28 @@ class ApkUpdater(
         }.getOrDefault(false)
     }
 
-    private fun apkFile(): File? {
-        val base = app.getExternalFilesDir(null) ?: app.cacheDir
-        return File(base, "updates/$APK_NAME")
+    private fun apkDir(): File? =
+        File(app.getExternalFilesDir(null) ?: app.cacheDir, "updates")
+
+    /**
+     * 正式包的路径**带版本**：`updates/KOiL-V1.2.6.apk`。
+     *
+     * 原来叫固定的 `KOiL-update.apk`，盘上除了 DataStore 里那个 tag 没有任何版本线索——
+     * 用户在文件管理器里看到一串同名文件时无从判断该删哪个，旧包也永远认不出是谁的。
+     */
+    private fun apkFile(tag: String): File? =
+        apkDir()?.resolve("KOiL-V${normalizeVersion(tag)}.apk")
+
+    /** 只保留 [keep] 这一份包，其余 `.apk` 全删（临时 `.part` 不碰，由下载自己管理） */
+    private fun prunePackages(keep: File?) {
+        val dir = apkDir() ?: return
+        val files = dir.listFiles() ?: return
+        val keepPath = keep?.absolutePath
+        files.forEach { f ->
+            if (f.isFile && f.name.endsWith(".apk") && f.absolutePath != keepPath) {
+                runCatching { f.delete() }
+            }
+        }
     }
 
     /**
@@ -288,7 +345,7 @@ class ApkUpdater(
         return File(base, "updates/$APK_PART_NAME")
     }
 
-    private suspend fun fetch(url: String): FetchResult {
+    private suspend fun fetch(tag: String, url: String): FetchResult {
         val dest = partFile() ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
         dest.parentFile?.mkdirs()
         // 只清临时文件：这次下载不继承上一轮的半截字节。**正式包不动**，它可能正等着安装
@@ -366,7 +423,7 @@ class ApkUpdater(
                 }
                 // 三项校验都过了才替换正式包：替换后 readyTag 才跟着换，
                 // 之前「下好没装」的旧包一直是磁盘上唯一可安装的那份
-                val final = apkFile() ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
+                val final = apkFile(tag) ?: return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法创建缓存目录")
                 val moved = runCatching {
                     java.nio.file.Files.move(
                         dest.toPath(),
@@ -379,6 +436,8 @@ class ApkUpdater(
                     dest.delete()
                     return FetchResult.Bad(UpdateFailure.DOWNLOAD, "无法替换更新包")
                 }
+                // 新包已落地，旧版本的包就没有存在意义（装也不该回退装它），一并清掉
+                prunePackages(keep = final)
                 return FetchResult.Ok(final)
             } finally {
                 runCatching { conn.disconnect() }
@@ -419,7 +478,8 @@ class ApkUpdater(
 
     private companion object {
         const val APK_MIME = "application/vnd.android.package-archive"
-        const val APK_NAME = "KOiL-update.apk"
+        /** 历史文件名：单文件、不带版本，盘上无从判断对应哪个 tag。启动时清掉 */
+        const val LEGACY_APK_NAME = "KOiL-update.apk"
         const val APK_PART_NAME = "KOiL-update.part"
         const val MAX_REDIRECT = 5
         const val CONNECT_TIMEOUT_MS = 10_000

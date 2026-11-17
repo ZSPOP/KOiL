@@ -103,6 +103,8 @@ import com.llpop.koil.data.update.RefreshOutcome
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateFailure
+import com.llpop.koil.data.update.UpdateNotifier
+import com.llpop.koil.data.update.UpdateTarget
 import com.llpop.koil.data.update.resolveCapsuleState
 import com.llpop.koil.data.update.showsReadySlot
 import com.llpop.koil.data.update.formatReleaseDate
@@ -234,6 +236,7 @@ private fun AboutContent(
     // —— 更新状态：只在本次运行内有效（冷启动回到 Idle）——
     val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
     val apkUpdater = remember { GlobalContext.get().get<ApkUpdater>() }
+    val updateNotifier = remember { GlobalContext.get().get<UpdateNotifier>() }
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf<AboutUpdateStatus>(AboutUpdateStatus.Idle) }
     // 「直链还没就绪、重查一次也没拿到」的下载侧失败：版本确实存在，胶囊不能消失
@@ -281,8 +284,16 @@ private fun AboutContent(
                 )
                 statusSlotAlpha.animateTo(1f, tween(200))
             }
-            // 失败 / 取消 / 回 Idle：这块没有可说的了，淡出
-            else -> if (statusSlot != null) {
+            // 失败 / 取消 / 回 Idle：包不在盘上、或说的不是当前新版，才淡出。
+            // 包还在（例如拉起安装器失败、或刚点安装去系统授权页）就保留结论——
+            // 这条状态说的是磁盘上的事实，不该被一次流程中断擦掉。
+            else -> if (showsReadySlot(newerTag, apkUpdater.readyTagSnapshot)) {
+                statusSlot = StatusSlot.Ready(
+                    sizeMb = apkUpdater.readyPackageBytes()
+                        ?.let { "%.1f".format(java.util.Locale.ROOT, it / 1048576f) }
+                )
+                statusSlotAlpha.animateTo(1f, tween(200))
+            } else if (statusSlot != null) {
                 statusSlotAlpha.animateTo(0f, tween(250))
                 statusSlot = null
             }
@@ -294,11 +305,14 @@ private fun AboutContent(
     // 用户授权完回到本页（ON_RESUME）就自动续上，不用再点一次
     val context = LocalContext.current
     LifecycleResumeEffect(Unit) {
-        val st = apkUpdater.state.value
+        // 用户可能在文件管理器里把包删了、或系统清理了外部存储：先用磁盘事实校正一遍，
+        // 否则页面会一直写着「安装包已就绪」，点「安装最新版」又毫无反应。
+        apkUpdater.verifyReady()
         val tag = (status as? AboutUpdateStatus.Newer)?.tag
-        if (st is UpdateDownloadState.Failed &&
-            st.reason == UpdateFailure.NO_PERMISSION &&
-            tag != null &&
+        // 点过安装、被「安装未知应用」授权页打断：拿到授权就自动续装，不用再点一次。
+        // 不再依赖 Failed 状态——缺授权已经被判定为「流程中断」，不是下载/安装失败。
+        if (tag != null &&
+            apkUpdater.pendingPermission.value &&
             context.packageManager.canRequestPackageInstalls()
         ) {
             apkUpdater.installReady(tag)
@@ -322,6 +336,13 @@ private fun AboutContent(
      */
     suspend fun runCheck(): AboutUpdateStatus {
         val next = applyOutcome(updateChecker.refresh())
+        // 手动检查与进页检查同样是「发现新版本」的出口：通知不能只挂在后台那条受 45 分钟
+        // 节流约束的路上，否则会出现「胶囊/红点已经在说有新版，通知栏却一条都没有」。
+        // 走同一个 notifyIfNeeded，自带 tag 去重与「系统通知」总开关判断，不会变成两条。
+        if (next is AboutUpdateStatus.Newer) {
+            runCatching { updateNotifier.notifyIfNeeded(UpdateTarget(next.tag, next.apkUrl)) }
+                .onFailure { android.util.Log.w("KOiL", "notify on manual check failed: ${it.message}") }
+        }
         // 这里**不再**丢掉旧包：删除的时机推到「新包真正落地」（ApkUpdater 用临时文件下载、
         // 校验通过才原子替换）。否则「下好 V1.2.4 没装 → 出了 V1.2.5 → 下载失败」会两空。
         return next
@@ -338,16 +359,34 @@ private fun AboutContent(
         scope.launch {
             isChecking = true
             downloadFailed = false
-            status = runCheck()
-            isChecking = false
+            try {
+                status = runCheck()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 以前这里没有 try/finally：任意一次异常都会让 isChecking 永久停在 true，
+                // 之后点 hero 区（检查）与进页自动检查都会在第一行静默 return，表现得「点了没反应」。
+                android.util.Log.w("KOiL", "manual update check failed: ${e.message}")
+                status = AboutUpdateStatus.Failed
+            } finally {
+                isChecking = false
+            }
         }
     }
 
     // 进关于页自动查一次：这一页是唯一能发起检查的地方，进来就该给结论
     LaunchedEffect(Unit) {
         isChecking = true
-        status = runCheck()
-        isChecking = false
+        try {
+            status = runCheck()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("KOiL", "auto update check failed: ${e.message}")
+            status = AboutUpdateStatus.Failed
+        } finally {
+            isChecking = false
+        }
     }
 
     // 冷启动静默检查已经发现的版本：先用库里的值把胶囊撑起来，不用等这次请求回来
@@ -430,6 +469,11 @@ private fun AboutContent(
     // 各段淡出进度在 graphicsLayer 内计算，读点全部落在绘制阶段
     val versionCodeProgress = { ((scrollProgress() - 0.05f) / 0.15f).coerceIn(0f, 1f) }
     val iconProgress = { ((scrollProgress() - 0.35f) / 0.15f).coerceIn(0f, 1f) }
+    // 胶囊单独一条更早的曲线。它与信息卡之间只有 heroToCard = 50dp，
+    // 卡片顶到胶囊只需要滚到 p ≈ 0.115；照 logo 那条 0.35→0.5 的曲线，
+    // 卡片压上来时胶囊还完全不透明，就成了「悬在卡片上的胶囊」。
+    // 这条曲线在 p ≈ 0.11 处收干净，卡片碰到之前它已经化掉。
+    val capsuleProgress = { ((scrollProgress() - 0.02f) / 0.09f).coerceIn(0f, 1f) }
 
     // logo 下方：本机版本；有新版本时追加「→ 新版本」
     val newerVersion = (status as? AboutUpdateStatus.Newer)?.version
@@ -479,11 +523,18 @@ private fun AboutContent(
         end = innerPadding.calculateEndPadding(layoutDirection),
     )
 
-    // progress 到 0.5 时 logo 与胶囊已经完全透明（alpha = (progress - 0.35) / 0.15），此后 hero 不再接收点击：
+    // logo 在 progress 到 0.5 时完全透明（alpha = (progress - 0.35) / 0.15），此后 hero 不再接收点击：
     // 它压在上层，继续接收等于让一块「看不见的区域」吃掉卡片的点击。
     // 阈值必须跟着淡出完成点走，写 1f 会留出半屏幽灵可点区（#81 一轮评审指出的就是这一处）。
     // derivedStateOf 只在跨阈值时翻转，不会跟着每一帧滚动重组。
     val heroInteractive by remember { derivedStateOf { scrollProgress() < 0.5f } }
+
+    // 胶囊淡完（p ≈ 0.11）就不再组合：ghost 按钮会让一块看不见的胶囊吃掉滑上来的卡片点击
+    val capsuleVisible by remember { derivedStateOf { scrollProgress() < 0.11f } }
+
+    // hero 占位高度：与列表里 logoSpacer 的 Spacer 高度同源，只算一次。
+    val heroSpacerHeight = logoHeightDp + 52.dp +
+        logoPadding.calculateTopPadding() - scrollPadding.calculateTopPadding() + heroToCard
 
     BgEffectBackground(
         dynamicBackground = effectBackground,
@@ -514,12 +565,7 @@ private fun AboutContent(
                 //    logo + 版本号 + 状态区 + 状态区到胶囊 + 胶囊本身 —— 这里不能再补 statusToCapsule
                 //    和胶囊高度，补一次就多出一整段空白（#81 一轮评审抓到的 114dp 错位就是这个）；
                 // 2) hero 从页面顶端起算，而这一项从 contentPadding 之后起算，两者差 scrollPadding.top，必须抵掉。
-                Spacer(
-                    Modifier.height(
-                        logoHeightDp + 52.dp + logoPadding.calculateTopPadding() -
-                            scrollPadding.calculateTopPadding() + heroToCard,
-                    ),
-                )
+                Spacer(Modifier.height(heroSpacerHeight))
             }
 
 
@@ -643,6 +689,8 @@ private fun AboutContent(
             backdrop = backdrop,
             logoBlend = logoBlend,
             iconProgress = iconProgress,
+            capsuleProgress = capsuleProgress,
+            capsuleVisible = capsuleVisible,
             versionCodeProgress = versionCodeProgress,
             versionLabel = heroVersionLabel,
             statusLabel = shownStatusLabel,
@@ -705,7 +753,12 @@ private fun BoxScope.AboutHero(
     backdrop: top.yukonga.miuix.kmp.blur.LayerBackdrop?,
     logoBlend: List<BlendColorEntry>,
     iconProgress: () -> Float,
+    /** 胶囊单独一条更早的淡出曲线：卡片碰上来之前必须已经化掉 */
+    capsuleProgress: () -> Float,
+    /** 胶囊是否仍然组合：淡完之后不再组合，避免留下看不见却能点的幽灵按钮 */
+    capsuleVisible: Boolean,
     versionCodeProgress: () -> Float,
+    /** hero 整体向上位移的像素（与列表滚动同速）：胶囊因此不会停在原地被卡片穿过 */
     /** logo 下方的版本号文案：`1.1.17`，有新版本时是 `1.1.17 → 1.1.18` */
     versionLabel: String,
     /** 版本号下方的状态文案（正在检查… / 已是最新版本 / 检查失败）：无文案时留空位，胶囊不上下跳 */
@@ -855,7 +908,7 @@ private fun BoxScope.AboutHero(
                 }
             }
         }
-        // 状态区到胶囊顶：胶囊属于 hero，上滑时跟着整块一起淡出，不随列表上移
+        // 状态区到胶囊顶：胶囊属于 hero，只淡出不位移
         Spacer(Modifier.height(statusToCapsule))
         // 槽位恒为一个胶囊高（52dp），内容在槽位里居中。无论有没有新版、是否正在下载、是否滚动，
         // 槽位都是同一个高度——hero 总高不跳，信息卡不上下移动。
@@ -863,12 +916,12 @@ private fun BoxScope.AboutHero(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(capsuleSlotHeight)
-                // 胶囊属于 hero，必须跟 logo 同一条淡出曲线：否则上滑时 logo 与版本号已经淡没了，
-                // 这块仍以全不透明压在滚上来的卡片上，看起来就是一个悬空的胶囊。
-                .graphicsLayer { alpha = 1f - iconProgress() },
+                // 胶囊只淡出、不位移：曲线比 logo 更早（卡片碰上来之前就已化掉），
+                // 否则它就是一粒悬在信息卡上方的胶囊。
+                .graphicsLayer { alpha = 1f - capsuleProgress() },
             contentAlignment = Alignment.Center,
         ) {
-            if (hasCapsule && interactive) {
+            if (hasCapsule && interactive && capsuleVisible) {
                 capsule()
             } else {
                 // interactive == false 时不组合胶囊：alpha 已经到 0，留着会变成看不见却能点的幽灵按钮，
