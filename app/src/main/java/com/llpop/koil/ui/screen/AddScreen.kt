@@ -377,7 +377,8 @@ fun AddScreen(
 }
 
 // ===== 省份选择弹窗 =====
-private val PROVINCES = Provinces.ALL
+// PROVINCES 见 ScreenShared.kt（原本设置页 / 总览页 / 本页各有一份 file-private 的同名表，
+// 拆文件后它们会撞名，统一收到共享文件里）。
 
 @Composable
 private fun ProvincePickerDialog(
