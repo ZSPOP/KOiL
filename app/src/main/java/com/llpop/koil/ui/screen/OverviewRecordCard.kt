@@ -123,7 +123,7 @@ internal fun RecordCard(
                                 Brush.verticalGradient(
                                     listOf(
                                         if (isHigh) KOiLColors.AttentionDay else KOiLColors.NeutralAmber,
-                                        if (isHigh) Color(0xFFD84315) else Color(0xFFD97706),
+                                        if (isHigh) KOiLColors.AttentionDayDeep else KOiLColors.NeutralAmberDeep,
                                     )
                                 )
                             )

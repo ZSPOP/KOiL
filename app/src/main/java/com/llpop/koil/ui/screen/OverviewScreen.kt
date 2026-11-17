@@ -86,6 +86,7 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 
 
 
@@ -380,7 +381,7 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Edit,
                             label = stringResource(R.string.koil_ov_edit),
-                            bg = Color(0xFF2563EB),
+                            bg = if (LocalKOiLDarkTheme.current) KOiLColors.PrimaryDark else KOiLColors.Primary,
                         ) {
                             moreMenuFor = null
                             actionRecord?.let { viewModel.startEdit(it.record) }
