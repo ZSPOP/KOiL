@@ -29,7 +29,7 @@ enum class AboutCapsuleState {
  *
  * 判定顺序有讲究：
  * 1. **先判失败，但「包还在」时让位给安装**：失败是终止态，可它不只代表下载出错 ——
- *    「已下好却没装成」（用户从安装器返回没点安装、首次安装被未知来源拦下）也落在这里。
+ *    「已下好却没装成」（从安装器返回没点安装、首次安装被未知来源拦下）也落在这里。
  *    此时 `readyTag` 仍等于当前 tag，包是完好的，应显示「安装最新版」而**不是**「下载失败」，
  *    否则用户以为要重下 6.6MB，点下去却直接进了安装器。
  * 2. `extraFailed` 优先于一切：那是「直链还没就绪、重查仍拿不到」的下载侧失败，
@@ -53,8 +53,8 @@ fun resolveCapsuleState(
     if (newer == null && !extraFailed) return AboutCapsuleState.Hidden
 
     if (extraFailed) return AboutCapsuleState.Failed
-    // 失败态要先让位给「包其实还在」：下载完自动拉起安装器、用户没装就返回，
-    // 或首次安装被「未知来源」拦下，都会停在这个失败态上；此时盘上的包是完好的，
+    // 失败态要先让位给「包其实还在」：用户点了安装却没装成（从安装器返回、或首次安装被
+    // 「未知来源」拦下），都会停在这个失败态上；此时盘上的包是完好的，
     // 再报「下载失败」等于告诉用户要重下 6.7MB，而点下去其实直接进安装器。
     if (downloadState is UpdateDownloadState.Failed) {
         if (newer != null && readyTag == newer.tag) return AboutCapsuleState.Install
@@ -66,3 +66,16 @@ fun resolveCapsuleState(
     if (newer != null && readyTag == newer.tag) return AboutCapsuleState.Install
     return AboutCapsuleState.Newer
 }
+
+/**
+ * 状态行的「安装包已就绪 · x MB」要不要显示。
+ *
+ * 条件是「当前新版 == 盘上那个包」。只看 `readyTag != null` 不够：
+ * 盘上可能躺着上一个版本的包，界面已经提示有新版本，这时说「安装包已就绪」
+ * 会让人以为能直接装，而胶囊其实写着「有新版本」。
+ *
+ * 抽成纯函数是为了能被单测钉住——它和 [resolveCapsuleState] 的第 4 条判定同源，
+ * 两处一旦各写一份，就会出现「胶囊说有包、状态行说没包」。
+ */
+fun showsReadySlot(newerTag: String?, readyTag: String?): Boolean =
+    newerTag != null && readyTag != null && newerTag == readyTag

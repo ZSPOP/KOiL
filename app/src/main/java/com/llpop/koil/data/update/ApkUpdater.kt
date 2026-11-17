@@ -170,7 +170,10 @@ class ApkUpdater(
                     readyTag = tag
                     persistReadyTag(tag)
                     _state.value = UpdateDownloadState.Ready(tag)
-                    installReady(tag)
+                    // 这里**不**自动拉起安装器。自动拉起会让系统安装器立刻盖住关于页：
+                    // 「条走满 → 100% 定格 1.5 秒 → 安装包已就绪」这段收尾还没画完就被切到后台，
+                    // 用户回到页面时看到的只是一个「怎么没反应就跳走了」的黑屏闪烁。
+                    // 收尾动画与「安装最新版」胶囊都需要这 1.5 秒，装不装由用户点胶囊决定。
                 }
             }
         }
