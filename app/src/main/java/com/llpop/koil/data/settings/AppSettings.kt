@@ -68,8 +68,6 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_LAST_NOTIFIED_DATE = stringPreferencesKey("KOiL-price-last-notified-date")
         private val KEY_NOTIFY_UPDATE_TAG = stringPreferencesKey("KOiL-notify-update-tag")
         private val KEY_NOTIFY_UPDATE_AT = longPreferencesKey("KOiL-notify-update-at")
-        // 「更新通知通道已迁移到 IMPORTANCE_HIGH」的一次性标记（迁移细节见 UpdateNotifier.ensureChannel）
-        private val KEY_NOTIFY_CHANNEL_MIGRATED = booleanPreferencesKey("KOiL-notify-channel-high")
         private val KEY_PRICE_LAST_WINDOW_REMINDED = stringPreferencesKey("KOiL-price-last-window-reminded")
         // 窗口日当天"今晚24点生效"提醒去重（按窗口日标记）
         private val KEY_PRICE_LAST_WINDOW_DAY_REMINDED = stringPreferencesKey("KOiL-price-last-window-day-reminded")
@@ -273,13 +271,6 @@ class AppSettings(private val context: Context) {
     val notifyUpdateAt: Flow<Long> = context.KOiLDataStore.data.distinctValue { it[KEY_NOTIFY_UPDATE_AT] ?: 0L }
     suspend fun setNotifyUpdateAt(at: Long) {
         context.KOiLDataStore.edit { it[KEY_NOTIFY_UPDATE_AT] = at }
-    }
-
-    /** 通道重要性迁移是否已做过（只迁一次，之后尊重用户在系统里的手改） */
-    val notifyChannelMigrated: Flow<Boolean> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_NOTIFY_CHANNEL_MIGRATED] ?: false }
-    suspend fun setNotifyChannelMigrated(v: Boolean) {
-        context.KOiLDataStore.edit { it[KEY_NOTIFY_CHANNEL_MIGRATED] = v }
     }
 
     // ---- 上次已推送调价的生效日（避免重复通知）----

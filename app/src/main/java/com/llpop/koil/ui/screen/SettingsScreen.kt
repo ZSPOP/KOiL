@@ -147,6 +147,10 @@ fun SettingsScreen(
     }
     // 用户点了开关想开但未授权 → 跳系统通知设置后等待返回；ON_RESUME 检测到已授权则自动打开开关
     var pendingOpenPush by remember { mutableStateOf(false) }
+    // 「应用更新」渠道被单独关掉时，更新通知会被系统直接丢弃，而开关本身看不出来——所以在副标题里点明
+    var updateChannelOff by remember {
+        mutableStateOf(com.llpop.koil.data.update.isUpdateChannelDisabled(context))
+    }
     // 返回前台时刷新权限状态（用户可能在系统设置里改动过通知/定位权限）
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -155,6 +159,7 @@ fun SettingsScreen(
                 pushPermissionGranted =
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
+                updateChannelOff = com.llpop.koil.data.update.isUpdateChannelDisabled(context)
                 locationPermissionGranted = viewModel.hasLocationPermission()
                 // 跳系统通知设置授权返回后，自动补开推送开关（用户刚表达过"想开"的意图）
                 if (pushPermissionGranted && pendingOpenPush) {
@@ -249,7 +254,11 @@ fun SettingsScreen(
                     add(CardItem("notify") {
                         SettingSwitchRow(
                             title = stringResource(R.string.koil_set_notify),
-                            subtitle = stringResource(R.string.koil_set_notify_sub),
+                            subtitle = if (updateChannelOff) {
+                                stringResource(R.string.koil_set_notify_sub_channel_off)
+                            } else {
+                                stringResource(R.string.koil_set_notify_sub)
+                            },
                             checked = uiState.notifyEnabled && pushPermissionGranted,
                             onCheckedChange = { on ->
                                 if (on) {

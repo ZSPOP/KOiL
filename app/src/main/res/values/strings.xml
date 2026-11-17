@@ -312,6 +312,7 @@
     <string name="koil_noti_price_channel_desc">调价生效与窗口日前推送系统通知</string>
     <string name="koil_set_notify">系统通知</string>
     <string name="koil_set_notify_sub">系统消息推送与提醒</string>
+    <string name="koil_set_notify_sub_channel_off">更新通知渠道已在系统中关闭</string>
     <string name="koil_noti_update_channel">应用更新</string>
     <string name="koil_noti_update_channel_desc">有新版本时提醒一次；下载与安装都在关于页</string>
     <string name="koil_noti_update_title">KOiL 有新版本 %1$s</string>

@@ -34,8 +34,19 @@ class UpdateNotifier(
 ) {
 
     companion object {
-        /** 通道 ID 保持不变：改名只会让系统设置里多出一条删不掉的旧通道 */
-        const val CHANNEL_ID = "app_update"
+        /**
+         * 通道 ID。
+         *
+         * 为什么不能继续叫 `app_update`：Android 的通道重要性**创建后不可修改**，
+         * 用同一个 id 删掉再按 HIGH 重建也没用——系统沿用旧设置（有单测钉住这一条）。
+         * 旧通道是按 IMPORTANCE_DEFAULT 建的，而 DEFAULT 永远不会顶部弹出，
+         * 所以「通知从来没弹出来」有一半原因在这里。
+         *
+         * 不叫 `app_update` 的另一个后果是：升级机子上会残留一条旧通道，
+         * 由 [ensureChannel] 顺手清掉（全新安装本来就不存在它）。
+         */
+        const val CHANNEL_ID = "app_update_alert"
+        private const val LEGACY_CHANNEL_ID = "app_update"
         private const val NOTIFICATION_ID = 1100
 
         /** 通知点击后要落到关于页：MainActivity 读这个 extra */
@@ -52,14 +63,11 @@ class UpdateNotifier(
      * 并用一个落盘标记记住已迁移过——否则每次冷启动都会把用户在系统设置里手改的
      * 重要性再顶回 HIGH，等于把用户的选择反复抹掉。
      */
-    private suspend fun ensureChannel() {
+    private fun ensureChannel() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (!settings.notifyChannelMigrated.first()) {
-            val existing = nm.getNotificationChannel(CHANNEL_ID)
-            if (existing != null && existing.importance < NotificationManager.IMPORTANCE_HIGH) {
-                nm.deleteNotificationChannel(CHANNEL_ID)
-            }
-            settings.setNotifyChannelMigrated(true)
+        // 升级机子上会残留旧 ID 的通道（全新安装没有）。留着只会在系统设置里多一条删不掉的僵尸项
+        if (nm.getNotificationChannel(LEGACY_CHANNEL_ID) != null) {
+            nm.deleteNotificationChannel(LEGACY_CHANNEL_ID)
         }
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
@@ -169,3 +177,15 @@ class UpdateNotifier(
         return true
     }
 }
+
+/**
+ * 用户是否在系统设置里单独关掉了「应用更新」这一个渠道。
+ *
+ * App 总开关与运行时权限都可能还是好的，但渠道 importance 为 NONE 时系统会直接丢弃通知。
+ * 设置页据此在副标题里点明，避免「开关开着却一条都收不到」的无声失败。
+ */
+fun isUpdateChannelDisabled(context: Context): Boolean = runCatching {
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    nm.getNotificationChannel(UpdateNotifier.CHANNEL_ID)?.importance ==
+        NotificationManager.IMPORTANCE_NONE
+}.getOrDefault(false)
