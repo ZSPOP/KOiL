@@ -3,7 +3,9 @@ package com.llpop.koil
 import com.llpop.koil.data.update.compareVersionNames
 import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
+import com.llpop.koil.data.update.UPDATE_NOTIFY_REMIND_AFTER_MS
 import com.llpop.koil.data.update.shouldBadgeUpdate
+import com.llpop.koil.data.update.shouldNotifyUpdate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -87,5 +89,24 @@ class UpdateVersionTest {
 
         // 装完最新版 : 不再比本机新，红点自然灭
         assertFalse(shouldBadgeUpdate("V1.1.4", "1.1.4"))
+    }
+
+    @Test
+    fun `shouldNotifyUpdate 换了版本立刻发，同一版本按 7 天节流`() {
+        val day = 24L * 60 * 60 * 1000
+        val now = 10 * day
+
+        // 从没通知过 : 发
+        assertTrue(shouldNotifyUpdate("", 0L, "V1.2.6", now))
+        // tag 空 : 不发（没有可提醒的目标）
+        assertFalse(shouldNotifyUpdate("V1.2.5", 0L, "", now))
+        // 换了版本 : 立刻发，哪怕上一条刚发过
+        assertTrue(shouldNotifyUpdate("V1.2.5", now - 60_000L, "V1.2.6", now))
+        // 同一版本且刚发过 : 安静（这就是原来自动 45 分钟一次的挡板）
+        assertFalse(shouldNotifyUpdate("V1.2.6", now - day, "V1.2.6", now))
+        // 同一版本但已过 7 天 : 再提醒一次（通知被划掉/没看见的兜底）
+        assertTrue(shouldNotifyUpdate("V1.2.6", now - UPDATE_NOTIFY_REMIND_AFTER_MS, "V1.2.6", now))
+        // 时钟回拨（时间戳在未来）: 判成未到间隔，不发
+        assertFalse(shouldNotifyUpdate("V1.2.6", now + day, "V1.2.6", now))
     }
 }

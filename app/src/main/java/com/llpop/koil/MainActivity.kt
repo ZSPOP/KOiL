@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         openAboutRequested = intent?.getBooleanExtra(UpdateNotifier.EXTRA_OPEN_ABOUT, false) == true
+        if (openAboutRequested) acknowledgeUpdateNotification(intent)
         // 调价推送通知权限（API 33+ 运行时申请；仅首次安装请求一次，拒绝后标记记忆，
         // 避免每次启动重复无效请求——Android 13+ 拒绝后系统静默不弹框；用户想开启时经设置页开关跳系统通知设置）
         // minSdk 33 起 POST_NOTIFICATIONS 恒存在，无需 SDK_INT 判断
@@ -75,6 +76,16 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         if (intent.getBooleanExtra(UpdateNotifier.EXTRA_OPEN_ABOUT, false)) {
             openAboutRequested = true
+            acknowledgeUpdateNotification(intent)
+        }
+    }
+
+    /** 用户点开了「有新版本」通知：记成已知晓，别在 7 天后再追一次 */
+    private fun acknowledgeUpdateNotification(intent: android.content.Intent) {
+        val tag = intent.getStringExtra(UpdateNotifier.EXTRA_TAG).orEmpty()
+        if (tag.isBlank()) return
+        lifecycleScope.launch {
+            runCatching { GlobalContext.get().get<UpdateNotifier>().markAcknowledged(tag) }
         }
     }
 

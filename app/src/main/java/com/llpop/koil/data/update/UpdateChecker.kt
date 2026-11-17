@@ -351,6 +351,36 @@ fun isNewerRelease(latestTag: String, currentVersion: String): Boolean =
     latestTag.isNotEmpty() &&
         compareVersionNames(normalizeVersion(latestTag), currentVersion) > 0
 
+/** 同一版本的重复提醒间隔：7 天 */
+const val UPDATE_NOTIFY_REMIND_AFTER_MS = 7L * 24 * 60 * 60 * 1000
+
+/**
+ * 「新版本通知要不要发」。
+ *
+ * 为什么不是「一个版本只提醒一次」：通知会被划掉、App 在前台时它只躺在通知栏不弹横幅，
+ * 而 `updateNotifiedTag` 一旦写入就永久挡住 —— 结果是「发过一次」经常等于「用户没看见」。
+ * 折中成两层：换了版本立刻发；同一个版本最多 7 天再发一次，直到装上为止。
+ * 用户点过通知（[UpdateNotifier.markAcknowledged]）会把时间戳刷新，就不会再被追。
+ *
+ * @param notifiedTag 上次通知过的 tag（空串=从未通知）
+ * @param notifiedAt 上次通知/被点击的时间戳（0=从未）
+ * @param targetTag 这次查到的新版本 tag
+ * @param now 当前时间（走 AppClock，便于单测）
+ */
+fun shouldNotifyUpdate(
+    notifiedTag: String,
+    notifiedAt: Long,
+    targetTag: String,
+    now: Long,
+    remindAfterMs: Long = UPDATE_NOTIFY_REMIND_AFTER_MS,
+): Boolean {
+    if (targetTag.isBlank()) return false
+    // 换了版本：新版本该有自己的那一条
+    if (notifiedTag != targetTag) return true
+    // 同一版本：没到间隔就安静（时钟回拨时 now - notifiedAt < 0，同样落到这里，不发）
+    return now - notifiedAt >= remindAfterMs
+}
+
 /**
  * 「设置页红点要不要亮」：只看有没有新版本，**不受横幅 × 影响**。
  *
