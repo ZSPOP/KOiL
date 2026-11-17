@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
                     val settings = GlobalContext.get().get<AppSettings>()
                     settings.setNotificationPermissionRequested(true)
                     if (!granted) {
-                        settings.setPricePush(false)
+                        settings.setNotifyEnabled(false)
                     }
                 }
             }

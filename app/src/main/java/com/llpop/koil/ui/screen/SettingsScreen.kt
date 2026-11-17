@@ -159,7 +159,7 @@ fun SettingsScreen(
                 // 跳系统通知设置授权返回后，自动补开推送开关（用户刚表达过"想开"的意图）
                 if (pushPermissionGranted && pendingOpenPush) {
                     pendingOpenPush = false
-                    viewModel.setPricePush(true)
+                    viewModel.setNotifyEnabled(true)
                 }
             }
         }
@@ -250,11 +250,11 @@ fun SettingsScreen(
                         SettingSwitchRow(
                             title = stringResource(R.string.koil_set_notify),
                             subtitle = stringResource(R.string.koil_set_notify_sub),
-                            checked = uiState.pricePush && pushPermissionGranted,
+                            checked = uiState.notifyEnabled && pushPermissionGranted,
                             onCheckedChange = { on ->
                                 if (on) {
                                     if (pushPermissionGranted) {
-                                        viewModel.setPricePush(true)
+                                        viewModel.setNotifyEnabled(true)
                                     } else {
                                         // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
                                         // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
@@ -262,7 +262,7 @@ fun SettingsScreen(
                                         openNotificationSettings(context)
                                     }
                                 } else {
-                                    viewModel.setPricePush(false)
+                                    viewModel.setNotifyEnabled(false)
                                 }
                             },
                         )
@@ -270,7 +270,7 @@ fun SettingsScreen(
                     if (!pushPermissionGranted) {
                         add(CardItem("notifyDenied") {
                             Text(
-                                text = stringResource(R.string.koil_set_price_push_denied),
+                                text = stringResource(R.string.koil_set_notify_denied),
                                 fontSize = KOiLType.CaptionLarge,
                                 lineHeight = 14.sp,
                                 color = KOiLColors.Warning,

@@ -19,7 +19,7 @@ internal class OilPriceChangeNotifier(
 ) {
 
     suspend fun notifyPriceChanges(context: Context) {
-        if (!settings.pricePush.first()) return
+        if (!settings.notifyEnabled.first()) return
 
         // 1) 调价生效通知：默认省 + 默认油号的最新生效日变化。
         // 仅价格实际变化（prev==null 或 prev.price != newest.price）才推送——

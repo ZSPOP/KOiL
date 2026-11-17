@@ -69,8 +69,8 @@ class UpdateNotifier(
      */
     suspend fun markAcknowledged(tag: String) {
         if (tag.isBlank()) return
-        settings.setUpdateNotifiedTag(tag)
-        settings.setUpdateNotifiedAt(AppClock.millis())
+        settings.setNotifyUpdateTag(tag)
+        settings.setNotifyUpdateAt(AppClock.millis())
     }
 
     /**
@@ -80,11 +80,11 @@ class UpdateNotifier(
      */
     suspend fun notifyIfNeeded(target: UpdateTarget): Boolean {
         if (target.tag.isBlank()) return false
-        if (!settings.pricePush.first()) return false
+        if (!settings.notifyEnabled.first()) return false
         // 去重不只看 tag：同一版本会在 7 天后允许再提醒一次（见 shouldNotifyUpdate）
         if (!shouldNotifyUpdate(
-                notifiedTag = settings.updateNotifiedTag.first(),
-                notifiedAt = settings.updateNotifiedAt.first(),
+                notifiedTag = settings.notifyUpdateTag.first(),
+                notifiedAt = settings.notifyUpdateAt.first(),
                 targetTag = target.tag,
                 now = AppClock.millis(),
             )
@@ -131,8 +131,8 @@ class UpdateNotifier(
             .build()
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
         // 发出去了才记账：上面任何一个跳过条件都不该消耗掉这一次提醒
-        settings.setUpdateNotifiedTag(target.tag)
-        settings.setUpdateNotifiedAt(AppClock.millis())
+        settings.setNotifyUpdateTag(target.tag)
+        settings.setNotifyUpdateAt(AppClock.millis())
         return true
     }
 }
