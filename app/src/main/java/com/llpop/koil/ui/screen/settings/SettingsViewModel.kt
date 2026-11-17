@@ -441,8 +441,18 @@ class SettingsViewModel(
                 val result = syncer.checkAndUpdate(force = true)
                 // Busy = 后台 Worker 正在跑、这次被互斥挡下。按钮自己的转圈挡不住这种并发，
                 // 之前什么都不提示，用户会以为点了没反应、反复点。这是 Busy 唯一该被看见的地方。
-                if (result.outcome is PriceDbOutcome.Busy) {
-                    _exportMessage.value = ExportNotice("pdb_busy")
+                when {
+                    result.outcome is PriceDbOutcome.Busy ->
+                        _exportMessage.value = ExportNotice("pdb_busy")
+                    // 手动触发的成功反馈：行 3 对正常类 outcome 折叠后，「入库 N 条」不再有出口。
+                    // 用独立通知把入库条数说出来，与 pdb_busy / pdb_update_failed 并列，
+                    // 避免"点了立即更新却不知道到底入库没有"。失败仍由 catch 分支提示。
+                    result.success && result.newRecords > 0 ->
+                        _exportMessage.value = ExportNotice("pdb_update_ok", listOf(result.newRecords))
+                    // 核验成功但没有新增（当天本就无新数据）：说「无新增」而不是「入库 0 笔」，
+                    // 后者读起来像失败。行 2 的「最近检查」时间戳更新本身也是反馈。
+                    result.success ->
+                        _exportMessage.value = ExportNotice("pdb_update_none")
                 }
                 // 手动「立即更新」成功后也触发调价/窗口提醒（与周期 Worker 共用同一入口）
                 syncer.notifyPriceChanges(context)

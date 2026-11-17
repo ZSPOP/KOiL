@@ -20,8 +20,16 @@ object KOiLColors {
     val PrimaryDark = Color(0xFF0A84FF)
     val PrimaryContainer = Color(0xFFE8F2FE)
     val OnPrimaryContainer = Color(0xFF004A99)
-    /** 权限/异常提示色（红色系，浅深色下均醒目） */
+    /** 权限/密码等异常提示色（红色系，浅深色下均醒目） */
     val Warning = Color(0xFFE5484D)
+    /**
+     * 油价核验失败警示色（琥珀色）。
+     *
+     * 刻意与 [Warning] 的红色分开：红色在数据页表示「涨价」，若核验失败也用红，
+     * 同一个 App 里红就同时承担「涨价」与「失败」两种语义。琥珀色同样醒目、色觉友好，
+     * 又避开了涨跌语义。仅用于油价卡片「上次核对结论」的失败类，别处仍用 [Warning]。
+     */
+    val OutcomeWarning = Color(0xFFE8A33D)
 }
 
 /**

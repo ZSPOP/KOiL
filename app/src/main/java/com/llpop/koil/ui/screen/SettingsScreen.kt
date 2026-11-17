@@ -52,15 +52,17 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import top.yukonga.miuix.kmp.basic.IconButton
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Warning
+import top.yukonga.miuix.kmp.basic.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -1015,7 +1017,10 @@ private fun PriceDbSection(
                             hours > 0 -> stringResource(R.string.koil_pdb_dur_hm, hours.toInt(), mins.toInt())
                             else -> stringResource(R.string.koil_pdb_dur_m, mins.toInt())
                         }
-                        stringResource(R.string.koil_pdb_countdown, dur)
+                        // 生效日 = 窗口日 + 1（与下面 deadline、行 1 的 effectiveDate 同口径）。
+                        // 直接给绝对日期，用户不用从「还有几天」自己换算哪天变价。
+                        val effectiveShort = target.plusDays(1).toString().takeLast(5)
+                        stringResource(R.string.koil_pdb_countdown, effectiveShort, dur)
                     }
                 }
             }
@@ -1250,18 +1255,32 @@ private fun PriceDbSection(
                         }
                     }
                 }
-                // —— 行 3：上次核对结论 ——
+                // —— 行 3：上次核对结论（仅异常/跳过/存疑类显示）——
                 // 光有「最近检查 21:44」看不出那次到底怎么了：是入库了、搁浅了、源滞后跳过，
-                // 还是直接失败。这些结论以前只写进 DataStore 没人读，用户只能猜。
-                val outcomeText = priceDbStatus.lastOutcome?.let { priceDbOutcomeText(it) }
-                if (outcomeText != null) {
+                // 还是直接失败。但正常的「已入库/无变化/搁浅」由行 1 + 行 2 已表达，再念一遍
+                // 只是噪音——所以按 presentation.tier 折叠：失败类琥珀色 ⚠，跳过/存疑类中性 ⓘ，
+                // 正常类整行不显示。这样常态只有两行，出问题时才冒出第三行。
+                val lastOutcome = priceDbStatus.lastOutcome
+                val presentation = lastOutcome?.let { presentOutcome(it) }
+                if (presentation != null && presentation.tier != OutcomeTier.HIDDEN && presentation.text != null) {
                     Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = outcomeText,
-                        fontSize = 12.sp,
-                        lineHeight = 15.sp,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (presentation.tier == OutcomeTier.WARNING) Icons.Filled.Warning else Icons.Filled.Info,
+                            contentDescription = null,
+                            tint = if (presentation.tier == OutcomeTier.WARNING) KOiLColors.OutcomeWarning
+                                   else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.55f),
+                            modifier = Modifier.size(13.dp),
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(
+                            text = presentation.text,
+                            fontSize = 12.sp,
+                            lineHeight = 15.sp,
+                            color = if (presentation.tier == OutcomeTier.WARNING) KOiLColors.OutcomeWarning
+                                   else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(14.dp))
 
@@ -2659,6 +2678,10 @@ private fun List<Any>.intAt(index: Int): Int = (getOrNull(index) as? Int) ?: (ge
 private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "pdb_update_failed" -> stringResource(R.string.koil_msg_pdb_update_failed, args.getOrElse(0) { "" })
     "pdb_busy" -> stringResource(R.string.koil_msg_pdb_busy)
+    "pdb_update_ok" -> pluralStringResource(
+        R.plurals.koil_msg_pdb_update_ok, args.intAt(0), args.getOrElse(0) { 0 },
+    )
+    "pdb_update_none" -> stringResource(R.string.koil_msg_pdb_update_none)
     "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
     "price_exported" -> pluralStringResource(
         R.plurals.koil_msg_price_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
@@ -2691,46 +2714,70 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 
 
 /**
- * 上次核对结论 → 三语文案；返回 null 表示「这一行不显示」。
+ * 「上次核对结论」行的展示级别与文案。
  *
- * 只有**会落盘**的结论才有文案。`Busy` / `AutoUpdateOff` / `Throttled` 是 Syncer 里
- * 「还没走到写缓存就 return」的早退路径，永远进不了「上次核对结论」，所以这三分支返回
- * null，而不是配一份谁也读不到的字符串。**不要**在这里再拼状态判断：分支语义（尤其是
- * 「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞与是否显示。
+ * 这一行的价值是「价格可能不是最新的」这类需要用户留意的状态；正常入库的结论由行 1
+ * （最近一次调价的生效日/价格）和行 2（倒计时/检查时间）已经表达，再念一遍只是噪音。
+ * 分级：失败类用警示色 + ⚠，跳过/存疑类用中性灰 + ⓘ，正常类整行不显示。
+ */
+private enum class OutcomeTier { HIDDEN, NOTICE, WARNING }
+
+/** 一次 when 同时决定「显示什么文案」与「用什么级别显示」，避免两份 15 分支 when 各自维护。 */
+private data class OutcomePresentation(val text: String?, val tier: OutcomeTier)
+
+/**
+ * 上次核对结论 → 文案 + 展示级别，一个 when 同时产出两者。
+ *
+ * `Busy` / `AutoUpdateOff` / `Throttled` 是 Syncer 里「还没走到写缓存就 return」的早退路径，
+ * 永远进不了「上次核对结论」，给 null text + HIDDEN，不配谁也读不到的字符串。
+ * 其余结论即使 tier 为 HIDDEN 也照样生成文案：这些 string 只在本函数被引用，
+ * 若 HIDDEN 分支返回 null 会触发 lint 的 UnusedResources，反而破坏 0 告警。
+ * 分支语义（尤其「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞与是否显示。
  */
 @Composable
-private fun priceDbOutcomeText(outcome: PriceDbOutcome): String? = when (outcome) {
-    // 这三条在 Syncer 里是「还没走到写缓存就 return」的早退路径，永远不会落盘，
-    // 因此不可能出现在「上次核对结论」里。保留枚举分支、返回 null 表示「这一行不显示」，
-    // 而不是给它们配一份永远不会被读到的文案。Busy 另有出口：见 checkPriceDbNow 的提示。
-    PriceDbOutcome.Busy -> null
-    PriceDbOutcome.AutoUpdateOff -> null
-    is PriceDbOutcome.Throttled -> null
-    PriceDbOutcome.NoProvince -> stringResource(R.string.koil_pdb_outcome_no_province)
-    is PriceDbOutcome.FetchFailed -> stringResource(R.string.koil_pdb_outcome_fetch_failed, outcome.detail)
-    is PriceDbOutcome.SourceLagging ->
+private fun presentOutcome(outcome: PriceDbOutcome): OutcomePresentation = when (outcome) {
+    // 早退路径：不落盘、不显示，不引用任何文案资源
+    PriceDbOutcome.Busy, PriceDbOutcome.AutoUpdateOff, is PriceDbOutcome.Throttled ->
+        OutcomePresentation(null, OutcomeTier.HIDDEN)
+    // 失败类：源挂了/省份空/检测异常——价格可能不是最新，必须醒目
+    PriceDbOutcome.NoProvince ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_no_province), OutcomeTier.WARNING)
+    is PriceDbOutcome.FetchFailed ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_fetch_failed, outcome.detail), OutcomeTier.WARNING)
+    is PriceDbOutcome.Failed ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_failed, outcome.detail), OutcomeTier.WARNING)
+    // 跳过/存疑类：数据源滞后、无法确认搁浅、窗口日 24h 后生效——中性提示
+    is PriceDbOutcome.SourceLagging -> OutcomePresentation(
         if (outcome.repaired > 0) {
-            stringResource(R.string.koil_pdb_outcome_source_lagging_fixed, outcome.date, outcome.repaired)
+            pluralStringResource(R.plurals.koil_pdb_outcome_source_lagging_fixed, outcome.repaired, outcome.repaired)
         } else {
-            stringResource(R.string.koil_pdb_outcome_source_lagging, outcome.date)
-        }
-    is PriceDbOutcome.WindowDay -> stringResource(R.string.koil_pdb_outcome_window_day, outcome.date)
+            stringResource(R.string.koil_pdb_outcome_source_lagging)
+        },
+        OutcomeTier.NOTICE,
+    )
     is PriceDbOutcome.UnchangedUnconfirmed ->
-        stringResource(R.string.koil_pdb_outcome_unchanged_unconfirmed, outcome.date)
-    is PriceDbOutcome.Stranded -> stringResource(R.string.koil_pdb_outcome_stranded, outcome.date)
-    is PriceDbOutcome.Unchanged -> stringResource(R.string.koil_pdb_outcome_unchanged, outcome.date)
-    is PriceDbOutcome.RepairedOnly -> stringResource(R.string.koil_pdb_outcome_repaired_only, outcome.repaired)
-    PriceDbOutcome.AlreadyAdjusted -> stringResource(R.string.koil_pdb_outcome_already_adjusted)
-    is PriceDbOutcome.Updated ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_unchanged_unconfirmed), OutcomeTier.NOTICE)
+    is PriceDbOutcome.WindowDay ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_window_day, outcome.date), OutcomeTier.NOTICE)
+    // 正常类：已入库/无变化/搁浅/维持等，行 1 + 行 2 已覆盖，不占行；文案仍生成以保留资源引用
+    is PriceDbOutcome.Stranded ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_stranded, outcome.date), OutcomeTier.HIDDEN)
+    is PriceDbOutcome.Unchanged ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_unchanged, outcome.date), OutcomeTier.HIDDEN)
+    is PriceDbOutcome.RepairedOnly ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_repaired_only, outcome.repaired), OutcomeTier.HIDDEN)
+    PriceDbOutcome.AlreadyAdjusted ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_already_adjusted), OutcomeTier.HIDDEN)
+    is PriceDbOutcome.Updated -> OutcomePresentation(
         if (outcome.failedProvinces > 0) {
-            stringResource(
-                R.string.koil_pdb_outcome_updated_partial, outcome.records, outcome.failedProvinces,
-            )
+            stringResource(R.string.koil_pdb_outcome_updated_partial, outcome.records, outcome.failedProvinces)
         } else {
             stringResource(R.string.koil_pdb_outcome_updated, outcome.records)
-        }
-    PriceDbOutcome.NoNewRecords -> stringResource(R.string.koil_pdb_outcome_no_new_records)
-    is PriceDbOutcome.Failed -> stringResource(R.string.koil_pdb_outcome_failed, outcome.detail)
+        },
+        OutcomeTier.HIDDEN,
+    )
+    PriceDbOutcome.NoNewRecords ->
+        OutcomePresentation(stringResource(R.string.koil_pdb_outcome_no_new_records), OutcomeTier.HIDDEN)
 }
 
 /** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
