@@ -255,7 +255,7 @@
     <string name="koil_pdb_line_stranded">%1$s 搁浅 · %2$s 起维持 ¥%3$s</string>
     <string name="koil_pdb_line_stranded_short">%1$s 搁浅</string>
     <string name="koil_pdb_line_missing">%1$s 窗口暂无记录 · 待补灌或核验</string>
-    <string name="koil_pdb_countdown">距下轮调价日 %1$s</string>
+    <string name="koil_pdb_countdown">%1$s 起调价 · 还有 %2$s</string>
     <string name="koil_pdb_countdown_today">今晚 24:00 调价窗口</string>
     <string name="koil_pdb_countdown_passed">本期窗口已开 · 等下一次发布</string>
     <string name="koil_pdb_dur_dh">%1$d 天 %2$d 时</string>
@@ -267,8 +267,8 @@
     <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
     <string name="koil_pdb_outcome_no_province">核对失败：省份列表为空</string>
     <string name="koil_pdb_outcome_fetch_failed">核对失败：实时油价不可用（%1$s）</string>
-    <string name="koil_pdb_outcome_source_lagging">已核对至 %1$s，数据源日期滞后，跳过本次核验</string>
-    <string name="koil_pdb_outcome_source_lagging_fixed">已核对至 %1$s，数据源日期滞后；顺带按实时源校正 %2$d 条</string>
+    <string name="koil_pdb_outcome_source_lagging">数据源尚未更新，跳过本次核验</string>
+    <string name="koil_pdb_outcome_source_lagging_fixed">数据源尚未更新；顺带按实时源校正 %1$d 条</string>
     <string name="koil_pdb_outcome_window_day">%1$s 是调价窗口日，价格 24 点后生效</string>
     <string name="koil_pdb_outcome_unchanged_unconfirmed">已核对至 %1$s，价格未变但实时源不可用，无法确认是否搁浅</string>
     <string name="koil_pdb_outcome_stranded">已核对至 %1$s，油价无变化（搁浅）</string>

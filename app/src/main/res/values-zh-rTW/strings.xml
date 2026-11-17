@@ -254,7 +254,7 @@
     <string name="koil_pdb_line_stranded">%1$s 擱淺 · %2$s 起維持 ¥%3$s</string>
     <string name="koil_pdb_line_stranded_short">%1$s 擱淺</string>
     <string name="koil_pdb_line_missing">%1$s 視窗尚無紀錄 · 待補灌或核驗</string>
-    <string name="koil_pdb_countdown">距下輪調價日 %1$s</string>
+    <string name="koil_pdb_countdown">%1$s 起調價 · 還有 %2$s</string>
     <string name="koil_pdb_countdown_today">今晚 24:00 調價視窗</string>
     <string name="koil_pdb_countdown_passed">本期視窗已開 · 等下一次發布</string>
     <string name="koil_pdb_dur_dh">%1$d 天 %2$d 時</string>
@@ -266,8 +266,8 @@
     <!-- 上次核对结论（结构化 PriceDbOutcome 的展示文案） -->
     <string name="koil_pdb_outcome_no_province">核對失敗：省份清單為空</string>
     <string name="koil_pdb_outcome_fetch_failed">核對失敗：即時油價不可用（%1$s）</string>
-    <string name="koil_pdb_outcome_source_lagging">已核對至 %1$s，資料來源日期落後，略過本次核驗</string>
-    <string name="koil_pdb_outcome_source_lagging_fixed">已核對至 %1$s，資料來源日期落後；順帶依即時來源校正 %2$d 筆</string>
+    <string name="koil_pdb_outcome_source_lagging">資料來源尚未更新，略過本次核驗</string>
+    <string name="koil_pdb_outcome_source_lagging_fixed">資料來源尚未更新；順帶依即時來源校正 %1$d 筆</string>
     <string name="koil_pdb_outcome_window_day">%1$s 是調價視窗日，價格 24 點後生效</string>
     <string name="koil_pdb_outcome_unchanged_unconfirmed">已核對至 %1$s，價格未變但即時來源不可用，無法確認是否擱淺</string>
     <string name="koil_pdb_outcome_stranded">已核對至 %1$s，油價無變化（擱淺）</string>
