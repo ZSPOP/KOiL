@@ -57,6 +57,13 @@ object KOiLColors {
     /** 居中档（既不好也不差，如预测提示） */
     val NeutralAmber = Color(0xFFF59E0B)
 
+    // 记录卡左侧色条的**渐变深端**。取色条不是单色而是两段渐变（上浅下深），
+    // 所以深端单独两个 token，别拿 AttentionDay 去替代——那会把渐变压成一块平色。
+    /** 偏高色条渐变深端 */
+    val AttentionDayDeep = Color(0xFFD84315)
+    /** 居中色条渐变深端 */
+    val NeutralAmberDeep = Color(0xFFD97706)
+
     // ===== 状态三色 + 10% 容器底 =====
     /** 错误 / 阻断 */
     val Error = Color(0xFFFF3B30)

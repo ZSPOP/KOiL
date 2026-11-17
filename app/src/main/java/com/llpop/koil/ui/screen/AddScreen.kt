@@ -509,7 +509,8 @@ private fun OilPriceCard(
     val accent = MiuixTheme.colorScheme.primary            // 深色=#0A84FF 柔和亮蓝 / 浅色=#0071E3
     val containerBg = if (dark) MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
     val containerText = if (dark) accent else KOiLColors.OnPrimaryContainer
-    val urgentColor = if (dark) Color(0xFFFF9F0A) else KOiLColors.AttentionDay
+    // 深色档与「油耗偏高」共用 AttentionNight：同为「需要注意」语义，不再各留一个值。
+    val urgentColor = if (dark) KOiLColors.AttentionNight else KOiLColors.AttentionDay
     Column(modifier = Modifier.padding(16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
