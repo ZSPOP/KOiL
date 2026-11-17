@@ -105,6 +105,7 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sign
 import kotlin.math.sin
+import com.llpop.koil.ui.theme.KOiLType
 
 private val LocalIosTabScale = staticCompositionLocalOf { { 1f } }
 
@@ -382,7 +383,7 @@ internal fun IosLiquidGlassNavigationBar(
                 if (showLabels) {
                     Text(
                         text = item.label,
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         fontWeight = FontWeight.Normal,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

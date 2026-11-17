@@ -111,10 +111,11 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
+import com.llpop.koil.ui.theme.KOiLType
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
-private val UpColor = Color(0xFFE53935)
-private val DownColor = Color(0xFF43A047)
+private val UpColor = KOiLColors.PriceUp
+private val DownColor = KOiLColors.PriceDown
 
 /**
  * 油价明细页：省份（下拉）/油号切换 → 今年累计涨跌汇总 + 价格走势图 + 调价时间线。
@@ -410,7 +411,7 @@ fun OilPriceDetailScreen(
                     ) {
                         Text(
                             text = gradeLabel(g),
-                            fontSize = 12.sp,
+                            fontSize = KOiLType.BodySmall,
                             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
                             color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
                             maxLines = 1,
@@ -435,7 +436,7 @@ fun OilPriceDetailScreen(
                 ) {
                     Text(
                         text = stringResource(R.string.koil_pdb_detail_empty),
-                        fontSize = 14.sp,
+                        fontSize = KOiLType.BodyLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                 }
@@ -575,7 +576,7 @@ private fun DropdownPill(
     ) {
         Text(
             text = label,
-            fontSize = 13.sp,
+            fontSize = KOiLType.Body,
             fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onBackground,
             maxLines = 1,
@@ -793,7 +794,7 @@ private fun StickyPill(label: String, expanded: Boolean, onToggle: () -> Unit) {
     ) {
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = KOiLType.BodySmall,
             fontWeight = FontWeight.Medium,
             color = MiuixTheme.colorScheme.onBackground,
             maxLines = 1,
@@ -823,7 +824,7 @@ private fun SummaryCell(
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = KOiLType.CaptionLarge,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
         Spacer(Modifier.height(4.dp))
@@ -1146,7 +1147,7 @@ private fun AdjustTimelineItem(
         // —— 日期列：独占最左（设计稿 A 的 46px 列），价格与幅度条都在右侧列 ——
         Text(
             text = item.label,
-            fontSize = 11.sp,
+            fontSize = KOiLType.CaptionLarge,
             color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.85f),
             modifier = Modifier
                 .width(46.dp)
@@ -1186,13 +1187,13 @@ private fun AdjustTimelineItem(
                 when {
                     stranded -> Text(
                         text = stringResource(R.string.koil_detail_stranded),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
 
                     diff == null -> Text(
                         text = stringResource(R.string.koil_pdb_first_base),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                     )
 
@@ -1212,7 +1213,7 @@ private fun AdjustTimelineItem(
 
                     else -> Text(
                         text = stringResource(R.string.koil_pdb_flat),
-                        fontSize = 11.sp,
+                        fontSize = KOiLType.CaptionLarge,
                         color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
                     )
                 }
@@ -1221,7 +1222,7 @@ private fun AdjustTimelineItem(
                     Spacer(Modifier.width(6.dp))
                     Text(
                         text = stringResource(R.string.koil_detail_latest),
-                        fontSize = 10.sp,
+                        fontSize = KOiLType.Caption,
                         fontWeight = FontWeight.Medium,
                         color = KOiLColors.Primary,
                         modifier = Modifier

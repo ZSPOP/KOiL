@@ -38,6 +38,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.mutableIntStateOf
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -58,7 +59,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
         )
         com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissImportPreview) {
             Column {
-                Text(stringResource(R.string.koil_import_title), fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
+                Text(stringResource(R.string.koil_import_title), fontSize = KOiLType.Title, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
@@ -76,7 +77,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                 .clickable { activeTab.intValue = idx }
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                         ) {
-                            Text(label, fontSize = 10.sp, color = if (activeTab.intValue == idx) Color.White else MiuixTheme.colorScheme.onBackground)
+                            Text(label, fontSize = KOiLType.Caption, color = if (activeTab.intValue == idx) Color.White else MiuixTheme.colorScheme.onBackground)
                         }
                     }
                 }
@@ -104,7 +105,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                 ) {
                                     Text(
                                         text = r.date,
-                                        fontSize = 12.sp,
+                                        fontSize = KOiLType.BodySmall,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = MiuixTheme.colorScheme.onBackground,
@@ -112,7 +113,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                     )
                                     Text(
                                         text = "${r.mileage.toInt()}km",
-                                        fontSize = 11.sp,
+                                        fontSize = KOiLType.CaptionLarge,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -120,7 +121,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                     )
                                     Text(
                                         text = "${NumberFormat.measure(r.oilAmount)}L",
-                                        fontSize = 11.sp,
+                                        fontSize = KOiLType.CaptionLarge,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -128,7 +129,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                     )
                                     Text(
                                         text = "¥${NumberFormat.money(r.actualAmount)}",
-                                        fontSize = 11.sp,
+                                        fontSize = KOiLType.CaptionLarge,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                         color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -142,8 +143,8 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                             "duplicate" -> stringResource(R.string.koil_msg_duplicate)
                                             else -> key
                                         },
-                                        fontSize = 10.sp,
-                                        color = Color(0xFFE53935),
+                                        fontSize = KOiLType.Caption,
+                                        color = KOiLColors.PriceUp,
                                         modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }
@@ -154,25 +155,25 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                             "gt_next" -> stringResource(R.string.koil_msg_mileage_gt_next, r.conflictArg)
                                             else -> key
                                         },
-                                        fontSize = 10.sp,
-                                        color = Color(0xFFE65100),
+                                        fontSize = KOiLType.Caption,
+                                        color = KOiLColors.AttentionDay,
                                         modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }
                             }
                         }
                         if (tabs[activeTab.intValue].second.isEmpty()) {
-                            Text(stringResource(R.string.koil_import_no_data), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(vertical = 20.dp))
+                            Text(stringResource(R.string.koil_import_no_data), fontSize = KOiLType.BodySmall, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.padding(vertical = 20.dp))
                         }
                     }
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
                     // 与恢复弹窗一致——不设固定 40dp 高度，防文字下缘被裁
-                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
                     Spacer(Modifier.width(10.dp))
                     Button(onClick = viewModel::confirmImport, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.koil_import_confirm, preview.valid.size), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.koil_import_confirm, preview.valid.size), fontSize = KOiLType.Body, fontWeight = FontWeight.Medium)
                     }
                 }
             }

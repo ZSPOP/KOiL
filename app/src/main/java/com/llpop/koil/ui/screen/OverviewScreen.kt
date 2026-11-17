@@ -85,6 +85,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -293,7 +294,7 @@ fun OverviewScreen(
                         Spacer(Modifier.width(3.dp))
                         Text(
                             text = stringResource(R.string.koil_ov_backfill),
-                            fontSize = 12.sp,
+                            fontSize = KOiLType.BodySmall,
                             fontWeight = FontWeight.Medium,
                             color = KOiLColors.Primary,
                         )
@@ -389,7 +390,7 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Delete,
                             label = stringResource(R.string.koil_ov_delete),
-                            bg = Color(0xFFE53935),
+                            bg = KOiLColors.PriceUp,
                         ) {
                             val rec = actionRecord
                             moreMenuFor = null
@@ -457,7 +458,7 @@ fun OverviewScreen(
             Column(Modifier.fillMaxWidth()) {
                 Text(
                     text = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
-                    fontSize = 17.sp,
+                    fontSize = KOiLType.TitleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                 )
@@ -465,7 +466,7 @@ fun OverviewScreen(
                 uiState.abnormalRecords.forEachIndexed { index, d ->
                     val rec = d.record
                     val isHigh = d.consumptionStatus == ConsumptionStatus.HIGH
-                    val accentColor = if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B)
+                    val accentColor = if (isHigh) KOiLColors.AttentionDay else KOiLColors.NeutralAmber
                     val statusTxt = stringResource(
                         if (isHigh) R.string.koil_ov_abnormal_high else R.string.koil_ov_abnormal_low
                     )
@@ -477,28 +478,28 @@ fun OverviewScreen(
                     ) {
                         Text(
                             text = rec.reoilDate.takeLast(5),
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
                             text = "${rec.oilGrade ?: "-"}#",
-                            fontSize = 11.sp,
+                            fontSize = KOiLType.CaptionLarge,
                             fontWeight = FontWeight.Medium,
                             color = KOiLColors.Primary,
                         )
                         Spacer(Modifier.weight(1f))
                         Text(
                             text = "${NumberFormat.measure(d.oilConsumption ?: 0.0)} L/100km",
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onBackground,
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
                             text = "$statusTxt ${NumberFormat.pct(abs(d.deviationPct))}%",
-                            fontSize = 11.sp,
+                            fontSize = KOiLType.CaptionLarge,
                             fontWeight = FontWeight.Medium,
                             color = accentColor,
                         )
@@ -522,21 +523,21 @@ fun OverviewScreen(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
                     text = stringResource(R.string.koil_ov_delete_confirm_title),
-                    fontSize = 17.sp,
+                    fontSize = KOiLType.TitleLarge,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     text = stringResource(R.string.koil_ov_delete_confirm_sub),
-                    fontSize = 13.sp,
+                    fontSize = KOiLType.Body,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
                 Spacer(Modifier.height(20.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = stringResource(R.string.koil_common_cancel),
-                        fontSize = 15.sp,
+                        fontSize = KOiLType.Subtitle,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier
@@ -550,13 +551,13 @@ fun OverviewScreen(
                     Spacer(Modifier.width(12.dp))
                     Text(
                         text = stringResource(R.string.koil_ov_delete_confirm),
-                        fontSize = 15.sp,
+                        fontSize = KOiLType.Subtitle,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFFE53935))
+                            .background(KOiLColors.PriceUp)
                             .clickable {
                                 pendingDelete = null
                                 viewModel.deleteRecord(rec.record.id)
@@ -601,7 +602,7 @@ fun OverviewScreen(
         ) {
             Column {
                 Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
-                Text(stringResource(R.string.koil_ov_backfill_title), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
+                Text(stringResource(R.string.koil_ov_backfill_title), fontSize = KOiLType.Headline, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
                 Spacer(Modifier.height(16.dp))
                 // 加油省份（与设置页同款下拉列表）
                 ProvinceSelectField(province = dlg.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
@@ -743,7 +744,7 @@ fun OverviewScreen(
                         Spacer(Modifier.height(20.dp))
                     }
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).heightIn(min = 44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
+                        Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).heightIn(min = 44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.BodyLarge) }
                         Spacer(Modifier.width(12.dp))
                         Button(
                             onClick = viewModel::saveBackfill,
@@ -756,7 +757,7 @@ fun OverviewScreen(
                                 disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
                             ),
-                        ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                        ) { Text(stringResource(R.string.koil_common_save), fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Medium) }
                     }
                 }
             }

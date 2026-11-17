@@ -53,6 +53,7 @@ import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -81,8 +82,8 @@ internal fun RecordCard(
     val isAbnormal = record.consumptionStatus == ConsumptionStatus.HIGH || record.consumptionStatus == ConsumptionStatus.LOW
     val isHigh = record.consumptionStatus == ConsumptionStatus.HIGH
     val accentColor = when {
-        isHigh -> Color(0xFFE65100)
-        record.consumptionStatus == ConsumptionStatus.LOW -> Color(0xFFF59E0B)
+        isHigh -> KOiLColors.AttentionDay
+        record.consumptionStatus == ConsumptionStatus.LOW -> KOiLColors.NeutralAmber
         else -> KOiLColors.Primary
     }
     // 实付/油站单价与差额（明细优惠行、底部把手可见性共用）
@@ -121,7 +122,7 @@ internal fun RecordCard(
                             .background(
                                 Brush.verticalGradient(
                                     listOf(
-                                        if (isHigh) Color(0xFFE65100) else Color(0xFFF59E0B),
+                                        if (isHigh) KOiLColors.AttentionDay else KOiLColors.NeutralAmber,
                                         if (isHigh) Color(0xFFD84315) else Color(0xFFD97706),
                                     )
                                 )
@@ -145,7 +146,7 @@ internal fun RecordCard(
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = md(r.reoilDate),
-                        fontSize = 16.sp,
+                        fontSize = KOiLType.Title,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -155,14 +156,14 @@ internal fun RecordCard(
                         Text(
                             text = "←",
                             // 旧日期缩到 11sp 后，箭头同步缩小配套
-                            fontSize = 12.sp,
+                            fontSize = KOiLType.BodySmall,
                             color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                         )
                         Spacer(Modifier.width(3.dp))
                         Text(
                             text = md(prevRecord.record.reoilDate),
                             // 旧日期弱化为 11sp 次要信息（用户定稿）
-                            fontSize = 11.sp,
+                            fontSize = KOiLType.CaptionLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                             maxLines = 1,
@@ -178,7 +179,7 @@ internal fun RecordCard(
                     Text(
                         text = "¥" + NumberFormat.money(r.actualAmount),
                         // 与日期同字号 16sp，把视觉锚点让给油耗大数字
-                        fontSize = 16.sp,
+                        fontSize = KOiLType.Title,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                         maxLines = 1,
@@ -205,7 +206,7 @@ internal fun RecordCard(
                                     (r.mileage - record.distance).toInt(),
                                     r.mileage.toInt(),
                                 ),
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 maxLines = 1,
                                 softWrap = false,
@@ -220,7 +221,7 @@ internal fun RecordCard(
                         } else {
                             Text(
                                 text = stringResource(R.string.koil_ov_current_mileage, r.mileage.toInt()),
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 maxLines = 1,
                                 softWrap = false,
@@ -236,7 +237,7 @@ internal fun RecordCard(
                         Spacer(Modifier.width(6.dp))
                         Text(
                             text = "¥" + NumberFormat.money(record.costPerKm) + "/km",
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.SemiBold,
                             color = MiuixTheme.colorScheme.onBackground,
                             maxLines = 1,
@@ -255,8 +256,8 @@ internal fun RecordCard(
                         record.oilConsumption,
                         prevRecord?.oilConsumption,
                         lowerBetter = true,
-                        goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32),
-                        badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100),
+                        goodColor = if (darkBg) KOiLColors.GoodNight else KOiLColors.GoodDay,
+                        badColor = if (darkBg) KOiLColors.AttentionNight else KOiLColors.AttentionDay,
                     )
                     // 实付单价（实付金额/加油量）与油站单价（挂牌/应付单价）都固定两位小数
                     // （actualPrice / stationPrice 放在卡片顶层，与明细区共用）
@@ -267,7 +268,7 @@ internal fun RecordCard(
                         Text(
                             text = NumberFormat.fixed2(record.oilConsumption),
                             // 字号取 33sp——数字墨迹与右列两行的墨迹等高（行高仍锁 31sp，不撑高卡片）
-                            fontSize = 33.sp,
+                            fontSize = KOiLType.Hero,
                             lineHeight = 31.sp,
                             fontWeight = FontWeight.ExtraBold,
                             // 异常时数字本身着色（偏高橙 / 偏低琥珀），正常用正文色
@@ -280,7 +281,7 @@ internal fun RecordCard(
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
                                 text = "L/100km",
-                                fontSize = 10.sp,
+                                fontSize = KOiLType.Caption,
                                 lineHeight = 13.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                             )
@@ -291,7 +292,7 @@ internal fun RecordCard(
                             if (delta != null) {
                                 Text(
                                     text = delta.text,
-                                    fontSize = 12.sp,
+                                    fontSize = KOiLType.BodySmall,
                                     lineHeight = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = delta.color,
@@ -303,7 +304,7 @@ internal fun RecordCard(
                                 // 有上一条但上条无有效油耗（短途不计/里程异常）时留空——那张卡自己有提示行
                                 Text(
                                     text = stringResource(R.string.koil_ov_first_tag),
-                                    fontSize = 12.sp,
+                                    fontSize = KOiLType.BodySmall,
                                     lineHeight = 16.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MiuixTheme.colorScheme.onBackgroundVariant,
@@ -323,7 +324,7 @@ internal fun RecordCard(
                                     R.string.koil_ov_unit_price_station,
                                     stationPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
-                                fontSize = 10.sp,
+                                fontSize = KOiLType.Caption,
                                 lineHeight = 13.sp,
                                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                                 maxLines = 1,
@@ -334,7 +335,7 @@ internal fun RecordCard(
                                     R.string.koil_ov_unit_price_actual,
                                     actualPrice?.let { NumberFormat.fixed2(it) } ?: NumberFormat.PLACEHOLDER,
                                 ),
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 lineHeight = 16.sp,
                                 color = MiuixTheme.colorScheme.onBackground,
                                 maxLines = 1,
@@ -376,8 +377,8 @@ internal fun RecordCard(
                 AnimatedVisibility(visible = expanded) {
                     Column {
                         val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
-                        val goodColor = if (darkBg) Color(0xFF66BB6A) else Color(0xFF2E7D32)
-                        val badColor = if (darkBg) Color(0xFFFF8A65) else Color(0xFFE65100)
+                        val goodColor = if (darkBg) KOiLColors.GoodNight else KOiLColors.GoodDay
+                        val badColor = if (darkBg) KOiLColors.AttentionNight else KOiLColors.AttentionDay
                         if (recentAvg != null && record.oilConsumption != null) {
                             Spacer(Modifier.height(10.dp))
                             val cur = record.oilConsumption
@@ -410,7 +411,7 @@ internal fun RecordCard(
                                 } else {
                                     stringResource(R.string.koil_ov_detail_over, NumberFormat.money(-saved))
                                 },
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 fontWeight = FontWeight.Medium,
                                 color = if (saved > 0) goodColor else badColor,
                                 maxLines = 1,
@@ -449,7 +450,7 @@ internal fun DetailBarRow(
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = KOiLType.CaptionLarge,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
             maxLines = 1,
             softWrap = false,
@@ -473,7 +474,7 @@ internal fun DetailBarRow(
         Spacer(Modifier.width(8.dp))
         Text(
             text = value,
-            fontSize = 12.sp,
+            fontSize = KOiLType.BodySmall,
             fontWeight = FontWeight.Bold,
             color = valueColor,
             textAlign = TextAlign.End,
@@ -495,11 +496,11 @@ internal fun HintLine(text: String) {
             .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("ℹ", fontSize = 13.sp, color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f))
+            Text("ℹ", fontSize = KOiLType.Body, color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.7f))
             Spacer(Modifier.width(6.dp))
             Text(
                 text = text,
-                fontSize = 11.sp,
+                fontSize = KOiLType.CaptionLarge,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -528,7 +529,7 @@ internal fun LongPressCircleAction(
         Spacer(Modifier.height(6.dp))
         Text(
             text = label,
-            fontSize = 12.sp,
+            fontSize = KOiLType.BodySmall,
             fontWeight = FontWeight.Medium,
             color = Color.White,
         )
@@ -545,8 +546,8 @@ internal fun deltaText(
     cur: Double?,
     prev: Double?,
     lowerBetter: Boolean,
-    goodColor: Color = Color(0xFF2E7D32),
-    badColor: Color = Color(0xFFE65100),
+    goodColor: Color = KOiLColors.GoodDay,
+    badColor: Color = KOiLColors.AttentionDay,
     digits: Int = 2,
 ): DeltaText? {
     if (cur == null || prev == null || prev <= 0) return null

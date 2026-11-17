@@ -32,6 +32,7 @@ import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 /** 胶囊宽度占屏宽的比例（图二实测 63%，用比例而不是写死 dp：小屏不溢出、大屏不变形） */
 private const val ACTION_WIDTH_FRACTION = 0.63f
@@ -124,7 +125,7 @@ fun KoilAboutUpdateButton(
         ) {
             Text(
                 text = label,
-                fontSize = 18.sp,
+                fontSize = KOiLType.Headline,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
             )
@@ -157,7 +158,7 @@ fun KoilAboutUpdateButton(
                         "%.1f".format(java.util.Locale.ROOT, downloading.received / 1048576f),
                     )
                 },
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 // 槽位高度定死 89dp（52 + 37）：这行一旦换行会多占一行（~17dp），
                 // 大字号下累计溢出会吃到下方 50dp 间距。限成单行，最坏情况封死在这一行里。
@@ -216,7 +217,7 @@ fun KoilAboutInfoCard(
                         versionName,
                         versionCode,
                     ),
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             },
@@ -227,7 +228,7 @@ fun KoilAboutInfoCard(
             endActions = {
                 Text(
                     text = releaseDate,
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             },

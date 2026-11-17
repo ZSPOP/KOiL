@@ -60,6 +60,7 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.mutableIntStateOf
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -107,14 +108,14 @@ internal fun SettingRow(
                     modifier = Modifier
                         .size(6.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFE53935)),
+                        .background(KOiLColors.PriceUp),
                 )
                 Spacer(Modifier.width(6.dp))
             }
             if (value.isNotEmpty()) {
                 Text(
                     text = value,
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
@@ -125,12 +126,12 @@ internal fun SettingRow(
     )
 }
 
-/** 四宫格统计项（蓝色图标 + 数值 + 标签，对齐截图样式） */
 /** 油价涨跌色（与明细页口径一致：涨红 / 跌绿） */
-internal val PriceUpColor = Color(0xFFE53935)
+internal val PriceUpColor = KOiLColors.PriceUp
 
-internal val PriceDownColor = Color(0xFF43A047)
+internal val PriceDownColor = KOiLColors.PriceDown
 
+/** 四宫格统计项（蓝色图标 + 数值 + 标签，对齐截图样式） */
 @Composable
 internal fun StatQuadItem(
     modifier: Modifier = Modifier,
@@ -151,14 +152,14 @@ internal fun StatQuadItem(
         Spacer(Modifier.height(4.dp))
         Text(
             text = value,
-            fontSize = 20.sp,
+            fontSize = KOiLType.Display,
             fontWeight = FontWeight.Bold,
             color = MiuixTheme.colorScheme.onBackground,
         )
         Spacer(Modifier.height(2.dp))
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = KOiLType.CaptionLarge,
             color = MiuixTheme.colorScheme.onBackgroundVariant,
         )
     }
@@ -210,14 +211,14 @@ internal fun StepperInputRow(
         Column(Modifier.weight(1f)) {
             Text(
                 text = title,
-                fontSize = 17.sp,
+                fontSize = KOiLType.TitleLarge,
                 fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(2.dp))
             Text(
                 text = summary,
-                fontSize = 14.sp,
+                fontSize = KOiLType.BodyLarge,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
         }
@@ -239,7 +240,7 @@ internal fun StepperInputRow(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("−", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("−", fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Bold, color = Color.White)
             }
             Spacer(Modifier.width(8.dp))
             // 数字区：非编辑态文字（含 2dp 光标占位）记录宽度；编辑态由测量层驱动精确同宽
@@ -254,7 +255,7 @@ internal fun StepperInputRow(
                 ) {
                     Text(
                         text = clamped.toString(),
-                        fontSize = 16.sp,
+                        fontSize = KOiLType.Title,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -280,7 +281,7 @@ internal fun StepperInputRow(
                     ) {
                         Text(
                             text = draft.value!!,
-                            fontSize = 16.sp,
+                            fontSize = KOiLType.Title,
                             fontWeight = FontWeight.Bold,
                             color = Color.Transparent,
                         )
@@ -299,7 +300,7 @@ internal fun StepperInputRow(
                         ),
                         singleLine = true,
                         textStyle = TextStyle(
-                            fontSize = 16.sp,
+                            fontSize = KOiLType.Title,
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onBackground,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
@@ -321,7 +322,7 @@ internal fun StepperInputRow(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = suffix,
-                fontSize = 14.sp,
+                fontSize = KOiLType.BodyLarge,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(Modifier.width(8.dp))
@@ -341,7 +342,7 @@ internal fun StepperInputRow(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Text("+", fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
     }

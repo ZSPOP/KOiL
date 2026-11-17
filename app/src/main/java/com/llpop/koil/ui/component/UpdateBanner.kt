@@ -24,6 +24,7 @@ import com.llpop.koil.ui.theme.KOiLColors
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 首页（AddScreen）摘要卡之后的更新横幅。
@@ -72,7 +73,7 @@ internal fun UpdateBanner(
             ) {
                 Text(
                     text = title ?: stringResource(R.string.koil_ov_update_new, version),
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -82,7 +83,7 @@ internal fun UpdateBanner(
                 Spacer(Modifier.width(8.dp))
                 Text(
                     text = actionLabel + " ›",
-                    fontSize = 11.5.sp,
+                    fontSize = KOiLType.CaptionXLarge,
                     fontWeight = FontWeight.Medium,
                     color = KOiLColors.Primary,
                     maxLines = 1,

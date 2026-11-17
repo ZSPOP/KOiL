@@ -62,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -157,7 +158,7 @@ internal fun SyncPanelBody(
                             Spacer(Modifier.width(4.dp))
                             Text(
                                 text = stringResource(R.string.koil_sync_backup_now),
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = Color.White,
                             )
@@ -185,7 +186,7 @@ internal fun SyncPanelBody(
                             Spacer(Modifier.width(4.dp))
                             Text(
                                 text = stringResource(R.string.koil_sync_restore),
-                                fontSize = 12.sp,
+                                fontSize = KOiLType.BodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = MiuixTheme.colorScheme.onSecondaryContainer,
                             )
@@ -199,7 +200,7 @@ internal fun SyncPanelBody(
                     Spacer(Modifier.height(8.dp))
                     Text(
                         text = stringResource(R.string.koil_sync_backup_restore_entry, backupCount),
-                        fontSize = 12.sp,
+                        fontSize = KOiLType.BodySmall,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
@@ -214,7 +215,7 @@ internal fun SyncPanelBody(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = statusText,
-                        fontSize = 12.sp,
+                        fontSize = KOiLType.BodySmall,
                         lineHeight = 15.sp,
                         color = if (unhealthy) KOiLColors.Warning
                         else MiuixTheme.colorScheme.onBackgroundVariant,
@@ -237,7 +238,7 @@ internal fun SyncPanelBody(
                         Text(
                             text = if (formExpanded) stringResource(R.string.koil_sync_collapse)
                             else stringResource(R.string.koil_sync_manage),
-                            fontSize = 14.sp,
+                            fontSize = KOiLType.BodyLarge,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onSurfaceVariantActions,
                             maxLines = 1,
@@ -377,7 +378,7 @@ internal fun SyncPanelBody(
                                 !syncUi.passwordEncrypted -> stringResource(R.string.koil_sync_password_plain_warn)
                                 else -> stringResource(R.string.koil_sync_app_password_set)
                             },
-                            fontSize = 11.sp,
+                            fontSize = KOiLType.CaptionLarge,
                             lineHeight = 14.sp,
                             color = if (passwordWarn && syncUi.passwordSet) KOiLColors.Warning
                             else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.8f),
@@ -386,7 +387,7 @@ internal fun SyncPanelBody(
                         if (syncUi.passwordSet) {
                             Text(
                                 text = stringResource(R.string.koil_sync_password_clear),
-                                fontSize = 11.sp,
+                                fontSize = KOiLType.CaptionLarge,
                                 color = KOiLColors.Primary,
                                 modifier = Modifier
                                     .padding(top = 4.dp, start = 8.dp)
@@ -426,7 +427,7 @@ internal fun SyncPanelBody(
                             Spacer(Modifier.width(4.dp))
                             Text(
                                 text = stringResource(R.string.koil_sync_save_test),
-                                fontSize = 13.sp,
+                                fontSize = KOiLType.Body,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White,
                             )
@@ -463,7 +464,7 @@ internal fun SyncPanelBody(
                 Column {
                     Text(
                         stringResource(R.string.koil_sync_restore_confirm_title),
-                        fontSize = 16.sp,
+                        fontSize = KOiLType.Title,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -474,7 +475,7 @@ internal fun SyncPanelBody(
                             preview.total,
                             preview.total, preview.valid, preview.duplicates, preview.errors,
                         ),
-                        fontSize = 13.sp,
+                        fontSize = KOiLType.Body,
                         lineHeight = 18.sp,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
@@ -486,7 +487,7 @@ internal fun SyncPanelBody(
                                 preview.skippedByTombstone,
                                 preview.skippedByTombstone,
                             ),
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             lineHeight = 18.sp,
                             color = MiuixTheme.colorScheme.onBackgroundVariant,
                         )
@@ -498,7 +499,7 @@ internal fun SyncPanelBody(
                         Button(
                             onClick = syncVm::dismissRestorePreview,
                             modifier = Modifier.weight(1f),
-                        ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                        ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
                         Spacer(Modifier.width(10.dp))
                         Button(
                             onClick = syncVm::confirmRestore,
@@ -506,7 +507,7 @@ internal fun SyncPanelBody(
                         ) {
                             Text(
                                 stringResource(R.string.koil_sync_restore_confirm, preview.valid),
-                                fontSize = 13.sp,
+                                fontSize = KOiLType.Body,
                                 fontWeight = FontWeight.Medium,
                             )
                         }
@@ -541,14 +542,14 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
             Column {
                 Text(
                     stringResource(R.string.koil_sync_reconcile_corrupt_title),
-                    fontSize = 16.sp,
+                    fontSize = KOiLType.Title,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     stringResource(R.string.koil_sync_reconcile_corrupt_msg),
-                    fontSize = 13.sp,
+                    fontSize = KOiLType.Body,
                     lineHeight = 18.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -557,12 +558,12 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     Button(
                         onClick = viewModel::dismissReconcileCorrupt,
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
                     Spacer(Modifier.width(10.dp))
                     Button(
                         onClick = viewModel::confirmReconcileCorrupt,
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_sync_reconcile_corrupt_overwrite), fontSize = 12.sp) }
+                    ) { Text(stringResource(R.string.koil_sync_reconcile_corrupt_overwrite), fontSize = KOiLType.BodySmall) }
                 }
             }
         }
@@ -575,14 +576,14 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
             Column {
                 Text(
                     stringResource(R.string.koil_sync_reconcile_destructive_title),
-                    fontSize = 16.sp,
+                    fontSize = KOiLType.Title,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     stringResource(R.string.koil_sync_reconcile_destructive_msg),
-                    fontSize = 13.sp,
+                    fontSize = KOiLType.Body,
                     lineHeight = 18.sp,
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
@@ -591,7 +592,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     Button(
                         onClick = { pendingDestructive = null },
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 13.sp) }
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
                     Spacer(Modifier.width(10.dp))
                     Button(
                         onClick = {
@@ -600,7 +601,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             if (mode != null) viewModel.confirmReconcile(mode)
                         },
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_sync_reconcile_confirm), fontSize = 13.sp) }
+                    ) { Text(stringResource(R.string.koil_sync_reconcile_confirm), fontSize = KOiLType.Body) }
                 }
             }
         }
@@ -612,14 +613,14 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                 Column {
                     Text(
                         stringResource(R.string.koil_sync_reconcile_title),
-                        fontSize = 16.sp,
+                        fontSize = KOiLType.Title,
                         fontWeight = FontWeight.Bold,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
                         stringResource(R.string.koil_sync_reconcile_counts, st.localCount, st.cloudCount),
-                        fontSize = 14.sp,
+                        fontSize = KOiLType.BodyLarge,
                         fontWeight = FontWeight.Medium,
                         color = MiuixTheme.colorScheme.onBackground,
                     )
@@ -649,7 +650,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_merge_plain)
                             },
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                             fontWeight = FontWeight.Medium,
                         )
                     }
@@ -664,7 +665,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_local_wins_plain)
                             },
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
@@ -678,13 +679,13 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_cloud_wins_plain)
                             },
-                            fontSize = 13.sp,
+                            fontSize = KOiLType.Body,
                         )
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = stringResource(R.string.koil_common_cancel),
-                        fontSize = 13.sp,
+                        fontSize = KOiLType.Body,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -703,7 +704,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
 internal fun ReconcileLine(text: String) {
     Text(
         text = "· $text",
-        fontSize = 13.sp,
+        fontSize = KOiLType.Body,
         lineHeight = 18.sp,
         color = MiuixTheme.colorScheme.onBackgroundVariant,
         modifier = Modifier.padding(bottom = 4.dp),
@@ -725,14 +726,14 @@ internal fun LocalBackupDialog(viewModel: SyncViewModel) {
         Column {
             Text(
                 stringResource(R.string.koil_sync_backup_restore_title),
-                fontSize = 16.sp,
+                fontSize = KOiLType.Title,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 stringResource(R.string.koil_sync_backup_restore_hint),
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 lineHeight = 17.sp,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
@@ -745,7 +746,7 @@ internal fun LocalBackupDialog(viewModel: SyncViewModel) {
                 }
                 Text(
                     text = label,
-                    fontSize = 13.sp,
+                    fontSize = KOiLType.Body,
                     color = if (b.recordCount < 0) MiuixTheme.colorScheme.onBackgroundVariant
                     else MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier
@@ -758,7 +759,7 @@ internal fun LocalBackupDialog(viewModel: SyncViewModel) {
             Spacer(Modifier.height(6.dp))
             Text(
                 text = stringResource(R.string.koil_common_cancel),
-                fontSize = 13.sp,
+                fontSize = KOiLType.Body,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -785,7 +786,7 @@ internal fun SyncStatusBadge(healthy: Boolean) {
         Text(
             text = if (healthy) stringResource(R.string.koil_sync_badge_on)
             else stringResource(R.string.koil_sync_badge_off),
-            fontSize = 11.sp,
+            fontSize = KOiLType.CaptionLarge,
             fontWeight = FontWeight.Medium,
             color = if (healthy) KOiLColors.Primary
             else MiuixTheme.colorScheme.onBackgroundVariant,

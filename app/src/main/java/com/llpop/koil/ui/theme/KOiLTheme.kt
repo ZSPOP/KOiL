@@ -30,6 +30,39 @@ object KOiLColors {
      * 又避开了涨跌语义。仅用于油价卡片「上次核对结论」的失败类，别处仍用 [Warning]。
      */
     val OutcomeWarning = Color(0xFFE8A33D)
+
+    // ===== 涨跌（数据页 / 记录卡 / 油价详情）=====
+    /** 涨价 / 上调（红）。原散落在 PriceUpColor、UpColor 等多处同名值 */
+    val PriceUp = Color(0xFFE53935)
+    /** 跌价 / 下调（绿） */
+    val PriceDown = Color(0xFF43A047)
+
+    // ===== 油耗好坏三档（记录卡 / 六指标）=====
+    // 深浅两套分开是刻意的：深橙 0xFFE65100 落在深色页上对比不足，深色模式换浅一档。
+    /** 偏高（差）：浅色模式 */
+    val AttentionDay = Color(0xFFE65100)
+    /** 偏高（差）：深色模式 */
+    val AttentionNight = Color(0xFFFF8A65)
+    /** 偏低（好）：浅色模式 */
+    val GoodDay = Color(0xFF2E7D32)
+    /** 偏低（好）：深色模式 */
+    val GoodNight = Color(0xFF66BB6A)
+    /** 居中档（既不好也不差，如预测提示） */
+    val NeutralAmber = Color(0xFFF59E0B)
+
+    // ===== 状态三色 + 10% 容器底 =====
+    /** 错误 / 阻断 */
+    val Error = Color(0xFFFF3B30)
+    /** 错误容器底（10% alpha） */
+    val ErrorContainer = Color(0x1AFF3B30)
+    /** 警示 / 待确认 */
+    val Caution = Color(0xFFFF9500)
+    /** 警示容器底（10% alpha） */
+    val CautionContainer = Color(0x1AFF9500)
+    /** 通过 / 正常 */
+    val Success = Color(0xFF34C759)
+    /** 通过容器底（10% alpha） */
+    val SuccessContainer = Color(0x1A34C759)
 }
 
 /**

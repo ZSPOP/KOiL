@@ -55,6 +55,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 
 
@@ -86,7 +87,7 @@ internal fun EditRecordDialog(
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
             Text(
                 text = stringResource(R.string.koil_ov_edit_title),
-                fontSize = 18.sp,
+                fontSize = KOiLType.Headline,
                 fontWeight = FontWeight.Bold,
                 color = MiuixTheme.colorScheme.onBackground,
             )
@@ -239,7 +240,7 @@ internal fun EditRecordDialog(
                     Button(
                         onClick = onDismiss,
                         modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = 14.sp) }
+                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.BodyLarge) }
                     Spacer(Modifier.width(12.dp))
                     Button(
                         onClick = onSave,
@@ -252,7 +253,7 @@ internal fun EditRecordDialog(
                             disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                             disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
                         ),
-                    ) { Text(stringResource(R.string.koil_common_save), fontSize = 14.sp, fontWeight = FontWeight.Medium) }
+                    ) { Text(stringResource(R.string.koil_common_save), fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Medium) }
                 }
             }
         }
@@ -296,8 +297,8 @@ internal fun BackfillPrecheckHint(
     }
     val blocking = beforeFirst || sameDayExists ||
         mileageConflictType.isNotBlank() || deviationExceeded || overPayable || overTank
-    val (bg, fg) = if (blocking) Color(0x1AFF9500) to Color(0xFFFF9500)
-    else Color(0x1A34C759) to Color(0xFF34C759)
+    val (bg, fg) = if (blocking) KOiLColors.CautionContainer to KOiLColors.Caution
+    else KOiLColors.SuccessContainer to KOiLColors.Success
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -305,7 +306,7 @@ internal fun BackfillPrecheckHint(
             .background(bg)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Text(text, fontSize = 12.sp, color = fg)
+        Text(text, fontSize = KOiLType.BodySmall, color = fg)
     }
 }
 
@@ -316,13 +317,13 @@ internal fun SaveErrorHint() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x1AFF3B30))
+            .background(KOiLColors.ErrorContainer)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(
             text = stringResource(R.string.koil_ov_save_failed),
-            fontSize = 12.sp,
-            color = Color(0xFFFF3B30),
+            fontSize = KOiLType.BodySmall,
+            color = KOiLColors.Error,
         )
     }
 }
@@ -345,7 +346,7 @@ internal fun MileageRangeHint(rangeMin: Double?, rangeMax: Double?) {
             .background(Color(0x14FFFFFF))
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Text(text, fontSize = 12.sp, color = Color(0xFF9AA0A6))
+        Text(text, fontSize = KOiLType.BodySmall, color = Color(0xFF9AA0A6))
     }
 }
 
@@ -365,7 +366,7 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.koil_ov_field_province),
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -390,7 +391,7 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
             ) {
                 Text(
                     text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else provinceLabel(province),
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     fontWeight = if (province.isBlank()) FontWeight.Normal else FontWeight.Bold,
                     color = if (province.isBlank()) MiuixTheme.colorScheme.onBackgroundVariant else MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f),
@@ -442,8 +443,8 @@ internal fun PaymentSummaryCard(
     val hasFuel = fuelAmount != null && fuelAmount > 0
     val hasReference = referencePrice != null && referencePrice > 0
 
-    val green = Color(0xFF34C759)
-    val amber = Color(0xFFFF9500)
+    val green = KOiLColors.Success
+    val amber = KOiLColors.Caution
     val gray = MiuixTheme.colorScheme.onBackgroundVariant
 
     // 第一行：优惠概览（应付/实付都有时显示）
@@ -488,11 +489,11 @@ internal fun PaymentSummaryCard(
                 ) {
                     Text(
                         text = stringResource(R.string.koil_ps_payable_actual, payable, actual),
-                        fontSize = 12.sp,
+                        fontSize = KOiLType.BodySmall,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier.weight(1f),
                     )
-                    Text(savingsText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = savingsColor)
+                    Text(savingsText, fontSize = KOiLType.Body, fontWeight = FontWeight.SemiBold, color = savingsColor)
                 }
                 Spacer(Modifier.height(6.dp))
             }
@@ -506,11 +507,11 @@ internal fun PaymentSummaryCard(
                             append(stringResource(R.string.koil_ps_actual_unit, actualUnitPrice))
                             if (hasReference) append("  ·  ").append(stringResource(R.string.koil_ps_ref_price, referencePrice))
                         },
-                        fontSize = 12.sp,
+                        fontSize = KOiLType.BodySmall,
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                         modifier = Modifier.weight(1f),
                     )
-                    Text(unitDiffText, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = unitDiffColor)
+                    Text(unitDiffText, fontSize = KOiLType.BodySmall, fontWeight = FontWeight.Medium, color = unitDiffColor)
                 }
             }
         }
@@ -555,7 +556,7 @@ internal fun EditField(
     error: Boolean = false,
     placeholder: String? = null,
 ) {
-    val errorColor = Color(0xFFFF3B30)
+    val errorColor = KOiLColors.Error
     val tfColors = TextFieldDefaults.textFieldColors(
         backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
         labelColor = if (error) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
@@ -572,7 +573,7 @@ internal fun EditField(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = if (error) errorColor else MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -592,7 +593,7 @@ internal fun EditField(
             if (placeholder != null && value.isEmpty()) {
                 Text(
                     text = placeholder,
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                     modifier = Modifier
                         .align(Alignment.CenterStart)
@@ -623,7 +624,7 @@ internal fun GradePriceSelect(
                 modifier = Modifier.size(14.dp),
             )
             Spacer(Modifier.width(4.dp))
-            Text(text = stringResource(R.string.koil_ov_grade), fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+            Text(text = stringResource(R.string.koil_ov_grade), fontSize = KOiLType.BodySmall, color = MiuixTheme.colorScheme.onBackgroundVariant)
         }
         Spacer(Modifier.height(6.dp))
         Box(
@@ -646,7 +647,7 @@ internal fun GradePriceSelect(
             ) {
                 Text(
                     text = "$grade# · ${price?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L"}",
-                    fontSize = 14.sp,
+                    fontSize = KOiLType.BodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     modifier = Modifier.weight(1f),

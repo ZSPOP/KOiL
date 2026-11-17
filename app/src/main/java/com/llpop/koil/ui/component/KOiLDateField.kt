@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 日期选择字段（补录/编辑/首页录入统一使用）。
@@ -62,7 +63,7 @@ fun KOiLDateField(
             Spacer(Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.koil_add_date),
-                fontSize = 12.sp,
+                fontSize = KOiLType.BodySmall,
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
         }
@@ -88,7 +89,7 @@ fun KOiLDateField(
             ) {
                 Text(
                     text = date,
-                    fontSize = 16.sp,
+                    fontSize = KOiLType.Title,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
