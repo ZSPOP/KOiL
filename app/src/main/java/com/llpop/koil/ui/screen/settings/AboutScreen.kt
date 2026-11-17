@@ -104,6 +104,7 @@ import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.resolveCapsuleState
+import com.llpop.koil.data.update.showsReadySlot
 import com.llpop.koil.data.update.formatReleaseDate
 import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
@@ -249,7 +250,12 @@ private fun AboutContent(
     // 读起来就是「卡在 100%」。稳态该用结论，不该用过程。
     var statusSlot by remember { mutableStateOf<StatusSlot?>(null) }
     val statusSlotAlpha = remember { Animatable(0f) }
-    LaunchedEffect(downloadState) {
+    // 「当前新版」的 tag 必须进 key：Ready 由 ApkUpdater 在下载完成时发，Newer 由进页那次
+    // check 回来才有，两条线不同步。只把 downloadState 当 key 时，冷启动/重进关于页会命中
+    // 「Ready 先到、status 还是 Idle」——守卫判成不匹配直接淡出，之后 status 变成 Newer
+    // 又不会重启这个 effect，「安装包已就绪」就再也不出现。
+    val newerTag = (status as? AboutUpdateStatus.Newer)?.tag
+    LaunchedEffect(downloadState, newerTag) {
         when (val d = downloadState) {
             is UpdateDownloadState.Downloading -> {
                 statusSlot = StatusSlot.Progress(
@@ -260,8 +266,7 @@ private fun AboutContent(
             is UpdateDownloadState.Ready -> {
                 // Ready 只在「这份包就是当前新版」时才有意义：盘上留着旧版包、界面已经提示有新版本时，
                 // 说「安装包已就绪」会让人以为能直接装（胶囊其实写着「有新版本」）
-                val currentTag = (status as? AboutUpdateStatus.Newer)?.tag
-                if (currentTag == null || currentTag != apkUpdater.readyTagSnapshot) {
+                if (!showsReadySlot(newerTag, apkUpdater.readyTagSnapshot)) {
                     statusSlotAlpha.animateTo(0f, tween(250))
                     statusSlot = null
                     return@LaunchedEffect
@@ -721,7 +726,7 @@ private fun BoxScope.AboutHero(
     capsule: @Composable () -> Unit,
     /**
      * 当前是否真有胶囊：与 [resolveCapsuleState] 同源（非 Hidden 即有）。
-     * 它只决定「要不要组合胶囊」；槽位恒为 [capsuleSlotHeight]（89dp）、与它无关——
+     * 它只决定「要不要组合胶囊」；槽位恒为 [capsuleSlotHeight]（52dp）、与它无关——
      * hero 总高固定，信息卡不因版本状态上下跳。
      */
     hasCapsule: Boolean,
@@ -857,7 +862,10 @@ private fun BoxScope.AboutHero(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(capsuleSlotHeight),
+                .height(capsuleSlotHeight)
+                // 胶囊属于 hero，必须跟 logo 同一条淡出曲线：否则上滑时 logo 与版本号已经淡没了，
+                // 这块仍以全不透明压在滚上来的卡片上，看起来就是一个悬空的胶囊。
+                .graphicsLayer { alpha = 1f - iconProgress() },
             contentAlignment = Alignment.Center,
         ) {
             if (hasCapsule && interactive) {

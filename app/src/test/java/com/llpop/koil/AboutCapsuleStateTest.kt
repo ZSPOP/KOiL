@@ -10,6 +10,7 @@ import com.llpop.koil.data.update.AboutUpdateStatus
 import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.resolveCapsuleState
+import com.llpop.koil.data.update.showsReadySlot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -130,5 +131,25 @@ class AboutCapsuleStateTest {
         val status = newer("V1.1.18")
         assertEquals(Newer, resolveCapsuleState(status, UpdateDownloadState.Idle, null))
         assertEquals(Install, resolveCapsuleState(status, UpdateDownloadState.Idle, "V1.1.18"))
+    }
+
+    // —— 状态行「安装包已就绪」的显示条件 ——
+
+    @Test
+    fun `已就绪文案只在当前新版与盘上包同 tag 时出现`() {
+        assertTrue(showsReadySlot("V1.1.18", "V1.1.18"))
+    }
+
+    @Test
+    fun `盘上留着旧包时不写已就绪 —— 胶囊那边写的是有新版本`() {
+        assertFalse(showsReadySlot("V1.1.19", "V1.1.18"))
+    }
+
+    @Test
+    fun `两条线的时间差不能当成不匹配 —— 任一侧还没到都是 false，随后会重算`() {
+        // 冷启动：Ready 先到、进页那次 check 还没回来
+        assertFalse(showsReadySlot(null, "V1.1.18"))
+        // 进页 check 已回来但盘上还没有包
+        assertFalse(showsReadySlot("V1.1.18", null))
     }
 }
