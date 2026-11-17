@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -101,13 +100,6 @@ private data class GiteeRelease(
  */
 class UpdateChecker(private val settings: AppSettings) {
 
-    /**
-     * 用户已知晓的版本 tag，**只在本次运行内有效**（冷启动清零，不落库）。
-     * 产品口径：横幅的 × 只收起本次运行，冷启动后新版本横幅必须重新出现 ——
-     * 所以这个值不能再写 DataStore，否则「× 掉之后永远不再提醒」。
-     */
-    private val sessionSeenTag = MutableStateFlow("")
-
     /** 最近一次**成功**检查的时间戳（0=从未查过）。 */
     fun lastCheckAt(): Flow<Long> = settings.updateLastCheckAt
 
@@ -119,12 +111,6 @@ class UpdateChecker(private val settings: AppSettings) {
     fun lastFailedAt(): Flow<Long> = settings.updateLastFailedAt
 
     /**
-     * 用户已知晓的版本 tag（原始形式）。与 [updateTarget] 配合判定红点：
-     * 两者不等 = 有新版本且用户还没被告知过。写入时机见 [markSeen]。
-     */
-    fun seenTag(): Flow<String> = sessionSeenTag
-
-    /**
      * tag 与直链的**单一快照**。UI 一律读这个，不分别订阅 latestTag / latestApkUrl：
      * 两条 collect 是两帧，中间可能取到「新 tag + 旧 url」→ 下上一版的包、校验全过、
      * 装完仍是旧版，还把新版标成已读。DataStore 一次 map 出来，就不存在这个窗口。
@@ -133,19 +119,6 @@ class UpdateChecker(private val settings: AppSettings) {
         settings.updateTargetPair.map { (tag, url) ->
             if (tag.isBlank()) null else UpdateTarget(tag, url)
         }
-
-    /**
-     * 记录「用户已知晓此版本」，**只影响本次运行**（冷启动清零）。
-     * 调用时机必须是用户主动表达知悉的动作：**关闭首页更新横幅**（唯一调用点）。
-     * **下载进行中、下载失败、拉起安装器但未装成都不要调用**
-     * ——那会让红点与横幅同时消失，用户再也不会被提醒。
-     * （装成功后 `isNewerRelease(latest, 当前版本)` 自然为 false，横幅自己就消失了，
-     * 不需要任何人提前写 seenTag 去兜。）
-     */
-    fun markSeen(tag: String) {
-        if (tag.isBlank()) return
-        sessionSeenTag.value = tag
-    }
 
     /**
      * 冷启动 / 回前台静默检查：距上次**成功**检查不足 [INTERVAL_MS] 时直接返回 null（不发请求、不写库）。
@@ -378,18 +351,35 @@ fun isNewerRelease(latestTag: String, currentVersion: String): Boolean =
     latestTag.isNotEmpty() &&
         compareVersionNames(normalizeVersion(latestTag), currentVersion) > 0
 
+/** 同一版本的重复提醒间隔：7 天 */
+const val UPDATE_NOTIFY_REMIND_AFTER_MS = 7L * 24 * 60 * 60 * 1000
+
 /**
- * 红点判定：存在严格更新的正式 release，且用户还没知晓过这个版本。
+ * 「新版本通知要不要发」。
  *
- * 抽成纯函数而不是留在 Composable 里的表达式——这段逻辑决定「要不要提醒」，
- * 判错的后果是用户永远看不到新版本或每次都被重复提示，必须能单测（见 UpdateVersionTest）。
+ * 为什么不是「一个版本只提醒一次」：通知会被划掉、App 在前台时它只躺在通知栏不弹横幅，
+ * 而「通知过就永久挡住」的旧判据 —— 结果是「发过一次」经常等于「用户没看见」。
+ * 折中成两层：换了版本立刻发；同一个版本最多 7 天再发一次，直到装上为止。
+ * 用户点过通知（[UpdateNotifier.markAcknowledged]）会把时间戳刷新，就不会再被追。
  *
- * @param latestTag DataStore 里最近一次查到的 tag（空串=从未查到）
- * @param seenTag 用户已知晓的 tag（空串=从未知晓）
- * @param currentVersion 本机 versionName，用于挡住「本地已是最新」的情况
+ * @param notifiedTag 上次通知过的 tag（空串=从未通知）
+ * @param notifiedAt 上次通知/被点击的时间戳（0=从未）
+ * @param targetTag 这次查到的新版本 tag
+ * @param now 当前时间（走 AppClock，便于单测）
  */
-fun shouldShowBanner(latestTag: String, seenTag: String, currentVersion: String): Boolean =
-    isNewerRelease(latestTag, currentVersion) && latestTag != seenTag
+fun shouldNotifyUpdate(
+    notifiedTag: String,
+    notifiedAt: Long,
+    targetTag: String,
+    now: Long,
+    remindAfterMs: Long = UPDATE_NOTIFY_REMIND_AFTER_MS,
+): Boolean {
+    if (targetTag.isBlank()) return false
+    // 换了版本：新版本该有自己的那一条
+    if (notifiedTag != targetTag) return true
+    // 同一版本：没到间隔就安静（时钟回拨时 now - notifiedAt < 0，同样落到这里，不发）
+    return now - notifiedAt >= remindAfterMs
+}
 
 /**
  * 「设置页红点要不要亮」：只看有没有新版本，**不受横幅 × 影响**。

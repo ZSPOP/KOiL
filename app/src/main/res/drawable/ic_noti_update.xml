@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <!-- 下载箭头 + 托盘：新版本通知小图标（单色，系统按需着色） -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,3a1,1 0 0,1 1,1v7.6l2.3,-2.3a1,1 0 0,1 1.4,1.4l-4,4a1,1 0 0,1 -1.4,0l-4,-4a1,1 0 0,1 1.4,-1.4L11,11.6V4a1,1 0 0,1 1,-1z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M4,16a1,1 0 0,1 1,1v2h14v-2a1,1 0 0,1 2,0v3a2,2 0 0,1 -2,2H6a2,2 0 0,1 -2,-2v-3a1,1 0 0,1 1,-1z" />
+</vector>

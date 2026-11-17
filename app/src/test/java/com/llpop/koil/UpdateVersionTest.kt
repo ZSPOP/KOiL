@@ -3,8 +3,9 @@ package com.llpop.koil
 import com.llpop.koil.data.update.compareVersionNames
 import com.llpop.koil.data.update.isNewerRelease
 import com.llpop.koil.data.update.normalizeVersion
+import com.llpop.koil.data.update.UPDATE_NOTIFY_REMIND_AFTER_MS
 import com.llpop.koil.data.update.shouldBadgeUpdate
-import com.llpop.koil.data.update.shouldShowBanner
+import com.llpop.koil.data.update.shouldNotifyUpdate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -76,27 +77,6 @@ class UpdateVersionTest {
     }
 
     @Test
-    fun `shouldShowBanner 只在有新版本且横幅未被收起时成立`() {
-        val current = "1.1.3"
-
-        // 从未查到过 : 不出现
-        assertFalse(shouldShowBanner("", "", current))
-        // 查到的 tag 不比本机新 : 不出现（防止把同版本或更低版本标成更新）
-        assertFalse(shouldShowBanner("V1.1.2", "", current))
-        assertFalse(shouldShowBanner("V1.1.3", "", current))
-
-        // 有更新且没点过 × : 出现
-        assertTrue(shouldShowBanner("V1.1.4", "", current))
-        assertTrue(shouldShowBanner("V1.1.4", "V1.1.3", current))
-
-        // 点过 × 收起同一版本 : 不出现（× 只收起本次运行）
-        assertFalse(shouldShowBanner("V1.1.4", "V1.1.4", current))
-
-        // 又发了更新的版本 : seenTag 停在旧版本也要重新出现
-        assertTrue(shouldShowBanner("V1.1.5", "V1.1.4", current))
-    }
-
-    @Test
     fun `shouldBadgeUpdate 只看有没有新版本，不受横幅被收起影响`() {
         val current = "1.1.3"
 
@@ -104,10 +84,29 @@ class UpdateVersionTest {
         assertFalse(shouldBadgeUpdate("V1.1.2", current))
         assertFalse(shouldBadgeUpdate("V1.1.3", current))
 
-        // 有新版本就亮 —— 与 seenTag 无关（这是它与 shouldShowBanner 的关键差别）
+        // 有新版本就亮 —— 与任何「已读/已收起」状态无关
         assertTrue(shouldBadgeUpdate("V1.1.4", current))
 
         // 装完最新版 : 不再比本机新，红点自然灭
         assertFalse(shouldBadgeUpdate("V1.1.4", "1.1.4"))
+    }
+
+    @Test
+    fun `shouldNotifyUpdate 换了版本立刻发，同一版本按 7 天节流`() {
+        val day = 24L * 60 * 60 * 1000
+        val now = 10 * day
+
+        // 从没通知过 : 发
+        assertTrue(shouldNotifyUpdate("", 0L, "V1.2.6", now))
+        // tag 空 : 不发（没有可提醒的目标）
+        assertFalse(shouldNotifyUpdate("V1.2.5", 0L, "", now))
+        // 换了版本 : 立刻发，哪怕上一条刚发过
+        assertTrue(shouldNotifyUpdate("V1.2.5", now - 60_000L, "V1.2.6", now))
+        // 同一版本且刚发过 : 安静（这就是原来自动 45 分钟一次的挡板）
+        assertFalse(shouldNotifyUpdate("V1.2.6", now - day, "V1.2.6", now))
+        // 同一版本但已过 7 天 : 再提醒一次（通知被划掉/没看见的兜底）
+        assertTrue(shouldNotifyUpdate("V1.2.6", now - UPDATE_NOTIFY_REMIND_AFTER_MS, "V1.2.6", now))
+        // 时钟回拨（时间戳在未来）: 判成未到间隔，不发
+        assertFalse(shouldNotifyUpdate("V1.2.6", now + day, "V1.2.6", now))
     }
 }

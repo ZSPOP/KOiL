@@ -14,6 +14,7 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.update.ApkUpdater
 import com.llpop.koil.data.update.UpdateChecker
+import com.llpop.koil.data.update.UpdateNotifier
 import com.llpop.koil.data.sync.WebDavClient
 import com.llpop.koil.ui.MainViewModel
 import com.llpop.koil.ui.screen.add.AddViewModel
@@ -49,6 +50,8 @@ val appModule = module {
     singleOf(::RecordStore)
     singleOf(::CloudSyncManager)
     singleOf(::UpdateChecker)
+    // UpdateNotifier 需要 Context：singleOf 会去容器里找 Context 类型，这里显式构造
+    single { UpdateNotifier(androidContext(), get()) }
     // 下载器持有应用级 scope：页面被销毁时下载不应中断，所以不能挂在 ViewModel 上
     singleOf(::ApkUpdater)
 

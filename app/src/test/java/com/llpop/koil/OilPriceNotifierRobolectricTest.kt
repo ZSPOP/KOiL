@@ -59,7 +59,7 @@ class OilPriceNotifierRobolectricTest {
         settings = AppSettings(context)
         notifier = OilPriceChangeNotifier(settings, db.koilPriceDao())
         // 每个用例从同一份干净状态出发
-        settings.setPricePush(true)
+        settings.setNotifyEnabled(true)
         settings.setDefaultProvince(province)
         settings.setPriceLastNotifiedDate("")
         settings.setPriceLastWindowReminded("")
@@ -157,7 +157,7 @@ class OilPriceNotifierRobolectricTest {
 
     @Test
     fun `推送开关关闭时一条都不发，也不写锚点`() = runBlocking {
-        settings.setPricePush(false)
+        settings.setNotifyEnabled(false)
         db.koilPriceDao().insertAll(listOf(price("2026-11-10", 8.00)))
         settings.setPriceDbAdjustDates(listOf(today))
         notifier.notifyPriceChanges(context)

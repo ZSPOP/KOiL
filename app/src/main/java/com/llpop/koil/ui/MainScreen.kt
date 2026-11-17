@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -86,7 +87,13 @@ import com.llpop.koil.ui.theme.KOiLType
  * 非悬浮时保留普通 NavigationBar + BlurredBar 模糊。
  */
 @Composable
-fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
+fun MainScreen(
+    /** 从「新版本提醒」通知点进来：首帧就落在关于页，不用用户再找一层 */
+    openAboutOnLaunch: Boolean = false,
+    /** 消费掉上面那个请求，避免返回首页后又被它弹回关于页 */
+    onOpenAboutHandled: () -> Unit = {},
+    viewModel: MainViewModel = koinViewModel(),
+) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
     val floatingBottomBar by viewModel.floatingBottomBar.collectAsStateWithLifecycle()
@@ -168,6 +175,13 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
             // 关于页开关：同样提升到 MainScreen 级全屏页（二级路由页）
             var showAbout by rememberSaveable { mutableStateOf(false) }
+            // 通知点进来：状态变化才生效（App 已在前台时点通知走 onNewIntent，不重组就不会读到新值）
+            LaunchedEffect(openAboutOnLaunch) {
+                if (openAboutOnLaunch) {
+                    showAbout = true
+                    onOpenAboutHandled()
+                }
+            }
 
             // 一级页的返回手势：数据总览 / 设定不是首页，按返回先回首页，不退出应用；
             // 只在首页按返回才交给系统（Activity finish）。
@@ -341,8 +355,6 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
                                     0 -> AddScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
-                                        // 更新横幅点进来 → 关于页（落地自动重新检查）
-                                        onOpenAbout = { showAbout = true },
                                     )
                                     1 -> OverviewScreen(
                                         modifier = contentModifier,

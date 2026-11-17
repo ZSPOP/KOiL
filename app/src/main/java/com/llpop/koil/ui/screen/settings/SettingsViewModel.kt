@@ -55,7 +55,7 @@ data class SettingsUiState(
     val keepLastGrade: Boolean = false,
     val abnormalThreshold: Double = AppSettings.DEFAULT_ABNORMAL_THRESHOLD,
     val priceAlert: Boolean = false,
-    val pricePush: Boolean = true,
+    val notifyEnabled: Boolean = true,
     val locationEnabled: Boolean = false,
     val priceDbAutoUpdate: Boolean = false,
     val deviationThreshold: Double = AppSettings.DEFAULT_DEVIATION_THRESHOLD,
@@ -520,7 +520,7 @@ class SettingsViewModel(
         settings.keepLastGrade,
         settings.abnormalThreshold,
         settings.priceAlert,
-        settings.pricePush,
+        settings.notifyEnabled,
         settings.locationEnabled,
         settings.priceDbAutoUpdate,
         settings.deviationThreshold,
@@ -537,7 +537,7 @@ class SettingsViewModel(
             keepLastGrade = args[5] as Boolean,
             abnormalThreshold = args[6] as Double,
             priceAlert = args[7] as Boolean,
-            pricePush = args[8] as Boolean,
+            notifyEnabled = args[8] as Boolean,
             locationEnabled = args[9] as Boolean,
             priceDbAutoUpdate = args[10] as Boolean,
             deviationThreshold = args[11] as Double,
@@ -584,8 +584,8 @@ class SettingsViewModel(
     fun setPriceAlert(on: Boolean) =
         viewModelScope.launch { settings.setPriceAlert(on) }
 
-    fun setPricePush(on: Boolean) =
-        viewModelScope.launch { settings.setPricePush(on) }
+    fun setNotifyEnabled(on: Boolean) =
+        viewModelScope.launch { settings.setNotifyEnabled(on) }
 
     fun setLocationEnabled(on: Boolean) =
         viewModelScope.launch { settings.setLocationEnabled(on) }

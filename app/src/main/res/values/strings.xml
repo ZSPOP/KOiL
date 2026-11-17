@@ -308,10 +308,16 @@
     </plurals>
     <string name="koil_pdb_seeding_progress">正在补灌 %1$d/%2$d 省…</string>
     <string name="koil_pdb_seeding_waiting">等待调价日历就绪，稍后自动重试</string>
-    <string name="koil_set_price_push">调价推送通知</string>
-    <string name="koil_set_price_push_sub">调价生效与窗口日前推送系统通知</string>
+    <string name="koil_noti_price_channel">调价推送通知</string>
+    <string name="koil_noti_price_channel_desc">调价生效与窗口日前推送系统通知</string>
+    <string name="koil_set_notify">系统通知</string>
+    <string name="koil_set_notify_sub">系统消息推送与提醒</string>
+    <string name="koil_noti_update_channel">应用更新</string>
+    <string name="koil_noti_update_channel_desc">有新版本时提醒一次；下载与安装都在关于页</string>
+    <string name="koil_noti_update_title">KOiL 有新版本 %1$s</string>
+    <string name="koil_noti_update_body">点开进入关于页查看，下载与安装都在那里</string>
     <!-- 权限联动提示 -->
-    <string name="koil_set_price_push_denied">系统通知权限未开启，推送无法送达，点此开启</string>
+    <string name="koil_set_notify_denied">系统通知权限未开启，推送无法送达，点此开启</string>
     <string name="koil_set_location_denied">未获得定位权限，开启定位需同意权限请求</string>
     <string name="koil_noti_title_price_adjust">油价已调整</string>
     <string name="koil_noti_msg_price_adjust">%1$s %2$s：¥%3$.2f → ¥%4$.2f</string>
@@ -392,9 +398,6 @@
     <string name="koil_set_about_feedback_sub">附带版本号与机型，便于定位</string>
     <string name="koil_set_about_open_failed">没有可打开该链接的应用</string>
     <string name="koil_common_close">关闭</string>
-    <string name="koil_ov_update_new">发现新版本 %1$s</string>
-    <string name="koil_ov_update_view">查看</string>
-    <string name="koil_ov_update_dismiss">关闭更新提示</string>
     <string name="koil_set_about_terms_body">KOiL 用于记录个人加油数据、查询公开的成品油调价信息。\n\n数据准确性：油价以加油站公示与官方调价公告为准，应用内的参考价、预测与折合仅作参考，不构成消费或投资建议。\n\n使用风险：因录入错误、数据源延迟或设备故障造成的记录偏差，由使用者自行承担。\n\n本应用为开源项目，按「现状」提供，不承诺无中断或无错误运行。</string>
     <string name="koil_set_about_privacy_body">本地优先：加油记录、车辆信息与设置项全部保存在设备本地，不上传任何服务器。\n\n定位权限：仅在开启「自动定位省份」时使用，结果只用于填充默认省份，不记录轨迹、不上传。\n\n云同步（可选）：开启后数据只备份到你自己的 WebDAV 服务器（如坚果云），账号与应用密码加密后存于本机，开发者无法访问。\n\n崩溃日志：只保存在本机，需手动导出，不会自动上报。</string>
     <string name="koil_sync_badge_on">已连接</string>
