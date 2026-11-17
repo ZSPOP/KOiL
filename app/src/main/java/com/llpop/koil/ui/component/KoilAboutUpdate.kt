@@ -35,14 +35,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 
 /** 胶囊宽度占屏宽的比例（图二实测 63%，用比例而不是写死 dp：小屏不溢出、大屏不变形） */
-private const val ACTION_WIDTH_FRACTION = 0.63f
+// internal 而不是 private：关于页的状态行进度条要跟这个胶囊同宽，
+ // 两处各写一个 0.63f 迟早会漂移
+internal const val ACTION_WIDTH_FRACTION = 0.63f
 
 /** 胶囊高度 52dp，圆角取它的一半 → 左右两端是完整半圆（纯胶囊形） */
 private val ACTION_HEIGHT = 52.dp
 private val ACTION_CORNER = ACTION_HEIGHT / 2
 
 /** 进度条粗细：比分割线（1dp）厚，比文字笔画细，"看得见但不抢戏" */
-private val PROGRESS_HEIGHT = 3.dp
 
 /**
  * 关于页的胶囊按钮 + 下载进度条。
@@ -77,7 +78,6 @@ fun KoilAboutUpdateButton(
 ) {
     val capsule = resolveCapsuleState(status, downloadState, readyTag, extraFailed)
     if (capsule == AboutCapsuleState.Hidden) return
-    val downloading = downloadState as? UpdateDownloadState.Downloading
 
     val label = when (capsule) {
         AboutCapsuleState.Failed -> stringResource(R.string.koil_about_action_failed)
@@ -130,43 +130,8 @@ fun KoilAboutUpdateButton(
                 textAlign = TextAlign.Center,
             )
         }
-        if (downloading != null) {
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                // percent < 0 = 服务端没给 Content-Length，交给组件跑不确定态动画
-                progress = if (downloading.percent >= 0) downloading.percent / 100f else null,
-                height = PROGRESS_HEIGHT,
-                modifier = Modifier.fillMaxWidth(ACTION_WIDTH_FRACTION),
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = if (downloading.percent >= 0) {
-                    // 「45% (3.4MB/6.4MB)」：括号里只放数字与单位，帮用户判断这包到底多大；
-                    // 拿不到总大小时（percent < 0）不加括号，否则分母是假的
-                    stringResource(
-                        R.string.koil_about_percent_with_size,
-                        downloading.percent,
-                        "%.1f".format(java.util.Locale.ROOT, downloading.received / 1048576f),
-                        "%.1f".format(java.util.Locale.ROOT, downloading.total / 1048576f),
-                    )
-                } else {
-                    // 拿不到总大小：只报已下载量，不画百分比（分子有了、分母没有，百分比是假的）
-                    stringResource(
-                        R.string.koil_about_downloaded,
-                        // Locale.ROOT：format 默认跟随系统语言，德语/法语会把小数点写成逗号，
-                        // 拼进「已下载 %1$s MB」就变成「已下载 3,4 MB」
-                        "%.1f".format(java.util.Locale.ROOT, downloading.received / 1048576f),
-                    )
-                },
-                fontSize = KOiLType.BodySmall,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                // 槽位高度定死 89dp（52 + 37）：这行一旦换行会多占一行（~17dp），
-                // 大字号下累计溢出会吃到下方 50dp 间距。限成单行，最坏情况封死在这一行里。
-                // 用 Ellipsis 而不是默认的 Clip：真放不下时省略号收尾，比把字形硬切一半好读。
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        // 进度条不再挂在这里：它挪到 hero 的「状态文案那一行」（见 AboutScreen 的
+        // DownloadProgressLine）。胶囊槽位因此从 89dp 收回 52dp，下载前后 hero 高度都不变。
     }
 }
 

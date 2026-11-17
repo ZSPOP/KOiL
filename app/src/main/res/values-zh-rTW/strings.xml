@@ -444,6 +444,8 @@
     <string name="koil_about_action_cancel_download">取消下載</string>
     <string name="koil_about_action_install">安裝最新版</string>
     <string name="koil_about_action_failed">下載失敗</string>
+    <string name="koil_about_package_ready">安裝包已就緒 · %1$s MB</string>
+    <string name="koil_about_package_ready_plain">安裝包已就緒</string>
     <string name="koil_about_percent_with_size">%1$d%% (%2$sMB/%3$sMB)</string>
     <string name="koil_about_downloaded">已下載 %1$s MB</string>
     <string name="koil_ov_update_view">查看</string>

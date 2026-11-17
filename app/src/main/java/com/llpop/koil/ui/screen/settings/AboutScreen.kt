@@ -123,6 +123,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import com.llpop.koil.ui.theme.KOiLType
+import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import androidx.compose.ui.text.style.TextOverflow
+import com.llpop.koil.ui.component.ACTION_WIDTH_FRACTION
+import androidx.compose.animation.core.animateFloatAsState
 
 /**
  * 关于页：结构 / 尺寸 / 字号 / 间距 / 动效。
@@ -236,6 +240,49 @@ private fun AboutContent(
     // 请求在途：挡连点（进页自动查 + 用户立刻点「应用版本」行会变成两次真请求）
     var isChecking by remember { mutableStateOf(false) }
     val downloadState by apkUpdater.state.collectAsStateWithLifecycle()
+    // 状态行这一格三态：
+    //   下载中   → 细条按真实百分比走 + 下面一行「45% (3.4MB/6.4MB)」
+    //   刚下完   → 条走满 + 「100% (6.4MB/6.4MB)」定格 1.5 秒（ApkUpdater 按 1% 步进发状态，
+    //              最后一格常停在 99%，不补这一下就永远看不到「走完」）
+    //   待安装   → 换成一句话「安装包已就绪 · 6.4MB」，不含进度条
+    // 为什么待安装不留满格条：进度条表达的是「正在走的过程」，下好一周后冷启动还看到同一条满格条，
+    // 读起来就是「卡在 100%」。稳态该用结论，不该用过程。
+    var statusSlot by remember { mutableStateOf<StatusSlot?>(null) }
+    val statusSlotAlpha = remember { Animatable(0f) }
+    LaunchedEffect(downloadState) {
+        when (val d = downloadState) {
+            is UpdateDownloadState.Downloading -> {
+                statusSlot = StatusSlot.Progress(
+                    DownloadSample(d.percent, d.received, d.total, finished = false)
+                )
+                statusSlotAlpha.animateTo(1f, tween(180))
+            }
+            is UpdateDownloadState.Ready -> {
+                // Ready 只在「这份包就是当前新版」时才有意义：盘上留着旧版包、界面已经提示有新版本时，
+                // 说「安装包已就绪」会让人以为能直接装（胶囊其实写着「有新版本」）
+                val currentTag = (status as? AboutUpdateStatus.Newer)?.tag
+                if (currentTag == null || currentTag != apkUpdater.readyTagSnapshot) {
+                    statusSlotAlpha.animateTo(0f, tween(250))
+                    statusSlot = null
+                    return@LaunchedEffect
+                }
+                // 本次刚下完：先把条补满定格 1.5 秒，让「走完」这件事被看见
+                (statusSlot as? StatusSlot.Progress)?.let {
+                    statusSlot = StatusSlot.Progress(it.sample.copy(finished = true))
+                    delay(1500)
+                }
+                statusSlot = StatusSlot.Ready(
+                    sizeMb = apkUpdater.readyPackageBytes()?.let { "%.1f".format(java.util.Locale.ROOT, it / 1048576f) }
+                )
+                statusSlotAlpha.animateTo(1f, tween(200))
+            }
+            // 失败 / 取消 / 回 Idle：这块没有可说的了，淡出
+            else -> if (statusSlot != null) {
+                statusSlotAlpha.animateTo(0f, tween(250))
+                statusSlot = null
+            }
+        }
+    }
     val storedTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
 
     // 安装授权：点「安装最新版」时未开「安装未知应用」→ 系统跳到授权页，
@@ -270,7 +317,8 @@ private fun AboutContent(
      */
     suspend fun runCheck(): AboutUpdateStatus {
         val next = applyOutcome(updateChecker.refresh())
-        (next as? AboutUpdateStatus.Newer)?.let { apkUpdater.discardReadyExcept(it.tag) }
+        // 这里**不再**丢掉旧包：删除的时机推到「新包真正落地」（ApkUpdater 用临时文件下载、
+        // 校验通过才原子替换）。否则「下好 V1.2.4 没装 → 出了 V1.2.5 → 下载失败」会两空。
         return next
     }
 
@@ -332,18 +380,17 @@ private fun AboutContent(
         }
     }
 
-    // hero 区是「logo → 版本号 → 状态文案 → 胶囊槽位」，胶囊和下载进度条都在 hero 内部，
-    // 跟 hero 一起淡出。段内比例沿用参考图口径：版本号底边到卡片顶边原为
-    // 状态区固定 26dp（6dp 间距 + 20dp 行高，有没有文案都占位，胶囊不跳）；
-    // 状态区到胶囊槽位、槽位到卡片都取 50dp，槽位独占 89dp（胶囊 52 + 下载进度 37）。
-    // 于是「已是最新版本」那行到底、胶囊整块、信息卡的三段间距左右对称，下载中进度条只占槽位内部。
+    // hero 区是「logo → 版本号 → 状态行 → 胶囊槽位」，都在 hero 内部、跟 hero 一起淡出。
+    // 段内比例沿用参考图口径：状态区固定 26dp（6dp 间距 + 20dp 行高，有没有文案都占位，胶囊不跳）；
+    // 状态区到胶囊槽位、槽位到卡片都取 50dp，槽位正好一个胶囊高（52dp）。
+    // 下载进度显示在**状态行**里（替掉「正在检查… / 已是最新版本」那行），所以槽位不再为进度预留
+    // 37dp —— 50 / 52 / 50 三段围着胶囊对称，下载前后 hero 高度都不变。
     val statusGapTop = 6.dp
     val statusAreaHeight = 26.dp
     // 状态区底到胶囊槽位顶：与「槽位底 → 信息卡」取同一个 50dp，胶囊整块上下等距。
     val statusToCapsule = 50.dp
-    // 胶囊槽位 = 胶囊本体 52 + 下载进度预留 37（进度区实测约 34：8 + 3 + 6 + 12sp 文本行，
-    // 多出的 3dp 是余量）。整块高度恒定，下载时进度条长在预留位里，槽位底边不动，信息卡不会被推下去。
-    val capsuleSlotHeight = 89.dp
+    // 槽位就是一个胶囊的高度。下载进度已挪到状态行，槽位不再需要为它预留空间。
+    val capsuleSlotHeight = 52.dp
     val heroToCard = 50.dp
 
     val backdrop = rememberLayerBackdrop()
@@ -599,6 +646,8 @@ private fun AboutContent(
             statusAreaHeight = statusAreaHeight,
             statusToCapsule = statusToCapsule,
             capsuleSlotHeight = capsuleSlotHeight,
+            downloadSlot = statusSlot,
+            downloadSlotAlpha = { statusSlotAlpha.value },
             // 与胶囊自身的渲染条件同源：非 Hidden 就等于「这一块会显示」。
             // 单写 status is Newer 靠的是「失败态下 status 不再是 Newer」这条跨文件不变量，改起来容易静默破坏。
             hasCapsule = resolveCapsuleState(
@@ -662,8 +711,12 @@ private fun BoxScope.AboutHero(
     statusGapTop: Dp,
     statusAreaHeight: Dp,
     statusToCapsule: Dp,
-    /** 胶囊槽位高度：52 胶囊 + 37 下载进度预留，恒定，下载时进度条只填内部 */
+    /** 胶囊槽位高度：正好一个胶囊高（52dp），恒定 */
     capsuleSlotHeight: Dp,
+    /** 状态行里的下载进度 / 待安装文案：null = 不显示 */
+    downloadSlot: StatusSlot?,
+    /** 上面那块的 alpha：出现时淡入，取消/失败时淡出 */
+    downloadSlotAlpha: () -> Float,
     /** 胶囊与下载进度条：属于 hero 内容，跟着 hero 一起淡出、不上滑 */
     capsule: @Composable () -> Unit,
     /**
@@ -751,31 +804,56 @@ private fun BoxScope.AboutHero(
             )
             // 状态区高度固定：三种文案（正在检查… / 已是最新版本 / 检查失败）与无文案时都占同一份高度，
             // 结论换来换去胶囊不会上下跳。文案本身靠 alpha 淡入淡出，不走「有就撑开、没有就塌陷」。
+            // 下载进度占用同一格：下载时这行换成长条 + 一行百分比，高度仍封在 26dp 里。
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     // 状态行按最小高度占位：三种文案在 1.0 倍下等高、胶囊不跳；
                     // 字号放大后允许撑高（hero 高度是量出来的，列表占位会跟着重算）
-                    .heightIn(min = statusAreaHeight)
-                    .padding(top = statusGapTop),
+                    .heightIn(min = statusAreaHeight),
                 contentAlignment = Alignment.Center,
             ) {
-                if (statusLabel != null) {
+                val slot = downloadSlot
+                if (slot is StatusSlot.Progress) {
+                    DownloadProgressLine(
+                        progress = slot.sample,
+                        alpha = downloadSlotAlpha,
+                        // 状态区 26dp 里给文案留的 6dp 上间距，进度块只用 2dp：
+                        // 4dp 条 + 3dp 间隔 + 一行 11sp 文本 ≈ 23dp，加起来仍 ≤ 26dp，hero 不长高
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                } else if (slot is StatusSlot.Ready) {
+                    // 待安装：只有一个结论，没有条。与「已是最新版本」用同一档字号，换词不换版式
+                    Text(
+                        color = colorScheme.onSurfaceVariantSummary,
+                        text = slot.sizeMb?.let {
+                            stringResource(R.string.koil_about_package_ready, it)
+                        } ?: stringResource(R.string.koil_about_package_ready_plain),
+                        fontSize = KOiLType.BodyLarge,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .padding(top = statusGapTop)
+                            .graphicsLayer { alpha = downloadSlotAlpha() },
+                    )
+                } else if (statusLabel != null) {
                     Text(
                         color = colorScheme.onSurfaceVariantSummary,
                         text = statusLabel,
                         fontSize = KOiLType.BodyLarge,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.graphicsLayer { alpha = statusAlpha() },
+                        modifier = Modifier
+                            .padding(top = statusGapTop)
+                            .graphicsLayer { alpha = statusAlpha() },
                     )
                 }
             }
         }
         // 状态区到胶囊顶：胶囊属于 hero，上滑时跟着整块一起淡出，不随列表上移
         Spacer(Modifier.height(statusToCapsule))
-        // 胶囊 + 下载进度条当成一整块：槽位恒为 52 + 37 = 89dp，内容在槽位里居中。
-        // 平时只有 52 的胶囊，上下各空 18.5；下载时进度条长在这块预留位里，填满 89，槽位纹丝不动。
-        // 无论有没有新版、是否滚动，槽位都是同一个高度——hero 总高不跳，信息卡不上下移动。
+        // 槽位恒为一个胶囊高（52dp），内容在槽位里居中。无论有没有新版、是否正在下载、是否滚动，
+        // 槽位都是同一个高度——hero 总高不跳，信息卡不上下移动。
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -792,5 +870,85 @@ private fun BoxScope.AboutHero(
                 Spacer(Modifier.height(52.dp))
             }
         }
+    }
+}
+
+/**
+ * 状态行里那格下载进度的一次采样。
+ *
+ * - [percent] < 0：服务端没给 `Content-Length`，分母未知 → 条走不确定态动画、文字只报已下载量
+ * - [finished]：下载已结束、这块正在「定格 100%」收尾（此时条一定填满）
+ */
+/** 状态行这一格要显示什么：下载中（含刚下完的那一下）/ 待安装结论 / 不显示（null） */
+private sealed interface StatusSlot {
+    data class Progress(val sample: DownloadSample) : StatusSlot
+    data class Ready(val sizeMb: String?) : StatusSlot
+}
+
+private data class DownloadSample(
+    val percent: Int,
+    val received: Long,
+    val total: Long,
+    val finished: Boolean,
+) {
+    val fraction: Float? get() = if (percent >= 0) percent / 100f else null
+    fun receivedMb(): String = "%.1f".format(java.util.Locale.ROOT, received / 1048576f)
+    fun totalMb(): String = "%.1f".format(java.util.Locale.ROOT, total / 1048576f)
+}
+
+/**
+ * 状态行里的下载进度：上面一条细进度条（与胶囊同宽），下面一行百分比。
+ *
+ * 宽度直接复用 [ACTION_WIDTH_FRACTION]：和下方胶囊同一个比例，视觉上是一条竖直对齐的轴；
+ * 两处各写一个 0.63f 迟早会漂。文字单独占一行（不并排）——并排时条只能缩到很窄，进度感就没了。
+ */
+@Composable
+private fun DownloadProgressLine(
+    progress: DownloadSample,
+    alpha: () -> Float,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer { this.alpha = alpha() },
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        // 目标值：正常进度用它、收尾定格给 1f；拿不到总大小（fraction == null）时不画确定进度，
+        // 交给组件跑不确定态动画
+        val target = if (progress.finished) 1f else progress.fraction
+        val animated by animateFloatAsState(
+            targetValue = target ?: 0f,
+            animationSpec = tween(220),
+            label = "downloadFraction",
+        )
+        LinearProgressIndicator(
+            progress = if (target == null) null else animated,
+            height = 4.dp,
+            modifier = Modifier.fillMaxWidth(ACTION_WIDTH_FRACTION),
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text = if (progress.finished) {
+                // 收尾：有总大小就报满格；没有总大小（percent < 0）就维持「已下载 x MB」
+                if (progress.percent >= 0) stringResource(
+                    R.string.koil_about_percent_with_size,
+                    100,
+                    "%.1f".format(java.util.Locale.ROOT, progress.total / 1048576f),
+                    "%.1f".format(java.util.Locale.ROOT, progress.total / 1048576f),
+                ) else stringResource(R.string.koil_about_downloaded, progress.receivedMb())
+            } else if (progress.percent >= 0) stringResource(
+                R.string.koil_about_percent_with_size,
+                progress.percent,
+                progress.receivedMb(),
+                progress.totalMb(),
+            ) else stringResource(R.string.koil_about_downloaded, progress.receivedMb()),
+            fontSize = KOiLType.CaptionLarge,
+            color = colorScheme.onSurfaceVariantSummary,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            // 大字号下这一行放不下时省略号收尾，别把字形硬切一半（也保证不因换行撑高状态区）
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }

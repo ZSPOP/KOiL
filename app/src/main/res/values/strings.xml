@@ -381,6 +381,9 @@
     <string name="koil_about_action_cancel_download">取消下载</string>
     <string name="koil_about_action_install">安装最新版</string>
     <string name="koil_about_action_failed">下载失败</string>
+    <!-- 下载完成、等用户点安装那一格：结论式文案，不带进度条 -->
+    <string name="koil_about_package_ready">安装包已就绪 · %1$s MB</string>
+    <string name="koil_about_package_ready_plain">安装包已就绪</string>
     <string name="koil_about_percent_with_size">%1$d%% (%2$sMB/%3$sMB)</string>
     <string name="koil_about_downloaded">已下载 %1$s MB</string>
     <string name="koil_set_about_terms">使用条款</string>
