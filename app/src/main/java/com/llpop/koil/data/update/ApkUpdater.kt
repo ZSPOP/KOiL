@@ -319,15 +319,14 @@ class ApkUpdater(
      * 用户在文件管理器里看到一串同名文件时无从判断该删哪个，旧包也永远认不出是谁的。
      */
     private fun apkFile(tag: String): File? =
-        apkDir()?.resolve("KOiL-V${normalizeVersion(tag)}.apk")
+        apkDir()?.resolve(apkFileNameFor(tag))
 
     /** 只保留 [keep] 这一份包，其余 `.apk` 全删（临时 `.part` 不碰，由下载自己管理） */
     private fun prunePackages(keep: File?) {
         val dir = apkDir() ?: return
         val files = dir.listFiles() ?: return
-        val keepPath = keep?.absolutePath
         files.forEach { f ->
-            if (f.isFile && f.name.endsWith(".apk") && f.absolutePath != keepPath) {
+            if (f.isFile && shouldPrunePackage(f.name, keep?.name)) {
                 runCatching { f.delete() }
             }
         }
@@ -496,4 +495,16 @@ class ApkUpdater(
  */
 internal fun isReadyFor(tag: String, readyTag: String?, file: File?): Boolean =
     readyTag == tag && file?.exists() == true
+
+/**
+ * 正式包的文件名：`KOiL-V1.2.6.apk`。
+ *
+ * 抽成顶层纯函数只为能单测：这个名字同时决定「盘上能不能一眼看出是哪个版本」
+ * 和「删旧包时留哪一份」，两条都不该靠读代码猜。
+ */
+internal fun apkFileNameFor(tag: String): String = "KOiL-V${normalizeVersion(tag)}.apk"
+
+/** 清理判据：只碰 `.apk`，且不碰当前要保留的那一份（`.part` 归下载自己管） */
+internal fun shouldPrunePackage(fileName: String, keepName: String?): Boolean =
+    fileName.endsWith(".apk", ignoreCase = true) && fileName != keepName
 

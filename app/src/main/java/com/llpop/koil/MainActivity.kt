@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -89,8 +90,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 首次启动通知权限框被拒 → 推送开关联动置关（设置页开关恒以系统权限状态为准，
-    // 用户想开时点开关会再次请求权限）
+    // 首次启动通知权限框被拒时**不改开关**。
+    //
+    // 以前这里会 `setNotifyEnabled(false)`：用户手快点一次「不允许」，开关被永久写成关，
+    // 之后哪怕他去系统设置里把通知放开，开关仍是关的，`notifyIfNeeded` 第一条就返回 false——
+    // 这条链上所有补发路径全部失效，表现为「权限都给了，还是一条通知都收不到」。
+    // 设置页的开关显示本来就与权限求与（`notifyEnabled && pushPermissionGranted`），
+    // 拒绝时自然显示为关，授权后自然显示为开，不需要把用户的选择写死。
     // 使用 onRequestPermissionsResult 回调，抑制 DEPRECATION
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onRequestPermissionsResult(
@@ -106,8 +112,9 @@ class MainActivity : ComponentActivity() {
                 lifecycleScope.launch {
                     val settings = GlobalContext.get().get<AppSettings>()
                     settings.setNotificationPermissionRequested(true)
+                    // granted 只用于判定「框已弹过」，不再据此改写用户开关
                     if (!granted) {
-                        settings.setNotifyEnabled(false)
+                        Log.i("KOiL", "notification permission denied; keep notifyEnabled untouched")
                     }
                 }
             }

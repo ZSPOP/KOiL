@@ -78,8 +78,20 @@ class UpdateNotifier(
     }
 
     /** 用户可能在系统设置里关掉整个 App 的通知：通道在、权限在，也发不出去 */
-    private fun channelEnabled(): Boolean =
-        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    /**
+     * App 级总开关**与**通道本身都开着，这条通知才发得出去。
+     *
+     * `areNotificationsEnabled()` 只查 App 级：用户在系统设置里把「应用更新」这一个通道单独关掉时，
+     * 它照样返回 true，于是我们照发、系统直接丢弃、App 完全无感——
+     * 通道重要性一旦被手改成 NONE，就再也收不到更新通知，却看不出任何异常。
+     * 通道尚未创建时返回 true（`ensureChannel()` 会紧接着建它）。
+     */
+    private fun channelEnabled(): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = nm.getNotificationChannel(CHANNEL_ID)
+        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
 
     /**
      * 用户点开了这条通知（或从它进了关于页）：算已知晓，刷新时间戳。
