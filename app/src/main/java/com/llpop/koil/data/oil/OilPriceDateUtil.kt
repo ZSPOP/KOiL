@@ -1,5 +1,6 @@
 package com.llpop.koil.data.oil
 
+import com.llpop.koil.util.AppClock
 import java.time.LocalDate
 
 /**
@@ -74,7 +75,7 @@ object OilPriceDateUtil {
      * 同时用 LocalDate.of 做真实日期校验，顺带拒绝 "2-30" 这类伪日期（直接拼字符串会放行）。
      */
     private fun withYear(mm: Int, dd: Int): String? {
-        val now = LocalDate.now()
+        val now = AppClock.today()
         val year = if (mm < now.monthValue) now.year + 1 else now.year
         val candidate = runCatching { LocalDate.of(year, mm, dd) }.getOrNull() ?: return null
         val days = java.time.temporal.ChronoUnit.DAYS.between(now, candidate)

@@ -1,5 +1,6 @@
 package com.llpop.koil.data.oil
 
+import com.llpop.koil.util.AppClock
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -207,7 +208,7 @@ open class KOiLUsdCnyRateRepository(
     }
 
     /** 缓存是否已过期（超过 [STALE_DAYS] 天）：仍可用，但 UI 可据此弱化表述 */
-    fun isStale(snapshot: KOiLUsdCnyRateSnapshot, now: Long = System.currentTimeMillis()): Boolean =
+    fun isStale(snapshot: KOiLUsdCnyRateSnapshot, now: Long = AppClock.millis()): Boolean =
         now - snapshot.fetchedAt > STALE_DAYS * 24 * 60 * 60 * 1000
 
     /**
@@ -261,7 +262,7 @@ open class KOiLUsdCnyRateRepository(
 
     /** 后台刷新：6 小时内不重复、同一时刻只跑一个（tryLock 失败即让路，不排队） */
     private fun refreshInBackground() {
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         if (now - lastAttemptAt < REFRESH_MIN_INTERVAL_MS) return
         lastAttemptAt = now
         scope.launch { runCatching { refreshNow(REFRESH_TIMEOUT_MS) } }
@@ -307,12 +308,12 @@ open class KOiLUsdCnyRateRepository(
             KOiLUsdCnyRateSource.ECB_XML,
             KOiLUsdCnyRateSource.CURRENCY_API,
         )
-        val startedAt = System.currentTimeMillis()
+        val startedAt = AppClock.millis()
         for (i in attempts.indices) {
             // 优先把预算给当前源，只为后续源预留最低兜底（MIN_PER_SOURCE_MS × 剩余数）。
             // 不能平均分：均分时主源 15s 只得 5s，而 ECB 首连实测 11.5s，冷启动必然
             // 砍掉主源落到「只给一天」的 XML——总预算形同虚设。
-            val remaining = timeoutMs - (System.currentTimeMillis() - startedAt)
+            val remaining = timeoutMs - (AppClock.millis() - startedAt)
             if (remaining <= 0) return@withTimeoutOrNull null
             val reserve = MIN_PER_SOURCE_MS * (attempts.size - i - 1)
             val share = maxOf(remaining - reserve, MIN_PER_SOURCE_MS)
@@ -385,7 +386,7 @@ open class KOiLUsdCnyRateRepository(
             dataThrough = latest.first,
             fallbackMonth = previousMonth,
             fallbackRate = fallbackRate,
-            fetchedAt = System.currentTimeMillis(),
+            fetchedAt = AppClock.millis(),
             source = source,
         )
     }
@@ -399,7 +400,7 @@ open class KOiLUsdCnyRateRepository(
      * 需要用上月均值回退，只取当月会让回退没有数据可用。
      */
     private suspend fun fetchSdmx(): List<Pair<String, Double>> {
-        val today = LocalDate.now()
+        val today = AppClock.today()
         val start = today.withDayOfMonth(1).minusMonths(1)
         val url = "$SDMX_URL?startPeriod=$start&endPeriod=$today&format=csvdata"
         return parseSdmx(client.get(url).bodyAsText())

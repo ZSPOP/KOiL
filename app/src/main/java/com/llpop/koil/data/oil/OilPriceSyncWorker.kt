@@ -43,9 +43,17 @@ class OilPriceSyncWorker(
      * 周期任务（8 小时）本来就会再来一次，连续失败 3 次后直接收尾，等下个周期，避免无谓耗电。
      */
     private fun retryOrGiveUp(): Result =
-        if (runAttemptCount >= MAX_RETRY) Result.success() else Result.retry()
-
-    private companion object {
-        const val MAX_RETRY = 3
-    }
+        if (shouldRetrySync(runAttemptCount)) Result.retry() else Result.success()
 }
+
+/** 连续失败达到这个次数就收尾等下个周期（周期任务 8 小时一次，不必在一轮里耗电） */
+internal const val MAX_SYNC_RETRY = 3
+
+/**
+ * 失败后要不要 Result.retry()。
+ *
+ * 抽成顶层函数：Worker 本体要 WorkManager 环境，跑不进 JVM 单测；而"重试几次才放弃"
+ * 是这里唯一会算错的东西 —— 判错的表现是「反复唤醒耗电」或「一次失败就放弃」。
+ * `runAttemptCount` 是本次任务的第几次尝试（0 起），达到 [MAX_SYNC_RETRY] 就不再重试。
+ */
+internal fun shouldRetrySync(runAttemptCount: Int): Boolean = runAttemptCount < MAX_SYNC_RETRY

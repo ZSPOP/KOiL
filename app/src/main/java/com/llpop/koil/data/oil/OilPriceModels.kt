@@ -44,7 +44,14 @@ data class OilPriceResponse(
 /** 一次检查更新的汇总结果（对齐 Web OilPriceDbUpdateResponse） */
 data class OilPriceSyncResult(
     val success: Boolean,
-    val message: String,
+    /**
+     * 本次检测的结论（结构化）。
+     *
+     * 以前这里是一句现拼的中文，直接写进 DataStore 当「上次核对结果」——界面从来不读它，
+     * 于是用户只看得到时间戳，看不到结论。改成结构后由界面翻译成三语，
+     * 持久化用 [PriceDbOutcome.encode]。
+     */
+    val outcome: PriceDbOutcome,
     val newAdjustments: Int = 0,
     val newRecords: Int = 0,
     val latestDate: String? = null,

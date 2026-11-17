@@ -114,6 +114,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.OilPriceDbSyncer
+import com.llpop.koil.data.oil.PriceDbOutcome
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
@@ -154,6 +155,7 @@ import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixIndication
 import java.util.Locale
+import com.llpop.koil.util.AppClock
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
@@ -546,7 +548,10 @@ fun SettingsScreen(
                                                     IconButton(onClick = { showKey = !showKey }) {
                                                         Icon(
                                                             imageVector = if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                                            contentDescription = null,
+                                                            // 读屏标签随当前状态切换：明文态读出「隐藏密码」，密文态读出「显示密码」
+                                                            contentDescription = stringResource(
+                                                                if (showKey) R.string.koil_a11y_hide_secret else R.string.koil_a11y_show_secret,
+                                                            ),
                                                             tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                                                             modifier = Modifier.size(18.dp),
                                                         )
@@ -947,22 +952,22 @@ private fun PriceDbSection(
             val tickNow: java.time.LocalDateTime? =
                 if (priceDbStatus.nextAdjustWindowDate != null) {
                     produceState(
-                        initialValue = java.time.LocalDateTime.now().withSecond(0).withNano(0),
+                        initialValue = AppClock.nowLocal().withSecond(0).withNano(0),
                         key1 = priceDbStatus.nextAdjustWindowDate,
                     ) {
                         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
                             // 回到前台先对齐一次：STOPPED 期间 block 被取消，value 冻在离开前的时刻，
                             // 不先赋一次就得等下一整分钟，「已开」态会晚 0~60 秒才翻
-                            value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+                            value = AppClock.nowLocal().withSecond(0).withNano(0)
                             while (true) {
-                                delay(60_000L - System.currentTimeMillis() % 60_000L)
+                                delay(60_000L - AppClock.millis() % 60_000L)
                                 // 落在整分钟上：跨零点判定等价（deadline 就是 00:00:00）
-                                value = java.time.LocalDateTime.now().withSecond(0).withNano(0)
+                                value = AppClock.nowLocal().withSecond(0).withNano(0)
                             }
                         }
                     }.value
                 } else null
-            val nowLocal = tickNow ?: java.time.LocalDateTime.now()
+            val nowLocal = tickNow ?: AppClock.nowLocal()
             val todayLocal = nowLocal.toLocalDate()
 
             // 上次检查时间：今天只给时刻、昨天加前缀、更早带日期
@@ -1244,6 +1249,19 @@ private fun PriceDbSection(
                             )
                         }
                     }
+                }
+                // —— 行 3：上次核对结论 ——
+                // 光有「最近检查 21:44」看不出那次到底怎么了：是入库了、搁浅了、源滞后跳过，
+                // 还是直接失败。这些结论以前只写进 DataStore 没人读，用户只能猜。
+                val outcomeText = priceDbStatus.lastOutcome?.let { priceDbOutcomeText(it) }
+                if (outcomeText != null) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = outcomeText,
+                        fontSize = 12.sp,
+                        lineHeight = 15.sp,
+                        color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.75f),
+                    )
                 }
                 Spacer(Modifier.height(14.dp))
 
@@ -1619,7 +1637,10 @@ private fun SyncPanelBody(
                             IconButton(onClick = { showPwd = !showPwd }) {
                                 Icon(
                                     imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = null,
+                                    // 读屏标签随当前状态切换：明文态读出「隐藏密码」，密文态读出「显示密码」
+                                    contentDescription = stringResource(
+                                        if (showPwd) R.string.koil_a11y_hide_secret else R.string.koil_a11y_show_secret,
+                                    ),
                                     tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.size(18.dp),
                                 )
@@ -1886,13 +1907,13 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                         ReconcileLine(stringResource(R.string.koil_sync_reconcile_both, st.bothCount, st.conflictCount))
                     }
                     if (st.cloudOnlyCount > 0) {
-                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_cloud_only, st.cloudOnlyCount))
+                        ReconcileLine(pluralStringResource(R.plurals.koil_sync_reconcile_cloud_only, st.cloudOnlyCount, st.cloudOnlyCount))
                     }
                     if (st.localOnlyCount > 0) {
                         ReconcileLine(stringResource(R.string.koil_sync_reconcile_local_only, st.localOnlyCount))
                     }
                     if (st.tombstoneSkippedCount > 0) {
-                        ReconcileLine(stringResource(R.string.koil_sync_reconcile_skipped, st.tombstoneSkippedCount))
+                        ReconcileLine(pluralStringResource(R.plurals.koil_sync_reconcile_skipped, st.tombstoneSkippedCount, st.tombstoneSkippedCount))
                     }
                     Spacer(Modifier.height(12.dp))
                     // 默认选项（推荐）放最上：用户不进面板直接点第一个就是最安全的
@@ -1903,7 +1924,7 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                         // 数字为 0 时不说「补进 0 条」——按钮文案要能单独读懂
                         Text(
                             text = if (st.cloudOnlyCount > 0) {
-                                stringResource(R.string.koil_sync_reconcile_merge, st.cloudOnlyCount)
+                                pluralStringResource(R.plurals.koil_sync_reconcile_merge, st.cloudOnlyCount, st.cloudOnlyCount)
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_merge_plain)
                             },
@@ -1918,7 +1939,7 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     ) {
                         Text(
                             text = if (st.cloudOnlyCount > 0) {
-                                stringResource(R.string.koil_sync_reconcile_local_wins, st.cloudOnlyCount)
+                                pluralStringResource(R.plurals.koil_sync_reconcile_local_wins, st.cloudOnlyCount, st.cloudOnlyCount)
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_local_wins_plain)
                             },
@@ -1932,7 +1953,7 @@ private fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     ) {
                         Text(
                             text = if (st.localOnlyCount > 0) {
-                                stringResource(R.string.koil_sync_reconcile_cloud_wins, st.localOnlyCount)
+                                pluralStringResource(R.plurals.koil_sync_reconcile_cloud_wins, st.localOnlyCount, st.localOnlyCount)
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_cloud_wins_plain)
                             },
@@ -1998,7 +2019,7 @@ private fun LocalBackupDialog(viewModel: SyncViewModel) {
                 val label = if (b.recordCount < 0) {
                     stringResource(R.string.koil_sync_backup_restore_broken)
                 } else {
-                    stringResource(R.string.koil_sync_backup_restore_item, b.displayTime, b.recordCount)
+                    pluralStringResource(R.plurals.koil_sync_backup_restore_item, b.recordCount, b.displayTime, b.recordCount)
                 }
                 Text(
                     text = label,
@@ -2075,18 +2096,53 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                 ) {
                     Column {
                         tabs[activeTab.intValue].second.forEach { r ->
-                            Row(
+                            // 四列等分（weight）而不是固定 dp：导入预览是用来逐条核对的行，
+                            // 列宽一旦固定，系统字体放大或里程到 6 位时数字会换行、四列错位，
+                            // 用户核对时容易看串行。改用权重后所有行列宽一致（行内不再有
+                            // 随内容伸缩的第五列），文字单行显示；错误/冲突提示另起一行。
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(r.date, fontSize = 12.sp, color = MiuixTheme.colorScheme.onBackground, modifier = Modifier.width(70.dp))
-                                Text("${r.mileage.toInt()}km", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(60.dp))
-                                Text("${NumberFormat.measure(r.oilAmount)}L", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant, modifier = Modifier.width(50.dp))
-                                Text("¥${NumberFormat.money(r.actualAmount)}", fontSize = 11.sp, color = MiuixTheme.colorScheme.onBackgroundVariant)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = r.date,
+                                        fontSize = 12.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackground,
+                                        modifier = Modifier.weight(1.5f),
+                                    )
+                                    Text(
+                                        text = "${r.mileage.toInt()}km",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                        modifier = Modifier.weight(1.3f),
+                                    )
+                                    Text(
+                                        text = "${NumberFormat.measure(r.oilAmount)}L",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Text(
+                                        text = "¥${NumberFormat.money(r.actualAmount)}",
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        color = MiuixTheme.colorScheme.onBackgroundVariant,
+                                        modifier = Modifier.weight(1.2f),
+                                    )
+                                }
                                 r.errorKey?.let { key ->
-                                    Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = when (key) {
                                             "format_error" -> stringResource(R.string.koil_msg_format_error)
@@ -2095,10 +2151,10 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                         },
                                         fontSize = 10.sp,
                                         color = Color(0xFFE53935),
+                                        modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }
                                 r.conflictKey?.let { key ->
-                                    Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = when (key) {
                                             "lt_prev" -> stringResource(R.string.koil_msg_mileage_lt_prev, r.conflictArg)
@@ -2107,6 +2163,7 @@ private fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                                         },
                                         fontSize = 10.sp,
                                         color = Color(0xFFE65100),
+                                        modifier = Modifier.padding(top = 2.dp),
                                     )
                                 }
                             }
@@ -2178,11 +2235,19 @@ fun LazyListScope.aboutSection(
                 }
                 val target by updateChecker.updateTarget()
                     .collectAsStateWithLifecycle(initialValue = null)
+                // 后台静默检查失败是完全无声的：不弹、不亮红点，Gitee 长期不可用时用户只会觉得
+                // 「永远没有新版本」。这里借右侧文字位提示一句；任意一次检查成功即清零，不需要已读机制。
+                val lastFailedAt by updateChecker.lastFailedAt()
+                    .collectAsStateWithLifecycle(initialValue = 0L)
                 SettingRow(
                     // 标题是「关于 KOiL」，副标题仍是当前版本号（不因有新版本而变化）
                     title = stringResource(R.string.koil_set_about_koil),
                     subtitle = stringResource(R.string.koil_set_about_version, com.llpop.koil.BuildConfig.VERSION_NAME, com.llpop.koil.BuildConfig.VERSION_CODE),
-                    value = "",
+                    value = if (lastFailedAt > 0) {
+                        stringResource(R.string.koil_set_update_check_failed)
+                    } else {
+                        ""
+                    },
                     onClick = onOpenAbout,
                     badgeDot = com.llpop.koil.data.update.shouldBadgeUpdate(
                         target?.tag.orEmpty(),
@@ -2349,13 +2414,15 @@ private fun StepperInputRow(
         }
         Spacer(Modifier.width(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // − 蓝圆（22dp）
+            // − 蓝圆（22dp）——纯符号按钮，补读屏动作标签（ TalkBack 否则只读出「−」不知用途）
             Box(
                 modifier = Modifier
                     .size(22.dp)
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
-                    .clickable {
+                    .clickable(
+                        onClickLabel = stringResource(R.string.koil_stepper_decrease, title),
+                    ) {
                         val base = draft.value?.toIntOrNull() ?: clamped
                         draft.value = null
                         fieldFocused.value = false
@@ -2449,13 +2516,15 @@ private fun StepperInputRow(
                 color = MiuixTheme.colorScheme.onBackgroundVariant,
             )
             Spacer(Modifier.width(8.dp))
-            // + 蓝圆（22dp）
+            // + 蓝圆（22dp）——纯符号按钮，补读屏动作标签（ TalkBack 否则只读出「+」不知用途）
             Box(
                 modifier = Modifier
                     .size(22.dp)
                     .clip(CircleShape)
                     .background(KOiLColors.Primary)
-                    .clickable {
+                    .clickable(
+                        onClickLabel = stringResource(R.string.koil_stepper_increase, title),
+                    ) {
                         val base = draft.value?.toIntOrNull() ?: clamped
                         draft.value = null
                         fieldFocused.value = false
@@ -2589,6 +2658,7 @@ private fun List<Any>.intAt(index: Int): Int = (getOrNull(index) as? Int) ?: (ge
 @Composable
 private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "pdb_update_failed" -> stringResource(R.string.koil_msg_pdb_update_failed, args.getOrElse(0) { "" })
+    "pdb_busy" -> stringResource(R.string.koil_msg_pdb_busy)
     "price_db_empty" -> stringResource(R.string.koil_msg_price_db_empty)
     "price_exported" -> pluralStringResource(
         R.plurals.koil_msg_price_exported, args.intAt(0), args.getOrElse(0) { 0 }, args.getOrElse(1) { "" },
@@ -2601,6 +2671,8 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
     "cannot_read" -> stringResource(R.string.koil_msg_cannot_read)
     "file_empty" -> stringResource(R.string.koil_msg_file_empty)
     "missing_columns" -> stringResource(R.string.koil_msg_missing_columns)
+    // 带乱码的"缺列"其实是编码问题，别让用户去核对列名
+    "missing_columns_encoding" -> stringResource(R.string.koil_msg_missing_columns_encoding)
     "parse_failed" -> stringResource(R.string.koil_msg_parse_failed, args.getOrElse(0) { "" })
     "import_done" -> stringResource(R.string.koil_msg_import_done, args.getOrElse(0) { 0 }, args.getOrElse(1) { 0 })
     "backup_no_records" -> stringResource(R.string.koil_msg_backup_no_records)
@@ -2617,6 +2689,49 @@ private fun formatNotice(key: String, args: List<Any>): String = when (key) {
 }
 
 
+
+/**
+ * 上次核对结论 → 三语文案；返回 null 表示「这一行不显示」。
+ *
+ * 只有**会落盘**的结论才有文案。`Busy` / `AutoUpdateOff` / `Throttled` 是 Syncer 里
+ * 「还没走到写缓存就 return」的早退路径，永远进不了「上次核对结论」，所以这三分支返回
+ * null，而不是配一份谁也读不到的字符串。**不要**在这里再拼状态判断：分支语义（尤其是
+ * 「搁浅」与「非窗口日维持」的区别）由 Syncer 决定，界面只负责措辞与是否显示。
+ */
+@Composable
+private fun priceDbOutcomeText(outcome: PriceDbOutcome): String? = when (outcome) {
+    // 这三条在 Syncer 里是「还没走到写缓存就 return」的早退路径，永远不会落盘，
+    // 因此不可能出现在「上次核对结论」里。保留枚举分支、返回 null 表示「这一行不显示」，
+    // 而不是给它们配一份永远不会被读到的文案。Busy 另有出口：见 checkPriceDbNow 的提示。
+    PriceDbOutcome.Busy -> null
+    PriceDbOutcome.AutoUpdateOff -> null
+    is PriceDbOutcome.Throttled -> null
+    PriceDbOutcome.NoProvince -> stringResource(R.string.koil_pdb_outcome_no_province)
+    is PriceDbOutcome.FetchFailed -> stringResource(R.string.koil_pdb_outcome_fetch_failed, outcome.detail)
+    is PriceDbOutcome.SourceLagging ->
+        if (outcome.repaired > 0) {
+            stringResource(R.string.koil_pdb_outcome_source_lagging_fixed, outcome.date, outcome.repaired)
+        } else {
+            stringResource(R.string.koil_pdb_outcome_source_lagging, outcome.date)
+        }
+    is PriceDbOutcome.WindowDay -> stringResource(R.string.koil_pdb_outcome_window_day, outcome.date)
+    is PriceDbOutcome.UnchangedUnconfirmed ->
+        stringResource(R.string.koil_pdb_outcome_unchanged_unconfirmed, outcome.date)
+    is PriceDbOutcome.Stranded -> stringResource(R.string.koil_pdb_outcome_stranded, outcome.date)
+    is PriceDbOutcome.Unchanged -> stringResource(R.string.koil_pdb_outcome_unchanged, outcome.date)
+    is PriceDbOutcome.RepairedOnly -> stringResource(R.string.koil_pdb_outcome_repaired_only, outcome.repaired)
+    PriceDbOutcome.AlreadyAdjusted -> stringResource(R.string.koil_pdb_outcome_already_adjusted)
+    is PriceDbOutcome.Updated ->
+        if (outcome.failedProvinces > 0) {
+            stringResource(
+                R.string.koil_pdb_outcome_updated_partial, outcome.records, outcome.failedProvinces,
+            )
+        } else {
+            stringResource(R.string.koil_pdb_outcome_updated, outcome.records)
+        }
+    PriceDbOutcome.NoNewRecords -> stringResource(R.string.koil_pdb_outcome_no_new_records)
+    is PriceDbOutcome.Failed -> stringResource(R.string.koil_pdb_outcome_failed, outcome.detail)
+}
 
 /** 云同步结果通知翻译（backup_done / backup_failed / backup_corrupt / restore_corrupt / restore_no_cloud / restore_done[:N] / restore_none / restore_failed / config_saved / config_test_failed） */
 @Composable
@@ -2644,8 +2759,7 @@ private fun formatSyncNotice(key: String): String {
         "not_configured" -> stringResource(R.string.koil_sync_status_not_configured)
         // 首次配对且云端还没快照：不弹面板，只提示一句再直接上传
         "first_upload" ->
-            if (arg != null) stringResource(R.string.koil_sync_first_upload, arg)
-            else stringResource(R.string.koil_sync_first_upload, 0)
+            pluralStringResource(R.plurals.koil_sync_first_upload, arg ?: 0, arg ?: 0)
         "reconcile_stale" -> stringResource(R.string.koil_sync_reconcile_stale)
         // 重跑没成功：不能说「已重新对账」
         "reconcile_stale_retry" -> stringResource(R.string.koil_sync_reconcile_stale_retry)

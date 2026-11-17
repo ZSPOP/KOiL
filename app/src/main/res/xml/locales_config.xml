@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 13+ 的「设置 → 应用 → KOiL → 语言」入口。
+  必须与 res/values* 实际提供的语言一致：values（默认简体）、values-zh-rTW、values-en。
+  声明后系统才知道这个 App 支持哪几种语言，也才会把系统侧的改写回写到 App。
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="zh-CN" />
+    <locale android:name="zh-TW" />
+    <locale android:name="en" />
+</locale-config>

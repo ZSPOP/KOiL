@@ -1,0 +1,62 @@
+# 依赖与 CI 版本守门。
+#
+# 目的只有一个：让「上游删了模块 / 改了包名」这类破坏性变更先以 PR 形式出现，
+# 而不是等 App 下次编译时才炸。miuix 已经发生过一次（miuix-navigation3-ui → miuix-nav）。
+#
+# 策略：
+# - 每周一聚合一次，不逐条轰炸（`groups`）；同一生态的更新合并成一个 PR，review 面可控。
+# - 只聚合 minor/patch：major 更新不进任何分组，单独成 PR（破坏性变更必须单独看）。
+# - 单个生态同时最多 5 个 PR，超出不再开新的，避免堆积。
+# - 只开 PR，不自动合并：版本升级仍然要人看 changelog 后手动合。
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      # 按生态分组，同一组只开一个 PR（十几个 androidx 包各开一个没人会看）。
+      # update-types 限定 minor/patch：major 落到组外，各自单独成 PR。
+      androidx:
+        patterns:
+          - "androidx.*"
+          - "com.google.android.*"
+        update-types: ["minor", "patch"]
+      kotlin-and-ksp:
+        patterns:
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+        update-types: ["minor", "patch"]
+      other:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "androidx.*"
+          - "com.google.android.*"
+          - "org.jetbrains.kotlin*"
+          - "com.google.devtools.ksp*"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 3
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]

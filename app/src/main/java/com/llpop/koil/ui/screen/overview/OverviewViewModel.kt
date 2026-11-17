@@ -17,6 +17,7 @@ import com.llpop.koil.domain.logic.RecordWithDerived
 import com.llpop.koil.domain.logic.SummaryMath
 import com.llpop.koil.domain.logic.TrendSampler
 import com.llpop.koil.domain.logic.inChronologicalOrder
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -315,7 +316,7 @@ class OverviewViewModel(
 
     /** 返回 (当前范围起点, 上一周期起点, 上一周期终点) */
     private fun rangeBounds(range: String): Triple<LocalDate, LocalDate, LocalDate> {
-        val now = LocalDate.now()
+        val now = AppClock.today()
         return when (range) {
             "year" -> {
                 val start = LocalDate.of(now.year, 1, 1)
@@ -618,7 +619,7 @@ class OverviewViewModel(
                 .takeIf { it in OilPriceNetwork.GRADE_LABELS } ?: "92"
             _dialogState.value = _dialogState.value.copy(
                 showBackfillDialog = true,
-                backfillDate = LocalDate.now().format(dateFormatter),
+                backfillDate = AppClock.today().format(dateFormatter),
                 backfillMileage = "",
                 backfillOilAmount = "",
                 backfillActualAmount = "",

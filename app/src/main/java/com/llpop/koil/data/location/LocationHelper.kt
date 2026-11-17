@@ -8,6 +8,7 @@ import android.location.Location
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
 import com.llpop.koil.data.oil.Provinces
+import com.llpop.koil.util.AppClock
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.HttpTimeout
@@ -80,7 +81,7 @@ class LocationHelper(private val context: Context) {
      *  - 30 分钟节流：接口按 IP 限流，启动 + 手动叠加容易被打回。
      */
     private suspend fun getProvinceByIp(): String? {
-        val now = System.currentTimeMillis()
+        val now = AppClock.millis()
         if (now - lastIpLookupAt < 30 * 60 * 1000L) return null
         if (now - lastIpFailureAt < 60 * 1000L) return null
         return try {
@@ -115,7 +116,7 @@ class LocationHelper(private val context: Context) {
             LocationManager.NETWORK_PROVIDER,
             LocationManager.PASSIVE_PROVIDER,
         )
-        val cutoff = System.currentTimeMillis() - 30 * 60 * 1000L
+        val cutoff = AppClock.millis() - 30 * 60 * 1000L
         var best: Location? = null
         for (provider in providers) {
             try {

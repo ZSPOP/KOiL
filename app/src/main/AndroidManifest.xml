@@ -35,6 +35,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/koil_app_name"
+        android:localeConfig="@xml/locales_config"
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
@@ -59,8 +60,15 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!--
+          configChanges 只接 locale / layoutDirection：语言切换不再重建 Activity。
+          App 内的界面文案由 MainScreen 用 CompositionLocal 覆盖 Configuration 即时刷新，
+          重建只会白跑一次冷启动（闪一帧启动图、丢掉未提交的补录输入）。
+          不接 uiMode：深色模式仍交给系统走重建，避免主题状态与框架不同步。
+        -->
         <activity
             android:name=".MainActivity"
+            android:configChanges="locale|layoutDirection"
             android:exported="true"
             android:theme="@style/Theme.KOiL.Starting"
             android:windowSoftInputMode="adjustResize">

@@ -4,6 +4,7 @@ import android.content.Context
 import com.llpop.koil.R
 import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.flow.first
 import java.time.LocalDate
 
@@ -28,17 +29,17 @@ internal class OilPriceChangeNotifier(
         val gradeCode = settings.defaultOilGrade.first()
             .takeIf { it in OilPriceNetwork.GRADE_LABELS } ?: "92"
         val grade = OilPriceNetwork.GRADE_LABELS[gradeCode] ?: gradeCode
-        val newest = priceDao.getLatestPrice(province, grade, LocalDate.now().format(KOIL_DATE_FMT))
+        val newest = priceDao.getLatestPrice(province, grade, AppClock.today().format(KOIL_DATE_FMT))
         if (newest != null) {
             val lastNotified = settings.priceLastNotifiedDate.first()
             if (lastNotified.isBlank()) {
                 // 首次启用：静默锚定当前生效日，不打扰
                 settings.setPriceLastNotifiedDate(newest.effectiveDate)
             } else if (newest.effectiveDate != lastNotified) {
-                val today = LocalDate.now().format(KOIL_DATE_FMT)
+                val today = AppClock.today().format(KOIL_DATE_FMT)
                 val prev = priceDao.getPrevious(province, grade, today)
                 val priceChanged = prev == null || prev.price != newest.price
-                if (priceChanged) {
+                if (shouldNotifyPriceChange(lastNotified, newest.effectiveDate, priceChanged)) {
                     val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
                     val title = context.getString(R.string.koil_noti_title_price_adjust)
                     val message = if (prev != null && prev.effectiveDate < newest.effectiveDate) {
@@ -63,11 +64,12 @@ internal class OilPriceChangeNotifier(
         val adjustDates = settings.priceDbAdjustDates.first()
             .split(",").map { it.trim() }.filter { it.isNotBlank() }
         if (adjustDates.isNotEmpty()) {
-            val today = LocalDate.now()
+            val today = AppClock.today()
             val tomorrow = today.plusDays(1).toString()
-            val next = adjustDates.firstOrNull { it >= today.toString() }
+            // 收成非空串再判：判据在纯函数里，这里不再依赖编译器对 String? 的智能转换
+            val next = adjustDates.firstOrNull { it >= today.toString() }.orEmpty()
             val reminded = settings.priceLastWindowReminded.first()
-            if (next == tomorrow && reminded != next) {
+            if (shouldRemindWindowTomorrow(next, tomorrow, reminded)) {
                 OilPriceNotifier.notify(
                     context,
                     context.getString(R.string.koil_noti_title_window_tomorrow),
@@ -82,7 +84,7 @@ internal class OilPriceChangeNotifier(
             val todayStr = today.toString()
             if (adjustDates.contains(todayStr)) {
                 val remindedDay = settings.priceLastWindowDayReminded.first()
-                if (remindedDay != todayStr) {
+                if (shouldRemindWindowToday(adjustDates, todayStr, remindedDay)) {
                     OilPriceNotifier.notify(
                         context,
                         context.getString(R.string.koil_noti_title_window_today),
@@ -104,11 +106,11 @@ internal class OilPriceChangeNotifier(
     suspend fun scheduleWindowDayReminder(context: Context) {
         val adjustDates = settings.priceDbAdjustDates.first()
             .split(",").map { it.trim() }.filter { it.isNotBlank() }
-        val next = adjustDates.firstOrNull { it > LocalDate.now().format(KOIL_DATE_FMT) } ?: return
+        val next = adjustDates.firstOrNull { it > AppClock.today().format(KOIL_DATE_FMT) } ?: return
         val delayMs = runCatching {
             val target = LocalDate.parse(next).atTime(0, 5)
                 .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
-            (target - System.currentTimeMillis()).coerceAtLeast(0L)
+            (target - AppClock.millis()).coerceAtLeast(0L)
         }.getOrNull() ?: return
         val request = androidx.work.OneTimeWorkRequestBuilder<OilPriceWindowDayWorker>()
             .setInitialDelay(delayMs, java.util.concurrent.TimeUnit.MILLISECONDS)
@@ -120,3 +122,36 @@ internal class OilPriceChangeNotifier(
         )
     }
 }
+
+/*
+ * 下面三个判定抽成顶层函数是为了能单测：通知去重一旦判错，用户要么被同一个窗口反复打扰，
+ * 要么永远收不到那次提醒 —— 两种都是"只有真机跑过一整天才会发现"的类型。
+ * 判定只依赖字符串/布尔参数，不碰 DataStore 与通知通道，所以可以在 JVM 里跑满所有组合。
+ */
+
+/**
+ * 调价生效通知要不要发。
+ *
+ * @param lastNotified 上次已通知的生效日（空串 = 首次启用，只锚定不打扰）
+ * @param newestDate 库里最新的生效日
+ * @param priceChanged 与上一条价格相比是否真的变了（搁浅窗口的维持价不算）
+ */
+internal fun shouldNotifyPriceChange(
+    lastNotified: String,
+    newestDate: String,
+    priceChanged: Boolean,
+): Boolean = lastNotified.isNotBlank() && newestDate != lastNotified && priceChanged
+
+/** 窗口日前一天提醒要不要发：下一个未过期窗口正好是明天，且这个窗口没提醒过 */
+internal fun shouldRemindWindowTomorrow(
+    nextWindow: String,
+    tomorrow: String,
+    reminded: String,
+): Boolean = nextWindow == tomorrow && reminded != nextWindow
+
+/** 窗口日当天提醒要不要发：今天本身就是窗口日，且当天没提醒过 */
+internal fun shouldRemindWindowToday(
+    adjustDates: List<String>,
+    today: String,
+    remindedDay: String,
+): Boolean = adjustDates.contains(today) && remindedDay != today

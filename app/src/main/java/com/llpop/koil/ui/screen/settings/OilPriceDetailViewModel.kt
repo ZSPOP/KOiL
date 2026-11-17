@@ -7,6 +7,7 @@ import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.util.AppClock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -35,7 +36,7 @@ data class PriceAdjustItem(
 data class OilPriceDetailUiState(
     val province: String = "广东",
     val grade: String = "92号汽油",
-    val year: String = java.time.LocalDate.now().year.toString(),
+    val year: String = AppClock.today().year.toString(),
     val years: List<String> = emptyList(),   // 库内该省油号记录存在的年份（降序），跨年后可切回看往年
     val provinces: List<String> = OilPriceDbSyncer.PROVINCES,
     // 库内 grade 以完整标签存储（"92号汽油"），查询与显示一致
@@ -66,7 +67,7 @@ class OilPriceDetailViewModel(
 
     private val provinceFlow = MutableStateFlow("广东")
     private val gradeFlow = MutableStateFlow("92号汽油")
-    private val yearFlow = MutableStateFlow(java.time.LocalDate.now().year.toString())
+    private val yearFlow = MutableStateFlow(AppClock.today().year.toString())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState = combine(

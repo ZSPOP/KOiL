@@ -1,5 +1,6 @@
 package com.llpop.koil.data.oil
 
+import com.llpop.koil.util.AppClock
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -209,7 +210,7 @@ open class OilPriceNetwork {
      * 翻页从首页到 index_N，直到某页无当年公告（已到上一年）即停；单页解析失败跳过继续，全部失败返回 emptyList。
      */
     suspend fun fetchNdrcAdjustDates(): List<String> {
-        val today = LocalDate.now()
+        val today = AppClock.today()
         val year = today.year
         val dates = sortedSetOf<String>()
         var page = 0

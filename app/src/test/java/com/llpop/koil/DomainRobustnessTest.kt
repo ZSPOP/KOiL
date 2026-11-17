@@ -4,6 +4,7 @@ import com.llpop.koil.data.local.entity.KOiLRecordEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.oil.OilPriceSyncResult
+import com.llpop.koil.data.oil.PriceDbOutcome
 import com.llpop.koil.data.sync.BackupCodec
 import com.llpop.koil.data.sync.RecordMerger
 import com.llpop.koil.domain.logic.ConsumptionStatus
@@ -449,12 +450,12 @@ class DomainRobustnessTest {
     fun `油价检测失败不写 8 小时节流时间戳`() {
         assertFalse(
             OilPriceDbSyncer.shouldWriteLastCheckAt(
-                OilPriceSyncResult(success = false, message = "双源失败"),
+                OilPriceSyncResult(success = false, outcome = PriceDbOutcome.FetchFailed("双源失败")),
             ),
         )
         assertTrue(
             OilPriceDbSyncer.shouldWriteLastCheckAt(
-                OilPriceSyncResult(success = true, message = "成功"),
+                OilPriceSyncResult(success = true, outcome = PriceDbOutcome.NoNewRecords),
             ),
         )
     }
