@@ -18,6 +18,7 @@ import com.llpop.koil.data.oil.decideForceCheckOnLaunch
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.CloudSyncManager
 import com.llpop.koil.data.update.UpdateChecker
+import com.llpop.koil.data.update.UpdateNotifier
 import com.llpop.koil.di.appModule
 import com.llpop.koil.util.CrashReporter
 import com.llpop.koil.util.SystemLocaleBridge
@@ -177,7 +178,11 @@ class KOiLApplication : Application() {
                 // 冷启动与回前台都查，避免 App 常驻后台几天一直看不到新版本
                 appScope.launch {
                     runCatching {
-                        GlobalContext.get().get<UpdateChecker>().checkIfDue()
+                        // 查到新版本就发一条系统通知（按 tag 去重、受设置页「系统通知」总开关约束）。
+                        // 顺序固定：先落库再通知——通知点进来时关于页要靠库里那条 tag 撑起胶囊。
+                        GlobalContext.get().get<UpdateChecker>().checkIfDue()?.let { target ->
+                            GlobalContext.get().get<UpdateNotifier>().notifyIfNeeded(target)
+                        }
                     }.onFailure { Log.w("KOiL", "Foreground update check failed: ${it.message}") }
                 }
             }
@@ -193,14 +198,14 @@ class KOiLApplication : Application() {
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
 
-        // 更新横幅的「已读」只在本次运行内有效（见 UpdateChecker.markSeen），不再需要应用级 scope 落库。
-
         // 冷启动静默检查应用更新（45min 节流，回前台也查）——查到比本机更新的 release 就把 tag 落到 DataStore，
         // 设置页「关于 KOiL」行据此挂红点，用户不用主动点也能知道有新版本。
         // 失败（离线 / 限流 / 超时）静默吞掉，保留上一次的 tag，不打扰、不显示假状态。
         appScope.launch {
             runCatching {
-                GlobalContext.get().get<UpdateChecker>().checkIfDue()
+                GlobalContext.get().get<UpdateChecker>().checkIfDue()?.let { target ->
+                    GlobalContext.get().get<UpdateNotifier>().notifyIfNeeded(target)
+                }
             }.onFailure { Log.w("KOiL", "Startup update check failed: ${it.message}") }
         }
 

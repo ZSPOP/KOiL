@@ -66,6 +66,7 @@ class AppSettings(private val context: Context) {
         private val KEY_PRICE_ALERT = booleanPreferencesKey("KOiL-price-alert")
         private val KEY_PRICE_PUSH = booleanPreferencesKey("KOiL-price-push")
         private val KEY_PRICE_LAST_NOTIFIED_DATE = stringPreferencesKey("KOiL-price-last-notified-date")
+        private val KEY_UPDATE_NOTIFIED_TAG = stringPreferencesKey("KOiL-update-notified-tag")
         private val KEY_PRICE_LAST_WINDOW_REMINDED = stringPreferencesKey("KOiL-price-last-window-reminded")
         // 窗口日当天"今晚24点生效"提醒去重（按窗口日标记）
         private val KEY_PRICE_LAST_WINDOW_DAY_REMINDED = stringPreferencesKey("KOiL-price-last-window-day-reminded")
@@ -252,6 +253,16 @@ class AppSettings(private val context: Context) {
     val pricePush: Flow<Boolean> = context.KOiLDataStore.data.distinctValue { it[KEY_PRICE_PUSH] ?: true }
     suspend fun setPricePush(on: Boolean) {
         context.KOiLDataStore.edit { it[KEY_PRICE_PUSH] = on }
+    }
+
+    // 新版本提醒不再有独立开关：并入「系统通知」总开关（pricePush）。
+    // 键刻意不重命名——改语义比改 key 安全，用户已开/已关的意图不会丢。
+
+    /** 已经通知过的新版本 tag：同一个 tag 只提醒一次，冷启动/回前台可能反复查到它 */
+    val updateNotifiedTag: Flow<String> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_UPDATE_NOTIFIED_TAG] ?: "" }
+    suspend fun setUpdateNotifiedTag(tag: String) {
+        context.KOiLDataStore.edit { it[KEY_UPDATE_NOTIFIED_TAG] = tag }
     }
 
     // ---- 上次已推送调价的生效日（避免重复通知）----

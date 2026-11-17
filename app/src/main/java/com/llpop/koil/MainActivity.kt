@@ -8,22 +8,35 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import com.llpop.koil.data.settings.AppSettings
+import com.llpop.koil.data.update.UpdateNotifier
 import com.llpop.koil.ui.MainScreen
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.core.context.GlobalContext
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * 「新版本提醒」通知点进来时置 true，MainScreen 消费后清掉。
+     * 放成 Compose state 而不是直接读 intent：App 已在前台/后台时点通知走的是 onNewIntent，
+     * 那一次 intent 不会触发重组，只有状态变化才会。
+     */
+    private var openAboutRequested by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // 全局崩溃捕获统一在 KOiLApplication.onCreate 安装（覆盖启动期崩溃）
         // 系统 SplashScreen（Android 12+ 原生，低版本兼容库）：品牌水滴 + KOiL
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        openAboutRequested = intent?.getBooleanExtra(UpdateNotifier.EXTRA_OPEN_ABOUT, false) == true
         // 调价推送通知权限（API 33+ 运行时申请；仅首次安装请求一次，拒绝后标记记忆，
         // 避免每次启动重复无效请求——Android 13+ 拒绝后系统静默不弹框；用户想开启时经设置页开关跳系统通知设置）
         // minSdk 33 起 POST_NOTIFICATIONS 恒存在，无需 SDK_INT 判断
@@ -48,8 +61,20 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(
                 LocalNavigationEventDispatcherOwner provides this@MainActivity,
             ) {
-                MainScreen()
+                MainScreen(
+                    openAboutOnLaunch = openAboutRequested,
+                    onOpenAboutHandled = { openAboutRequested = false },
+                )
             }
+        }
+    }
+
+    /** 通知点击（FLAG_ACTIVITY_CLEAR_TOP + SINGLE_TOP 复用同一实例）走这里 */
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(UpdateNotifier.EXTRA_OPEN_ABOUT, false)) {
+            openAboutRequested = true
         }
     }
 

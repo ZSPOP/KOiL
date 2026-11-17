@@ -62,7 +62,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
-import org.koin.core.context.GlobalContext
 import com.llpop.koil.data.oil.ForecastDirection
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.oil.forecastDirection
@@ -71,11 +70,6 @@ import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLGlassDialog
-import com.llpop.koil.BuildConfig
-import com.llpop.koil.data.update.UpdateChecker
-import com.llpop.koil.data.update.normalizeVersion
-import com.llpop.koil.data.update.shouldShowBanner
-import com.llpop.koil.ui.component.UpdateBanner
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -114,8 +108,6 @@ import com.llpop.koil.ui.theme.KOiLType
 fun AddScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
-    /** 更新横幅点击后进入关于页：检查与下载都在那边发生，首页只负责跳转 */
-    onOpenAbout: () -> Unit = {},
     viewModel: AddViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -125,19 +117,8 @@ fun AddScreen(
     val showPermissionDialog = remember { mutableStateOf(false) }
     // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
     val context = LocalContext.current
-    // 更新横幅：与设置页共用同一个 UpdateChecker（冷启动静默检查已把 tag 落到 DataStore）。
-    // 判据走独立的有单测的 shouldShowBanner，不在首页再手写一套。
-    // 注意它与设置页红点 shouldBadgeUpdate 是**刻意**不同源：横幅受 × 影响，红点不受
-    // （详见 UpdateBanner 顶部注释），改其中一个不要顺手去同步另一个。
-    val updateChecker = remember { GlobalContext.get().get<UpdateChecker>() }
-    // tag 与直链必须来自**同一快照**：分别订阅是两条 collect，中间有一帧
-    // 「新 tag + 旧 url」——下的是上一版的包，校验全过，装完仍是旧版还把新版标成已读
-    val updateTarget by updateChecker.updateTarget().collectAsStateWithLifecycle(initialValue = null)
-    val latestTag = updateTarget?.tag.orEmpty()
-    val seenTag by updateChecker.seenTag().collectAsStateWithLifecycle(initialValue = "")
-    val bannerTag = latestTag.takeIf { shouldShowBanner(it, seenTag, BuildConfig.VERSION_NAME) }
-    // 首页横幅只负责提醒与跳转：检查 / 下载 / 安装全部在关于页
-    // （关于页是唯一发起检查的地方，首页不再需要 ApkUpdater、下载进度、失败原因这一整套状态）
+    // 首页不再显示任何「有新版本」提示：新版本改由系统通知告知一次，
+    // 下载与安装全部留在关于页（通知点进来直接落在那一页）。
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
     // 不在副作用里读 context.getString——语言切换后不会拿到旧语种的缓存值
     val locateToast = uiState.locateMessage?.let {
@@ -214,26 +195,6 @@ fun AddScreen(
                     },
                 ),
             )
-
-            // 更新横幅：一组一卡，没更新时不出现
-            if (bannerTag != null) {
-                groupedCardItems(
-                    keyPrefix = "add_banner",
-                    outerBottomPadding = 12.dp,
-                        items = listOf(
-                        CardItem("updateBanner") {
-                            // 首页横幅只提醒与跳转：检查、下载、安装全部收在关于页。
-                            // version 用本机 tag 归一后的版本号（不含 V），文案见 UpdateBanner。
-                    UpdateBanner(
-                        version = normalizeVersion(bannerTag),
-                        onOpen = onOpenAbout,
-                        // × 只收起本次运行：markSeen 只写内存，冷启动后新版本横幅会重新出现
-                        onDismiss = { updateChecker.markSeen(bannerTag) },
-                    )
-                        },
-                    ),
-                )
-            }
 
             // 上次加油条：一组一卡，没有上一条记录时不出现
             if (uiState.lastRecord != null) {

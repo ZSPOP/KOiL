@@ -317,6 +317,12 @@
     <string name="koil_pdb_seeding_waiting">Waiting for the price calendar, retrying automatically</string>
     <string name="koil_set_price_push">Price change notifications</string>
     <string name="koil_set_price_push_sub">System notification on adjustment &amp; day before window</string>
+    <string name="koil_set_notify">System notifications</string>
+    <string name="koil_set_notify_sub">System message push and alerts</string>
+    <string name="koil_noti_update_channel">App updates</string>
+    <string name="koil_noti_update_channel_desc">One alert per new version; download and install happen on the About page</string>
+    <string name="koil_noti_update_title">KOiL %1$s is available</string>
+    <string name="koil_noti_update_body">Open the About page to check, download and install</string>
     <!-- 权限联动提示 -->
     <string name="koil_set_price_push_denied">Notification permission is off; push can\'t be delivered. Tap to enable.</string>
     <string name="koil_set_location_denied">Location permission missing; enable it to use location.</string>
@@ -382,8 +388,6 @@
     <string name="koil_set_about_feedback_sub">Includes version and device model</string>
     <string name="koil_set_about_open_failed">No app can open this link</string>
     <string name="koil_common_close">Close</string>
-    <string name="koil_ov_update_new">New version %1$s available</string>
-    <string name="koil_ov_update_dismiss">Dismiss update notice</string>
     <string name="koil_set_about_terms_body">KOiL records your own fuel purchases and reads publicly announced fuel price adjustments.\n\nAccuracy: prices follow station postings and official announcements. Reference prices, forecasts and conversions are for reference only and are not purchasing or investment advice.\n\nRisk: deviations caused by entry mistakes, data delays or device faults are borne by the user.\n\nThis is an open source project provided as is, without warranty of uninterrupted or error-free operation.</string>
     <string name="koil_set_about_privacy_body">Local first: fuel records, vehicle info and settings stay on your device. Nothing is uploaded to any server.\n\nLocation: used only when auto-detect province is on, solely to fill in the default province. No tracking, no upload.\n\nCloud sync (optional): data is backed up only to your own WebDAV server. Credentials are encrypted and stored locally; the developer has no access.\n\nCrash logs: kept on device only, exported manually, never reported automatically.</string>
     <string name="koil_sync_badge_on">Connected</string>
@@ -463,7 +467,6 @@
     <string name="koil_about_package_ready_plain">Update package ready</string>
     <string name="koil_about_percent_with_size">%1$d%% (%2$sMB/%3$sMB)</string>
     <string name="koil_about_downloaded">Downloaded %1$s MB</string>
-    <string name="koil_ov_update_view">View</string>
 
     <string name="koil_sync_reconcile_title">First pairing: cloud already has a backup</string>
     <string name="koil_sync_reconcile_counts">Here: %1$d · Cloud: %2$d</string>

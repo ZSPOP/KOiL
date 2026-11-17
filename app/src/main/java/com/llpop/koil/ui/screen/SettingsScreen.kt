@@ -244,6 +244,43 @@ fun SettingsScreen(
                             onSelectedIndexChange = { index -> viewModel.setLanguage(languages[index]) },
                         )
                     })
+                    // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
+                    // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
+                    add(CardItem("notify") {
+                        SettingSwitchRow(
+                            title = stringResource(R.string.koil_set_notify),
+                            subtitle = stringResource(R.string.koil_set_notify_sub),
+                            checked = uiState.pricePush && pushPermissionGranted,
+                            onCheckedChange = { on ->
+                                if (on) {
+                                    if (pushPermissionGranted) {
+                                        viewModel.setPricePush(true)
+                                    } else {
+                                        // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
+                                        // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
+                                        pendingOpenPush = true
+                                        openNotificationSettings(context)
+                                    }
+                                } else {
+                                    viewModel.setPricePush(false)
+                                }
+                            },
+                        )
+                    })
+                    if (!pushPermissionGranted) {
+                        add(CardItem("notifyDenied") {
+                            Text(
+                                text = stringResource(R.string.koil_set_price_push_denied),
+                                fontSize = KOiLType.CaptionLarge,
+                                lineHeight = 14.sp,
+                                color = KOiLColors.Warning,
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp)
+                                    .offset(y = (-3).dp)
+                                    .clickable { openNotificationSettings(context) },
+                            )
+                        })
+                    }
                 },
             )
             // ===== 导航栏（SmallTitle + 分段卡）=====
@@ -501,41 +538,6 @@ fun SettingsScreen(
                 onCheckedChange = viewModel::setPriceAlert,
             )
                     })
-                    add(CardItem("pricePush") {
-            SettingSwitchRow(
-                title = stringResource(R.string.koil_set_price_push),
-                subtitle = stringResource(R.string.koil_set_price_push_sub),
-                checked = uiState.pricePush && pushPermissionGranted,
-                onCheckedChange = { on ->
-                    if (on) {
-                        if (pushPermissionGranted) {
-                            viewModel.setPricePush(true)
-                        } else {
-                            // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
-                            // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
-                            pendingOpenPush = true
-                            openNotificationSettings(context)
-                        }
-                    } else {
-                        viewModel.setPricePush(false)
-                    }
-                },
-            )
-                    })
-                    if (!pushPermissionGranted) {
-                        add(CardItem("pushDenied") {
-                Text(
-                    text = stringResource(R.string.koil_set_price_push_denied),
-                    fontSize = KOiLType.CaptionLarge,
-                    lineHeight = 14.sp,
-                    color = KOiLColors.Warning,
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .offset(y = (-3).dp)
-                        .clickable { openNotificationSettings(context) },
-                )
-                        })
-                    }
                     if (priceDbStatus.lastSyncSources.isNotBlank()) {
                         add(CardItem("syncSources") {
 
@@ -884,8 +886,8 @@ fun LazyListScope.aboutSection(
                 )
             },
             CardItem("about") {
-                // 红点只看「有没有新版本」，**不看 seenTag**：首页横幅的 × 只收起那条提醒，
-                // 不代表用户不想知道有更新；红点要一直亮到装上最新版为止
+                // 红点只看「有没有新版本」，不受「系统通知」开关影响：
+                // 红点要一直亮到装上最新版为止 —— 装成功后版本号不再比本机新，红点自然灭。
                 val updateChecker = remember {
                     org.koin.core.context.GlobalContext.get()
                         .get<com.llpop.koil.data.update.UpdateChecker>()

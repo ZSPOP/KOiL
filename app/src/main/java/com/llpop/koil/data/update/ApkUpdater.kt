@@ -260,7 +260,7 @@ class ApkUpdater(
         }
         return runCatching {
             app.startActivity(intent)
-            // 这里**不写 seenTag**。startActivity 返回只代表安装器弹出来了，用户可能点取消；
+            // 这里**不写「已通知」标记**。startActivity 返回只代表安装器弹出来了，用户可能点取消；
             // 提前标记会让横幅与红点一起消失，他留在旧版且再也不会被提示。
             // 装成功后 isNewerRelease(latest, 当前版本) 自然为 false，横幅自己消失——
             // 不需要任何人提前写入来兜这个场景。
