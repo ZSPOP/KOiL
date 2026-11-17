@@ -12,7 +12,6 @@ import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.util.AppClock
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,6 +20,7 @@ import java.nio.charset.Charset
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import com.llpop.koil.data.net.KOiLHttpClient
 
 /**
  * 定位助手：获取当前位置并逆地理编码为省份。
@@ -31,13 +31,8 @@ import java.util.concurrent.TimeUnit
  */
 class LocationHelper(private val context: Context) {
 
-    private val httpClient = HttpClient {
-        install(HttpTimeout) {
-            requestTimeoutMillis = 8_000
-            connectTimeoutMillis = 8_000
-            socketTimeoutMillis = 8_000
-        }
-    }
+    // IP 归属地接口按 IP 限流，8s 是「等得起但不干等」的档；与油价网络同档
+    private val httpClient = KOiLHttpClient.create(timeoutMs = 8_000)
 
     // IP 定位节流（进程内 30 分钟一次）——归属地接口按 IP 限流，启动+手动叠加易被打回；
     // 失败只做 60 秒短退避，不能一次网络抖动就占满 30 分钟窗口。

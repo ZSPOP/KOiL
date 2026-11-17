@@ -2,8 +2,6 @@ package com.llpop.koil.data.oil
 
 import com.llpop.koil.util.AppClock
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -11,7 +9,6 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -22,6 +19,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.time.LocalDate
 import java.util.Locale
+import com.llpop.koil.data.net.KOiLHttpClient
 
 /**
  * 油价数据抓取（apizero 接口已不可用，单源）：
@@ -98,14 +96,7 @@ open class OilPriceNetwork {
     private val json = Json { ignoreUnknownKeys = true }
 
     private val client: HttpClient by lazy {
-        HttpClient {
-            install(HttpTimeout) {
-                requestTimeoutMillis = TIMEOUT_MS
-                connectTimeoutMillis = TIMEOUT_MS
-                socketTimeoutMillis = TIMEOUT_MS
-            }
-            install(ContentNegotiation) { json(json) }
-        }
+        KOiLHttpClient.create(TIMEOUT_MS, json = json)
     }
 
     // ===== 主源：youjia.abapi.cn =====
