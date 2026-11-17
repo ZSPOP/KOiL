@@ -206,29 +206,13 @@ class ApkUpdater(
      *   无人订阅时 `tryEmit` 直接丢弃 → 用户切走后失败完全无提示。
      * 展示交给 UI 就地读 state：横幅显示「· 失败」并把动作换成「重试」，设置页显示原因。
      *
-     * NO_PERMISSION 不清 readyTag（包已下好，授权回来应直接安装）；其它失败清掉，下次从头下载。
+     * readyTag 一律保留：下载现在先写临时文件，任何失败都只删 `.part`，正式包根本没被碰过。
+     * 所以失败不代表包坏了，凭据也没有理由丢——丢掉它只会让盘上那个完好的包变成没人认领的孤儿
+     * （几 MB 一直占着，直到下次下载成功被覆盖）。真正不可用的包（文件在、拉不起安装器）
+     * 由 [download] 里那条 LAUNCH 分支显式删。
      */
     private fun fail(reason: UpdateFailure, detail: String? = null) {
-        readyTag = nextReadyTag(readyTag, reason)
-        persistReadyTag(readyTag)
         _state.value = UpdateDownloadState.Failed(reason, detail)
-    }
-
-    /**
-     * 检测到更新的版本时，把**旧版本**的包丢掉。
-     *
-     * 不丢的后果：盘上留着一个能通过签名校验的旧包，用户点「安装最新版」时
-     * 若 tag 判断出现偏差就得装回旧版；而且 6.7MB 会一直压在更新目录里。
-     * 只丢「与 [tag] 不同」的那一个：同 tag 的包正在装，不能删。
-     */
-    fun discardReadyExcept(tag: String) {
-        if (!shouldDiscardReady(readyTag, tag)) return
-        apkFile()?.delete()
-        readyTag = null
-        persistReadyTag(null)
-        if (_state.value is UpdateDownloadState.Ready) {
-            _state.value = UpdateDownloadState.Idle
-        }
     }
 
     /**
@@ -450,9 +434,3 @@ class ApkUpdater(
 internal fun isReadyFor(tag: String, readyTag: String?, file: File?): Boolean =
     readyTag == tag && file?.exists() == true
 
-/**
- * 失败后 readyTag 的去留：只有「缺授权」保留（包已下好，授权回来应直接进安装器），
- * 其它失败一律清空，让下次点击从头下载。
- */
-internal fun nextReadyTag(current: String?, reason: UpdateFailure): String? =
-    if (reason == UpdateFailure.NO_PERMISSION) current else null

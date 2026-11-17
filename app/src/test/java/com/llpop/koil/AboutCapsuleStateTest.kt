@@ -10,7 +10,6 @@ import com.llpop.koil.data.update.AboutUpdateStatus
 import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.resolveCapsuleState
-import com.llpop.koil.data.update.shouldDiscardReady
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -123,12 +122,6 @@ class AboutCapsuleStateTest {
         )
     }
 
-    @Test
-    fun `检测到新版本时丢旧包 —— 同 tag 不丢，异 tag 丢，没有包不用丢`() {
-        assertFalse(shouldDiscardReady(null, "V1.1.18"))
-        assertFalse(shouldDiscardReady("V1.1.18", "V1.1.18"))
-        assertTrue(shouldDiscardReady("V1.1.17", "V1.1.18"))
-    }
 
     @Test
     fun `同一份状态下 readyTag 决定 Newer 还是 Install —— 一次判断只差一个参数`() {
