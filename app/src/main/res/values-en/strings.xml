@@ -512,4 +512,7 @@
     <!-- TalkBack label for number stepper buttons; %1$s is the setting title -->
     <string name="koil_stepper_decrease">Decrease %1$s</string>
     <string name="koil_stepper_increase">Increase %1$s</string>
+    <!-- TalkBack label for the password visibility toggle -->
+    <string name="koil_a11y_show_secret">Show password</string>
+    <string name="koil_a11y_hide_secret">Hide password</string>
 </resources>

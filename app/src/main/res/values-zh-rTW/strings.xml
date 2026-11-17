@@ -492,4 +492,7 @@
     <!-- 數字設定步進按鈕的讀屏標籤，%1$s 為該設定項標題 -->
     <string name="koil_stepper_decrease">減少%1$s</string>
     <string name="koil_stepper_increase">增加%1$s</string>
+    <!-- 密碼可見性切換按鈕的讀屏標籤 -->
+    <string name="koil_a11y_show_secret">顯示密碼</string>
+    <string name="koil_a11y_hide_secret">隱藏密碼</string>
 </resources>

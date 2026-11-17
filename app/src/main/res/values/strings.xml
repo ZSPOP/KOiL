@@ -496,4 +496,7 @@
     <!-- 数字设置行步进按钮的读屏标签，%1$s 为该设置项标题 -->
     <string name="koil_stepper_decrease">减少%1$s</string>
     <string name="koil_stepper_increase">增加%1$s</string>
+    <!-- 密码可见性切换按钮的读屏标签 -->
+    <string name="koil_a11y_show_secret">显示密码</string>
+    <string name="koil_a11y_hide_secret">隐藏密码</string>
 </resources>

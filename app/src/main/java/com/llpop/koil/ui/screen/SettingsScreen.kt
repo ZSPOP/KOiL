@@ -548,7 +548,10 @@ fun SettingsScreen(
                                                     IconButton(onClick = { showKey = !showKey }) {
                                                         Icon(
                                                             imageVector = if (showKey) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                                            contentDescription = null,
+                                                            // 读屏标签随当前状态切换：明文态读出「隐藏密码」，密文态读出「显示密码」
+                                                            contentDescription = stringResource(
+                                                                if (showKey) R.string.koil_a11y_hide_secret else R.string.koil_a11y_show_secret,
+                                                            ),
                                                             tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                                                             modifier = Modifier.size(18.dp),
                                                         )
@@ -1634,7 +1637,10 @@ private fun SyncPanelBody(
                             IconButton(onClick = { showPwd = !showPwd }) {
                                 Icon(
                                     imageVector = if (showPwd) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = null,
+                                    // 读屏标签随当前状态切换：明文态读出「隐藏密码」，密文态读出「显示密码」
+                                    contentDescription = stringResource(
+                                        if (showPwd) R.string.koil_a11y_hide_secret else R.string.koil_a11y_show_secret,
+                                    ),
                                     tint = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f),
                                     modifier = Modifier.size(18.dp),
                                 )
