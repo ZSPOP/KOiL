@@ -36,6 +36,14 @@ object AppClock {
 
     fun today(): LocalDate = LocalDate.now(clock)
 
+    /**
+     * 指定时区的「今天」。
+     *
+     * 油价窗口按北京时间 24 时开，与设备所在时区无关：非 UTC+8 的设备上，
+     * `today()` 与窗口日历可能差一天。这里仍走同一个可注入的时钟，测试照样能钉死。
+     */
+    fun todayIn(zone: ZoneId): LocalDate = LocalDate.now(clock.withZone(zone))
+
     fun nowLocal(): LocalDateTime = LocalDateTime.now(clock)
 
     fun nowZoned(): ZonedDateTime = ZonedDateTime.now(clock)

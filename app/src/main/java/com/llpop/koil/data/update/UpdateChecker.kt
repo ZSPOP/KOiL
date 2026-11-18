@@ -288,11 +288,19 @@ internal suspend fun <T> fetchBothSources(
  * 若一律以 GitHub 为准，国内用户要下 GitHub 直链，成功率反而下降。
  * 所以按版本号取大，只有打平时才偏向 Gitee。
  */
-internal fun pickNewestTarget(gitee: UpdateTarget?, github: UpdateTarget?): UpdateTarget? = when {
-    gitee == null -> github
-    github == null -> gitee
-    compareVersionNames(gitee.tag, github.tag) >= 0 -> gitee
-    else -> github
+internal fun pickNewestTarget(gitee: UpdateTarget?, github: UpdateTarget?): UpdateTarget? {
+    if (gitee == null) return github
+    if (github == null) return gitee
+    val cmp = compareVersionNames(gitee.tag, github.tag)
+    if (cmp > 0) return gitee
+    if (cmp < 0) return github
+    // 同版本时优先「真的能给直链」的那一方：镜像刚建 Release、附件还在传的那十几分钟里，
+    // Gitee 的 tag 已经可见但 apkUrl 为空，此时选它会让「立即更新」点下去直接下载失败。
+    return when {
+        gitee.apkUrl.isNotBlank() -> gitee
+        github.apkUrl.isNotBlank() -> github
+        else -> gitee
+    }
 }
 
 /**

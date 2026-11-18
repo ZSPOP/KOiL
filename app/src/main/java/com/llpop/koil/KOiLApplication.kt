@@ -201,6 +201,13 @@ class KOiLApplication : Application() {
             override fun onActivityDestroyed(activity: Activity) = Unit
         })
 
+        // 通道准备先于更新检查、且不看结果：升级机上的历史通道必须每次都清一遍，
+        // 否则旧通道会一直挂在系统设置里与新的同名并存（1.2.7 横幅事故的根因）。
+        appScope.launch {
+            runCatching { GlobalContext.get().get<UpdateNotifier>().prepareChannel() }
+                .onFailure { Log.w("KOiL", "prepare update channel failed: ${it.message}") }
+        }
+
         // 冷启动静默检查应用更新（45min 节流，回前台也查）——查到比本机更新的 release 就把 tag 落到 DataStore，
         // 设置页「关于 KOiL」行据此挂红点，用户不用主动点也能知道有新版本。
         // 失败（离线 / 限流 / 超时）静默吞掉，保留上一次的 tag，不打扰、不显示假状态。
