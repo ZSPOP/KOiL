@@ -190,8 +190,8 @@ class UpdateNotifier(
             // API 26+ 由通道 IMPORTANCE_HIGH 决定 heads-up，这行是给旧版本兜底；
             // 显式 PRIORITY_HIGH 保证「顶部弹出 + 通知栏常驻」两件事同时成立
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // 默认提示音 + 振动 + 灯效一起要：与通道属性同向，避免某一路被系统判成静默
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // 不写 setDefaults：minSdk 33，声音与振动完全由通道属性决定，
+            // 通知对象上的 defaults 在 API 26+ 会被系统忽略，留着只会让人以为它在起作用
             // 用「状态」类而不是「推荐」类：部分 ROM 会把「推荐」折叠进汇总，状态类不会。
             // Android 没有「软件更新」这个 category 常量（CATEGORY_UPDATE 两边都不存在），
             // 更新通知的本质也确实是「一个持续到你装完为止的状态」，与 STATUS 语义一致
