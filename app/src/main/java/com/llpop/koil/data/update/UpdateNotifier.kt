@@ -56,12 +56,15 @@ class UpdateNotifier(
     }
 
     /**
-     * 建通道。ID 始终是 [CHANNEL_ID]，不换名。
+     * 建通道，并清掉旧 ID 的残留。
      *
-     * 难点是「重要性一经创建不可修改」：旧版按 DEFAULT 建过这条通道，
-     * 现在要顶部弹出就必须是 HIGH。做法是**只做一次**「删掉旧通道再按 HIGH 重建」，
-     * 并用一个落盘标记记住已迁移过——否则每次冷启动都会把用户在系统设置里手改的
-     * 重要性再顶回 HIGH，等于把用户的选择反复抹掉。
+     * 重要性一经创建不可修改，**同名重建也改不掉**：删掉 `app_update` 之后再用同一个 id
+     * 按 HIGH 重建，系统仍沿用旧值 DEFAULT（`UpdateChannelMigrationTest` 钉住了这条实测行为）。
+     * 而 DEFAULT 通道永远不会顶部弹出，所以「让更新通知弹横幅」的唯一办法是换 ID：
+     * 现用 [CHANNEL_ID] = `app_update_alert`，全新安装一次建成 HIGH。
+     *
+     * [LEGACY_CHANNEL_ID] 只会出现在从旧版升级上来的机子上（全新安装没有），
+     * 这里顺手删掉，免得系统设置里多一条删不掉的僵尸通道。
      */
     private fun ensureChannel() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

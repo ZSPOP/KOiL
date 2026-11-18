@@ -92,6 +92,7 @@ import kotlinx.coroutines.Dispatchers
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.data.update.isUpdateChannelDisabled
 
 
 
@@ -149,7 +150,7 @@ fun SettingsScreen(
     var pendingOpenPush by remember { mutableStateOf(false) }
     // 「应用更新」渠道被单独关掉时，更新通知会被系统直接丢弃，而开关本身看不出来——所以在副标题里点明
     var updateChannelOff by remember {
-        mutableStateOf(com.llpop.koil.data.update.isUpdateChannelDisabled(context))
+        mutableStateOf(isUpdateChannelDisabled(context))
     }
     // 返回前台时刷新权限状态（用户可能在系统设置里改动过通知/定位权限）
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -159,7 +160,7 @@ fun SettingsScreen(
                 pushPermissionGranted =
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
-                updateChannelOff = com.llpop.koil.data.update.isUpdateChannelDisabled(context)
+                updateChannelOff = isUpdateChannelDisabled(context)
                 locationPermissionGranted = viewModel.hasLocationPermission()
                 // 跳系统通知设置授权返回后，自动补开推送开关（用户刚表达过"想开"的意图）
                 if (pushPermissionGranted && pendingOpenPush) {
