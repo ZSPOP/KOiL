@@ -52,6 +52,17 @@ class UpdateNotifier(
          *   重要性只是「允许弹」的前提，**有声才是弹的条件**。
          *
          * 历史 ID 由 [ensureChannel] 顺手删掉（全新安装本来就不存在它们）。
+         *
+         * **换 ID 时不要沿用旧的显示名。** 1.2.7 → 1.2.8 的真机上就是这样翻车的：
+         * 覆盖安装时旧 `app_update_alert` 还留在系统里，名字同样是「应用更新」，
+         * 两条通道在系统设置里并存；App 查的是 `KOiL_Update`（HIGH + 有声音，判正常），
+         * 而用户在系统界面里看到、手动去开的是旧那条（静默），怎么改都没用 ——
+         * 清一次应用数据（连通道一起清）后重建，同样的代码就正常弹了。
+         * 显示名不同的话，至少一眼能分清改的是哪一条，也不会被同名条目误导。
+         *
+         * 顺带记一条当时的教训：[ensureChannel] 只在「真要发一条通知」时才会执行，
+         * 升级机第一次启动若直接命中节流/去重就永远走不到它，旧通道也就永远不被删。
+         * 所以清理历史通道这件事不能只挂在这里（见 `channelIssue` 的调用处）。
          */
         const val CHANNEL_ID = "KOiL_Update"
         private val LEGACY_CHANNEL_IDS = listOf("app_update_alert", "app_update")
