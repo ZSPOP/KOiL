@@ -2,6 +2,7 @@ package com.llpop.koil
 
 import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.isReadyFor
+import com.llpop.koil.data.update.shouldDropReadyPackage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -43,6 +44,30 @@ class ApkReadyStateTest {
         val f = tmp.newFile("KOiL-update.apk")
         assertTrue(f.delete())
         assertFalse(isReadyFor("V1.1.10", "V1.1.10", f))
+    }
+
+    @Test
+    fun `已装上的那一版包在启动时该被清掉`() {
+        // 覆盖安装后：包里是 V1.2.9，App 自己已经是 1.2.9 —— 这 6.8MB 留着没用
+        val f = tmp.newFile("KOiL-V1.2.9.apk")
+        f.writeBytes(ByteArray(8))
+        assertTrue(shouldDropReadyPackage("V1.2.9", "1.2.9", f))
+    }
+
+    @Test
+    fun `还没装的新版包不能被清掉`() {
+        // 下完还没来得及装，App 还是旧版本 —— 删了就得重下 6.8MB
+        val f = tmp.newFile("KOiL-V1.2.9.apk")
+        f.writeBytes(ByteArray(8))
+        assertFalse(shouldDropReadyPackage("V1.2.9", "1.2.8", f))
+    }
+
+    @Test
+    fun `文件不在或 tag 为空时不需要清`() {
+        assertFalse(shouldDropReadyPackage("", "1.2.9", null))
+        val gone = tmp.newFile("KOiL-V1.2.9.apk")
+        assertTrue(gone.delete())
+        assertFalse(shouldDropReadyPackage("V1.2.9", "1.2.9", gone))
     }
 
     @Test

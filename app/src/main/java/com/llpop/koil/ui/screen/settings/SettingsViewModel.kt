@@ -968,40 +968,53 @@ class SettingsViewModel(
         data class Failure(val messageKey: String, val detail: String? = null) : BackupOutcome
     }
 
-    /** 备份设置块回写（仅白名单键，未知键忽略；非法枚举值不改变现状） */
     /**
      * 备份设置块回写（仅白名单键，未知键忽略；非法枚举值不改变现状）。
      * 校验逐项照旧，落盘收口为一次事务（AppSettings.applyBackupValues）——
      * 曾逐项 setXxx 产生 11 次独立 DataStore 事务，每次都让订阅设置的页面整批重算（M-08）。
      */
     private suspend fun applyBackupSettings(obj: org.json.JSONObject) {
+        // 格式不坏的项照旧静默保留现状（覆盖现状比丢掉更危险），但要留痕：
+        // 否则「恢复完发现主题没变」在现场只能靠猜是文件旧了还是值不合法
+        val dropped = mutableListOf<String>()
         val themeMode = obj.optString("themeMode").takeIf { it.isNotEmpty() }?.let {
             runCatching { AppSettings.ThemeMode.valueOf(it) }.getOrNull()
+                ?: run { dropped += "themeMode=$it"; null }
         }
         val language = obj.optString("language").takeIf { it.isNotEmpty() }?.let {
             runCatching { AppSettings.Language.valueOf(it) }.getOrNull()
+                ?: run { dropped += "language=$it"; null }
         }
-        val province = obj.optString("defaultProvince")
-            .takeIf { it.isNotEmpty() && Provinces.isValid(it) }
-        val grade = obj.optString("defaultGrade").takeIf { it in OilPriceNetwork.GRADE_LABELS }
+        val province = obj.optString("defaultProvince").takeIf { it.isNotEmpty() }?.let {
+            it.takeIf { Provinces.isValid(it) } ?: run { dropped += "defaultProvince=$it"; null }
+        }
+        val grade = obj.optString("defaultGrade").takeIf { it.isNotEmpty() }?.let {
+            it.takeIf { it in OilPriceNetwork.GRADE_LABELS } ?: run { dropped += "defaultGrade=$it"; null }
+        }
         val tank = if (!obj.isNull("tankCapacity")) {
             obj.optDouble("tankCapacity", Double.NaN)
                 .takeIf { it.isFinite() && it in 5.0..200.0 }
                 ?.let { it.toFloat() }
+                ?: run { dropped += "tankCapacity=${obj.optString("tankCapacity")}"; null }
         } else null
         val keep = if (!obj.isNull("keepLastGrade")) obj.optBoolean("keepLastGrade") else null
         // 阈值导入收口：口径以设置页为准（异常 0..50、偏差 1..50），且 UI 步进只收整数，
         // 备份可能写 20.5 这类小数——导入一律四舍五入取整（normalizeThresholdPct，可单测）。
         val abnormal = if (!obj.isNull("abnormalThreshold")) {
             normalizeThresholdPct(obj.optDouble("abnormalThreshold", Double.NaN), 0.0, 50.0)
+                ?: run { dropped += "abnormalThreshold=${obj.optString("abnormalThreshold")}"; null }
         } else null
         val deviation = if (!obj.isNull("deviationThreshold")) {
             normalizeThresholdPct(obj.optDouble("deviationThreshold", Double.NaN), 1.0, 50.0)
+                ?: run { dropped += "deviationThreshold=${obj.optString("deviationThreshold")}"; null }
         } else null
         val alert = if (!obj.isNull("priceAlert")) obj.optBoolean("priceAlert") else null
         val location = if (!obj.isNull("locationEnabled")) obj.optBoolean("locationEnabled") else null
         val autoUpdate = if (!obj.isNull("priceDbAutoUpdate")) obj.optBoolean("priceDbAutoUpdate") else null
 
+        if (dropped.isNotEmpty()) {
+            android.util.Log.w("KOiL", "backup settings skipped (invalid): ${dropped.joinToString()}")
+        }
         settings.applyBackupValues(
             themeMode = themeMode,
             language = language,
