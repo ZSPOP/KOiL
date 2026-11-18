@@ -4,8 +4,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.llpop.koil.data.update.UpdateChannelIssue
 import com.llpop.koil.data.update.UpdateNotifier
 import com.llpop.koil.data.update.isUpdateChannelDisabled
+import com.llpop.koil.data.update.updateChannelIssue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -62,11 +64,11 @@ class UpdateChannelMigrationTest {
     @Test
     fun `换一个新的通道 ID 按 HIGH 建 —— 这才真的拿到 HIGH`() {
         nm.createNotificationChannel(
-            NotificationChannel("app_update_alert", "应用更新", NotificationManager.IMPORTANCE_HIGH)
+            NotificationChannel("KOiL_Update_probe", "应用更新", NotificationManager.IMPORTANCE_HIGH)
         )
         assertEquals(
             NotificationManager.IMPORTANCE_HIGH,
-            nm.getNotificationChannel("app_update_alert")!!.importance,
+            nm.getNotificationChannel("KOiL_Update_probe")!!.importance,
         )
     }
 
@@ -80,5 +82,48 @@ class UpdateChannelMigrationTest {
     fun `通道正常时不报警`() {
         createChannel(NotificationManager.IMPORTANCE_HIGH)
         assertFalse(isUpdateChannelDisabled(context))
+    }
+
+    @Test
+    fun `重要性只有 DEFAULT 时算静默 —— 通知栏看得见但永不弹横幅`() {
+        // 这就是 1.2.7 在 HyperOS 上的实际状态：通知能进通知栏，横幅从不出现
+        createChannel(NotificationManager.IMPORTANCE_DEFAULT)
+        assertEquals(UpdateChannelIssue.Quiet, updateChannelIssue(context))
+        assertFalse("静默不是「被关掉」，两者不能混为一谈", isUpdateChannelDisabled(context))
+    }
+
+    @Test
+    fun `HIGH 但既没声音也不振动时同样算静默`() {
+        // 横幅的真正条件是「通道会响」，不是 importance 的数字大小
+        val silent = NotificationChannel(
+            UpdateNotifier.CHANNEL_ID,
+            "应用更新",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            setSound(null, null)
+            enableVibration(false)
+        }
+        nm.createNotificationChannel(silent)
+        assertEquals(UpdateChannelIssue.Quiet, updateChannelIssue(context))
+    }
+
+    @Test
+    fun `HIGH 且有声有振动时才算正常`() {
+        val alerting = NotificationChannel(
+            UpdateNotifier.CHANNEL_ID,
+            "应用更新",
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            setSound(android.net.Uri.parse("content://settings/system/notification_sound"), null)
+            enableVibration(true)
+        }
+        nm.createNotificationChannel(alerting)
+        assertEquals(UpdateChannelIssue.None, updateChannelIssue(context))
+    }
+
+    @Test
+    fun `通道尚未创建时不报警也不判静默`() {
+        // ensureChannel() 紧接着就会建它，此时报「静默」会让首启的副标题说假话
+        assertEquals(UpdateChannelIssue.None, updateChannelIssue(context))
     }
 }

@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -37,16 +39,22 @@ class UpdateNotifier(
         /**
          * 通道 ID。
          *
-         * 为什么不能继续叫 `app_update`：Android 的通道重要性**创建后不可修改**，
-         * 用同一个 id 删掉再按 HIGH 重建也没用——系统沿用旧设置（有单测钉住这一条）。
-         * 旧通道是按 IMPORTANCE_DEFAULT 建的，而 DEFAULT 永远不会顶部弹出，
-         * 所以「通知从来没弹出来」有一半原因在这里。
+         * 这条通道被换过两次，原因都是同一个：**通道的任何属性一经创建就不可修改**，
+         * 用同一个 id 删掉再按新参数重建也没用——系统沿用首次创建的那份设置
+         * （`UpdateChannelMigrationTest` 钉住了这条实测行为）。
+         * 所以「把已经落地的通道改成会弹横幅」在 Android 上没有别的办法，只能换 ID。
          *
-         * 不叫 `app_update` 的另一个后果是：升级机子上会残留一条旧通道，
-         * 由 [ensureChannel] 顺手清掉（全新安装本来就不存在它）。
+         * 两次换名的经过（不要重复踩）：
+         * - `app_update`：最早按 IMPORTANCE_DEFAULT 建，DEFAULT 永远不会顶部弹出；
+         * - `app_update_alert`：只把重要性抬到 HIGH，忽略了**通道是否静音**这个真正的开关，
+         *   HyperOS 上落地成了「声音：无 / 悬浮通知：关」，横幅依旧不弹；
+         * - `KOiL_Update`：现用。建通道时显式给默认提示音 + 振动 + 锁屏可见，
+         *   重要性只是「允许弹」的前提，**有声才是弹的条件**。
+         *
+         * 历史 ID 由 [ensureChannel] 顺手删掉（全新安装本来就不存在它们）。
          */
-        const val CHANNEL_ID = "app_update_alert"
-        private const val LEGACY_CHANNEL_ID = "app_update"
+        const val CHANNEL_ID = "KOiL_Update"
+        private val LEGACY_CHANNEL_IDS = listOf("app_update_alert", "app_update")
         private const val NOTIFICATION_ID = 1100
 
         /** 通知点击后要落到关于页：MainActivity 读这个 extra */
@@ -56,33 +64,45 @@ class UpdateNotifier(
     }
 
     /**
-     * 建通道，并清掉旧 ID 的残留。
+     * 建通道，并清掉历史 ID 的残留。
      *
-     * 重要性一经创建不可修改，**同名重建也改不掉**：删掉 `app_update` 之后再用同一个 id
-     * 按 HIGH 重建，系统仍沿用旧值 DEFAULT（`UpdateChannelMigrationTest` 钉住了这条实测行为）。
-     * 而 DEFAULT 通道永远不会顶部弹出，所以「让更新通知弹横幅」的唯一办法是换 ID：
-     * 现用 [CHANNEL_ID] = `app_update_alert`，全新安装一次建成 HIGH。
+     * 通道属性一经创建不可修改，**同名重建也改不掉**：删掉之后再用同一个 id 按新参数重建，
+     * 系统仍沿用首次那份（`UpdateChannelMigrationTest` 钉住了这条实测行为）。
+     * 所以「让更新通知弹横幅」的唯一办法是换 ID：[CHANNEL_ID] = `KOiL_Update`。
      *
-     * [LEGACY_CHANNEL_ID] 只会出现在从旧版升级上来的机子上（全新安装没有），
-     * 这里顺手删掉，免得系统设置里多一条删不掉的僵尸通道。
+     * **光有 IMPORTANCE_HIGH 不够。** 横幅真正的条件是这个通道「会响」：
+     * 只写 IMPORTANCE_HIGH、不给声音时，部分 ROM（HyperOS 实测）会把通道落地成
+     * 「声音：无 / 振动：关 / 悬浮通知：关」，于是在通知栏里躺着、永远不弹。
+     * 这里所以要显式给默认提示音与振动，重要性只是「允许弹」的前提。
+     *
+     * [LEGACY_CHANNEL_IDS] 只会出现在升级机子上（全新安装没有），顺手删掉，
+     * 免得系统设置里堆着几条删不掉的僵尸通道。
      */
     private fun ensureChannel() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        // 升级机子上会残留旧 ID 的通道（全新安装没有）。留着只会在系统设置里多一条删不掉的僵尸项
-        if (nm.getNotificationChannel(LEGACY_CHANNEL_ID) != null) {
-            nm.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+        LEGACY_CHANNEL_IDS.forEach { legacy ->
+            if (nm.getNotificationChannel(legacy) != null) nm.deleteNotificationChannel(legacy)
         }
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.koil_noti_update_channel),
-                // IMPORTANCE_HIGH：顶部弹出的横幅 + 提示音，同时保留在通知栏里。
+                // IMPORTANCE_HIGH：允许顶部弹出的横幅，同时保留在通知栏里。
                 // 「有新版本」是用户需要当场决定装不装的事，值得打断一次；点开或划掉就没了。
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = context.getString(R.string.koil_noti_update_channel_desc)
-                // 不开「长按可改锁屏可见性」之外的额外开关：横幅 + 声音由 HIGH 自带
-                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
+                // 必须显式给声音与振动：这是横幅的触发条件，不是锦上添花。
+                // 用系统默认通知音而不是自带音频资源——跟随用户的铃声与静音策略，也不额外占包体。
+                setSound(
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .build(),
+                )
+                enableVibration(true)
+                // 锁屏上显示内容：更新提醒不含隐私信息，藏起来反而让人以为没收到
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
             }
             nm.createNotificationChannel(channel)
         }
@@ -170,7 +190,14 @@ class UpdateNotifier(
             // API 26+ 由通道 IMPORTANCE_HIGH 决定 heads-up，这行是给旧版本兜底；
             // 显式 PRIORITY_HIGH 保证「顶部弹出 + 通知栏常驻」两件事同时成立
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            // 默认提示音 + 振动 + 灯效一起要：与通道属性同向，避免某一路被系统判成静默
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            // 用「状态」类而不是「推荐」类：部分 ROM 会把「推荐」折叠进汇总，状态类不会。
+            // Android 没有「软件更新」这个 category 常量（CATEGORY_UPDATE 两边都不存在），
+            // 更新通知的本质也确实是「一个持续到你装完为止的状态」，与 STATUS 语义一致
+            .setCategory(android.app.Notification.CATEGORY_STATUS)
+            // 锁屏可见：与通道的 VISIBILITY_PUBLIC 保持一致
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
@@ -181,14 +208,42 @@ class UpdateNotifier(
     }
 }
 
+/** 更新通知这条通道在系统侧的三态：正常 / 被关掉 / 在但不会响 */
+enum class UpdateChannelIssue {
+    /** 通道不在或一切正常（通道尚未创建时也按正常处理，`ensureChannel()` 紧接着就建） */
+    None,
+
+    /** 用户在系统设置里把这条通道整个关掉了：重要性 NONE，系统直接丢弃 */
+    Disabled,
+
+    /**
+     * 通道还在、但会被判成静默：重要性低于 HIGH，或既没有声音也不会振动。
+     * 这种通道**永远不会弹出横幅**，通知只安静地躺在通知栏里 —— 正是 1.2.7 之前的样子。
+     */
+    Quiet,
+}
+
 /**
- * 用户是否在系统设置里单独关掉了「应用更新」这一个渠道。
+ * 读出更新通道在系统侧的实际状态，供设置页副标题提示「开关开着却收不到」的原因。
  *
- * App 总开关与运行时权限都可能还是好的，但渠道 importance 为 NONE 时系统会直接丢弃通知。
- * 设置页据此在副标题里点明，避免「开关开着却一条都收不到」的无声失败。
+ * 光查 `areNotificationsEnabled()` 不够：App 级开关、运行时权限、通道级开关是三件事，
+ * 任何一层关掉都发不出去，而 App 自己毫无感知。这里把通道层的两种失败分开报，
+ * 一条提示「被关掉」、一条提示「不响」——后者才是最容易被忽略的：通知能看见，就是不弹。
  */
-fun isUpdateChannelDisabled(context: Context): Boolean = runCatching {
+fun updateChannelIssue(context: Context): UpdateChannelIssue = runCatching {
     val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    nm.getNotificationChannel(UpdateNotifier.CHANNEL_ID)?.importance ==
-        NotificationManager.IMPORTANCE_NONE
-}.getOrDefault(false)
+    val channel = nm.getNotificationChannel(UpdateNotifier.CHANNEL_ID)
+        ?: return@runCatching UpdateChannelIssue.None
+    when {
+        channel.importance == NotificationManager.IMPORTANCE_NONE -> UpdateChannelIssue.Disabled
+        // 重要性不足：系统根本不会考虑横幅
+        channel.importance < NotificationManager.IMPORTANCE_HIGH -> UpdateChannelIssue.Quiet
+        // 重要性够了但通道静默：横幅同样不弹（HyperOS 上「声音：无」时就是这一档）
+        channel.sound == null && !channel.shouldVibrate() -> UpdateChannelIssue.Quiet
+        else -> UpdateChannelIssue.None
+    }
+}.getOrDefault(UpdateChannelIssue.None)
+
+/** 用户是否在系统设置里单独关掉了「应用更新」这一个渠道。 */
+fun isUpdateChannelDisabled(context: Context): Boolean =
+    updateChannelIssue(context) == UpdateChannelIssue.Disabled
