@@ -44,6 +44,17 @@ class UpdateSourcePickTest {
     }
 
     @Test
+    fun `同版本但 Gitee 还没传附件时改取 GitHub`() {
+        // 镜像刚建好 Release、APK 还在传的那十几分钟：Gitee 的 tag 已可见，apkUrl 却是空的。
+        // 只看版本的 tie-break 会选它，用户点「立即更新」直接下载失败
+        val giteeNoApk = UpdateTarget("V1.2.3", "")
+        val picked = pickNewestTarget(giteeNoApk, github("V1.2.3"))
+        assertEquals("https://github.com/ZSPOP/KOiL/V1.2.3.apk", picked?.apkUrl)
+        // 两边都没直链时维持原取舍（Gitee），不返回 null 把版本号也丢掉
+        assertEquals("V1.2.3", pickNewestTarget(giteeNoApk, UpdateTarget("V1.2.3", ""))?.tag)
+    }
+
+    @Test
     fun `两源都失败返回 null`() {
         assertNull(pickNewestTarget(null, null))
     }

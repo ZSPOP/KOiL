@@ -494,7 +494,9 @@ class ApkUpdater(
  * 抽成顶层纯函数是为了能单测（这条逻辑没有别的地方守着）。
  */
 internal fun isReadyFor(tag: String, readyTag: String?, file: File?): Boolean =
-    readyTag == tag && file?.exists() == true
+    // 长度要一起判：`exists()` 对 0 字节文件也返回 true，而下载中断留下的空壳正是这种形态。
+    // 只看存在性的话，用户点「安装最新版」会拉起安装器、系统报「解析包时出现问题」。
+    readyTag == tag && file != null && file.exists() && file.length() > 0L
 
 /**
  * 正式包的文件名：`KOiL-V1.2.6.apk`。

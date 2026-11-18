@@ -823,7 +823,13 @@ class AddViewModel(
                 // 刷新上次记录（成功后 lastRecord 必须是最新一条，供「沿用上次」使用）
                 val last = recordDao.getLatest()
                 _uiState.update { it.copy(lastRecord = last) }
-            } catch (_: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // 协程取消不是「入库失败」：必须透传，否则页面退出时会被记成一次 add_failed
+                throw e
+            } catch (e: Exception) {
+                // 用户侧仍只看到固定文案（不透出数据库内部信息），但要留痕：
+                // 否则「记录不入库」在现场只能靠猜是校验拒绝还是 DB 异常。
+                android.util.Log.w("KOiL", "add record failed: ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     isAdding = false,
                     // 失败提示固定文案，不透出数据库内部异常文本

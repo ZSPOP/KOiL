@@ -11,6 +11,14 @@ import java.time.format.DateTimeFormatter
  * 抽到文件级避免互相引用私有实现。均为纯函数/纯解析，无行为改动。
  */
 
+/**
+ * 油价窗口的时区：**固定北京时间**，不跟设备时区走。
+ *
+ * 调价窗口是国内 24:00 开的政策时刻，出差的手机把时区切成 UTC-5 也不会改变它。
+ * 曾经用 `systemDefault()`，非 UTC+8 设备上整条窗口推断都跟着偏一天。
+ */
+internal val CN_ZONE: java.time.ZoneId = java.time.ZoneId.of("Asia/Shanghai")
+
 /** 全链路统一日期格式（原 OilPriceDbSyncer.DATE_FMT） */
 internal val KOIL_DATE_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
@@ -110,7 +118,7 @@ internal fun isPastLastEffectiveWindow(lastCheck: Long, prevWindow: String?): Bo
     val prev = prevWindow?.takeIf { it.isNotBlank() } ?: return false
     val effectiveAt = runCatching {
         LocalDate.parse(prev).plusDays(1).atStartOfDay()
-            .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            .atZone(CN_ZONE).toInstant().toEpochMilli()
     }.getOrNull() ?: return false
     return lastCheck < effectiveAt
 }

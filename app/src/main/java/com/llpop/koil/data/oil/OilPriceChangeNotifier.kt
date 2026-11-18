@@ -106,10 +106,10 @@ internal class OilPriceChangeNotifier(
     suspend fun scheduleWindowDayReminder(context: Context) {
         val adjustDates = settings.priceDbAdjustDates.first()
             .split(",").map { it.trim() }.filter { it.isNotBlank() }
-        val next = adjustDates.firstOrNull { it > AppClock.today().format(KOIL_DATE_FMT) } ?: return
+        val next = adjustDates.firstOrNull { it > AppClock.todayIn(CN_ZONE).format(KOIL_DATE_FMT) } ?: return
         val delayMs = runCatching {
             val target = LocalDate.parse(next).atTime(0, 5)
-                .atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                .atZone(CN_ZONE).toInstant().toEpochMilli()
             (target - AppClock.millis()).coerceAtLeast(0L)
         }.getOrNull() ?: return
         val request = androidx.work.OneTimeWorkRequestBuilder<OilPriceWindowDayWorker>()

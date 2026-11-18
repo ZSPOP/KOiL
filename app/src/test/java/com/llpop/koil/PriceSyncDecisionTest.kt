@@ -3,6 +3,7 @@ package com.llpop.koil
 import com.llpop.koil.data.oil.decideForceCheckOnLaunch
 import com.llpop.koil.data.oil.isPastLastEffectiveWindow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
@@ -54,10 +55,24 @@ class PriceSyncDecisionTest {
 
     // ---- isPastLastEffectiveWindow ----
 
-    /** 与实现同口径的生效时刻：窗口日次日 00:00（本地时区） */
+    /** 与实现同口径的生效时刻：窗口日次日 00:00（**北京时间**，与设备时区无关） */
     private fun effectiveAt(windowDay: String): Long =
         LocalDate.parse(windowDay).plusDays(1).atStartOfDay()
-            .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            .atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli()
+
+    @Test
+    fun `生效时刻按北京时间算，不跟设备时区漂`() {
+        // 窗口日次日 00:00（北京）就是 UTC 前一天 16:00；不必去比别的时区差几小时
+        // （夏令时会让差值不是整数小时），直接钉绝对时刻更稳。
+        assertEquals(
+            java.time.Instant.parse("2026-11-12T16:00:00Z").toEpochMilli(),
+            effectiveAt("2026-11-12"),
+        )
+        // 同一句话换个时区算出来必然不同：这正是原先 systemDefault() 的漏洞
+        val effNy = LocalDate.parse("2026-11-12").plusDays(1).atStartOfDay()
+            .atZone(ZoneId.of("America/New_York")).toInstant().toEpochMilli()
+        assertNotEquals(effNy, effectiveAt("2026-11-12"))
+    }
 
     @Test
     fun `上次检测早于生效时刻判为过期`() {

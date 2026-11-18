@@ -24,6 +24,17 @@ class ApkReadyStateTest {
     @Test
     fun `包已在且 tag 一致才算 ready`() {
         val f = tmp.newFile("KOiL-update.apk")
+        f.writeBytes(ByteArray(8))   // 非空：0 字节不算下完，见下一条
+        assertTrue(isReadyFor("V1.1.10", "V1.1.10", f))
+    }
+
+    @Test
+    fun `0 字节空壳不算 ready —— exists 骗得过人，骗不过安装器`() {
+        // 下载中断留下的空文件：只判 exists 会显示「安装包已就绪」，
+        // 点安装必被系统以「解析包时出现问题」拒掉
+        val f = tmp.newFile("KOiL-update.apk")
+        assertFalse(isReadyFor("V1.1.10", "V1.1.10", f))
+        f.writeBytes(ByteArray(8))
         assertTrue(isReadyFor("V1.1.10", "V1.1.10", f))
     }
 
@@ -44,6 +55,7 @@ class ApkReadyStateTest {
     fun `进程重启 —— 落盘 tag 与文件都在，恢复后不该重下`() {
         // readyTag 只有内存副本时，「下完没装、退出应用、再进来」会丢掉唯一凭据：
         val f = tmp.newFile("KOiL-update.apk")
+        f.writeBytes(ByteArray(8))
         val saved = "V1.1.10"
         // 恢复就是拿落盘 tag 当内存 tag 再判一次
         assertTrue(isReadyFor(saved, saved, f))
