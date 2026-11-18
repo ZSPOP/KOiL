@@ -52,6 +52,14 @@ class UpdateNotifier(
          *   重要性只是「允许弹」的前提，**有声才是弹的条件**。
          *
          * 历史 ID 由 [ensureChannel] 顺手删掉（全新安装本来就不存在它们）。
+         *
+         * **下次再换 ID 时，必须同时换掉通道显示名（`koil_noti_update_channel`），
+         * 不能沿用「应用更新」这个名字。** 这是 1.2.8 真机上踩到的：覆盖安装时旧通道
+         * `app_update_alert` 还留在系统里、显示名与新通道相同，HyperOS 把旧通道那套
+         * 「静音 / 不悬浮」的偏好按**名字**套到了新通道上——App 查到的属性是 HIGH + 有声音，
+         * 系统界面却显示「声音：无 / 悬浮通知：关」，横幅照旧不弹；清一次应用数据
+         * （连同通道与偏好一起清掉）后重建，同样的代码就正常弹了。
+         * 也就是说：同名换 ID 等于白换。
          */
         const val CHANNEL_ID = "KOiL_Update"
         private val LEGACY_CHANNEL_IDS = listOf("app_update_alert", "app_update")
