@@ -33,9 +33,20 @@ class UpdateNotifier(
     private val settings: AppSettings,
 ) {
 
-    /** 通道 ID：更新不是紧急事件，用 DEFAULT，不抢 heads-up */
     companion object {
-        const val CHANNEL_ID = "app_update"
+        /**
+         * 通道 ID。
+         *
+         * 为什么不能继续叫 `app_update`：Android 的通道重要性**创建后不可修改**，
+         * 用同一个 id 删掉再按 HIGH 重建也没用——系统沿用旧设置（有单测钉住这一条）。
+         * 旧通道是按 IMPORTANCE_DEFAULT 建的，而 DEFAULT 永远不会顶部弹出，
+         * 所以「通知从来没弹出来」有一半原因在这里。
+         *
+         * 不叫 `app_update` 的另一个后果是：升级机子上会残留一条旧通道，
+         * 由 [ensureChannel] 顺手清掉（全新安装本来就不存在它）。
+         */
+        const val CHANNEL_ID = "app_update_alert"
+        private const val LEGACY_CHANNEL_ID = "app_update"
         private const val NOTIFICATION_ID = 1100
 
         /** 通知点击后要落到关于页：MainActivity 读这个 extra */
@@ -44,24 +55,54 @@ class UpdateNotifier(
         const val EXTRA_TAG = "com.llpop.koil.extra.UPDATE_TAG"
     }
 
+    /**
+     * 建通道，并清掉旧 ID 的残留。
+     *
+     * 重要性一经创建不可修改，**同名重建也改不掉**：删掉 `app_update` 之后再用同一个 id
+     * 按 HIGH 重建，系统仍沿用旧值 DEFAULT（`UpdateChannelMigrationTest` 钉住了这条实测行为）。
+     * 而 DEFAULT 通道永远不会顶部弹出，所以「让更新通知弹横幅」的唯一办法是换 ID：
+     * 现用 [CHANNEL_ID] = `app_update_alert`，全新安装一次建成 HIGH。
+     *
+     * [LEGACY_CHANNEL_ID] 只会出现在从旧版升级上来的机子上（全新安装没有），
+     * 这里顺手删掉，免得系统设置里多一条删不掉的僵尸通道。
+     */
     private fun ensureChannel() {
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        // 升级机子上会残留旧 ID 的通道（全新安装没有）。留着只会在系统设置里多一条删不掉的僵尸项
+        if (nm.getNotificationChannel(LEGACY_CHANNEL_ID) != null) {
+            nm.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+        }
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 context.getString(R.string.koil_noti_update_channel),
-                // 更新提醒不该打断手上正在做的事：DEFAULT 出声但不弹横幅
-                NotificationManager.IMPORTANCE_DEFAULT,
+                // IMPORTANCE_HIGH：顶部弹出的横幅 + 提示音，同时保留在通知栏里。
+                // 「有新版本」是用户需要当场决定装不装的事，值得打断一次；点开或划掉就没了。
+                NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = context.getString(R.string.koil_noti_update_channel_desc)
+                // 不开「长按可改锁屏可见性」之外的额外开关：横幅 + 声音由 HIGH 自带
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PRIVATE
             }
             nm.createNotificationChannel(channel)
         }
     }
 
     /** 用户可能在系统设置里关掉整个 App 的通知：通道在、权限在，也发不出去 */
-    private fun channelEnabled(): Boolean =
-        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    /**
+     * App 级总开关**与**通道本身都开着，这条通知才发得出去。
+     *
+     * `areNotificationsEnabled()` 只查 App 级：用户在系统设置里把「应用更新」这一个通道单独关掉时，
+     * 它照样返回 true，于是我们照发、系统直接丢弃、App 完全无感——
+     * 通道重要性一旦被手改成 NONE，就再也收不到更新通知，却看不出任何异常。
+     * 通道尚未创建时返回 true（`ensureChannel()` 会紧接着建它）。
+     */
+    private fun channelEnabled(): Boolean {
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = nm.getNotificationChannel(CHANNEL_ID)
+        return channel == null || channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
 
     /**
      * 用户点开了这条通知（或从它进了关于页）：算已知晓，刷新时间戳。
@@ -126,7 +167,10 @@ class UpdateNotifier(
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(contentIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            // API 26+ 由通道 IMPORTANCE_HIGH 决定 heads-up，这行是给旧版本兜底；
+            // 显式 PRIORITY_HIGH 保证「顶部弹出 + 通知栏常驻」两件事同时成立
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
@@ -136,3 +180,15 @@ class UpdateNotifier(
         return true
     }
 }
+
+/**
+ * 用户是否在系统设置里单独关掉了「应用更新」这一个渠道。
+ *
+ * App 总开关与运行时权限都可能还是好的，但渠道 importance 为 NONE 时系统会直接丢弃通知。
+ * 设置页据此在副标题里点明，避免「开关开着却一条都收不到」的无声失败。
+ */
+fun isUpdateChannelDisabled(context: Context): Boolean = runCatching {
+    val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    nm.getNotificationChannel(UpdateNotifier.CHANNEL_ID)?.importance ==
+        NotificationManager.IMPORTANCE_NONE
+}.getOrDefault(false)

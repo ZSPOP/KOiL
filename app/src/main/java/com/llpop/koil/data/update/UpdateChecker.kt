@@ -137,6 +137,21 @@ class UpdateChecker(private val settings: AppSettings) {
     }
 
     /**
+     * 库里已经躺着的「比本机新」的快照，不做网络请求。
+     *
+     * 为什么需要它：通知原先只挂在 [checkIfDue] 的「请求成功」这一个出口上，
+     * 而 [checkIfDue] 有自己的 45 分钟节流——节流命中时它连请求都不发，通知自然也不发。
+     * 于是出现「关于页红点、胶囊都在说有新版本，通知栏却一条都没有」的割裂：
+     * 用户已经知道有新版了，通知还在等下一个窗口。回前台时读一次 DataStore 就能补上这一条。
+     *
+     * 只认严格比本机新的 tag（与本文件唯一判据 [isNewerRelease] 同源），避免给「库里残留的旧 tag」发通知。
+     */
+    suspend fun storedNewerTarget(): UpdateTarget? {
+        val target = updateTarget().first() ?: return null
+        return if (isNewerRelease(target.tag, BuildConfig.VERSION_NAME)) target else null
+    }
+
+    /**
      * 真实请求一次 Gitee Releases。
      *
      * 返回值已经把「是否比本机新」算完了，UI 直接按三态分支，不再自己 `compareVersionNames` 第二遍

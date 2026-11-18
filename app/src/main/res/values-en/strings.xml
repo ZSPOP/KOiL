@@ -319,6 +319,7 @@
     <string name="koil_noti_price_channel_desc">System notification on adjustment &amp; day before window</string>
     <string name="koil_set_notify">System notifications</string>
     <string name="koil_set_notify_sub">System message push and alerts</string>
+    <string name="koil_set_notify_sub_channel_off">Update notification channel is off in system settings</string>
     <string name="koil_noti_update_channel">App updates</string>
     <string name="koil_noti_update_channel_desc">One alert per new version; download and install happen on the About page</string>
     <string name="koil_noti_update_title">KOiL %1$s is available</string>
