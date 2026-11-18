@@ -1,5 +1,6 @@
 package com.llpop.koil.data.update
 
+import com.llpop.koil.BuildConfig
 import android.app.Application
 import com.llpop.koil.data.settings.AppSettings
 import android.content.Intent
@@ -115,7 +116,12 @@ class ApkUpdater(
                 apkDir()?.resolve(LEGACY_APK_NAME)?.delete()
                 val saved = settings.updateReadyTag.first()
                 if (saved.isNotBlank()) {
-                    if (isReadyFor(saved, saved, apkFile(saved))) {
+                    if (shouldDropReadyPackage(saved, BuildConfig.VERSION_NAME, apkFile(saved))) {
+                        // 这一版已经装上了：包里的 tag 不比当前 App 新，包留着没用（约 6.8MB）。
+                        // 覆盖安装后不清的话，它会一直躺在 files/updates 里，直到下次下载新包才被 prune
+                        apkFile(saved)?.delete()
+                        settings.setUpdateReadyTag(null)
+                    } else if (isReadyFor(saved, saved, apkFile(saved))) {
                         readyTag = saved
                         _state.value = UpdateDownloadState.Ready(saved)
                     } else {
@@ -505,6 +511,18 @@ internal fun isReadyFor(tag: String, readyTag: String?, file: File?): Boolean =
  * 和「删旧包时留哪一份」，两条都不该靠读代码猜。
  */
 internal fun apkFileNameFor(tag: String): String = "KOiL-V${normalizeVersion(tag)}.apk"
+
+/**
+ * 「已下好的包该不该在启动时丢掉」：包里那一版**不比当前 App 新**，说明它已经装上了。
+ *
+ * 抽成纯函数是因为它决定升级后那 6.8MB 留不留：判早了会删掉用户还没装的包，
+ * 判晚了包就一直堆在 `files/updates` 里。
+ */
+internal fun shouldDropReadyPackage(readyTag: String, installedVersion: String, file: File?): Boolean =
+    readyTag.isNotBlank() &&
+        file != null &&
+        file.exists() &&
+        !isNewerRelease(readyTag, installedVersion)
 
 /** 清理判据：只碰 `.apk`，且不碰当前要保留的那一份（`.part` 归下载自己管） */
 internal fun shouldPrunePackage(fileName: String, keepName: String?): Boolean =
