@@ -10,6 +10,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -33,9 +35,10 @@ fun Modifier.swipeToSwitchTab(
     val selectState = rememberUpdatedState(onSelect)
     val countState = rememberUpdatedState(tabCount)
     var rowWidthPx by remember { mutableFloatStateOf(0f) }
+    val layoutDirection = LocalLayoutDirection.current
     return this
         .onSizeChanged { rowWidthPx = it.width.toFloat() }
-        .pointerInput(Unit) {
+        .pointerInput(layoutDirection) {
             val spacingPx = itemSpacing.toPx()
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -49,7 +52,14 @@ fun Modifier.swipeToSwitchTab(
                     if (count <= 1 || width <= 0f) continue
                     val tabWidth = (width - spacingPx * (count - 1)) / count
                     if (tabWidth <= 0f) continue
-                    val target = (change.position.x / (tabWidth + spacingPx))
+                    // RTL 下手势 x 从右往左递增，先镜像成 LTR 坐标再算下标，
+                    // 否则 Arabic/Urdu 等从右往左语言里拖动方向与落点会反。
+                    val posX = if (layoutDirection == LayoutDirection.Rtl) {
+                        width - change.position.x
+                    } else {
+                        change.position.x
+                    }
+                    val target = (posX / (tabWidth + spacingPx))
                         .toInt()
                         .coerceIn(0, count - 1)
                     if (target != index) {

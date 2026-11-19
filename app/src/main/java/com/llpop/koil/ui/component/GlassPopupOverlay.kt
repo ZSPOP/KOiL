@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.component
 
+import android.animation.ValueAnimator
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.Box
@@ -50,12 +51,15 @@ fun GlassPopupOverlay(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val mounted: MutableState<Boolean> = remember { mutableStateOf(false) }
-    LaunchedEffect(show) {
+    // 卸载延迟按系统「动画时长缩放」换算：无障碍/开发者选项把动画调慢时，
+    // 固定 260ms 会截断官方收起动画；调到 0 时又会多挂一段空层。
+    val animatorScale = remember { ValueAnimator.getDurationScale().coerceAtLeast(0f) }
+    LaunchedEffect(show, animatorScale) {
         if (show) {
             mounted.value = true
         } else if (mounted.value) {
-            // 等官方收起动画播完再卸载宿主（面板自身退出约 150ms）
-            delay(260)
+            // 等官方收起动画播完再卸载宿主（面板自身退出约 150ms，留余量到 260ms）
+            delay((260L * animatorScale).toLong())
             mounted.value = false
         }
     }
