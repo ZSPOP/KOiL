@@ -120,6 +120,16 @@ class KOiLApplication : Application() {
             modules(appModule)
         }
 
+        // 预测性返回（Android 14+）开关：ApplicationInfo 是进程级对象，进程启动时对齐一次即可。
+        // 此前放在 MainActivity.onCreate，活动重建时会读回旧值、把设置页刚设的标志覆盖掉——
+        // 切换开关后「已切换但返回动画仍是旧的」。现在只在进程启动读一次，活动重建不再插手。
+        appScope.launch {
+            val enabled = runCatching {
+                GlobalContext.get().get<AppSettings>().predictiveBack.first()
+            }.getOrNull()
+            if (enabled != null) setPredictiveBack(enabled)
+        }
+
         // 系统「每应用语言」（Android 13+）与 App 内设置的对账，见 adoptSystemLocale。
         // 改「每应用语言」必然伴随一次配置变更（公开 SDK 没有 OnLocaleChangedListener，
         // 配置回调是公开且等价的入口）；进程已死时的那次改动由启动时的一次比对兜住。

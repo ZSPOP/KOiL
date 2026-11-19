@@ -32,9 +32,6 @@ val LocalBlurEnabled = compositionLocalOf { true }
 /** 顶栏起始侧额外内缩（宽屏/侧栏场景由外层写入；手机为 0，等同无操作） */
 val LocalTopBarStartInset = staticCompositionLocalOf<() -> Dp> { { 0.dp } }
 
-/** 顶栏模糊形态（Gaussian / Progressive），与开关同层提供，BlurredBar 从这里取 */
-val LocalTopBarBlurStyle = compositionLocalOf { TopBarBlurStyle.Gaussian }
-
 @Composable
 fun rememberBlurEnabled(): State<Boolean> =
     rememberUpdatedState(isRuntimeShaderSupported() && LocalBlurEnabled.current)

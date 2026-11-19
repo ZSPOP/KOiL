@@ -458,6 +458,19 @@ class OilPriceDbSyncer(
 
     // ===== 偏差预检（对齐 Web checkPriceDeviation：当日历史参考价）=====
 
+    /**
+     * 不晚于 [date] 的当日历史参考价，与 [checkDeviation] 取价口径完全一致。
+     * 录入页在「实付为空」时也要拿它算应付，避免展示用当前油价、校验用历史参考价的两套数。
+     * 无记录或价格无效时返回 null。
+     */
+    suspend fun referencePrice(province: String, grade: String, date: String): Double? {
+        if (province.isBlank() || grade.isBlank() || date.isBlank()) return null
+        val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
+        return priceDao.getLatestPrice(province, gradeLabel, date)
+            ?.price
+            ?.takeIf { it.isFinite() && it > 0 }
+    }
+
     suspend fun checkDeviation(
         province: String,
         grade: String,

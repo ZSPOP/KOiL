@@ -276,14 +276,18 @@ fun SettingsScreen(
                             onSelectedIndexChange = { index -> viewModel.setLanguage(languages[index]) },
                         )
                     })
-                    add(CardItem("blur") {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.koil_set_blur),
-                            subtitle = stringResource(R.string.koil_set_blur_sub),
-                            checked = uiState.blurEnabled,
-                            onCheckedChange = viewModel::setBlurEnabled,
-                        )
-                    })
+                    // 等 DataStore 首值到达再渲染：否则冷启动会先显示默认「开」，
+                    // 真实值（关）到达后再翻回去，出现「关→开→关」的闪烁。
+                    if (uiState.loaded) {
+                        add(CardItem("blur") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_blur),
+                                subtitle = stringResource(R.string.koil_set_blur_sub),
+                                checked = uiState.blurEnabled,
+                                onCheckedChange = viewModel::setBlurEnabled,
+                            )
+                        })
+                    }
                     // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
                     // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
                     add(CardItem("notify") {
