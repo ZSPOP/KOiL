@@ -15,7 +15,7 @@ import androidx.compose.ui.Modifier
  * 竖屏手机上是 0，横屏与折叠屏展开时才有值。
  */
 @Composable
-fun Modifier.horizontalCutoutPadding(applySidebarInset: Boolean = true): Modifier = this
+fun Modifier.horizontalCutoutPadding(): Modifier = this
     .windowInsetsPadding(
         WindowInsets.displayCutout.union(WindowInsets.navigationBars).only(WindowInsetsSides.Horizontal),
     )

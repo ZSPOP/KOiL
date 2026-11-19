@@ -41,7 +41,7 @@ class OilPriceDbSyncer(
 
         /** 核验基准油号：92 号。标签从 [OilPriceNetwork.GRADE_LABELS] 取，避免日后改文案这里静默失效 */
         private const val GRADE_92_GRADE = "92"
-        private val GRADE_92_LABEL = OilPriceNetwork.GRADE_LABELS["92"] ?: "92号汽油"
+        private val GRADE_92_LABEL = PriceLookup.DEFAULT_GRADE
 
         /**
          * 只有成功的检测才允许写 8h 节流时间戳。
@@ -490,7 +490,7 @@ class OilPriceDbSyncer(
             )
         }
 
-        val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
+        val gradeLabel = PriceLookup.gradeLabel(grade)
         // 不晚于录入日期的历史参考价（对齐 Web getHistoryPrice lte date）
         val history = priceDao.getLatestPrice(province, gradeLabel, date) ?: return DeviationCheckResult(
             hasDeviation = false,
@@ -634,7 +634,8 @@ class OilPriceDbSyncer(
             val toInsert = mutableListOf<KOiLPriceEntity>()
 
             for ((grade, pItem) in primaryMap) {
-                val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: grade
+                // 写库路径只接受已知油号：换源/新增油号时宁可跳过，也不把未知油品冒充 92# 入库
+                val gradeLabel = PriceLookup.gradeLabelOrNull(grade) ?: continue
                 val pPrice = pItem.price
                 val pSource = pItem.source.ifBlank { "youjia.abapi.cn" }
                 // 单源有价即自动入库（真实调价必然变价；同价非搁浅假点由 purge 清理）；pPrice 已由 PrimaryPrice 保证非空

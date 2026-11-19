@@ -371,6 +371,29 @@ class AppSettings(private val context: Context) {
         }
     }
 
+    /**
+     * 一次性清理 1.2.9 及更早版本留下的两个僵尸键：
+     * 旧「悬浮导航条」开关 `KOiL-floating-bottom-bar`、旧「底栏模式」`KOiL-bottom-bar-mode`。
+     * 现行键是 `KOiL-floating-bottom-bar-style`，上面两个在代码里已无任何读写，
+     * 只会作为死值留在存量设备的 DataStore 里。
+     *
+     * 幂等且零成本：旧键不在时只读一次内存里的 Preferences 就返回，不落盘；
+     * 备份/云同步都按字段白名单导出，这两个键不会随备份迁移。
+     *
+     * 拆除时间：**1.2.12 整段删除**（连同 KOiLApplication 里的调用）。
+     * 保留窗口内升级过一次的设备都会被清干净；跨过 1.2.12 直接升级的设备会继续带着死值，
+     * 但它们本来就无读取方，不影响任何行为。
+     */
+    suspend fun pruneLegacyKeys() {
+        val legacyKeys = listOf(
+            stringPreferencesKey("KOiL-floating-bottom-bar"),
+            stringPreferencesKey("KOiL-bottom-bar-mode"),
+        )
+        val snapshot = context.KOiLDataStore.data.first()
+        if (legacyKeys.none { it in snapshot }) return
+        context.KOiLDataStore.edit { prefs -> legacyKeys.forEach { prefs.remove(it) } }
+    }
+
     private fun ThemeMode.toPrefValue(): String = when (this) {
         ThemeMode.SYSTEM -> "system"
         ThemeMode.LIGHT -> "light"

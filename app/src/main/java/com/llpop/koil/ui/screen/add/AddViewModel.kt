@@ -12,6 +12,7 @@ import com.llpop.koil.data.oil.KOiLUsdCnyRateRepository
 import com.llpop.koil.data.oil.OilPriceDateUtil
 import com.llpop.koil.data.location.LocationHelper
 import com.llpop.koil.data.oil.OilPriceDbSyncer
+import com.llpop.koil.data.oil.PriceLookup
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.domain.logic.RecordValidator
 import com.llpop.koil.util.AppClock
@@ -346,12 +347,12 @@ class AddViewModel(
             ) { p, g, today -> Triple(p, g, today) }
                 .distinctUntilChanged()
                 .flatMapLatest { (p, g, today) ->
-                    val label = GRADE_LABELS[g] ?: "92号汽油"
-                    // 当前单价取"截至今天已生效"的最新价（窗口日白天不提前显示次日新价）
-                    priceDao.observeNewestUpTo(p, label, today)
+                    // 当前单价与应付、偏差校验共用 PriceLookup 的同一口径
+                    // （截至今天已生效、>0 且有限、未知油号统一回落 92#）
+                    PriceLookup.observeReferencePrice(priceDao, p, g, today)
                 }
-                .collect { entry ->
-                    _uiState.update { it.copy(currentPrice = entry?.price?.takeIf { v -> v > 0 && v.isFinite() }) }
+                .collect { price ->
+                    _uiState.update { it.copy(currentPrice = price) }
                     updatePayable()
                 }
         }
