@@ -291,32 +291,32 @@ fun SettingsScreen(
                         // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
                         // 与上面 blur 同一病因：notifyEnabled 默认 true，存量关过的用户冷启动会「开→关」闪
                         add(CardItem("notify") {
-                        SettingSwitchRow(
-                            title = stringResource(R.string.koil_set_notify),
-                            subtitle = when (channelIssue) {
-                                UpdateChannelIssue.Disabled ->
-                                    stringResource(R.string.koil_set_notify_sub_channel_off)
-                                UpdateChannelIssue.Quiet ->
-                                    stringResource(R.string.koil_set_notify_sub_channel_quiet)
-                                UpdateChannelIssue.None ->
-                                    stringResource(R.string.koil_set_notify_sub)
-                            },
-                            checked = uiState.notifyEnabled && pushPermissionGranted,
-                            onCheckedChange = { on ->
-                                if (on) {
-                                    if (pushPermissionGranted) {
-                                        viewModel.setNotifyEnabled(true)
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_notify),
+                                subtitle = when (channelIssue) {
+                                    UpdateChannelIssue.Disabled ->
+                                        stringResource(R.string.koil_set_notify_sub_channel_off)
+                                    UpdateChannelIssue.Quiet ->
+                                        stringResource(R.string.koil_set_notify_sub_channel_quiet)
+                                    UpdateChannelIssue.None ->
+                                        stringResource(R.string.koil_set_notify_sub)
+                                },
+                                checked = uiState.notifyEnabled && pushPermissionGranted,
+                                onCheckedChange = { on ->
+                                    if (on) {
+                                        if (pushPermissionGranted) {
+                                            viewModel.setNotifyEnabled(true)
+                                        } else {
+                                            // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
+                                            // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
+                                            pendingOpenPush = true
+                                            openNotificationSettings(context)
+                                        }
                                     } else {
-                                        // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
-                                        // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
-                                        pendingOpenPush = true
-                                        openNotificationSettings(context)
+                                        viewModel.setNotifyEnabled(false)
                                     }
-                                } else {
-                                    viewModel.setNotifyEnabled(false)
-                                }
-                            },
-                        )
+                                },
+                            )
                         })
                     }
                     if (!pushPermissionGranted) {
