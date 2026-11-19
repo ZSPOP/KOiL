@@ -635,6 +635,12 @@ class AddViewModel(
             var oilOverTank = false
             var effectivePayable: Double? = null
             var messageKey = "default"
+            // 当日历史参考价（与偏差校验同口径）。实付为空时也要用它算应付：
+            // 否则应付先按当前油价显示，填了实付又按参考价重算，同一个数字会跳。
+            val lookupDate = state.date.ifBlank { todayFlow.value }
+            val dbReferencePrice = runCatching {
+                syncer.referencePrice(state.province, state.oilGrade, lookupDate)
+            }.getOrNull()
             var messageArgs: List<Any> = emptyList()
 
             // 日期固定今天（录入页不可编辑）：同日+同里程重复拦截
@@ -660,13 +666,13 @@ class AddViewModel(
             if (amount != null && amount.isFinite() && amount > 0 &&
                 actual != null && actual.isFinite() && actual > 0
             ) {
-                val date = state.date.ifBlank { todayFlow.value }
-                val result = syncer.checkDeviation(state.province, state.oilGrade, date, amount, actual)
+                val result = syncer.checkDeviation(state.province, state.oilGrade, lookupDate, amount, actual)
                 val threshold = result.thresholdPercent
-                // 应付只能由“当前参考价 × 油量”派生：不能信任 state 里的旧 payable，
+                // 应付只能由“参考价 × 油量”派生：不能信任 state 里的旧 payable，
                 // 否则换油号/省份后预检用旧应付判定，可能放行实付 > 新应付的记录。
                 val referencePrice = result.referencePrice
                     ?.takeIf { it.isFinite() && it > 0 }
+                    ?: dbReferencePrice
                     ?: state.currentPrice?.takeIf { it.isFinite() && it > 0 }
                 effectivePayable = referencePrice
                     ?.let { amount * it }
@@ -745,7 +751,8 @@ class AddViewModel(
             // 实付为空就落到下面被清成空串——表现为油量输完仍显示"待计算"，
             // 直到填了实付才冒出数字。这里补一条不依赖实付的兜底。
             if (effectivePayable == null) {
-                val fallbackPrice = state.currentPrice?.takeIf { it.isFinite() && it > 0 }
+                // 与上面的校验分支同一口径：优先当日历史参考价，无参考价才用当前油价
+                val fallbackPrice = dbReferencePrice ?: state.currentPrice?.takeIf { it.isFinite() && it > 0 }
                 if (amount != null && amount.isFinite() && amount > 0 && fallbackPrice != null) {
                     effectivePayable = amount * fallbackPrice
                 }

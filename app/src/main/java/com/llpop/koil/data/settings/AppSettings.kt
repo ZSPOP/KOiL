@@ -149,7 +149,6 @@ class AppSettings(private val context: Context) {
         // ---- 导航栏（悬浮导航 / 样式 / 模式）----
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
         private val KEY_BLUR_ENABLED = booleanPreferencesKey("KOiL-blur-enabled")
-        private val KEY_TOP_BAR_BLUR_STYLE = stringPreferencesKey("KOiL-top-bar-blur-style")
         private val KEY_PAGER_GESTURE_MODE = stringPreferencesKey("KOiL-pager-gesture-mode")
         private val KEY_PREDICTIVE_BACK = booleanPreferencesKey("KOiL-predictive-back")
         private val KEY_SWIPE_DISMISS = booleanPreferencesKey("KOiL-swipe-dismiss")
@@ -784,16 +783,6 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_BLUR_ENABLED] ?: true }
     suspend fun setBlurEnabled(enabled: Boolean) {
         context.KOiLDataStore.edit { it[KEY_BLUR_ENABLED] = enabled }
-    }
-
-    /**
-     * 顶栏模糊形态：gaussian（均匀高斯）/ progressive（顶部渐进）。
-     * 默认高斯；值走 storageValue，与枚举一一对应，读侧用 fromStorage 兜底。
-     */
-    val topBarBlurStyle: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_TOP_BAR_BLUR_STYLE] ?: "gaussian" }
-    suspend fun setTopBarBlurStyle(style: String) {
-        context.KOiLDataStore.edit { it[KEY_TOP_BAR_BLUR_STYLE] = style }
     }
 
     /**

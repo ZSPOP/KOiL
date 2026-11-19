@@ -458,6 +458,20 @@ class OilPriceDbSyncer(
 
     // ===== 偏差预检（对齐 Web checkPriceDeviation：当日历史参考价）=====
 
+    /**
+     * 不晚于 [date] 的当日历史参考价，与 [checkDeviation] 取价口径完全一致。
+     * 录入页在「实付为空」时也要拿它算应付，避免展示用当前油价、校验用历史参考价的两套数。
+     * 无记录或价格无效时返回 null。
+     */
+    suspend fun referencePrice(province: String, grade: String, date: String): Double? {
+        if (province.isBlank() || date.isBlank()) return null
+        // 未知油号回落 92#：卡片价、应付、校验三处必须同一个回落，否则同一场景会出现两个数
+        val gradeLabel = OilPriceNetwork.GRADE_LABELS[grade] ?: "92号汽油"
+        return priceDao.getLatestPrice(province, gradeLabel, date)
+            ?.price
+            ?.takeIf { it.isFinite() && it > 0 }
+    }
+
     suspend fun checkDeviation(
         province: String,
         grade: String,

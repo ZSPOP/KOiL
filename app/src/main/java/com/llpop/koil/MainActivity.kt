@@ -2,7 +2,6 @@ package com.llpop.koil
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -48,17 +47,6 @@ class MainActivity : ComponentActivity() {
                 if (!requested) {
                     ActivityCompat.requestPermissions(this@MainActivity, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
                 }
-            }
-        }
-        // 预测性返回开关：启动时把存储值同步到 ApplicationInfo。
-        // 该标志没有公开 setter，只在 API 34+ 有实际效果；改完要重建 Activity 才被窗口系统读取，
-        // 这里只做启动期对齐（用户切换开关时由设置页当场重建）。
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            lifecycleScope.launch {
-                val enabled = runCatching {
-                    GlobalContext.get().get<AppSettings>().predictiveBack.first()
-                }.getOrNull()
-                if (enabled != null) (application as? KOiLApplication)?.setPredictiveBack(enabled)
             }
         }
         enableEdgeToEdge()

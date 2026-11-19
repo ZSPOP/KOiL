@@ -59,8 +59,6 @@ import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import com.llpop.koil.ui.component.blur.LocalTopBarBlurStyle
-import com.llpop.koil.ui.component.blur.TopBarBlurStyle
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
@@ -73,7 +71,6 @@ import top.yukonga.miuix.kmp.utils.springAnimateToPage
  * 底部导航条采用悬浮导航体系：
  * - 底栏固定悬浮（不提供开关），只可选悬浮样式
  * - 悬浮样式：Miuix（官方玻璃胶囊 GlassNavigationBar） / iOS 液态玻璃（IosLiquidGlassNavigationBar）
- * - 底栏模式：图标+文字 / 仅图标
  * 非悬浮时保留普通 NavigationBar + BlurredBar 模糊。
  */
 @Composable
@@ -88,7 +85,6 @@ fun MainScreen(
     val language by viewModel.language.collectAsStateWithLifecycle()
     val floatingStyle by viewModel.floatingBottomBarStyle.collectAsStateWithLifecycle()
     val blurEnabled by viewModel.blurEnabled.collectAsStateWithLifecycle()
-    val topBarBlurStyle by viewModel.topBarBlurStyle.collectAsStateWithLifecycle()
     val pagerGestureMode by viewModel.pagerGestureMode.collectAsStateWithLifecycle()
     val swipeDismissEnabled by viewModel.swipeDismissEnabled.collectAsStateWithLifecycle()
     // 页面切换手势：与 miuix PagerInterceptionMode 一一对应（cross_axis = 跨轴拦截）
@@ -148,8 +144,6 @@ fun MainScreen(
         androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
         // 模糊效果总开关：一路往下传给页面 Scaffold / 弹层 / 底栏，关掉即全部回落不透明
         LocalBlurEnabled provides blurEnabled,
-        // 顶栏模糊形态：读持久化值，未知值回落高斯
-        LocalTopBarBlurStyle provides TopBarBlurStyle.fromStorage(topBarBlurStyle),
     ) {
         KOiLTheme(darkTheme = darkTheme) {
         // 底栏玻璃 backdrop：drawRect(surface) + drawContent() 录制页面真实内容，
@@ -245,7 +239,6 @@ fun MainScreen(
             Scaffold(
                     containerColor = Color.Transparent,
                     bottomBar = {
-                        run {
                         if (isFloatingStyleIos) {
                             // iOS 液态玻璃悬浮导航条
                             IosLiquidGlassNavigationBar(
@@ -269,7 +262,6 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp),
                             )
-                        }
                         }
                     },
                 ) { innerPadding ->
@@ -298,7 +290,9 @@ fun MainScreen(
                     ) {
                         // flingBehavior 用 miuix PagerNavigationSpringSpec：
                         // 页面切换/松手回弹的弹簧曲线统一，避免默认 fling 的
-                        // 生硬 snap 造成的"卡一下"观感
+                        // 生硬 snap 造成的"卡一下"观感。
+                        // 这两个都是 @Composable 且内部自带 remember（foundation PagerDefaults），
+                        // 每次重组新建对象的说法不成立，不要在外面再包 remember。
                         val pagerFlingBehavior = PagerDefaults.flingBehavior(
                             state = pagerState,
                             snapAnimationSpec = PagerNavigationSpringSpec,
@@ -316,16 +310,17 @@ fun MainScreen(
                             state = pagerState,
                             orientation = Orientation.Horizontal,
                         )
-                        val pagerGestureModifier = Modifier.fillMaxSize()
-                            HorizontalPager(
+                        HorizontalPager(
                                 state = pagerState,
                                 // 跨轴拦截：横滑前先判主轴（页面内垂直滚动与翻页不打架）；
                                 // native 模式由 miuix 把手势原样交回 Pager
-                                modifier = pagerGestureModifier.pagerGestureOverride(
-                                    pagerState = pagerState,
-                                    flingBehavior = pagerFlingBehavior,
-                                    mode = pagerInterceptionMode,
-                                ),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pagerGestureOverride(
+                                        pagerState = pagerState,
+                                        flingBehavior = pagerFlingBehavior,
+                                        mode = pagerInterceptionMode,
+                                    ),
                                 verticalAlignment = Alignment.Top,
                                 // 预载相邻页：滑动时页面已组合完毕，动画帧只有绘制无组合，
                                 // 避免切换时整页首帧组合造成的掉帧
@@ -338,7 +333,7 @@ fun MainScreen(
                                     nativePagerNestedScrollConnection
                                 },
                                 flingBehavior = pagerFlingBehavior,
-                            ) { page ->
+                        ) { page ->
                                 when (page) {
                                     0 -> HomeScreen(
                                         modifier = contentModifier,

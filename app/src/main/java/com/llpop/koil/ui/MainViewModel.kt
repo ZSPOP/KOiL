@@ -49,10 +49,6 @@ class MainViewModel(
     val blurEnabled: StateFlow<Boolean> = settings.blurEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    /** 顶栏模糊形态：gaussian / progressive */
-    val topBarBlurStyle: StateFlow<String> = settings.topBarBlurStyle
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "gaussian")
-
     /** 页面横移返回开关 */
     val swipeDismissEnabled: StateFlow<Boolean> = settings.swipeDismissEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)

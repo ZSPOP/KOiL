@@ -73,9 +73,7 @@ fun KOiLScreenScaffold(
         }
     }
 
-    val popupLayer = remember { GlassPopupLayerState() }
     CompositionLocalProvider(
-        LocalGlassPopupLayer provides popupLayer,
         LocalPageBackdrop provides backdrop,
     ) {
     Scaffold(
@@ -109,8 +107,6 @@ fun KOiLScreenScaffold(
             }
             // 覆盖层（backdrop 录制树外，可安全采样 backdrop 而不自采样递归）
             overlay(backdrop, innerPadding, innerPadding.calculateTopPadding())
-            // 玻璃下拉宿主：页面根 Box，尺寸有界、位于内容与覆盖层之上
-            GlassPopupLayerHost(popupLayer)
         }
     }
     }
