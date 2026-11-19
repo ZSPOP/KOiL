@@ -287,10 +287,10 @@ fun SettingsScreen(
                                 onCheckedChange = viewModel::setBlurEnabled,
                             )
                         })
-                    }
-                    // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
-                    // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
-                    add(CardItem("notify") {
+                        // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
+                        // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
+                        // 与上面 blur 同一病因：notifyEnabled 默认 true，存量关过的用户冷启动会「开→关」闪
+                        add(CardItem("notify") {
                         SettingSwitchRow(
                             title = stringResource(R.string.koil_set_notify),
                             subtitle = when (channelIssue) {
@@ -317,7 +317,8 @@ fun SettingsScreen(
                                 }
                             },
                         )
-                    })
+                        })
+                    }
                     if (!pushPermissionGranted) {
                         add(CardItem("notifyDenied") {
                             Text(
