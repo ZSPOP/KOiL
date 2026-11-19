@@ -252,33 +252,35 @@ fun SettingsScreen(
                 keyPrefix = "general",
                 outerBottomPadding = 12.dp,
                 items = buildList {
-                    add(CardItem("theme") {
-                        val themeModes = AppSettings.ThemeMode.entries
-                        val themeModeIdx = themeModes.indexOf(uiState.themeMode).coerceAtLeast(0)
-                        GlassDropdownPreference(
-                            backdrop = pageBackdrop,
-                            items = themeModes.map { themeLabel(it) },
-                            selectedIndex = themeModeIdx,
-                            title = stringResource(R.string.koil_set_appearance),
-                            summary = themeModes.getOrElse(themeModeIdx) { themeModes.first() }.let { themeLabel(it) },
-                            onSelectedIndexChange = { index -> viewModel.setThemeMode(themeModes[index]) },
-                        )
-                    })
-                    add(CardItem("language") {
-                        val languages = AppSettings.Language.entries
-                        val languageIdx = languages.indexOf(uiState.language).coerceAtLeast(0)
-                        GlassDropdownPreference(
-                            backdrop = pageBackdrop,
-                            items = languages.map { langLabel(it) },
-                            selectedIndex = languageIdx,
-                            title = stringResource(R.string.koil_set_language),
-                            summary = languages.getOrElse(languageIdx) { languages.first() }.let { langLabel(it) },
-                            onSelectedIndexChange = { index -> viewModel.setLanguage(languages[index]) },
-                        )
-                    })
-                    // 等 DataStore 首值到达再渲染：否则冷启动会先显示默认「开」，
-                    // 真实值（关）到达后再翻回去，出现「关→开→关」的闪烁。
-                    if (uiState.loaded) {
+    // 整卡等首值到达再渲染：主题/语言/模糊/通知读的都是首帧默认值，逐行补守卫会让整行
+    // 先消失再插入，跳得比翻一下更显眼；整块出现只跳一次，也不会「默认值 → 真实值」翻转。
+    if (uiState.loaded) {
+                        add(CardItem("theme") {
+                            val themeModes = AppSettings.ThemeMode.entries
+                            val themeModeIdx = themeModes.indexOf(uiState.themeMode).coerceAtLeast(0)
+                            GlassDropdownPreference(
+                                backdrop = pageBackdrop,
+                                items = themeModes.map { themeLabel(it) },
+                                selectedIndex = themeModeIdx,
+                                title = stringResource(R.string.koil_set_appearance),
+                                summary = themeModes.getOrElse(themeModeIdx) { themeModes.first() }.let { themeLabel(it) },
+                                onSelectedIndexChange = { index -> viewModel.setThemeMode(themeModes[index]) },
+                            )
+                        })
+                        add(CardItem("language") {
+                            val languages = AppSettings.Language.entries
+                            val languageIdx = languages.indexOf(uiState.language).coerceAtLeast(0)
+                            GlassDropdownPreference(
+                                backdrop = pageBackdrop,
+                                items = languages.map { langLabel(it) },
+                                selectedIndex = languageIdx,
+                                title = stringResource(R.string.koil_set_language),
+                                summary = languages.getOrElse(languageIdx) { languages.first() }.let { langLabel(it) },
+                                onSelectedIndexChange = { index -> viewModel.setLanguage(languages[index]) },
+                            )
+                        })
+                        // 等 DataStore 首值到达再渲染：否则冷启动会先显示默认「开」，
+                        // 真实值（关）到达后再翻回去，出现「关→开→关」的闪烁。
                         add(CardItem("blur") {
                             SettingSwitchRow(
                                 title = stringResource(R.string.koil_set_blur),
@@ -318,20 +320,20 @@ fun SettingsScreen(
                                 },
                             )
                         })
-                    }
-                    if (!pushPermissionGranted) {
-                        add(CardItem("notifyDenied") {
-                            Text(
-                                text = stringResource(R.string.koil_set_notify_denied),
-                                fontSize = KOiLType.CaptionLarge,
-                                lineHeight = 14.sp,
-                                color = KOiLColors.Warning,
-                                modifier = Modifier
-                                    .padding(horizontal = 16.dp)
-                                    .offset(y = (-3).dp)
-                                    .clickable { openNotificationSettings(context) },
-                            )
-                        })
+                        if (!pushPermissionGranted) {
+                            add(CardItem("notifyDenied") {
+                                Text(
+                                    text = stringResource(R.string.koil_set_notify_denied),
+                                    fontSize = KOiLType.CaptionLarge,
+                                    lineHeight = 14.sp,
+                                    color = KOiLColors.Warning,
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .offset(y = (-3).dp)
+                                        .clickable { openNotificationSettings(context) },
+                                )
+                            })
+                        }
                     }
                 },
             )
