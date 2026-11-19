@@ -73,7 +73,7 @@ import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 自研日期选择弹窗（柔光玻璃风格）。
- * - 锚定下拉弹出（AnchoredPopup）：紧贴日期字段下方，空间不足自动上翻，不被弹窗卡片遮挡
+ * - 锚定弹出（GlassPopupOverlay）：紧贴日期字段下方，空间不足自动上翻，不被弹窗卡片遮挡
  * - 上下滑动切月（双卡轮播）：当前月跟手拖动，相邻月从对面露出，松手按位移+惯性切月，边界橡皮筋回弹
  * - 非当前月日期灰显（上月尾部 / 下月头部），点击自动跳转该月
  * - 今天：主色数字 + 底部主色小圆点；有加油记录的日期底部圆点标记
@@ -101,7 +101,7 @@ fun KOiLDatePickerDialog(
     val weekLabels = stringArrayResource(R.array.koil_cal_week)
     val monthFormat = stringResource(R.string.koil_cal_month)
 
-    // 入场动画由 AnchoredPopup 统一驱动（miuix spring 缩放 + tween 淡入），此处不自带动画
+    // 入场动画由 GlassPopupOverlay 统一驱动（miuix spring 缩放 + tween 淡入），此处不自带动画
 
     // ===== 滑动切月：双卡轮播状态 =====
     val offsetY = remember { mutableFloatStateOf(0f) }       // 当前网格拖动偏移（px）
@@ -240,7 +240,7 @@ fun KOiLDatePickerDialog(
                     }
                 },
         ) {
-            // 面板背景由 AnchoredPopupHost 的 Dropdown 容器统一提供（单层），
+            // 面板背景由 GlassPopupOverlay 的玻璃容器统一提供（单层），
             // 此处不套 blur，避免"两层"玻璃叠加观感
             Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp)) {
                     // ===== 顶部：月份切换（箭头） =====
