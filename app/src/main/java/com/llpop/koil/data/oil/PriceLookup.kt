@@ -22,6 +22,13 @@ object PriceLookup {
 
     fun gradeLabel(grade: String): String = OilPriceNetwork.GRADE_LABELS[grade] ?: DEFAULT_GRADE
 
+    /**
+     * 已知油号才返回标签，未知返回 null。
+     * 入库写库路径必须用它：未知油号若回落到 92#，会把别的油品价格冒充 92 号写进库里，
+     * 之后被当成真实价展示、参与涨跌对比。那条路径宁可跳过这条数据。
+     */
+    fun gradeLabelOrNull(grade: String): String? = OilPriceNetwork.GRADE_LABELS[grade]
+
     private fun Double.validPrice(): Double? = takeIf { it > 0 && it.isFinite() }
 
     /** 一次性取价（校验/兜底路径）；无记录或价格无效返回 null */

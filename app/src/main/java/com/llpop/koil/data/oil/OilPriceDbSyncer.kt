@@ -620,7 +620,8 @@ class OilPriceDbSyncer(
             val toInsert = mutableListOf<KOiLPriceEntity>()
 
             for ((grade, pItem) in primaryMap) {
-                val gradeLabel = PriceLookup.gradeLabel(grade)
+                // 写库路径只接受已知油号：换源/新增油号时宁可跳过，也不把未知油品冒充 92# 入库
+                val gradeLabel = PriceLookup.gradeLabelOrNull(grade) ?: continue
                 val pPrice = pItem.price
                 val pSource = pItem.source.ifBlank { "youjia.abapi.cn" }
                 // 单源有价即自动入库（真实调价必然变价；同价非搁浅假点由 purge 清理）；pPrice 已由 PrimaryPrice 保证非空

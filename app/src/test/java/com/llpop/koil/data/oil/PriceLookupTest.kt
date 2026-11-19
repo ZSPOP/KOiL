@@ -18,6 +18,15 @@ class PriceLookupTest {
     }
 
     @Test
+    fun gradeLabelOrNull_onlyAcceptsKnownGrades() {
+        assertEquals("92号汽油", PriceLookup.gradeLabelOrNull("92"))
+        assertEquals("0号柴油", PriceLookup.gradeLabelOrNull("0"))
+        assertEquals(null, PriceLookup.gradeLabelOrNull(""))
+        assertEquals(null, PriceLookup.gradeLabelOrNull("95#"))
+        assertEquals(null, PriceLookup.gradeLabelOrNull("unknown"))
+    }
+
+    @Test
     fun gradeLabel_fallsBackTo92_forUnknownGrade() {
         assertEquals(PriceLookup.DEFAULT_GRADE, PriceLookup.gradeLabel(""))
         assertEquals(PriceLookup.DEFAULT_GRADE, PriceLookup.gradeLabel("92#"))
