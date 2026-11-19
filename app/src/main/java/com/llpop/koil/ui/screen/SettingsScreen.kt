@@ -247,14 +247,16 @@ fun SettingsScreen(
         ) {
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
 
-            item { SmallTitle(text = stringResource(R.string.koil_set_section_general)) }
+            if (uiState.loaded) {
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_general)) }
+            }
             groupedCardItems(
                 keyPrefix = "general",
                 outerBottomPadding = 12.dp,
                 items = buildList {
-    // 整卡等首值到达再渲染：主题/语言/模糊/通知读的都是首帧默认值，逐行补守卫会让整行
-    // 先消失再插入，跳得比翻一下更显眼；整块出现只跳一次，也不会「默认值 → 真实值」翻转。
-    if (uiState.loaded) {
+                    // 整卡等首值到达再渲染：主题/语言/模糊/通知读的都是首帧默认值，逐行补守卫会让整行
+                    // 先消失再插入，跳得比翻一下更显眼；整块出现只跳一次，也不会「默认值 → 真实值」翻转。
+                    if (uiState.loaded) {
                         add(CardItem("theme") {
                             val themeModes = AppSettings.ThemeMode.entries
                             val themeModeIdx = themeModes.indexOf(uiState.themeMode).coerceAtLeast(0)
@@ -338,7 +340,9 @@ fun SettingsScreen(
                 },
             )
             // ===== 导航栏（SmallTitle + 分段卡）=====
-            item { SmallTitle(text = stringResource(R.string.koil_set_section_nav)) }
+            if (uiState.loaded) {
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_nav)) }
+            }
             groupedCardItems(
                 keyPrefix = "settings_nav",
                 outerBottomPadding = 12.dp,
@@ -410,7 +414,9 @@ fun SettingsScreen(
             )
 
             // ===== 录入（SmallTitle + 分段卡）=====
-            item { SmallTitle(text = stringResource(R.string.koil_set_section_entry)) }
+            if (uiState.loaded) {
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_entry)) }
+            }
             groupedCardItems(
                 keyPrefix = "settings_entry",
                 outerBottomPadding = 12.dp,
@@ -604,15 +610,18 @@ fun SettingsScreen(
                             )
                         })
                     }
-                    add(CardItem("priceAlert") {
-            // —— 调价窗口提醒 / 推送通知 ——
-            SettingSwitchRow(
-                title = stringResource(R.string.koil_set_price_alert),
-                subtitle = stringResource(R.string.koil_set_price_alert_sub),
-                checked = uiState.priceAlert,
-                onCheckedChange = viewModel::setPriceAlert,
-            )
-                    })
+                    // 只给这一行套守卫：本段还挂着油价库状态等独立数据，整段等首值不合适
+                    if (uiState.loaded) {
+                        add(CardItem("priceAlert") {
+                            // —— 调价窗口提醒 / 推送通知 ——
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_price_alert),
+                                subtitle = stringResource(R.string.koil_set_price_alert_sub),
+                                checked = uiState.priceAlert,
+                                onCheckedChange = viewModel::setPriceAlert,
+                            )
+                        })
+                    }
                     if (priceDbStatus.lastSyncSources.isNotBlank()) {
                         add(CardItem("syncSources") {
 
