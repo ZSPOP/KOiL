@@ -1,5 +1,12 @@
 package com.llpop.koil.ui.screen
 
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -70,6 +77,7 @@ import com.llpop.koil.ui.theme.KOiLType
  * 云同步卡（坚果云 WebDAV：私有数据自动备份/恢复）（M-07 拆分）。
  * 从 SettingsScreen 主函数整体移出，行为不变；showDataIoDialog 上提到页面级供弹窗共享。
  */
+@OptIn(ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun SyncPanelBody(
     tappedOnField: MutableState<Boolean>,
@@ -96,6 +104,16 @@ internal fun SyncPanelBody(
             if (usernameDraft != syncUi.effectiveUsername) usernameDraft = syncUi.effectiveUsername
         }
         var formExpanded by remember { mutableStateOf(false) }
+        // 三项 WebDAV 配置框整体抬到键盘上方：请求挂在包住三个框的那个 Column 上，
+        // 只有当其中某个框真的拿到焦点时才发请求（避免别的页面弹键盘时被牵连滚动）。
+        val webdavBringIntoView = remember { BringIntoViewRequester() }
+        var webdavFieldFocused by remember { mutableStateOf(false) }
+        val imeVisible = WindowInsets.isImeVisible
+        LaunchedEffect(imeVisible, webdavFieldFocused) {
+            if (!imeVisible || !webdavFieldFocused) return@LaunchedEffect
+            delay(240)
+            webdavBringIntoView.bringIntoView()
+        }
 
         // 状态判定放在开关行之前：徽章挂在「云同步」标题右侧，与开关键同一行。
         // 只认数据层算好的 configured（三项有效配置），界面不再自己拼判定。
@@ -261,6 +279,7 @@ internal fun SyncPanelBody(
 
                 // —— 表单：点「管理」才展开（改地址/账号/密码时用）——
                 if (formExpanded) {
+                    Column(modifier = Modifier.bringIntoViewRequester(webdavBringIntoView)) {
                     Spacer(Modifier.height(14.dp))
                     TextField(
                         value = urlDraft,
@@ -271,6 +290,7 @@ internal fun SyncPanelBody(
                             .fillMaxWidth()
                             .onFocusChanged { state ->
                                 tappedOnField.value = state.isFocused
+                                webdavFieldFocused = state.isFocused
                                 if (!state.isFocused && urlDraft != syncUi.url) syncVm.setUrl(urlDraft)
                             },
                         singleLine = true,
@@ -296,6 +316,7 @@ internal fun SyncPanelBody(
                             .fillMaxWidth()
                             .onFocusChanged { state ->
                                 tappedOnField.value = state.isFocused
+                                webdavFieldFocused = state.isFocused
                                 if (!state.isFocused && usernameDraft != syncUi.username) syncVm.setUsername(usernameDraft)
                             },
                         singleLine = true,
@@ -320,6 +341,7 @@ internal fun SyncPanelBody(
                             .fillMaxWidth()
                             .onFocusChanged { state ->
                                 tappedOnField.value = state.isFocused
+                                webdavFieldFocused = state.isFocused
                                 if (!state.isFocused && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
                                     syncVm.setPassword(pwdDraft)
                                 }
@@ -368,6 +390,7 @@ internal fun SyncPanelBody(
                             }
                         },
                     )
+                    }
                     // 密码状态行 + 明文存储/失效警示
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val passwordWarn = syncUi.passwordInvalid || (syncUi.passwordSet && !syncUi.passwordEncrypted)

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -38,6 +37,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
@@ -50,12 +50,10 @@ import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -63,12 +61,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
+import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.NumberFormat
@@ -82,11 +81,19 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
+import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
+import com.llpop.koil.ui.component.blur.overScrollVertical
+import com.llpop.koil.ui.component.horizontalCutoutPadding
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 
 
@@ -184,38 +191,26 @@ fun OverviewScreen(
         "3m" to stringResource(R.string.koil_range_3m),
     )
 
+    val pageBackdrop = rememberBlurBackdrop()
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_ov_title),
         modifier = modifier,
-        overlay = { backdrop, _, topPadding ->
-            // 吸顶月份标题覆盖层——位于 backdrop 录制树外，可安全 textureBlur(backdrop)
-            // 达到与顶栏同款真毛玻璃（采样不到自身，无递归）
-            // monthKeys 用 remember 稳定引用（避免重组重建列表导致 LaunchedEffect 重启、吸顶闪烁）
-            val monthKeys = remember(monthGroups) { monthGroups.map { it.first } }
-            val pinnedMonth = rememberTopPinnedMonth(listState, topPadding, monthKeys)
-            if (pinnedMonth != null) {
-                val group = monthGroups.firstOrNull { it.first == pinnedMonth }
-                StickyMonthOverlay(
-                    backdrop = backdrop,
-                    pinnedMonth = pinnedMonth,
-                    summary = group?.let { monthSummaryText(it.second) },
-                    topPadding = topPadding,
-                )
-            }
-        },
-    ) { _, topPadding, scrollBehavior, _ ->
+        backdrop = pageBackdrop,
+        listState = listState,
+    ) { innerPadding, topPadding, scrollBehavior, pageBackdrop ->
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
+                .horizontalCutoutPadding()
+                .scrollEndHaptic()
+                .overScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
             // bottom 只留底栏槽高，与添加页、设置页一致
-            contentPadding = PaddingValues(
-                top = topPadding,
-                bottom = bottomPadding,
-            ),
+            contentPadding = pageContentPadding(innerPadding, extraBottom = bottomPadding),
         ) {
 
             // 范围筛选器 / 六指标 / 走势图：一组一卡
@@ -303,26 +298,14 @@ fun OverviewScreen(
                 }
             }
             // LazyColumn 惰性渲染——月份标题分组展示，卡片仅组合可见项；
-            // 无记录时显示空态引导。不设手动按月分页（visibleMonths）与"滚动加载更多"提示
-            // 月份标题用普通 item——吸顶由覆盖层（StickyMonthOverlay，
-            // 位于 backdrop 录制树外）承担：贴顶期间列表内标题行自身透明占位（高度保持，防叠影），
-            // 标题文字由覆盖层以顶栏同款真毛玻璃（textureBlur + surface 0.8）呈现
+            // 无记录时显示空态引导。不设手动按月分页（visibleMonths）与"滚动加载更多"提示。
+            // 月份标题是普通 item，跟内容一起滚走（不做吸顶）
             if (uiState.records.isEmpty()) {
                 item { EmptyHistoryBox(onAddClick = onNavigateToAdd) }
             } else {
                 monthGroups.forEach { (monthKey, monthRecords) ->
                     item(key = "header-$monthKey") {
-                        val density = LocalDensity.current
-                        val topBarPx = with(density) { topPadding.toPx() }
-                        val pinned by remember(topPadding) {
-                            derivedStateOf {
-                                val off = listState.layoutInfo.visibleItemsInfo
-                                    .firstOrNull { it.key == "header-$monthKey" }?.offset ?: Int.MAX_VALUE
-                                off <= topBarPx + 2
-                            }
-                        }
-                        // 贴顶（进入顶栏区域）时自身透明占位；标题由覆盖层显示
-                        Box(Modifier.padding(horizontal = 12.dp).alpha(if (pinned) 0f else 1f)) {
+                        Box(Modifier.padding(horizontal = 12.dp)) {
                             MonthHeaderRow(
                                 monthKey = monthKey,
                                 count = monthRecords.size,
@@ -418,27 +401,27 @@ fun OverviewScreen(
                 .align(Alignment.BottomEnd)
                 .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .alpha(if (atListBottom) 0.4f else 1f)
-                    .clip(CircleShape)
-                    .background(KOiLColors.Primary)
-                    .clickable {
-                        scope.launch {
-                            if (listState.firstVisibleItemIndex > 60) {
-                                listState.scrollToItem(60)
-                            }
-                            listState.animateScrollToItem(0)
+            // 官方 FloatingActionButton：默认 60dp 圆形、主色底、4dp 阴影；
+            // 滚到底时整体降到 alpha 0.4（仍可点）
+            // 官方玻璃图标按钮：44dp 圆形玻璃胶囊（顶栏按钮同款材质），比 60dp FAB 小
+            GlassIconButton(
+                onClick = {
+                    scope.launch {
+                        if (listState.firstVisibleItemIndex > 60) {
+                            listState.scrollToItem(60)
                         }
-                    },
-                contentAlignment = Alignment.Center,
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
+                backdrop = LocalWallpaperBackdrop.current,
+                size = 44.dp,
             ) {
                 Icon(
                     imageVector = Icons.Filled.KeyboardArrowUp,
                     contentDescription = stringResource(R.string.koil_back_to_top),
-                    tint = Color.White,
-                    modifier = Modifier.size(26.dp),
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(24.dp),
                 )
             }
         }
@@ -447,6 +430,9 @@ fun OverviewScreen(
 
     // 异常明细弹窗（有异常时点异常卡弹出）；KOiLGlassDialog 滚动容器是
     // Box，多个直接子项会全部叠在同一位置，必须在 content 内包 Column 垂直排列；补标题（title 参数未渲染）；偏差取绝对值
+    // 数据页的弹窗/弹层是脚手架的兄弟节点，不在 KOiLScreenScaffold 的 CompositionLocal 作用域内，
+    // 不显式补 backdrop 的话，官方玻璃组件采样源为 null，只能回落成不透明底色（看起来「没有玻璃」）。
+    CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
     if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
         com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
@@ -454,7 +440,6 @@ fun OverviewScreen(
             contentPadding = 20.dp,
             scrollable = true,
             maxHeight = 480.dp,
-            widthFraction = 0.82f,
         ) {
             Column(Modifier.fillMaxWidth()) {
                 Text(
@@ -519,7 +504,6 @@ fun OverviewScreen(
             show = true,
             onDismissRequest = { pendingDelete = null },
             contentPadding = 20.dp,
-            widthFraction = 0.82f,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -535,37 +519,32 @@ fun OverviewScreen(
                     color = MiuixTheme.colorScheme.onBackgroundVariant,
                 )
                 Spacer(Modifier.height(20.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = stringResource(R.string.koil_common_cancel),
-                        fontSize = KOiLType.Subtitle,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onBackgroundVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .clickable { pendingDelete = null }
-                            .padding(vertical = 11.dp),
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.koil_ov_delete_confirm),
-                        fontSize = KOiLType.Subtitle,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(KOiLColors.Danger)
-                            .clickable {
-                                pendingDelete = null
-                                viewModel.deleteRecord(rec.record.id)
-                            }
-                            .padding(vertical = 11.dp),
-                        textAlign = TextAlign.Center,
-                    )
+                // 两个按钮交回官方 GlassDialogButton：取消 = Normal（半透明玻璃底），
+                // 删除 = Destructive（危险色），底色/按下态/圆角都跟弹窗面板同一套 material
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    GlassDialogButton(
+                        onClick = { pendingDelete = null },
+                        modifier = Modifier.weight(1f),
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_cancel),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
+                    GlassDialogButton(
+                        onClick = {
+                            pendingDelete = null
+                            viewModel.deleteRecord(rec.record.id)
+                        },
+                        modifier = Modifier.weight(1f),
+                        role = GlassDialogButtonRole.Destructive,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_ov_delete_confirm),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                 }
             }
         }
@@ -589,22 +568,13 @@ fun OverviewScreen(
 
     // 补录弹窗（source=backfill_modal）
     if (dlg.showBackfillDialog) {
-        // 按窗口可用高度算（分屏/键盘弹出时 Configuration 仍是整屏）
-        val maxH = with(LocalDensity.current) {
-            (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
-        }
-        com.llpop.koil.ui.component.KOiLGlassDialog(
+        com.llpop.koil.ui.component.KOiLFormSheet(
             show = true,
             onDismissRequest = viewModel::cancelBackfill,
-            contentPadding = 0.dp,
-            scrollable = true,
-            maxHeight = maxH,
-            widthFraction = 0.90f,
+            title = stringResource(R.string.koil_ov_backfill_title),
         ) {
             Column {
-                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
-                Text(stringResource(R.string.koil_ov_backfill_title), fontSize = KOiLType.Headline, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
-                Spacer(Modifier.height(16.dp))
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
                 // 加油省份（与设置页同款下拉列表）
                 ProvinceSelectField(province = dlg.backfillProvince, onProvinceChange = viewModel::setBackfillProvince)
                 Spacer(Modifier.height(14.dp))
@@ -763,5 +733,6 @@ fun OverviewScreen(
                 }
             }
         }
+    }
     }
 }

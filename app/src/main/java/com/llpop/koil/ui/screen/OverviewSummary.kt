@@ -3,7 +3,6 @@ package com.llpop.koil.ui.screen
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Money
@@ -33,7 +31,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -43,7 +40,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.domain.logic.NumberFormat
@@ -51,6 +47,10 @@ import com.llpop.koil.ui.screen.overview.OverviewUiState
 import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
+import com.llpop.koil.ui.component.LocalWallpaperBackdrop
+import com.llpop.koil.ui.component.swipeToSwitchTab
+import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
@@ -73,32 +73,31 @@ internal fun SummaryGrid(
 
     // 分三段：范围筛选器 / 指标网格 / 走势与汇总（段间不留分割线，靠内距区分）
         Column(modifier = Modifier.padding(16.dp)) {
-            // 范围筛选器放在摘要卡顶部（独立悬浮灰条会在卡片区多一块浮块）
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-                rangeLabels.forEach { (key, label) ->
-                    val selected = uiState.range == key
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) KOiLColors.Primary else Color.Transparent)
-                            .clickable { onRangeChange(key) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                    ) {
-                        Text(
-                            text = label,
-                            fontSize = KOiLType.BodySmall,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (selected) Color.White else MiuixTheme.colorScheme.onBackground,
-                        )
-                    }
-                }
+            // 范围筛选器用官方 GlassSegmentedTabRow（一条轨道 + 轨道内指示块滑动）
+            val rangeIndex = rangeLabels.indexOfFirst { it.first == uiState.range }.coerceAtLeast(0)
+            val onRangeSelect: (Int) -> Unit = { idx -> onRangeChange(rangeLabels[idx].first) }
+            // 官方 GlassSegmentedTabRow：一条玻璃轨道 + 轨道内滑动指示块。
+            // backdrop 取"背景层"（LocalWallpaperBackdrop），不取页面列表自身的录制层。
+            val wallpaper = LocalWallpaperBackdrop.current
+            if (wallpaper != null) {
+                GlassSegmentedTabRow(
+                    tabs = rangeLabels.map { it.second },
+                    selectedIndex = rangeIndex,
+                    onSelect = onRangeSelect,
+                    backdrop = wallpaper,
+                )
+            } else {
+                TabRowWithContour(
+                    tabs = rangeLabels.map { it.second },
+                    selectedTabIndex = rangeIndex,
+                    onTabSelected = onRangeSelect,
+                    modifier = Modifier.swipeToSwitchTab(
+                        tabCount = rangeLabels.size,
+                        selectedIndex = rangeIndex,
+                        onSelect = onRangeSelect,
+                        itemSpacing = 5.dp,
+                    ),
+                )
             }
             Spacer(Modifier.height(14.dp))
         }

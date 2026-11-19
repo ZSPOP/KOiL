@@ -77,7 +77,6 @@
     <string name="koil_range_3m">3 months</string>
     <string name="koil_ov_history">History</string>
     <string name="koil_ov_empty_title">No refuel records yet</string>
-    <string name="koil_ov_empty_hint">Go to the Add tab to record your first refuel</string>
     <string name="koil_ov_empty_action">Add Record</string>
     <string name="koil_ov_backfill">Backfill</string>
     <string name="koil_ov_month_count">%1$d</string>
@@ -174,14 +173,16 @@
     <string name="koil_set_appearance">Appearance</string>
     <string name="koil_set_language">Language</string>
     <string name="koil_set_section_nav">Navigation &amp; display</string>
-    <string name="koil_set_floating_bar">Floating bar</string>
-    <string name="koil_set_floating_bar_sub">Bar floats above content</string>
     <string name="koil_set_floating_style">Floating style</string>
-    <string name="koil_set_bar_mode">Bar mode</string>
-    <string name="koil_style_miuix">Miuix floating</string>
-    <string name="koil_style_ios">iOS liquid glass</string>
-    <string name="koil_mode_icon_text">Icon + text</string>
-    <string name="koil_mode_icon_only">Icon only</string>
+    <string name="koil_set_blur">Blur effect</string>
+    <string name="koil_set_blur_sub">Enable surface blur effect</string>
+    <string name="koil_set_pager_gesture">Page switch gesture</string>
+    <string name="koil_pager_gesture_cross_axis">Cross-axis interception</string>
+    <string name="koil_pager_gesture_native">Preset gesture</string>
+    <string name="koil_set_predictive_back">Predictive back gesture</string>
+    <string name="koil_set_predictive_back_sub">Enable predictive back animation</string>
+    <string name="koil_style_miuix">Glass</string>
+    <string name="koil_style_ios">iOS style (liquid glass)</string>
     <string name="koil_set_section_entry">Entry &amp; calculation</string>
     <string name="koil_set_default_province">Default province</string>
     <string name="koil_set_default_province_sum">Price query &amp; location · %1$s</string>
@@ -531,4 +532,6 @@
     <!-- TalkBack label for the password visibility toggle -->
     <string name="koil_a11y_show_secret">Show password</string>
     <string name="koil_a11y_hide_secret">Hide password</string>
+    <string name="koil_set_swipe_dismiss">Swipe-back gesture</string>
+    <string name="koil_set_swipe_dismiss_sub">Swipe from the screen edge to leave a secondary page</string>
 </resources>

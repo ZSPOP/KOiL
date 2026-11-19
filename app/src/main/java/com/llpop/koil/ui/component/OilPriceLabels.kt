@@ -34,10 +34,10 @@ private val PROVINCE_TW = mapOf(
 
 // 油号统一成 "92# 汽油" 的写法（与总览/录入页的 "92# · ¥x/L" 同源，真机反馈要求统一）
 private val GRADE_LABEL = mapOf(
-    "92号汽油" to "92# 汽油",
-    "95号汽油" to "95# 汽油",
-    "98号汽油" to "98# 汽油",
-    "0号柴油" to "0# 柴油",
+    "92号汽油" to "92#",
+    "95号汽油" to "95#",
+    "98号汽油" to "98#",
+    "0号柴油" to "0#",
 )
 
 private val GRADE_EN = mapOf(
@@ -48,10 +48,10 @@ private val GRADE_EN = mapOf(
 )
 
 private val GRADE_TW = mapOf(
-    "92号汽油" to "92# 汽油",
-    "95号汽油" to "95# 汽油",
-    "98号汽油" to "98# 汽油",
-    "0号柴油" to "0# 柴油",
+    "92号汽油" to "92#",
+    "95号汽油" to "95#",
+    "98号汽油" to "98#",
+    "0号柴油" to "0#",
 )
 
 /**

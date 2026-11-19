@@ -1,6 +1,5 @@
 package com.llpop.koil.ui.component
 
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -33,7 +32,6 @@ import top.yukonga.miuix.kmp.basic.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +44,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
@@ -55,20 +57,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.llpop.koil.R
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.util.AppClock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import kotlin.math.abs
-import kotlin.math.ceil
 import java.util.Locale
 import com.llpop.koil.ui.theme.KOiLType
 
@@ -88,6 +87,7 @@ fun KOiLDatePickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     anchorBounds: IntRect? = null,
+    anchor: top.yukonga.miuix.kmp.glass.GlassPopupAnchor? = null,
 ) {
     val initial = remember(initialDate) {
         runCatching { LocalDate.parse(initialDate) }.getOrDefault(AppClock.today())
@@ -120,7 +120,9 @@ fun KOiLDatePickerDialog(
     fun buildCells(ym: YearMonth): List<Pair<LocalDate, Boolean>> {
         val firstWeekday = ym.atDay(1).dayOfWeek.value % 7 // 周日=0
         val total = ym.lengthOfMonth()
-        val rows = ceil((firstWeekday + total) / 7.0).toInt()
+        // 固定 6 行：网格高度与月份无关，弹层面板高度恒定，
+        // 拖动切换月份时不会因为行数变化把整块面板重新落位（表现为面板往下跳再回弹）
+        val rows = 6
         val cells = ArrayList<Pair<LocalDate, Boolean>>(rows * 7)
         val prevMonth = ym.minusMonths(1)
         val prevTotal = prevMonth.lengthOfMonth()
@@ -172,20 +174,71 @@ fun KOiLDatePickerDialog(
         switching.value = false
     }
 
-    // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位）
-    AnchoredPopupAnchor(
+    // 官方玻璃面板 + 根 Scaffold 全屏层挂载：盖在弹窗之上、不被裁剪，且是玻璃效果
+    val anchorRect = anchorBounds?.let {
+        androidx.compose.ui.geometry.Rect(
+            it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat(),
+        )
+    } ?: androidx.compose.ui.geometry.Rect.Zero
+    com.llpop.koil.ui.component.GlassPopupOverlay(
         show = true,
-        id = "koil-date-picker",
-        anchorBounds = anchorBounds,
-        // 面板（300dp）比日期字段宽，右对齐会把左缘推到字段右侧再钳回屏幕边；显式左对齐贴字段左缘
-        endAligned = false,
+        anchorBounds = anchorRect,
+        anchor = anchor,
+        backdrop = com.llpop.koil.ui.component.LocalPageBackdrop.current,
+        onDismissRequest = onDismiss,
+        // 6 行月份 + 字体放大时内容约 548dp，480dp 会把底部“今天”裁掉
+        maxHeight = 600.dp,
         minWidth = 300.dp,
-        maxHeight = 480.dp,
-        onDismiss = onDismiss,
+        // 面板内边距归零：整块区域都由内容最外层的手势层接管，官方那层 verticalScroll
+        // 连面板边缘那圈也收不到拖动，日历内容不会再整体滑动
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
     ) {
         Box(
             modifier = Modifier
-                .widthIn(max = 320.dp),
+                .widthIn(max = 320.dp)
+                // 官方下拉内容被 verticalScroll 包着，滚动前会先向子节点派发 pre-scroll；
+                // 这里把纵向可用量全部预先消费，滚动容器永远收不到位移，
+                // 所以无论从哪儿滑、滑多少次，内容都不会整体滚动（今天按钮也就不会滑出视野）
+                .nestedScroll(object : NestedScrollConnection {
+                    override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                        if (available.y != 0f) Offset(0f, available.y) else Offset.Zero
+
+                    override fun onPostScroll(
+                        consumed: Offset,
+                        available: Offset,
+                        source: NestedScrollSource,
+                    ): Offset = if (available.y != 0f) Offset(0f, available.y) else Offset.Zero
+                })
+                // 官方 GlassDropdownPopup 内部固定 scrollable=true，日历内容会被包进
+                // verticalScroll，导致面板里任意位置都能上下拖动整块内容。这里在内容最外层
+                // 只吞"纵向拖动"（越过 touchSlop 且纵向占优才吞），点击与网格内的切月手势
+                // 都是子节点、先于这层收到事件，因此行为不变
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        var accY = 0f
+                        var accX = 0f
+                        var vertical = false
+                        var decided = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull() ?: break
+                            if (change.positionChanged()) {
+                                accY += change.position.y - change.previousPosition.y
+                                accX += change.position.x - change.previousPosition.x
+                                if (!decided) {
+                                    if (abs(accY) > viewConfiguration.touchSlop && abs(accY) >= abs(accX)) {
+                                        vertical = true; decided = true
+                                    } else if (abs(accX) > viewConfiguration.touchSlop) {
+                                        decided = true
+                                    }
+                                }
+                                if (vertical) event.changes.forEach { it.consume() }
+                            }
+                            if (change.changedToUpIgnoreConsumed()) break
+                        }
+                    }
+                },
         ) {
             // 面板背景由 AnchoredPopupHost 的 Dropdown 容器统一提供（单层），
             // 此处不套 blur，避免"两层"玻璃叠加观感
@@ -241,10 +294,9 @@ fun KOiLDatePickerDialog(
                         }
                     }
 
-                    Spacer(Modifier.height(14.dp))
-
-                    // ===== 星期标题 =====
-                    Row(modifier = Modifier.fillMaxWidth()) {
+                    // ===== 星期标题 =====（间隔用 padding-top 而不是 Spacer：
+                    // Spacer 的 intrinsic 高度为 0，会被官方视口计算漏算，行数多的月份把“今天”挤没）
+                    Row(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
                         weekLabels.forEach { w ->
                             Box(
                                 modifier = Modifier.weight(1f),
@@ -259,8 +311,6 @@ fun KOiLDatePickerDialog(
                         }
                     }
 
-                    Spacer(Modifier.height(8.dp))
-
                     // ===== 日期网格（双卡轮播容器） =====
                     // 卡片背景用实色（非 blur）：承载 graphicsLayer translationY 的层内不可放
                     // backdrop-filter 元素（柔光玻璃纪律：transform 与 backdrop-filter 冲突）
@@ -271,8 +321,12 @@ fun KOiLDatePickerDialog(
                     // 上限 1.5 倍：再高这个弹窗就放不下了。
                     val gridFontScale = androidx.compose.ui.platform.LocalDensity.current.fontScale
                         .coerceIn(1f, 1.5f)
-                    val cellH = 44.dp * gridFontScale
-                    val cardBg = MiuixTheme.colorScheme.background
+                    // 6 行月份把单元高度按 5/6 收一下：网格总高与 5 行月份基本相等
+                    // （原生 6 行时官方弹层按固有高度算出的视口会差一截，底部“今天”被压成 0 高）
+                    val cellH = 40.dp * gridFontScale
+                    // 面板本身是玻璃材质，网格卡片不能再铺一层实色底，
+                    // 否则 1-31 那块会盖出一块不透明色块；透明后底色由玻璃面板透出
+                    val cardBg = Color.Transparent
                     val gridRows = curCells.size / 7
                     val previewDelta = when {
                         // 预览层移除前始终跟随 settleDelta（含复位延后移除的一帧），避免预览层换边瞬移
@@ -292,6 +346,7 @@ fun KOiLDatePickerDialog(
                     )
                     Box(
                         modifier = Modifier
+                            .padding(top = 8.dp)
                             .fillMaxWidth()
                             .height(gridH)
                             .clipToBounds() // 对齐 Web overflow:hidden：切月内容仅在网格区域（黄色框）内切换，不盖住星期标题/月份标题
@@ -439,18 +494,24 @@ fun KOiLDatePickerDialog(
                             }
                         }
                     }
-                    Spacer(Modifier.height(10.dp))
                     // 回到今天快捷按钮：切到今天所在月并选中今天
-                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Text(
                             text = stringResource(R.string.koil_cal_today),
                             fontSize = KOiLType.BodyLarge,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.primary,
-                            modifier = Modifier.clickable {
-                                viewMonth = todayMonth
-                                selected = today
-                            },
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(percent = 50))
+                                .background(MiuixTheme.colorScheme.primary.copy(alpha = 0.14f))
+                                .clickable {
+                                    viewMonth = todayMonth
+                                    selected = today
+                                }
+                                .padding(horizontal = 16.dp, vertical = 7.dp),
                         )
                     }
                 }

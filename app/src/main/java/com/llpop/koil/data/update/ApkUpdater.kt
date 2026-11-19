@@ -5,7 +5,6 @@ import android.app.Application
 import com.llpop.koil.data.settings.AppSettings
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import androidx.core.net.toUri
 import android.provider.Settings
 import android.util.Log

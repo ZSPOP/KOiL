@@ -1,88 +1,78 @@
 package com.llpop.koil.ui
 
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
+import com.llpop.koil.ui.navigation.Route
+import top.yukonga.miuix.kmp.nav.core.NavController
+import top.yukonga.miuix.kmp.nav.core.NavDisplay
+import top.yukonga.miuix.kmp.nav.core.NavKey
+import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.component.BlurredBar
+import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.liquid.IosLiquidGlassNavigationBar
-import com.llpop.koil.ui.screen.AddScreen
+import com.llpop.koil.ui.screen.HomeScreen
 import com.llpop.koil.ui.screen.OverviewScreen
 import com.llpop.koil.ui.screen.SettingsScreen
 import com.llpop.koil.ui.screen.settings.OilPriceDetailScreen
-import com.llpop.koil.ui.theme.BottomBarMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLTheme
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
-import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurDefaults
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
+import top.yukonga.miuix.kmp.glass.GlassNavigationBar
+import top.yukonga.miuix.kmp.glass.GlassNavigationItem
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.glass.Data
+import top.yukonga.miuix.kmp.icon.glass.HomeOutline
+import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.foundation.gestures.Orientation
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.LocalTopBarBlurStyle
+import com.llpop.koil.ui.component.blur.TopBarBlurStyle
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
-import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
+import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
-import com.llpop.koil.ui.theme.KOiLType
 
 /**
  * 主界面：三 Tab（录入 / 总览 / 设置）+ 底部导航 + 主题三档。
  *
  * 底部导航条采用悬浮导航体系：
- * - 悬浮导航开关：floatingBottomBar（默认开启）
- * - 悬浮样式：Miuix（胶囊悬浮 + textureBlur 玻璃） / iOS 液态玻璃（IosLiquidGlassNavigationBar）
+ * - 底栏固定悬浮（不提供开关），只可选悬浮样式
+ * - 悬浮样式：Miuix（官方玻璃胶囊 GlassNavigationBar） / iOS 液态玻璃（IosLiquidGlassNavigationBar）
  * - 底栏模式：图标+文字 / 仅图标
  * 非悬浮时保留普通 NavigationBar + BlurredBar 模糊。
  */
@@ -96,9 +86,18 @@ fun MainScreen(
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val language by viewModel.language.collectAsStateWithLifecycle()
-    val floatingBottomBar by viewModel.floatingBottomBar.collectAsStateWithLifecycle()
     val floatingStyle by viewModel.floatingBottomBarStyle.collectAsStateWithLifecycle()
-    val barMode by viewModel.bottomBarMode.collectAsStateWithLifecycle()
+    val blurEnabled by viewModel.blurEnabled.collectAsStateWithLifecycle()
+    val topBarBlurStyle by viewModel.topBarBlurStyle.collectAsStateWithLifecycle()
+    val pagerGestureMode by viewModel.pagerGestureMode.collectAsStateWithLifecycle()
+    val swipeDismissEnabled by viewModel.swipeDismissEnabled.collectAsStateWithLifecycle()
+    // 页面切换手势：与 miuix PagerInterceptionMode 一一对应（cross_axis = 跨轴拦截）
+    val pagerInterceptionMode = if (pagerGestureMode == "native") {
+        PagerInterceptionMode.Native
+    } else {
+        PagerInterceptionMode.CrossAxis
+    }
+    val interceptPagerGestures = pagerInterceptionMode == PagerInterceptionMode.CrossAxis
 
     val darkTheme = when (themeMode) {
         AppSettings.ThemeMode.SYSTEM -> isSystemInDarkTheme()
@@ -128,7 +127,7 @@ fun MainScreen(
     // 覆盖 LocalContext 后，activity-compose 1.9.3 的
     // LocalActivityResultRegistryOwner 兜底解析（沿 LocalContext.base 链查找
     // ActivityResultRegistryOwner）会因 createConfigurationContext 的 wrapper
-    // 链不含 Activity 而失败，导致 AddScreen 定位权限 launcher 抛
+    // 链不含 Activity 而失败，导致首页定位权限 launcher 抛
     // No ActivityResultRegistryOwner。故从原始 baseContext 解析出 owner 显式补回。
     val registryOwner = remember(baseContext) {
         var cur: android.content.Context? = baseContext
@@ -147,6 +146,10 @@ fun MainScreen(
         androidx.compose.ui.platform.LocalConfiguration provides overrideConfig,
         androidx.compose.ui.platform.LocalContext provides localizedContext,
         androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
+        // 模糊效果总开关：一路往下传给页面 Scaffold / 弹层 / 底栏，关掉即全部回落不透明
+        LocalBlurEnabled provides blurEnabled,
+        // 顶栏模糊形态：读持久化值，未知值回落高斯
+        LocalTopBarBlurStyle provides TopBarBlurStyle.fromStorage(topBarBlurStyle),
     ) {
         KOiLTheme(darkTheme = darkTheme) {
         // 底栏玻璃 backdrop：drawRect(surface) + drawContent() 录制页面真实内容，
@@ -154,31 +157,37 @@ fun MainScreen(
         // 页面底色 = Miuix Scaffold 默认 containerColor=surface（浅 #F7F7F7 / 深 #000000），
         // 卡片为 surfaceContainer（浅白 / 深 #242424），两者天然拉开色差。
         val surfaceColor = MiuixTheme.colorScheme.surface
-        val bottomBarBackdrop = rememberLayerBackdrop {
-            drawRect(surfaceColor)
-            drawContent()
-        }
+        val bottomBarBackdrop = rememberBlurBackdrop()
+        val bottomBarBlurActive = bottomBarBackdrop != null
 
+        // 背景层 backdrop：只录制这层纯底色，供列表内的玻璃组件采样。
+        // 不能复用 bottomBarBackdrop（它录制的是整个 Pager，组件采样自己所在层会崩）。
+        val wallpaperBackdrop = rememberLayerBackdrop()
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 // 最底层填充：Scaffold 已透明，若不铺背景会露出窗口底色
                 .background(surfaceColor),
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(surfaceColor)
+                    .layerBackdrop(wallpaperBackdrop),
+            )
             // 三页用 HorizontalPager 承载：
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
             val scope = rememberCoroutineScope()
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
-            // 调价记录明细页开关：true 时在 Pager 之外全屏显示（二级路由页，
-            // 脱离 Pager 的手势拦截器，页面内横向组件可自由滑动）
-            var showOilPriceDetail by rememberSaveable { mutableStateOf(false) }
-            // 关于页开关：同样提升到 MainScreen 级全屏页（二级路由页）
-            var showAbout by rememberSaveable { mutableStateOf(false) }
+            // 二级页（关于 / 调价明细）改由导航层承载：back stack 里 Main 常驻，
+            // 二级页作为 entry 压栈，转场与交互式侧滑返回由 NavDisplay 负责
+            val backStack = remember { mutableStateListOf<NavKey>(Route.Main) }
+            val nav = remember(backStack) { NavController(backStack) }
             // 通知点进来：状态变化才生效（App 已在前台时点通知走 onNewIntent，不重组就不会读到新值）
             LaunchedEffect(openAboutOnLaunch) {
                 if (openAboutOnLaunch) {
-                    showAbout = true
+                    if (backStack.last() != Route.About) nav.push(Route.About)
                     onOpenAboutHandled()
                 }
             }
@@ -187,7 +196,7 @@ fun MainScreen(
             // 只在首页按返回才交给系统（Activity finish）。
             // 二级页（明细页 / 关于页）自己有 BackHandler，且比这里更内层注册、先消费事件；
             // enabled 里再排除一次，不依赖注册顺序兜底。
-            BackHandler(enabled = selectedTab != 0 && !showOilPriceDetail && !showAbout) {
+            BackHandler(enabled = selectedTab != 0 && backStack.last() == Route.Main) {
                 scope.launch { pagerState.springAnimateToPage(0) }
             }
 
@@ -198,92 +207,68 @@ fun MainScreen(
             val navSettingsLabel = stringResource(R.string.koil_nav_settings)
             val navigationItems = remember(navAddLabel, navOverviewLabel, navSettingsLabel) {
                 listOf(
-                    NavigationItem(label = navAddLabel, icon = Icons.Filled.Home),
-                    NavigationItem(label = navOverviewLabel, icon = Icons.Filled.Storage),
-                    NavigationItem(label = navSettingsLabel, icon = Icons.Filled.Settings),
+                    NavigationItem(label = navAddLabel, icon = MiuixIcons.Glass.HomeOutline),
+                    NavigationItem(label = navOverviewLabel, icon = MiuixIcons.Glass.Data),
+                    NavigationItem(label = navSettingsLabel, icon = MiuixIcons.Glass.SettingsOutline),
                 )
             }
-            val showLabels = barMode == BottomBarMode.IconAndText.storageValue
+            // 官方 Glass 导航条的 items：与 basic NavigationItem 分开构造，两者类型不同。
+            // 底栏固定「图标 + 文字」——Glass 组件没有 showLabel 开关，item 的 label 直接上屏。
+            val glassNavigationItems = remember(navAddLabel, navOverviewLabel, navSettingsLabel) {
+                listOf(
+                    GlassNavigationItem(icon = MiuixIcons.Glass.HomeOutline, label = navAddLabel, contentDescription = navAddLabel),
+                    GlassNavigationItem(icon = MiuixIcons.Glass.Data, label = navOverviewLabel, contentDescription = navOverviewLabel),
+                    GlassNavigationItem(icon = MiuixIcons.Glass.SettingsOutline, label = navSettingsLabel, contentDescription = navSettingsLabel),
+                )
+            }
             val isFloatingStyleIos = floatingStyle == FloatingBottomBarStyle.IosLike.storageValue
             val isDark = darkTheme
-            // 高光边：深色 GlassStrokeMiddleDark / 浅色 GlassStrokeMiddleLight 高光边
-            val floatingHighlight = remember(isDark) {
-                if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
+
+            // 横移返回：方向取物理方向（不随布局镜像），RTL 下反过来
+            val swipeBackDirection = if (LocalLayoutDirection.current == LayoutDirection.Rtl) {
+                NavSwipeDirection.RightToLeft
+            } else {
+                NavSwipeDirection.LeftToRight
             }
+            val swipeDismiss = if (swipeDismissEnabled) swipeBackDirection else null
+
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.llpop.koil.ui.component.LocalWallpaperBackdrop provides wallpaperBackdrop,
+            ) {
+            NavDisplay(
+                backStack = backStack,
+                onBack = { nav.pop() },
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                entry<Route.Main>(swipeDismiss = swipeDismiss) {
 
             Scaffold(
                     containerColor = Color.Transparent,
                     bottomBar = {
-                        // 二级全屏页（调价记录明细页 / 关于页）隐藏底部导航（二级路由页规范）
-                        if (!showOilPriceDetail && !showAbout) {
-                        if (floatingBottomBar) {
-                            if (isFloatingStyleIos) {
-                                // iOS 液态玻璃悬浮导航条
-                                IosLiquidGlassNavigationBar(
-                                    items = navigationItems,
-                                    selectedIndex = selectedTab,
-                                    onItemClick = { index -> scope.launch { pagerState.springAnimateToPage(index) } },
-                                    backdrop = bottomBarBackdrop,
-                                    isBlurActive = true,
-                                    isDark = isDark,
-                                    showLabels = showLabels,
-                                )
-                            } else {
-                                // Miuix 胶囊悬浮导航条 + 玻璃
-                                val floatingPillRadius = 50.dp
-                                val floatingBarShape = RoundedCornerShape(floatingPillRadius)
-                                val floatingBarModifier = Modifier.textureBlur(
-                                    backdrop = bottomBarBackdrop,
-                                    shape = floatingBarShape,
-                                    blurRadius = 25f,
-                                    colors = BlurDefaults.blurColors(
-                                        blendColors = listOf(
-                                            BlendColorEntry(
-                                                color = MiuixTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f),
-                                            ),
-                                        ),
-                                    ),
-                                    highlight = floatingHighlight,
-                                )
-                                top.yukonga.miuix.kmp.basic.FloatingNavigationBar(
-                                    modifier = floatingBarModifier,
-                                    color = Color.Transparent,
-                                    cornerRadius = floatingPillRadius,
-                                ) {
-                                    navigationItems.forEachIndexed { index, item ->
-                                        MiuixFloatingNavigationBarItem(
-                                            item = item,
-                                            selected = selectedTab == index,
-                                            onClick = { scope.launch { pagerState.springAnimateToPage(index) } },
-                                            showLabel = showLabels,
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            // 普通导航条 + 模糊底栏
-                            BlurredBar(
+                        run {
+                        if (isFloatingStyleIos) {
+                            // iOS 液态玻璃悬浮导航条
+                            IosLiquidGlassNavigationBar(
+                                items = navigationItems,
+                                selectedIndex = selectedTab,
+                                onItemClick = { index -> scope.launch { pagerState.springAnimateToPage(index) } },
                                 backdrop = bottomBarBackdrop,
-                                blurActive = true,
-                            ) {
-                                NavigationBar(
-                                    color = Color.Transparent,
-                                    mode = if (showLabels) {
-                                        NavigationBarDisplayMode.IconAndText
-                                    } else {
-                                        NavigationBarDisplayMode.IconOnly
-                                    },
-                                ) {
-                                    navigationItems.forEachIndexed { index, item ->
-                                        NavigationBarItem(
-                                            selected = selectedTab == index,
-                                            onClick = { scope.launch { pagerState.springAnimateToPage(index) } },
-                                            icon = item.icon,
-                                            label = item.label,
-                                        )
-                                    }
-                                }
-                            }
+                                isBlurActive = bottomBarBlurActive,
+                                isDark = isDark,
+                                showLabels = true,
+                            )
+                        } else {
+                            // 官方 OS4 玻璃胶囊导航条：材质、描边、阴影由组件内置，
+                            // 不再自己叠 textureBlur。Scaffold 已消费底部 inset，这里关掉组件自带的 insets。
+                            GlassNavigationBar(
+                                items = glassNavigationItems,
+                                selectedIndex = selectedTab,
+                                onSelect = { index -> scope.launch { pagerState.springAnimateToPage(index) } },
+                                backdrop = if (bottomBarBlurActive) bottomBarBackdrop else null,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp),
+                            )
                         }
                         }
                     },
@@ -302,7 +287,14 @@ fun MainScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .layerBackdrop(bottomBarBackdrop),
+                            // 模糊关掉时没有 backdrop，也就不挂录制层（底栏直接吃 surface 色）
+                            .then(
+                                if (bottomBarBackdrop != null) {
+                                    Modifier.layerBackdrop(bottomBarBackdrop)
+                                } else {
+                                    Modifier
+                                },
+                            ),
                     ) {
                         // flingBehavior 用 miuix PagerNavigationSpringSpec：
                         // 页面切换/松手回弹的弹簧曲线统一，避免默认 fling 的
@@ -316,116 +308,68 @@ fun MainScreen(
                         // 注意：拦截器仅作用于 Pager 内三个 tab 页；调价记录明细页已提升为
                         // MainScreen 级全屏页（脱离 Pager，见下方 if(showOilPriceDetail)），
                         // 因此其省份横滑条/走势图拖动不受拦截器影响（二级页同理）。
-                        val pagerGestureModifier = Modifier
-                            .fillMaxSize()
-                            .pagerGestureOverride(
-                                pagerState = pagerState,
-                                mode = PagerInterceptionMode.CrossAxisInterceptor,
-                            )
-                        if (showAbout) {
-                            // 关于页：全屏承载在 Pager 之外
-                            com.llpop.koil.ui.screen.settings.AboutScreen(
-                                onBack = { showAbout = false },
-                            )
-                        } else if (showOilPriceDetail) {
-                            // 调价记录明细页：全屏承载在 Pager 之外（二级路由页），
-                            // 横向手势完全归页面内组件所有；无底栏，底部留白用系统导航条 inset
-                            OilPriceDetailScreen(
-                                onBack = { showOilPriceDetail = false },
-                                // 二级页不显示底部悬浮栏（见上方 bottomBar 槽的 showAbout/showOilPriceDetail 判断），
-                                // 因此不与 Pager 三页共用 bottomPad，只让出系统导航条高度，与关于页一致
-                                bottomPadding = WindowInsets.systemBars
-                                    .asPaddingValues()
-                                    .calculateBottomPadding(),
-                            )
-                        } else {
+                        // 0.9.5 的 Pager 拦截 API 仍在（miuix-ui 的 PagerGestureUtilsKt / PagerGestureNestedScrollConnection）：
+                        // cross_axis 模式下由拦截器接管左右滑动（先判主轴，页面内垂直滚动与翻页不打架），
+                        // 同时关掉 Pager 自带滑动，避免两条手势管线互相抢；native 模式则完全交回 Pager。
+                        // 拦截器仅作用于 Pager 内三个 tab 页；调价明细/关于页已提升到 Pager 之外，不受影响。
+                        val nativePagerNestedScrollConnection = PagerDefaults.pageNestedScrollConnection(
+                            state = pagerState,
+                            orientation = Orientation.Horizontal,
+                        )
+                        val pagerGestureModifier = Modifier.fillMaxSize()
                             HorizontalPager(
                                 state = pagerState,
-                                modifier = pagerGestureModifier,
+                                // 跨轴拦截：横滑前先判主轴（页面内垂直滚动与翻页不打架）；
+                                // native 模式由 miuix 把手势原样交回 Pager
+                                modifier = pagerGestureModifier.pagerGestureOverride(
+                                    pagerState = pagerState,
+                                    flingBehavior = pagerFlingBehavior,
+                                    mode = pagerInterceptionMode,
+                                ),
                                 verticalAlignment = Alignment.Top,
                                 // 预载相邻页：滑动时页面已组合完毕，动画帧只有绘制无组合，
                                 // 避免切换时整页首帧组合造成的掉帧
                                 beyondViewportPageCount = 1,
                                 overscrollEffect = null,
-                                userScrollEnabled = false,
-                                pageNestedScrollConnection = PagerGestureNestedScrollConnection,
+                                userScrollEnabled = !interceptPagerGestures,
+                                pageNestedScrollConnection = if (interceptPagerGestures) {
+                                    PagerGestureNestedScrollConnection
+                                } else {
+                                    nativePagerNestedScrollConnection
+                                },
                                 flingBehavior = pagerFlingBehavior,
                             ) { page ->
                                 when (page) {
-                                    0 -> AddScreen(
+                                    0 -> HomeScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
                                     )
                                     1 -> OverviewScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
-                                        // #5 空态「去录入」一键跳转录入页
-                                        // animateScrollToPage 在自定义手势管线（pagerGestureOverride +
-                                        // userScrollEnabled=false）下不生效，采用与底部导航一致的 springAnimateToPage（已验证可用）
+                                        // #5 空态「去录入」一键跳转录入页：与底部导航一致走 springAnimateToPage
                                         onNavigateToAdd = { scope.launch { pagerState.springAnimateToPage(0) } },
                                     )
                                     2 -> SettingsScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
-                                        onOpenPriceDetail = { showOilPriceDetail = true },
-                                        onOpenAbout = { showAbout = true },
+                                        onOpenPriceDetail = { nav.push(Route.OilPriceDetail) },
+                                        onOpenAbout = { nav.push(Route.About) },
                                     )
                                 }
                             }
                         }
                     }
                 }
+                entry<Route.About>(swipeDismiss = swipeDismiss) {
+                    com.llpop.koil.ui.screen.settings.AboutScreen(onBack = { nav.pop() })
+                }
+                entry<Route.OilPriceDetail>(swipeDismiss = swipeDismiss) {
+                    OilPriceDetailScreen(onBack = { nav.pop() })
+                }
+            }
+            }
             }
         }
         }
     }
-
-/** 浮动导航项：按压反馈 + 图标 / 文字 */
-@Composable
-private fun MiuixFloatingNavigationBarItem(
-    item: NavigationItem,
-    selected: Boolean,
-    onClick: () -> Unit,
-    showLabel: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val onSurfaceContainerColor = MiuixTheme.colorScheme.onSurfaceContainer
-    val tint = when {
-        isPressed -> onSurfaceContainerColor.copy(alpha = if (selected) 0.7f else 0.5f)
-        selected -> onSurfaceContainerColor
-        else -> onSurfaceContainerColor.copy(alpha = 0.6f)
-    }
-
-    Column(
-        modifier = modifier
-            .defaultMinSize(minWidth = if (showLabel) 56.dp else 48.dp, minHeight = 48.dp)
-            .selectable(
-                selected = selected,
-                onClick = onClick,
-                role = Role.Tab,
-                interactionSource = interactionSource,
-                indication = null,
-            )
-            .padding(horizontal = if (showLabel) 8.dp else 6.dp, vertical = 5.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            modifier = Modifier.size(22.dp),
-            imageVector = item.icon,
-            contentDescription = if (showLabel) null else item.label,
-            tint = tint,
-        )
-        if (showLabel) {
-            Text(
-                text = item.label,
-                color = tint,
-                fontSize = KOiLType.CaptionLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}

@@ -3,7 +3,7 @@ package com.llpop.koil.data.oil
 /**
  * 全国 31 个省级行政区（不含港澳台）——油价库、定位、省份选择器、导入校验共用同一份。
  *
- * 同一份列表统一由本常量提供（避免 AddScreen / OverviewScreen / SettingsScreen / OilPriceDbSyncer
+ * 同一份列表统一由本常量提供（避免 HomeScreen / OverviewScreen / SettingsScreen / OilPriceDbSyncer
  * 各写一遍共 4 份字面量）。这些字符串是**数据库主键的一部分**（province 字段），
  * 任意一处拼写漂移（如"内蒙古"写成"内蒙"）都会让该省油价永远查不到、四宫格全空，
  * 而且不会报错。单一常量令漂移面归零。

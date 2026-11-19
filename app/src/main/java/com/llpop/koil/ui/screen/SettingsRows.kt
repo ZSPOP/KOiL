@@ -43,13 +43,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import com.llpop.koil.ui.theme.BottomBarMode
+import com.llpop.koil.ui.theme.PagerGestureMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLColors
 import top.yukonga.miuix.kmp.basic.BasicComponent
@@ -77,6 +76,8 @@ internal fun DataIoDialogItem(
 ) {
     // 弹窗内的动作行交回 ArrowPreference，不再自绘 0.5dp 分割线
     // （设置类页面无分割线，行与行靠 insideMargin 的 16dp 留白区分）。
+    // 行节点横向吃满面板宽度（内容靠 insideMargin 内缩），按下高亮才会像
+    // 设置页卡片里的行一样横向铺满、由外层按面板圆角裁切，而不是一块内缩的方角块
     ArrowPreference(
         title = title,
         summary = subtitle,
@@ -433,7 +434,7 @@ internal fun styleLabel(style: FloatingBottomBarStyle) = when (style) {
 }
 
 @Composable
-internal fun modeLabel(mode: BottomBarMode) = when (mode) {
-    BottomBarMode.IconAndText -> stringResource(R.string.koil_mode_icon_text)
-    BottomBarMode.IconOnly -> stringResource(R.string.koil_mode_icon_only)
+internal fun pagerGestureLabel(mode: PagerGestureMode) = when (mode) {
+    PagerGestureMode.CrossAxis -> stringResource(R.string.koil_pager_gesture_cross_axis)
+    PagerGestureMode.Native -> stringResource(R.string.koil_pager_gesture_native)
 }

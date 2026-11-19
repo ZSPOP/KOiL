@@ -2,18 +2,10 @@
 
 package com.llpop.koil.ui.screen.settings
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
-import top.yukonga.miuix.kmp.basic.rememberScrollBarAdapter
-import top.yukonga.miuix.kmp.basic.VerticalScrollBar
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsBottomHeight
@@ -41,6 +32,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +40,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -68,26 +59,26 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.R
-import com.llpop.koil.ui.component.BlurredBar
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import top.yukonga.miuix.kmp.basic.Button
 import com.llpop.koil.ui.component.blur.ColorBlendToken
+import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
+import com.llpop.koil.ui.component.blur.overScrollVertical
+import com.llpop.koil.ui.component.AdaptiveTopAppBar
+import com.llpop.koil.ui.component.BackNavigationIcon
+import com.llpop.koil.ui.component.BlurredBar
 import com.llpop.koil.ui.component.blur.rememberBlurEnabled
+import com.llpop.koil.ui.component.liquid.rememberCombinedBackdrop
 import com.llpop.koil.ui.component.effect.BgEffectBackground
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SmallTitle
-import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
@@ -102,7 +93,6 @@ import com.llpop.koil.data.update.ApkUpdater
 import com.llpop.koil.data.update.RefreshOutcome
 import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.data.update.UpdateDownloadState
-import com.llpop.koil.data.update.UpdateFailure
 import com.llpop.koil.data.update.UpdateNotifier
 import com.llpop.koil.data.update.UpdateTarget
 import com.llpop.koil.data.update.resolveCapsuleState
@@ -117,13 +107,13 @@ import org.koin.core.context.GlobalContext
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurBlendMode
 import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
-import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import com.llpop.koil.ui.theme.KOiLType
 import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
@@ -144,7 +134,6 @@ fun AboutScreen(
     onBack: () -> Unit = {},
 ) {
     // 二级页：侧滑 / 系统返回键回到设置页，而不是被 Activity 直接 finish
-    BackHandler(onBack = onBack)
     val scrollBehavior = MiuixScrollBehavior()
     val lazyListState = rememberLazyListState()
 
@@ -154,11 +143,6 @@ fun AboutScreen(
         derivedStateOf {
             when {
                 lazyListState.firstVisibleItemIndex > 0 -> 1f
-
-                // 滚到底：底部不再留一整屏兜底，靠这条把 hero 收完
-                // （viewportSize 为 0 说明还没测量，不能当"到底"，否则首帧会闪一下已收起状态）
-                lazyListState.layoutInfo.viewportSize.height > 0 &&
-                    !lazyListState.canScrollForward -> 1f
 
                 else -> {
                     val spacer = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "logoSpacer" }
@@ -178,33 +162,32 @@ fun AboutScreen(
     }
 
     val backdrop = rememberBlurBackdrop()
+    // 纹理模糊的开关仍然跟 hero 收起走；标题的渐进模糊由 AdaptiveTopAppBar 内部按模糊开关决定
     val blurActive = backdrop != null && heroCollapsed
-    val barColor = if (heroCollapsed && !blurActive) colorScheme.surface else Color.Transparent
+    // 顶栏单独录制一层、正文一层；弹层采样两者合并，避免采到自己的宿主或被遮罩
+    val barBackdrop = if (backdrop != null) rememberLayerBackdrop() else null
+    val overlayBackdrop = if (backdrop != null && barBackdrop != null) {
+        rememberCombinedBackdrop(backdrop, barBackdrop)
+    } else {
+        null
+    }
 
     Scaffold(
         topBar = {
-            BlurredBar(backdrop = backdrop, blurActive = blurActive) {
-                SmallTopAppBar(
-                    title = stringResource(R.string.koil_set_about),
-                    scrollBehavior = scrollBehavior,
-                    color = barColor,
-                    titleColor = colorScheme.onSurface.copy(alpha = titleAlpha),
-                    defaultWindowInsetsPadding = false,
-                    navigationIcon = {
-                        val layoutDirection = LocalLayoutDirection.current
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = MiuixIcons.Back,
-                                contentDescription = stringResource(R.string.koil_back),
-                                tint = colorScheme.onSurface,
-                                modifier = Modifier.graphicsLayer {
-                                    // RTL 语言下整组镜像，箭头指向阅读方向的反向
-                                    scaleX = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
-                                },
-                            )
-                        }
-                    },
-                )
+            Box(modifier = if (barBackdrop != null) Modifier.layerBackdrop(barBackdrop) else Modifier) {
+                // 顶栏底材只承担"收起后才敷纹理"这一半职责，标题的渐进模糊始终由模糊开关控制
+                BlurredBar(backdrop = backdrop, blurActive = blurActive) {
+                    AdaptiveTopAppBar(
+                        title = stringResource(R.string.koil_set_about),
+                        // 二级页不折叠大标题，只做「渐显小标题 + 玻璃按钮」的过渡
+                        expandable = false,
+                        titleColor = colorScheme.onSurface,
+                        titleAlpha = { titleAlpha },
+                        defaultWindowInsetsPadding = false,
+                        scrollBehavior = scrollBehavior,
+                        navigationIcon = { BackNavigationIcon(onClick = onBack) },
+                    )
+                }
             }
         },
         contentWindowInsets = WindowInsets.systemBars
@@ -217,6 +200,7 @@ fun AboutScreen(
                 scrollBehavior = scrollBehavior,
                 lazyListState = lazyListState,
                 scrollProgress = { scrollProgressState.value },
+                overlayBackdrop = overlayBackdrop,
             )
         }
     }
@@ -228,6 +212,7 @@ private fun AboutContent(
     scrollBehavior: ScrollBehavior,
     lazyListState: LazyListState,
     scrollProgress: () -> Float,
+    overlayBackdrop: Backdrop?,
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val density = LocalDensity.current
@@ -435,7 +420,7 @@ private fun AboutContent(
     val statusToCapsule = 50.dp
     // 槽位就是一个胶囊的高度。下载进度已挪到状态行，槽位不再需要为它预留空间。
     val capsuleSlotHeight = 52.dp
-    val heroToCard = 50.dp
+    val heroToCard = 126.dp
 
     val backdrop = rememberLayerBackdrop()
 
@@ -469,10 +454,9 @@ private fun AboutContent(
     // 各段淡出进度在 graphicsLayer 内计算，读点全部落在绘制阶段
     val versionCodeProgress = { ((scrollProgress() - 0.05f) / 0.15f).coerceIn(0f, 1f) }
     val iconProgress = { ((scrollProgress() - 0.35f) / 0.15f).coerceIn(0f, 1f) }
-    // 胶囊单独一条更早的曲线。它与信息卡之间只有 heroToCard = 50dp，
-    // 卡片顶到胶囊只需要滚到 p ≈ 0.115；照 logo 那条 0.35→0.5 的曲线，
-    // 卡片压上来时胶囊还完全不透明，就成了「悬在卡片上的胶囊」。
-    // 这条曲线在 p ≈ 0.11 处收干净，卡片碰到之前它已经化掉。
+    // 胶囊单独一条更早的曲线：它和信息卡之间只有 heroToCard 这一段间距。
+    // 照 logo 那条 0.35→0.5 的曲线，卡片压上来时胶囊还完全不透明，就会变成
+    // 「悬在卡片上的胶囊」；这条曲线在 p ≈ 0.11 处收干净，卡片碰到之前已经化掉。
     val capsuleProgress = { ((scrollProgress() - 0.02f) / 0.09f).coerceIn(0f, 1f) }
 
     // logo 下方：本机版本；有新版本时追加「→ 新版本」
@@ -549,7 +533,7 @@ private fun AboutContent(
             modifier = Modifier
                 .fillMaxSize()
                 .scrollEndHaptic()
-                .overScrollVertical()
+                .overScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection),
             contentPadding = PaddingValues(
                 top = scrollPadding.calculateTopPadding(),
@@ -585,6 +569,8 @@ private fun AboutContent(
 
             item(key = "about") {
                 Box {
+                    // 预留一屏余量：内容滚完后仍能继续滚，hero 才能随滚动连续收满
+                    Spacer(Modifier.fillParentMaxHeight())
                     Column(
                         modifier = Modifier.padding(bottom = 12.dp),
                     ) {
@@ -647,6 +633,9 @@ private fun AboutContent(
             }
         }
         if (sheet.isNotEmpty()) {
+            // 关于页只有一个原生 Scaffold，没有页面级 backdrop 作用域，
+            // 这里用本页录制的 backdrop 显式补上，弹窗才有玻璃
+            CompositionLocalProvider(LocalPageBackdrop provides (overlayBackdrop ?: backdrop)) {
             val titleRes = if (sheet == "terms") R.string.koil_set_about_terms
             else R.string.koil_set_about_privacy
             val bodyRes = if (sheet == "terms") R.string.koil_set_about_terms_body
@@ -656,7 +645,6 @@ private fun AboutContent(
                 onDismissRequest = { sheet = "" },
                 contentPadding = 16.dp,
                 scrollable = true,
-                widthFraction = 0.90f,
             ) {
                 Column {
                     Text(
@@ -677,6 +665,7 @@ private fun AboutContent(
                         Text(stringResource(R.string.koil_common_close), fontSize = KOiLType.Body)
                     }
                 }
+            }
             }
         }
         // hero 放在列表之后：绘制与命中都在上层，胶囊才像真的嵌在 hero 里、点得到。
@@ -735,11 +724,6 @@ private fun AboutContent(
             onMeasured = { logoHeightDp = it },
         )
 
-        VerticalScrollBar(
-            adapter = rememberScrollBarAdapter(lazyListState),
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-            trackPadding = scrollPadding,
-        )
     }
 }
 

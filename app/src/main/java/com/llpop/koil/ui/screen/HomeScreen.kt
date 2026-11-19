@@ -2,11 +2,13 @@ package com.llpop.koil.ui.screen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -18,19 +20,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EvStation
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalGasStation
@@ -45,13 +43,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.boundsInWindow
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -60,10 +63,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.data.oil.ForecastDirection
-import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.data.oil.forecastDirection
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.groupedCardItems
@@ -71,6 +72,8 @@ import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.pageContentPadding
+import com.llpop.koil.ui.component.ImeGap
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.ui.screen.add.AddUiState
@@ -87,14 +90,18 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
-import top.yukonga.miuix.kmp.basic.DropdownDefaults
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
-import top.yukonga.miuix.kmp.popup.OverlayDropdownPopup
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import java.util.Locale
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
+import com.llpop.koil.ui.component.blur.overScrollVertical
+import com.llpop.koil.ui.component.horizontalCutoutPadding
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import top.yukonga.miuix.kmp.glass.GlassPopupItem
+import com.llpop.koil.ui.component.GlassPopupOverlay
+import com.llpop.koil.ui.component.LocalPageBackdrop
 
 /**
  * 录入页（M2 完整实现）
@@ -104,8 +111,9 @@ import com.llpop.koil.ui.theme.KOiLType
  * - 实时预检：重复 / 里程递减 / 行驶里程 / 价格偏差
  * - 添加记录入库
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalLayoutApi::class)
 @Composable
-fun AddScreen(
+fun HomeScreen(
     modifier: Modifier = Modifier,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     viewModel: AddViewModel = koinViewModel(),
@@ -155,13 +163,40 @@ fun AddScreen(
         if (granted) viewModel.locateProvince()
     }
 
+    // 顶栏模糊判据用列表状态（见 KOiLScreenScaffold 的 listState 参数）
+    val listState = rememberLazyListState()
+    // 页面自己的 backdrop，录制挂在下方的滚动容器上（顶栏渐变带与卡片玻璃都采样它）
+    val pageBackdrop = rememberBlurBackdrop()
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_add_title),
         modifier = modifier,
-    ) { _, topPadding, scrollBehavior, _ ->
+        backdrop = pageBackdrop,
+        listState = listState,
+    ) { innerPadding, topPadding, scrollBehavior, pageBackdrop ->
+        val imeVisible = WindowInsets.isImeVisible
+        // 首页所有输入框都在同一张录入卡里：键盘一弹就让整张卡完整落进可视区（列表可视区已被 imePadding 切到键盘上沿）。
+        // 走 bringIntoView 而不是 scrollToItem/scrollBy：前者和"手指点进输入框"是同一条滚动路径，
+        // 会经过顶栏的嵌套滚动，顶栏才会照常折叠、模糊态才成立；程序化跳转不经过那条路径，
+        // 顶栏会停在展开态（大标题还在左边、也没有模糊）。
+        val formBringIntoView = remember { BringIntoViewRequester() }
+        // 只在"首页自己的输入框拿到焦点"时抬卡：别的页面（补录/编辑弹层）把键盘弹起来时，
+        // 首页仍被 Pager 组合着，若无条件 bringIntoView，请求会顺着 Pager 的滚动链把当前页滚回首页。
+        var homeFieldFocused by remember { mutableStateOf(false) }
+        LaunchedEffect(imeVisible, homeFieldFocused) {
+            if (!imeVisible || !homeFieldFocused) return@LaunchedEffect
+            // 键盘动画期间 inset 连续变化，等它稳定再定位
+            delay(240)
+            formBringIntoView.bringIntoView()
+        }
+
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
+                .horizontalCutoutPadding()
+                .scrollEndHaptic()
+                .overScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 // edge-to-edge 下键盘不 resize 窗口，补 imePadding 让表单底部（实付/提交按钮）不被键盘遮挡
                 .imePadding(),
@@ -169,9 +204,9 @@ fun AddScreen(
             // 键盘弹起时只留 12dp：此时底部悬浮条已被键盘盖住，再留一整段导航栏高度会像"内容没渲染出来"；
             // 键盘收起才让出 bottomPadding（底栏自身占的高度）。
             // 横向边距不在骨架里给：由 CardSegment / groupedCardItems 的 outerHorizontalPadding(12dp) 承担
-            contentPadding = PaddingValues(
-                top = topPadding,
-                bottom = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) 12.dp else bottomPadding,
+            contentPadding = pageContentPadding(
+                innerPadding,
+                extraBottom = if (imeVisible) ImeGap else bottomPadding,
             ),
         ) {
 
@@ -184,6 +219,7 @@ fun AddScreen(
                         OilPriceCard(
                     uiState = uiState,
                     onProvinceSelect = viewModel::setProvince,
+                    backdrop = pageBackdrop,
                     onLocateClick = {
                         if (locationHelper.hasPermission()) {
                             viewModel.locateProvince()
@@ -215,7 +251,9 @@ fun AddScreen(
                 outerBottomPadding = 12.dp,
                 items = listOf(
                     CardItem("form") {
-                    Column {
+                    Column(
+                        modifier = Modifier.bringIntoViewRequester(formBringIntoView),
+                    ) {
                         // 表单三行：底部 12dp = 块模型 ①「上方内容 → 块上缘」，留在高亮之外——
                         // 上距若塞进行内 insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行。
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
@@ -231,6 +269,7 @@ fun AddScreen(
                                     grade = uiState.oilGrade,
                                     priceText = uiState.currentPrice?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L",
                                     onGradeSelected = viewModel::setOilGrade,
+                                    backdrop = pageBackdrop,
                                 )
                             }
                             Spacer(Modifier.height(14.dp))
@@ -244,6 +283,7 @@ fun AddScreen(
                                     value = uiState.mileage,
                                     onValueChange = viewModel::setMileage,
                                     keyboardType = KeyboardType.Number,
+                                    onFieldFocusChange = { homeFieldFocused = it },
                                     error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
                                 )
                                 Spacer(Modifier.width(12.dp))
@@ -254,6 +294,7 @@ fun AddScreen(
                                     value = uiState.oilAmount,
                                     onValueChange = viewModel::setOilAmount,
                                     keyboardType = KeyboardType.Decimal,
+                                    onFieldFocusChange = { homeFieldFocused = it },
                                     error = uiState.precheck.oilOverTank,
                                 )
                             }
@@ -268,6 +309,7 @@ fun AddScreen(
                                     value = uiState.payableAmount,
                                     onValueChange = {},
                                     keyboardType = KeyboardType.Decimal,
+                                    onFieldFocusChange = { homeFieldFocused = it },
                                     readOnly = true,
                                     placeholder = stringResource(R.string.koil_ov_payable_pending),
                                 )
@@ -279,6 +321,7 @@ fun AddScreen(
                                     value = uiState.actualAmount,
                                     onValueChange = viewModel::setActualAmount,
                                     keyboardType = KeyboardType.Decimal,
+                                    onFieldFocusChange = { homeFieldFocused = it },
                                     error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
                                 )
                             }
@@ -338,76 +381,6 @@ fun AddScreen(
     }
 }
 
-// ===== 省份选择弹窗 =====
-// PROVINCES 见 ScreenShared.kt（原本设置页 / 总览页 / 本页各有一份 file-private 的同名表，
-// 拆文件后它们会撞名，统一收到共享文件里）。
-
-@Composable
-private fun ProvincePickerDialog(
-    currentProvince: String,
-    onSelect: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    KOiLGlassDialog(show = true, onDismissRequest = onDismiss) {
-        Column {
-            Text(
-                text = stringResource(R.string.koil_add_pick_province),
-                fontSize = KOiLType.Headline,
-                fontWeight = FontWeight.Bold,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            Spacer(Modifier.height(14.dp))
-            // 列表式上下滚动单选（与设置页「默认省份」同款观感）
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                Column {
-                    PROVINCES.forEach { province ->
-                        val isSelected = province == currentProvince
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(if (isSelected) KOiLColors.Primary.copy(alpha = 0.12f) else Color.Transparent)
-                                .clickable { onSelect(province) }
-                                .padding(horizontal = 14.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = provinceLabel(province),
-                                fontSize = KOiLType.BodyLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) KOiLColors.Primary else MiuixTheme.colorScheme.onBackground,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = KOiLColors.Primary,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(14.dp))
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 44.dp),
-            ) {
-                Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.BodyLarge)
-            }
-        }
-    }
-}
-
 // ===== 定位权限提醒弹窗 =====
 @Composable
 private fun PermissionDialog(
@@ -462,8 +435,11 @@ private fun OilPriceCard(
     uiState: AddUiState,
     onProvinceSelect: (String) -> Unit,
     onLocateClick: () -> Unit,
+    backdrop: LayerBackdrop?,
 ) {
     val showProvincePicker = remember { mutableStateOf(false) }
+    var provinceBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    val provinceAnchor = rememberGlassPopupAnchor()
     // 主题感知配色：深色下用柔和亮蓝主色 + 蓝色柔光容器底（避免亮色调 PrimaryContainer 发白突兀），浅色保持原样
     // 主题是设置项（跟随系统/浅色/深色）：必须读实际生效值，读系统值会在手动主题下反色
     val dark = LocalKOiLDarkTheme.current
@@ -532,7 +508,7 @@ private fun OilPriceCard(
                 }
             }
             Spacer(Modifier.width(2.dp))
-            // 省份选择按钮（点击弹设置页同款 OverlayDropdownPopup 下拉，锚定按钮下方、跟随位置）
+            // 省份选择按钮（点击弹官方玻璃下拉菜单，锚定按钮、跟随位置）
             // 同定位按钮——clip 在 clickable 之前，波纹圆角不出现矩形色块
             Box(
                 modifier = Modifier
@@ -543,13 +519,14 @@ private fun OilPriceCard(
             ) {
                 Row(
                     modifier = Modifier
+                        // 记录可见胶囊自身的窗口坐标，官方玻璃面板按这个矩形对齐到正下方
+                        .onGloballyPositioned { provinceBounds = it.boundsInWindow() }
                         .clip(RoundedCornerShape(8.dp))
                         .background(containerBg)
                         .padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    // 省份文字 14sp Bold + 箭头直接跟随（无手动间距）——与设置页 Dropdown / 油号选择行尾完全同款
-                    // 文字→箭头间 8dp 间距（设置页行尾箭头靠 weight 撑开有空隙，紧凑按钮内需显式间距对齐观感）
+                    // 省份文字 14sp Bold + 箭头直接跟随（无手动间距）
                     Text(
                         // 省份是数据库主键（中文），显示层用本地化名
                         text = provinceLabel(uiState.viewProvince),
@@ -558,33 +535,36 @@ private fun OilPriceCard(
                         color = containerText,
                     )
                     Spacer(Modifier.width(8.dp))
-                    // 省份下拉箭头——用 Miuix DropdownArrowEndAction（与设置页 Dropdown / 油号选择
-                    // 行尾同款线条风格），不用实心小三角 ArrowDropDown（用户反馈不显眼）
-                    DropdownArrowEndAction(actionColor = containerText)
+                    // 锚点只挂右侧箭头：值留在左边，面板右边缘对齐胶囊右边
+                    Row(
+                        modifier = Modifier.glassPopupAnchorValue(provinceAnchor),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        // 省份下拉箭头——用 Miuix DropdownArrowEndAction（与设置页 Dropdown / 油号选择
+                        // 行尾同款线条风格），不用实心小三角 ArrowDropDown（用户反馈不显眼）
+                        DropdownArrowEndAction(actionColor = containerText)
+                    }
                 }
             }
-            if (showProvincePicker.value) {
-                OverlayDropdownPopup(
-                    entry = DropdownEntry(
-                        items = PROVINCES.map { p ->
-                            DropdownItem(
-                                text = provinceLabel(p),
-                                selected = p == uiState.viewProvince,
-                                onClick = {
-                                    onProvinceSelect(p)
-                                    showProvincePicker.value = false
-                                },
-                            )
-                        }
-                    ),
-                    show = showProvincePicker.value,
-                    onDismiss = { showProvincePicker.value = false },
-                    onDismissFinished = {},
-                    maxHeight = 300.dp,
-                    dropdownColors = DropdownDefaults.dropdownColors(),
-                    renderInRootScaffold = true,
-                    collapseOnSelection = true,
-                )
+            // 统一走根宿主的玻璃面板（与数据总览补录/编辑窗同一套 GlassPopupOverlay）
+            GlassPopupOverlay(
+                show = showProvincePicker.value,
+                anchorBounds = provinceBounds,
+                anchor = provinceAnchor,
+                backdrop = LocalPageBackdrop.current,
+                onDismissRequest = { showProvincePicker.value = false },
+                maxHeight = 360.dp,
+            ) {
+                PROVINCES.forEach { p ->
+                    GlassPopupItem(
+                        text = provinceLabel(p),
+                        selected = p == uiState.viewProvince,
+                        onClick = {
+                            onProvinceSelect(p)
+                            showProvincePicker.value = false
+                        },
+                    )
+                }
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -948,6 +928,7 @@ private fun FormField(
     readOnly: Boolean = false,
     error: Boolean = false,
     placeholder: String? = null,
+    onFieldFocusChange: ((Boolean) -> Unit)? = null,
 ) {
     val errorColor = KOiLColors.Error
     // 错误态：用 TextFieldColors 把边框/标签设为红色；正常态边框透明（无蓝色聚焦框）
@@ -977,7 +958,15 @@ private fun FormField(
             TextField(
                 value = value,
                 onValueChange = { onValueChange(it.sanitizeDecimalInput()) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (onFieldFocusChange != null) {
+                            Modifier.onFocusChanged { onFieldFocusChange(it.isFocused) }
+                        } else {
+                            Modifier
+                        },
+                    ),
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
                 readOnly = readOnly,
                 singleLine = true,
@@ -998,16 +987,21 @@ private fun FormField(
     }
 }
 
-// ===== 油号选择字段（行样式与 DateField 一致：标签行 + 52dp 输入框；弹窗用 miuix OverlayDropdownPopup 与设置页语言选择同款：锚定、无分割线、选中蓝点、缩放动画） =====
+/** 玻璃面板内的一行：选中态加粗 + 主色 + 勾，与官方弹出菜单观感一致 */
+
+// ===== 油号选择字段（行样式与 DateField 一致：标签行 + 52dp 输入框；弹窗用官方玻璃下拉菜单：锚定输入框、面板跳卡片裁剪、采样页面 backdrop） =====
 @Composable
 private fun GradeField(
     modifier: Modifier = Modifier,
     grade: String,
     priceText: String,
     onGradeSelected: (String) -> Unit,
+    backdrop: LayerBackdrop?,
 ) {
     val gradeLabels = listOf("92", "95", "98", "0")
     val showMenu = remember { mutableStateOf(false) }
+    var gradeBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    val gradeAnchor = rememberGlassPopupAnchor()
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -1029,6 +1023,8 @@ private fun GradeField(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 52.dp)
+                // 记录整个输入框的窗口矩形，玻璃面板据此对齐到正下方
+                .onGloballyPositioned { gradeBounds = it.boundsInWindow() }
                 .clip(RoundedCornerShape(12.dp))
                 .background(MiuixTheme.colorScheme.secondaryContainer)
                 .clickable { showMenu.value = true }
@@ -1039,47 +1035,58 @@ private fun GradeField(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // 值在左（油号 + 当前单价），箭头在右；锚点只挂右侧箭头
+                val gradeText = if (grade == "0") stringResource(R.string.koil_add_grade_diesel)
+                else stringResource(R.string.koil_add_grade_gasoline, grade)
                 Text(
-                    text = "$grade# · $priceText",
-                    fontSize = KOiLType.Title,
-                    fontWeight = FontWeight.Bold,
+                    text = gradeText,
+                    fontSize = KOiLType.BodyLarge,
+                    fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                 )
-                // 与设置页语言选择同款下拉箭头（miuix DropdownArrowEndAction）
-                DropdownArrowEndAction(
-                    actionColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = priceText,
+                    fontSize = KOiLType.BodySmall,
+                    color = MiuixTheme.colorScheme.onBackgroundVariant,
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
                 )
+                Row(
+                    modifier = Modifier.glassPopupAnchorValue(gradeAnchor),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // 与设置页语言选择同款下拉箭头（miuix DropdownArrowEndAction）
+                    DropdownArrowEndAction(
+                        actionColor = MiuixTheme.colorScheme.onBackgroundVariant,
+                    )
+                }
             }
         }
     }
 
-    // 语言弹窗同款弹窗：单条 DropdownEntry 内含多个 DropdownItem（分割线只画在 entry 之间，单 entry 无分割线）
-    if (showMenu.value) {
-        OverlayDropdownPopup(
-            entry = DropdownEntry(
-                items = gradeLabels.map { g ->
-                    val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
-                    else stringResource(R.string.koil_add_grade_gasoline, g)
-                    DropdownItem(
-                        text = label,
-                        selected = g == grade,
-                        onClick = {
-                            onGradeSelected(g)
-                            showMenu.value = false
-                        },
-                    )
-                }
-            ),
-            show = showMenu.value,
-            onDismiss = { showMenu.value = false },
-            onDismissFinished = {},
-            maxHeight = 220.dp,
-            dropdownColors = DropdownDefaults.dropdownColors(),
-            renderInRootScaffold = true,
-            collapseOnSelection = true,
-        )
+    // 统一走根宿主的玻璃面板
+    GlassPopupOverlay(
+        show = showMenu.value,
+        anchorBounds = gradeBounds,
+        anchor = gradeAnchor,
+        backdrop = LocalPageBackdrop.current,
+        onDismissRequest = { showMenu.value = false },
+        maxHeight = 360.dp,
+    ) {
+        gradeLabels.forEach { g ->
+            val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
+            else stringResource(R.string.koil_add_grade_gasoline, g)
+            GlassPopupItem(
+                text = label,
+                selected = g == grade,
+                onClick = {
+                    onGradeSelected(g)
+                    showMenu.value = false
+                },
+            )
+        }
     }
 }
 

@@ -21,7 +21,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -31,7 +30,6 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -740,6 +738,17 @@ class AddViewModel(
                     messageArgs = listOf(distanceKm ?: 0.0, discount)
                 }
                 else -> messageKey = "default"
+            }
+
+            // 应付由"油量 × 参考价"派生，与实付是否填写无关：
+            // 此前只有 实付 有值时才走上面的偏差校验分支算出 effectivePayable，
+            // 实付为空就落到下面被清成空串——表现为油量输完仍显示"待计算"，
+            // 直到填了实付才冒出数字。这里补一条不依赖实付的兜底。
+            if (effectivePayable == null) {
+                val fallbackPrice = state.currentPrice?.takeIf { it.isFinite() && it > 0 }
+                if (amount != null && amount.isFinite() && amount > 0 && fallbackPrice != null) {
+                    effectivePayable = amount * fallbackPrice
+                }
             }
 
             // 应付展示同步为本次预检实际使用的参考价口径；价格/油量无效时清空

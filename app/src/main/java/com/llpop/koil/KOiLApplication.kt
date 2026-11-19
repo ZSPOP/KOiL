@@ -3,7 +3,9 @@ package com.llpop.koil
 import android.app.Activity
 import android.app.Application
 import android.content.ComponentCallbacks
+import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.work.BackoffPolicy
@@ -86,6 +88,23 @@ class KOiLApplication : Application() {
             return
         }
         if (system != stored) settings.setLanguage(system)
+    }
+
+    /**
+     * 预测性返回（Android 14+ 的返回预览动画）开关。
+     * ApplicationInfo 上的这个标志没有公开 setter，只能反射改；
+     * 改完要重建 Activity，窗口系统才会按新值重新决定返回动画。
+     */
+    fun setPredictiveBack(enabled: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return
+        runCatching {
+            val method = ApplicationInfo::class.java.getDeclaredMethod(
+                "setEnableOnBackInvokedCallback",
+                Boolean::class.javaPrimitiveType,
+            )
+            method.isAccessible = true
+            method.invoke(applicationInfo, enabled)
+        }.onFailure { Log.w("KOiLApplication", "setEnableOnBackInvokedCallback failed", it) }
     }
 
     override fun onCreate() {

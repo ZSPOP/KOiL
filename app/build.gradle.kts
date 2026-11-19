@@ -18,7 +18,13 @@ plugins {
 
 android {
     namespace = "com.llpop.koil"
-    compileSdk = 37
+    // miuix 0.9.5 的 AAR 要求依赖方 compileSdk ≥ 37.2（minor API level），
+    // 用 AGP 9 的 release + minorApiLevel 写法精确到小版本；targetSdk 仍为 37。
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     signingConfigs {
         if (hasReleaseSigning) {
@@ -84,8 +90,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -112,7 +118,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_17)
+        jvmTarget.set(JvmTarget.JVM_21)
     }
 }
 
@@ -147,6 +153,13 @@ dependencies {
     implementation(libs.miuix.preference)
     implementation(libs.miuix.blur)
     implementation(libs.miuix.icons)
+    // material：0.9.5 起 shader 与 OS3 高光统一并入此模块（RuntimeShader / EdgeStroke / GlassMaterial）
+    implementation(libs.miuix.material)
+    // glass：官方 OS4 玻璃组件（悬浮胶囊导航 GlassNavigationBar）
+    implementation(libs.miuix.glass)
+    // glass-icons：OS4 玻璃风格图标集（MiuixIcons.Glass.*），与玻璃组件同一套视觉
+    implementation(libs.miuix.glass.icons)
+    implementation(libs.miuix.nav)
     // navigationevent：miuix Dropdown 弹窗的返回手势依赖 LocalNavigationEventDispatcherOwner；
     // 必须用 1.2.0：1.1.2 无外部 dispatcher 时抛 IllegalStateException 闪退
     implementation(libs.androidx.navigationevent.compose)

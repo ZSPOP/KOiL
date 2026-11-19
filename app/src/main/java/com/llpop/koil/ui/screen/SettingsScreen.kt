@@ -1,5 +1,7 @@
 package com.llpop.koil.ui.screen
 
+import android.os.Build
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -8,6 +10,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +28,7 @@ import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.CardSegment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -32,6 +36,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import top.yukonga.miuix.kmp.basic.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -61,16 +66,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
+import com.llpop.koil.KOiLApplication
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.screen.settings.SyncViewModel
-import com.llpop.koil.ui.theme.BottomBarMode
+import com.llpop.koil.ui.theme.PagerGestureMode
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.ui.component.provinceLabel
@@ -83,7 +90,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
+import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.withContext
@@ -94,6 +101,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.data.update.UpdateChannelIssue
 import com.llpop.koil.data.update.updateChannelIssue
+import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
+import com.llpop.koil.ui.component.blur.overScrollVertical
+import com.llpop.koil.ui.component.horizontalCutoutPadding
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 
 
@@ -181,10 +194,14 @@ fun SettingsScreen(
         viewModel.loadEiaApiKey()
     }
 
+    val pageBackdrop = rememberBlurBackdrop()
+    val listState = rememberLazyListState()
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_set_title),
         modifier = modifier,
-    ) { _, topPadding, scrollBehavior, _ ->
+        backdrop = pageBackdrop,
+        listState = listState,
+    ) { innerPadding, topPadding, scrollBehavior, pageBackdrop ->
         val priceDbStatus by viewModel.priceDbStatus.collectAsStateWithLifecycle()
         val eiaKey by viewModel.eiaApiKey.collectAsStateWithLifecycle()
         val eiaEnabled by viewModel.eiaEnabled.collectAsStateWithLifecycle()
@@ -205,8 +222,13 @@ fun SettingsScreen(
         val syncHealthy = syncUi.configured
 
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
+                .horizontalCutoutPadding()
+                .scrollEndHaptic()
+                .overScrollVertical(scrollBehavior)
                 .nestedScroll(scrollBehavior.nestedScrollConnection)
                 .imePadding()
                 .pointerInput(Unit) {
@@ -221,7 +243,7 @@ fun SettingsScreen(
                         }
                     }
                 },
-            contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding),
+            contentPadding = pageContentPadding(innerPadding, extraBottom = bottomPadding),
         ) {
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
 
@@ -233,7 +255,8 @@ fun SettingsScreen(
                     add(CardItem("theme") {
                         val themeModes = AppSettings.ThemeMode.entries
                         val themeModeIdx = themeModes.indexOf(uiState.themeMode).coerceAtLeast(0)
-                        OverlayDropdownPreference(
+                        GlassDropdownPreference(
+                            backdrop = pageBackdrop,
                             items = themeModes.map { themeLabel(it) },
                             selectedIndex = themeModeIdx,
                             title = stringResource(R.string.koil_set_appearance),
@@ -244,12 +267,21 @@ fun SettingsScreen(
                     add(CardItem("language") {
                         val languages = AppSettings.Language.entries
                         val languageIdx = languages.indexOf(uiState.language).coerceAtLeast(0)
-                        OverlayDropdownPreference(
+                        GlassDropdownPreference(
+                            backdrop = pageBackdrop,
                             items = languages.map { langLabel(it) },
                             selectedIndex = languageIdx,
                             title = stringResource(R.string.koil_set_language),
                             summary = languages.getOrElse(languageIdx) { languages.first() }.let { langLabel(it) },
                             onSelectedIndexChange = { index -> viewModel.setLanguage(languages[index]) },
+                        )
+                    })
+                    add(CardItem("blur") {
+                        SettingSwitchRow(
+                            title = stringResource(R.string.koil_set_blur),
+                            subtitle = stringResource(R.string.koil_set_blur_sub),
+                            checked = uiState.blurEnabled,
+                            onCheckedChange = viewModel::setBlurEnabled,
                         )
                     })
                     // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
@@ -305,46 +337,65 @@ fun SettingsScreen(
                 outerBottomPadding = 12.dp,
                 items = buildList {
                     if (uiState.loaded) {
-                        add(CardItem("floatingBar") {
-                            SettingSwitchRow(
-                                title = stringResource(R.string.koil_set_floating_bar),
-                                subtitle = stringResource(R.string.koil_set_floating_bar_sub),
-                                checked = uiState.floatingBottomBar,
-                                onCheckedChange = viewModel::setFloatingBottomBar,
+                        add(CardItem("floatingStyle") {
+                            val floatingStyles = FloatingBottomBarStyle.entries
+                            val floatingStyleIdx = floatingStyles.indexOf(
+                                FloatingBottomBarStyle.fromStorage(uiState.floatingBottomBarStyle),
+                            ).coerceAtLeast(0)
+                            GlassDropdownPreference(
+                                backdrop = pageBackdrop,
+                                items = floatingStyles.map { styleLabel(it) },
+                                selectedIndex = floatingStyleIdx,
+                                title = stringResource(R.string.koil_set_floating_style),
+                                summary = floatingStyles.getOrElse(floatingStyleIdx) { floatingStyles.first() }
+                                    .let { styleLabel(it) },
+                                onSelectedIndexChange = { index ->
+                                    viewModel.setFloatingBottomBarStyle(floatingStyles[index].storageValue)
+                                },
                             )
                         })
-                        if (uiState.floatingBottomBar) {
-                            add(CardItem("floatingStyle") {
-                                val floatingStyles = FloatingBottomBarStyle.entries
-                                val floatingStyleIdx = floatingStyles.indexOf(
-                                    FloatingBottomBarStyle.fromStorage(uiState.floatingBottomBarStyle),
-                                ).coerceAtLeast(0)
-                                OverlayDropdownPreference(
-                                    items = floatingStyles.map { styleLabel(it) },
-                                    selectedIndex = floatingStyleIdx,
-                                    title = stringResource(R.string.koil_set_floating_style),
-                                    summary = floatingStyles.getOrElse(floatingStyleIdx) { floatingStyles.first() }
-                                        .let { styleLabel(it) },
-                                    onSelectedIndexChange = { index ->
-                                        viewModel.setFloatingBottomBarStyle(floatingStyles[index].storageValue)
+                        add(CardItem("pagerGesture") {
+                            val pagerModes = PagerGestureMode.entries
+                            val pagerModeIdx = pagerModes.indexOf(
+                                PagerGestureMode.fromStorage(uiState.pagerGestureMode),
+                            ).coerceAtLeast(0)
+                            GlassDropdownPreference(
+                                backdrop = pageBackdrop,
+                                items = pagerModes.map { pagerGestureLabel(it) },
+                                selectedIndex = pagerModeIdx,
+                                title = stringResource(R.string.koil_set_pager_gesture),
+                                summary = pagerModes.getOrElse(pagerModeIdx) { pagerModes.first() }
+                                    .let { pagerGestureLabel(it) },
+                                onSelectedIndexChange = { index ->
+                                    viewModel.setPagerGestureMode(pagerModes[index].storageValue)
+                                },
+                            )
+                        })
+                        // 预测性返回：只有 Android 14 起才有返回预览动画，低版本不显示该开关
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            add(CardItem("predictiveBack") {
+                                val activity = LocalActivity.current
+                                SettingSwitchRow(
+                                    title = stringResource(R.string.koil_set_predictive_back),
+                                    subtitle = stringResource(R.string.koil_set_predictive_back_sub),
+                                    checked = uiState.predictiveBack,
+                                    onCheckedChange = { enabled ->
+                                        viewModel.setPredictiveBack(enabled)
+                                        // ApplicationInfo 上的标志只能反射改，且要重建 Activity
+                                        // 才会被窗口系统重新读取（与系统行为一致）
+                                        (activity?.application as? KOiLApplication)?.setPredictiveBack(enabled)
+                                        activity?.recreate()
                                     },
                                 )
                             })
                         }
-                        add(CardItem("barMode") {
-                            val barModes = BottomBarMode.entries
-                            val barModeIdx = barModes.indexOf(
-                                BottomBarMode.fromStorage(uiState.bottomBarMode),
-                            ).coerceAtLeast(0)
-                            OverlayDropdownPreference(
-                                items = barModes.map { modeLabel(it) },
-                                selectedIndex = barModeIdx,
-                                title = stringResource(R.string.koil_set_bar_mode),
-                                summary = barModes.getOrElse(barModeIdx) { barModes.first() }
-                                    .let { modeLabel(it) },
-                                onSelectedIndexChange = { index ->
-                                    viewModel.setBottomBarMode(barModes[index].storageValue)
-                                },
+                        // 页面横移返回：二级页可交互式侧滑关闭（0.9.5 导航层能力，Android 全版本可用）
+                        add(CardItem("swipeDismiss") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_swipe_dismiss),
+                                subtitle = stringResource(R.string.koil_set_swipe_dismiss_sub),
+                                checked = uiState.swipeDismissEnabled,
+                                onCheckedChange = viewModel::setSwipeDismissEnabled,
                             )
                         })
                     }
@@ -401,7 +452,8 @@ fun SettingsScreen(
                             add(CardItem("province") {
                                 val provinces = PROVINCES
                                 val provinceIdx = provinces.indexOf(uiState.defaultProvince).coerceAtLeast(0)
-                                OverlayDropdownPreference(
+                                GlassDropdownPreference(
+                                    backdrop = pageBackdrop,
                                     items = provinces.map { provinceLabel(it) },
                                     selectedIndex = provinceIdx,
                                     title = stringResource(R.string.koil_set_default_province),
@@ -427,7 +479,8 @@ fun SettingsScreen(
                             add(CardItem("grade") {
                                 val oilGrades = GRADES
                                 val gradeIdx = oilGrades.indexOf(uiState.defaultOilGrade).coerceAtLeast(0)
-                                OverlayDropdownPreference(
+                                GlassDropdownPreference(
+                                    backdrop = pageBackdrop,
                                     items = oilGrades.map { "${it}#" },
                                     selectedIndex = gradeIdx,
                                     title = stringResource(R.string.koil_set_default_grade),
@@ -634,10 +687,11 @@ fun SettingsScreen(
             KOiLGlassDialog(
                 show = true,
                 onDismissRequest = { showDataIoDialog.value = false },
-                contentPadding = 16.dp,
-                widthFraction = 0.90f,
+                // 内容零内边距：行节点吃满面板宽度，按下高亮才能横向铺满
+                contentPadding = 0.dp,
             ) {
-                Column {
+                // 只按面板本身的 32dp 圆角裁一刀，让高亮四角跟面板对齐
+                Column(modifier = Modifier.clip(RoundedCornerShape(32.dp))) {
                     // 不设「数据与备份」标题——入口行本身就叫「导出与备份」，
                     // 弹窗再顶一个近义大标题只是重复占高度，直接让选项当首屏内容。
                     // —— CSV 段：人可读、Excel 能开 ——
@@ -697,7 +751,6 @@ fun SettingsScreen(
                 onDismissRequest = { showCrashDialog = false },
                 contentPadding = 16.dp,
                 scrollable = true,
-                widthFraction = 0.90f,
             ) {
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -824,7 +877,11 @@ fun SettingsScreen(
     // 省份选择弹窗
 
     // CSV 导入预览弹窗
-    ImportPreviewDialog(viewModel)
+    // 与数据页同一问题：这层调用在脚手架外面，拿不到脚手架内部的 LocalPageBackdrop，
+    // 需要显式补上页面 backdrop，否则官方玻璃弹窗只能回落成不透明底色
+    CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
+        ImportPreviewDialog(viewModel)
+    }
 }
 
 // ===== 组件 =====
