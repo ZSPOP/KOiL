@@ -65,9 +65,13 @@ data class SettingsUiState(
     val priceDbProvinceCount: Int = 0,
     val importPreview: ImportPreview? = null,
     // 导航栏（悬浮导航体系）
-    val floatingBottomBar: Boolean = true,
     val floatingBottomBarStyle: String = AppSettings.DEFAULT_FLOATING_BAR_STYLE,
-    val bottomBarMode: String = "icon_and_text",
+    val pagerGestureMode: String = "cross_axis",
+    // 外观
+    val blurEnabled: Boolean = true,
+    // 系统交互
+    val predictiveBack: Boolean = true,
+    val swipeDismissEnabled: Boolean = true,
     // 设置异步加载完成标志（DataStore 首值到达前不渲染开关，杜绝"关→开"闪烁）
     val loaded: Boolean = false,
 )
@@ -103,6 +107,16 @@ data class ParsedRecord(
     val conflictArg: Int = 0,
 )
 
+/**
+ * 待预览的 CSV 文件 Uri（进程级）。
+ * 系统文件选择器返回时 Activity 可能被重建，ViewModel 也随之重建，
+ * 解析结果（仅内存态）会丢；把 Uri 留在这里，重建后可按它重新解析，
+ * 预览弹窗与列表就不会凭空消失。进程结束即失效，不落盘、不持久化用户文件引用。
+ */
+internal object PendingCsvImport {
+    var uri: String? = null
+}
+
 class SettingsViewModel(
     private val settings: AppSettings,
     private val recordDao: KOiLRecordDao,
@@ -116,6 +130,8 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     init {
+        // Activity 重建（例如从系统文件选择器返回）后重新解析上次选中的文件，恢复导入预览
+        PendingCsvImport.uri?.let { Uri.parse(it) }?.let { previewCsv(it) }
         // 库行数变化（后台补全国/立即更新写库）时自动刷新缺口统计，
         // 解决"重装后自动补灌完成但设置页缺口停留旧快照"的问题；
         // loadPriceDbStatus 只读不写库，无循环风险
@@ -524,9 +540,11 @@ class SettingsViewModel(
         settings.locationEnabled,
         settings.priceDbAutoUpdate,
         settings.deviationThreshold,
-        settings.floatingBottomBar,
         settings.floatingBottomBarStyle,
-        settings.bottomBarMode,
+        settings.pagerGestureMode,
+        settings.blurEnabled,
+        settings.predictiveBack,
+        settings.swipeDismissEnabled,
     ) { args ->
         SettingsUiState(
             themeMode = args[0] as AppSettings.ThemeMode,
@@ -541,9 +559,11 @@ class SettingsViewModel(
             locationEnabled = args[9] as Boolean,
             priceDbAutoUpdate = args[10] as Boolean,
             deviationThreshold = args[11] as Double,
-            floatingBottomBar = args[12] as Boolean,
-            floatingBottomBarStyle = args[13] as String,
-            bottomBarMode = args[14] as String,
+            floatingBottomBarStyle = args[12] as String,
+            pagerGestureMode = args[13] as String,
+            blurEnabled = args[14] as Boolean,
+            predictiveBack = args[15] as Boolean,
+            swipeDismissEnabled = args[16] as Boolean,
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
@@ -554,14 +574,20 @@ class SettingsViewModel(
     fun setLanguage(lang: AppSettings.Language) =
         viewModelScope.launch { settings.setLanguage(lang) }
 
-    fun setFloatingBottomBar(on: Boolean) =
-        viewModelScope.launch { settings.setFloatingBottomBar(on) }
-
     fun setFloatingBottomBarStyle(style: String) =
         viewModelScope.launch { settings.setFloatingBottomBarStyle(style) }
 
-    fun setBottomBarMode(mode: String) =
-        viewModelScope.launch { settings.setBottomBarMode(mode) }
+    fun setPagerGestureMode(mode: String) =
+        viewModelScope.launch { settings.setPagerGestureMode(mode) }
+
+    fun setBlurEnabled(enabled: Boolean) =
+        viewModelScope.launch { settings.setBlurEnabled(enabled) }
+
+    fun setSwipeDismissEnabled(enabled: Boolean) =
+        viewModelScope.launch { settings.setSwipeDismissEnabled(enabled) }
+
+    fun setPredictiveBack(enabled: Boolean) =
+        viewModelScope.launch { settings.setPredictiveBack(enabled) }
 
     fun setDefaultProvince(province: String) =
         viewModelScope.launch { settings.setDefaultProvince(province) }
@@ -719,11 +745,16 @@ class SettingsViewModel(
      * ③复合键用 Double 精确比较（不用字符串拼接）；④解析/判定切 Dispatchers.Default，大文件不卡主线程。
      */
     fun previewCsv(uri: Uri) {
+        PendingCsvImport.uri = uri.toString()
         viewModelScope.launch {
             try {
                 val content = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.use { decodeTextSmart(it.readBytes()) }
-                } ?: run { _exportMessage.value = ExportNotice("cannot_read"); return@launch }
+                } ?: run {
+                    PendingCsvImport.uri = null
+                    _exportMessage.value = ExportNotice("cannot_read")
+                    return@launch
+                }
 
                 // 整文件状态机切记录：引号内的换行不切行。csvEscape 会给含 \n/\r 的字段加引号，
                 // 若先 lines() 再逐行解析，一条记录会被切成两条残缺行（多出来的进 format_error）。
@@ -873,12 +904,16 @@ class SettingsViewModel(
                 recordStore.insertAll(entities)
             }
             _importPreview.value = null
+            PendingCsvImport.uri = null
             val skipped = preview.duplicates.size + preview.mileageConflicts.size + preview.errors.size
             _exportMessage.value = ExportNotice("import_done", listOf(imported, skipped))
         }
     }
 
-    fun dismissImportPreview() { _importPreview.value = null }
+    fun dismissImportPreview() {
+        _importPreview.value = null
+        PendingCsvImport.uri = null
+    }
 
     /**
      * 从完整备份 JSON 恢复数据（§7.10 反向操作）。

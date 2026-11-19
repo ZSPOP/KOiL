@@ -74,11 +74,10 @@
     <string name="koil_ov_title">数据总览</string>
     <string name="koil_range_all">全部</string>
     <string name="koil_range_year">今年</string>
-    <string name="koil_range_6m">近6个月</string>
-    <string name="koil_range_3m">近3个月</string>
+    <string name="koil_range_6m">近6月</string>
+    <string name="koil_range_3m">近3月</string>
     <string name="koil_ov_history">加油历史</string>
     <string name="koil_ov_empty_title">暂无加油记录</string>
-    <string name="koil_ov_empty_hint">前往「录入」页添加第一条加油记录</string>
     <string name="koil_ov_empty_action">去录入</string>
     <string name="koil_ov_backfill">补录</string>
     <string name="koil_ov_month_count">%1$d条</string>
@@ -171,14 +170,16 @@
     <string name="koil_set_appearance">外观设置</string>
     <string name="koil_set_language">语言设置</string>
     <string name="koil_set_section_nav">导航与显示</string>
-    <string name="koil_set_floating_bar">悬浮导航条</string>
-    <string name="koil_set_floating_bar_sub">底部导航悬浮于内容之上</string>
     <string name="koil_set_floating_style">悬浮样式</string>
-    <string name="koil_set_bar_mode">底栏模式</string>
-    <string name="koil_style_miuix">Miuix 悬浮</string>
-    <string name="koil_style_ios">iOS 液态玻璃</string>
-    <string name="koil_mode_icon_text">图标 + 文字</string>
-    <string name="koil_mode_icon_only">仅图标</string>
+    <string name="koil_set_blur">模糊效果</string>
+    <string name="koil_set_blur_sub">启用表面模糊效果</string>
+    <string name="koil_set_pager_gesture">页面切换手势</string>
+    <string name="koil_pager_gesture_cross_axis">跨轴拦截</string>
+    <string name="koil_pager_gesture_native">预设手势</string>
+    <string name="koil_set_predictive_back">预测返回手势</string>
+    <string name="koil_set_predictive_back_sub">启用预测性返回动画效果</string>
+    <string name="koil_style_miuix">玻璃</string>
+    <string name="koil_style_ios">iOS风格（液态玻璃）</string>
     <string name="koil_set_section_entry">录入与计算</string>
     <string name="koil_set_default_province">默认省份</string>
     <string name="koil_set_default_province_sum">油价查询与定位 · %1$s</string>
@@ -514,4 +515,6 @@
     <!-- 密码可见性切换按钮的读屏标签 -->
     <string name="koil_a11y_show_secret">显示密码</string>
     <string name="koil_a11y_hide_secret">隐藏密码</string>
+    <string name="koil_set_swipe_dismiss">横移返回手势</string>
+    <string name="koil_set_swipe_dismiss_sub">在二级页从屏幕边缘侧滑即可返回上一页</string>
 </resources>

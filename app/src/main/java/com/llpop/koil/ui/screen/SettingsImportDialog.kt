@@ -28,10 +28,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
-import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.theme.KOiLColors
 import top.yukonga.miuix.kmp.basic.Button

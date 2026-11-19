@@ -35,12 +35,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import com.llpop.koil.domain.logic.NumberFormat
@@ -56,6 +53,12 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
+import com.llpop.koil.ui.component.LocalPageBackdrop
+import top.yukonga.miuix.kmp.glass.GlassPopupItem
+import com.llpop.koil.ui.component.GlassPopupOverlay
+import com.llpop.koil.ui.component.LocalPageBackdrop
 
 
 
@@ -73,25 +76,13 @@ internal fun EditRecordDialog(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    com.llpop.koil.ui.component.KOiLGlassDialog(
+    com.llpop.koil.ui.component.KOiLFormSheet(
         show = true,
         onDismissRequest = onDismiss,
-        contentPadding = 0.dp,
-        scrollable = true,
-        maxHeight = with(LocalDensity.current) {
-            (LocalWindowInfo.current.containerSize.height * 0.85f).toDp()
-        },
-        widthFraction = 0.90f,
+        title = stringResource(R.string.koil_ov_edit_title),
     ) {
         Column {
-            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
-            Text(
-                text = stringResource(R.string.koil_ov_edit_title),
-                fontSize = KOiLType.Headline,
-                fontWeight = FontWeight.Bold,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            Spacer(Modifier.height(16.dp))
+            Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {
             // 加油省份（与设置页同款下拉列表）
             ProvinceSelectField(province = uiState.editProvince, onProvinceChange = onProvinceChange)
             Spacer(Modifier.height(14.dp))
@@ -351,10 +342,14 @@ internal fun MileageRangeHint(rangeMin: Double?, rangeMax: Double?) {
 }
 
 /** 加油省份选择字段（锚定下拉列表：紧贴字段下方弹出、空间不足自动上翻、底色与首页下拉一致，联动参考价/应付/偏差预检） */
+/** 加油省份选择字段（官方玻璃下拉：由 Scaffold 根级托管，玻璃面板 + 页面 backdrop 采样） */
+/** 加油省份选择字段（灰底圆角框触发 + 官方玻璃下拉，面板挂在根 Scaffold 全屏层） */
 @Composable
 internal fun ProvinceSelectField(province: String, onProvinceChange: (String) -> Unit) {
     val showPicker = remember { mutableStateOf(false) }
-    val anchorBounds = remember { mutableStateOf<androidx.compose.ui.unit.IntRect?>(null) }
+    val anchorBounds = remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    // 值文本作为锚点：面板从值处展开、值在展开期间淡出（与设置页下拉同款）
+    val popupAnchor = rememberGlassPopupAnchor()
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -377,10 +372,7 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
                 .heightIn(min = 44.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MiuixTheme.colorScheme.secondaryContainer)
-                .onGloballyPositioned {
-                    val b = it.boundsInWindow()
-                    anchorBounds.value = androidx.compose.ui.unit.IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
-                }
+                .onGloballyPositioned { anchorBounds.value = it.boundsInWindow() }
                 .clickable { showPicker.value = true }
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart,
@@ -394,36 +386,36 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
                     fontSize = KOiLType.BodyLarge,
                     fontWeight = if (province.isBlank()) FontWeight.Normal else FontWeight.Bold,
                     color = if (province.isBlank()) MiuixTheme.colorScheme.onBackgroundVariant else MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                 )
-                DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                Spacer(Modifier.weight(1f))
+                // 锚点只挂右侧箭头：值留在左边，面板按箭头这一组的右边缘对齐字段右边
+                Row(
+                    modifier = Modifier.glassPopupAnchorValue(popupAnchor),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                }
             }
         }
     }
-    if (showPicker.value) {
-        // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位）
-        com.llpop.koil.ui.component.AnchoredPopupAnchor(
-            show = true,
-            id = "ov-province-picker",
-            anchorBounds = anchorBounds.value,
-            maxHeight = 320.dp,
-            onDismiss = { showPicker.value = false },
-        ) {
-            com.llpop.koil.ui.component.AnchoredDropdownColumn {
-                PROVINCES.forEachIndexed { index, p ->
-                    com.llpop.koil.ui.component.AnchoredDropdownItemRow(
-                        text = provinceLabel(p),
-                        selected = p == province,
-                        isFirst = index == 0,
-                        isLast = index == PROVINCES.lastIndex,
-                        onClick = {
-                            onProvinceChange(p)
-                            showPicker.value = false
-                        },
-                    )
-                }
-            }
+    GlassPopupOverlay(
+        show = showPicker.value,
+        anchorBounds = anchorBounds.value,
+        anchor = popupAnchor,
+        backdrop = LocalPageBackdrop.current,
+        onDismissRequest = { showPicker.value = false },
+        maxHeight = 360.dp,
+    ) {
+        PROVINCES.forEach { p ->
+            GlassPopupItem(
+                text = provinceLabel(p),
+                selected = p == province,
+                onClick = {
+                    onProvinceChange(p)
+                    showPicker.value = false
+                },
+            )
         }
     }
 }
@@ -605,6 +597,8 @@ internal fun EditField(
 }
 
 /** 油号选择 + 当日参考单价（对齐首页录入 GradeField：显示 `92# · ¥X.XX/L`，点击弹锚定下拉） */
+/** 油号选择 + 当日参考单价（官方玻璃下拉，价格走 summary 行） */
+/** 油号选择 + 当日参考单价（灰底圆角框触发 + 官方玻璃下拉） */
 @Composable
 internal fun GradePriceSelect(
     grade: String,
@@ -614,7 +608,8 @@ internal fun GradePriceSelect(
 ) {
     val gradeLabels = listOf("92", "95", "98", "0")
     val showMenu = remember { mutableStateOf(false) }
-    val anchorBounds = remember { mutableStateOf<androidx.compose.ui.unit.IntRect?>(null) }
+    val anchorBounds = remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
+    val popupAnchor = rememberGlassPopupAnchor()
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -633,10 +628,7 @@ internal fun GradePriceSelect(
                 .heightIn(min = 52.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(MiuixTheme.colorScheme.secondaryContainer)
-                .onGloballyPositioned {
-                    val b = it.boundsInWindow()
-                    anchorBounds.value = androidx.compose.ui.unit.IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
-                }
+                .onGloballyPositioned { anchorBounds.value = it.boundsInWindow() }
                 .clickable { showMenu.value = true }
                 .padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart,
@@ -650,38 +642,38 @@ internal fun GradePriceSelect(
                     fontSize = KOiLType.BodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
-                    modifier = Modifier.weight(1f),
                     maxLines = 1,
                 )
-                DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                Spacer(Modifier.weight(1f))
+                // 锚点只挂右侧箭头：值留在左边，面板右边缘对齐字段右边
+                Row(
+                    modifier = Modifier.glassPopupAnchorValue(popupAnchor),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                }
             }
         }
     }
-    if (showMenu.value) {
-        // 弹窗根级锚定下拉：注册到 KOiLGlassDialog 的 overlay（窗口坐标定位，与 miuix 同款视觉）
-        com.llpop.koil.ui.component.AnchoredPopupAnchor(
-            show = true,
-            id = "ov-grade-picker",
-            anchorBounds = anchorBounds.value,
-            maxHeight = 240.dp,
-            onDismiss = { showMenu.value = false },
-        ) {
-            com.llpop.koil.ui.component.AnchoredDropdownColumn {
-                gradeLabels.forEachIndexed { index, g ->
-                    val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
-                    else stringResource(R.string.koil_add_grade_gasoline, g)
-                    com.llpop.koil.ui.component.AnchoredDropdownItemRow(
-                        text = label,
-                        selected = g == grade,
-                        isFirst = index == 0,
-                        isLast = index == gradeLabels.lastIndex,
-                        onClick = {
-                            onGradeSelected(g)
-                            showMenu.value = false
-                        },
-                    )
-                }
-            }
+    GlassPopupOverlay(
+        show = showMenu.value,
+        anchorBounds = anchorBounds.value,
+        anchor = popupAnchor,
+        backdrop = LocalPageBackdrop.current,
+        onDismissRequest = { showMenu.value = false },
+        maxHeight = 240.dp,
+    ) {
+        gradeLabels.forEach { g ->
+            val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
+            else stringResource(R.string.koil_add_grade_gasoline, g)
+            GlassPopupItem(
+                text = label,
+                selected = g == grade,
+                onClick = {
+                    onGradeSelected(g)
+                    showMenu.value = false
+                },
+            )
         }
     }
 }

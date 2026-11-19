@@ -37,17 +37,25 @@ class MainViewModel(
     val language: StateFlow<AppSettings.Language> = settings.language
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings.Language.SYSTEM)
 
-    /** 悬浮导航条开关 */
-    val floatingBottomBar: StateFlow<Boolean> = settings.floatingBottomBar
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
-
     /** 悬浮样式：miuix / ios_like */
     val floatingBottomBarStyle: StateFlow<String> = settings.floatingBottomBarStyle
         .stateIn(viewModelScope, SharingStarted.Eagerly, AppSettings.DEFAULT_FLOATING_BAR_STYLE)
 
-    /** 底栏模式：icon_and_text / icon_only */
-    val bottomBarMode: StateFlow<String> = settings.bottomBarMode
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "icon_and_text")
+    /** 页面切换手势：cross_axis / native */
+    val pagerGestureMode: StateFlow<String> = settings.pagerGestureMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "cross_axis")
+
+    /** 模糊效果开关 */
+    val blurEnabled: StateFlow<Boolean> = settings.blurEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /** 顶栏模糊形态：gaussian / progressive */
+    val topBarBlurStyle: StateFlow<String> = settings.topBarBlurStyle
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "gaussian")
+
+    /** 页面横移返回开关 */
+    val swipeDismissEnabled: StateFlow<Boolean> = settings.swipeDismissEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     fun setThemeMode(mode: AppSettings.ThemeMode) {
         viewModelScope.launch { settings.setThemeMode(mode) }
@@ -57,15 +65,15 @@ class MainViewModel(
         viewModelScope.launch { settings.setLanguage(lang) }
     }
 
-    fun setFloatingBottomBar(on: Boolean) {
-        viewModelScope.launch { settings.setFloatingBottomBar(on) }
-    }
-
     fun setFloatingBottomBarStyle(style: String) {
         viewModelScope.launch { settings.setFloatingBottomBarStyle(style) }
     }
 
-    fun setBottomBarMode(mode: String) {
-        viewModelScope.launch { settings.setBottomBarMode(mode) }
+    fun setPagerGestureMode(mode: String) {
+        viewModelScope.launch { settings.setPagerGestureMode(mode) }
+    }
+
+    fun setBlurEnabled(enabled: Boolean) {
+        viewModelScope.launch { settings.setBlurEnabled(enabled) }
     }
 }

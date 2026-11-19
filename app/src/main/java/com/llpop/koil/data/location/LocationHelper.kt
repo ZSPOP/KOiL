@@ -10,7 +10,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.llpop.koil.data.oil.Provinces
 import com.llpop.koil.util.AppClock
-import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import kotlinx.coroutines.Dispatchers

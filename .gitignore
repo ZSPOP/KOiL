@@ -12,3 +12,6 @@ cd2026.json
 # Python 脚本运行产生的字节码缓存
 __pycache__/
 *.pyc
+
+# 本地构建日志/临时目录
+build-tmp/

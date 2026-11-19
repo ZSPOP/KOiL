@@ -31,9 +31,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 
@@ -52,6 +53,8 @@ fun KOiLDateField(
 ) {
     var showPicker by remember { mutableStateOf(false) }
     var fieldBounds by remember { mutableStateOf<IntRect?>(null) }
+    // 日期值文本作为锚点：日历面板从值处展开、值在展开期间淡出（与省份/油号同一条路径）
+    val popupAnchor = rememberGlassPopupAnchor()
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -93,10 +96,15 @@ fun KOiLDateField(
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
-                    modifier = Modifier.weight(1f),
+                    // 锚点直接挂在日期值上：面板左边缘=值左缘、纵向=值顶
+                    modifier = Modifier
+                        .then(if (onDateSelected != null) Modifier.weight(1f) else Modifier)
+                        .glassPopupAnchorValue(popupAnchor),
                 )
                 if (onDateSelected != null) {
-                    DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DropdownArrowEndAction(actionColor = MiuixTheme.colorScheme.onBackgroundVariant)
+                    }
                 }
             }
         }
@@ -111,6 +119,7 @@ fun KOiLDateField(
                 showPicker = false
             },
             anchorBounds = fieldBounds,
+            anchor = popupAnchor,
         )
     }
 }

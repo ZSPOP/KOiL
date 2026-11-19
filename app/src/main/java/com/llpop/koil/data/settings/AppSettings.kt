@@ -147,9 +147,12 @@ class AppSettings(private val context: Context) {
         private val KEY_UPDATE_READY_TAG = stringPreferencesKey("KOiL-update-ready-tag")
 
         // ---- 导航栏（悬浮导航 / 样式 / 模式）----
-        private val KEY_FLOATING_BOTTOM_BAR = booleanPreferencesKey("KOiL-floating-bottom-bar")
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
-        private val KEY_BOTTOM_BAR_MODE = stringPreferencesKey("KOiL-bottom-bar-mode")
+        private val KEY_BLUR_ENABLED = booleanPreferencesKey("KOiL-blur-enabled")
+        private val KEY_TOP_BAR_BLUR_STYLE = stringPreferencesKey("KOiL-top-bar-blur-style")
+        private val KEY_PAGER_GESTURE_MODE = stringPreferencesKey("KOiL-pager-gesture-mode")
+        private val KEY_PREDICTIVE_BACK = booleanPreferencesKey("KOiL-predictive-back")
+        private val KEY_SWIPE_DISMISS = booleanPreferencesKey("KOiL-swipe-dismiss")
 
         const val DEFAULT_TANK_CAPACITY = 65f
         const val DEFAULT_ABNORMAL_THRESHOLD = 20.0   // 默认异常油耗阈值 20%（用户要求）
@@ -762,14 +765,7 @@ class AppSettings(private val context: Context) {
         }
     }
 
-    // ---- 底部导航条（悬浮导航体系）----
-
-    /** 悬浮导航条开关（默认开启，按用户要求采用悬浮导航） */
-    val floatingBottomBar: Flow<Boolean> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_FLOATING_BOTTOM_BAR] ?: true }
-    suspend fun setFloatingBottomBar(on: Boolean) {
-        context.KOiLDataStore.edit { it[KEY_FLOATING_BOTTOM_BAR] = on }
-    }
+    // ---- 底部导航条（固定悬浮，仅样式可切）----
 
     /** 悬浮样式：miuix（Miuix 胶囊悬浮）/ ios_like（iOS 液态玻璃） */
     val floatingBottomBarStyle: Flow<String> =
@@ -780,10 +776,47 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.edit { it[KEY_FLOATING_BOTTOM_BAR_STYLE] = style }
     }
 
-    /** 底栏模式：icon_and_text（图标+文字）/ icon_only（仅图标） */
-    val bottomBarMode: Flow<String> =
-        context.KOiLDataStore.data.distinctValue { it[KEY_BOTTOM_BAR_MODE] ?: "icon_and_text" }
-    suspend fun setBottomBarMode(mode: String) {
-        context.KOiLDataStore.edit { it[KEY_BOTTOM_BAR_MODE] = mode }
+    /**
+     * 模糊效果开关：关闭时所有 backdrop 传 null，玻璃/模糊组件回落为不透明底色。
+     * 只影响观感，不影响功能；运行时着色器不支持的机型本就没有模糊。
+     */
+    val blurEnabled: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_BLUR_ENABLED] ?: true }
+    suspend fun setBlurEnabled(enabled: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_BLUR_ENABLED] = enabled }
+    }
+
+    /**
+     * 顶栏模糊形态：gaussian（均匀高斯）/ progressive（顶部渐进）。
+     * 默认高斯；值走 storageValue，与枚举一一对应，读侧用 fromStorage 兜底。
+     */
+    val topBarBlurStyle: Flow<String> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_TOP_BAR_BLUR_STYLE] ?: "gaussian" }
+    suspend fun setTopBarBlurStyle(style: String) {
+        context.KOiLDataStore.edit { it[KEY_TOP_BAR_BLUR_STYLE] = style }
+    }
+
+    /**
+     * 页面切换手势：cross_axis（跨轴拦截，横向翻页前先判定主轴）/ native（原生 Pager 手势）。
+     * 取值与 miuix PagerInterceptionMode 一一对应，见 PagerGestureMode。
+     */
+    val pagerGestureMode: Flow<String> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_PAGER_GESTURE_MODE] ?: "cross_axis" }
+    suspend fun setPagerGestureMode(mode: String) {
+        context.KOiLDataStore.edit { it[KEY_PAGER_GESTURE_MODE] = mode }
+    }
+
+    /** 预测性返回（Android 14+ 的返回预览动画）开关，默认跟随系统开启 */
+    val predictiveBack: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_PREDICTIVE_BACK] ?: true }
+    suspend fun setPredictiveBack(enabled: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_PREDICTIVE_BACK] = enabled }
+    }
+
+    /** 页面横移返回（交互式侧滑关闭二级页）开关，默认开启 */
+    val swipeDismissEnabled: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_SWIPE_DISMISS] ?: true }
+    suspend fun setSwipeDismissEnabled(enabled: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_SWIPE_DISMISS] = enabled }
     }
 }

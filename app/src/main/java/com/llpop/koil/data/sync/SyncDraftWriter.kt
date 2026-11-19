@@ -1,7 +1,6 @@
 package com.llpop.koil.data.sync
 
 import com.llpop.koil.data.settings.AppSettings
-import kotlinx.coroutines.flow.first
 
 /**
  * 配置草稿落盘：**只写用户真实输入**，内置默认值一律不落盘。

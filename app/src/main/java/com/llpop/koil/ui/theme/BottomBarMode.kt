@@ -17,17 +17,16 @@ enum class FloatingBottomBarStyle(val storageValue: String) {
 }
 
 /**
- * 底栏显示模式。
+ * 页面切换手势。取值与 miuix PagerInterceptionMode 一一对应：
+ * - CrossAxis → PagerInterceptionMode.CrossAxis（跨轴拦截，横向翻页前先判主轴）
+ * - Native → PagerInterceptionMode.Native（原生 Pager 手势）
  */
-enum class BottomBarMode(val storageValue: String) {
-    /** 图标 + 文字 */
-    IconAndText("icon_and_text"),
-
-    /** 仅图标 */
-    IconOnly("icon_only");
+enum class PagerGestureMode(val storageValue: String) {
+    CrossAxis("cross_axis"),
+    Native("native");
 
     companion object {
-        fun fromStorage(value: String): BottomBarMode =
-            entries.firstOrNull { it.storageValue == value } ?: IconAndText
+        fun fromStorage(value: String): PagerGestureMode =
+            entries.firstOrNull { it.storageValue == value } ?: CrossAxis
     }
 }
