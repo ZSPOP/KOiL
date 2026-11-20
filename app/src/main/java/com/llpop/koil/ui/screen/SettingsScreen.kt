@@ -247,14 +247,15 @@ fun SettingsScreen(
         ) {
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
 
+            // ===== 外观：主题 / 语言 / 悬浮样式 / 模糊 =====
             if (uiState.loaded) {
-                item { SmallTitle(text = stringResource(R.string.koil_set_section_general)) }
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_appearance)) }
             }
             groupedCardItems(
-                keyPrefix = "general",
+                keyPrefix = "settings_appearance",
                 outerBottomPadding = 12.dp,
                 items = buildList {
-                    // 整卡等首值到达再渲染：主题/语言/模糊/通知读的都是首帧默认值，逐行补守卫会让整行
+                    // 整卡等首值到达再渲染：主题/语言/悬浮样式/模糊读的都是首帧默认值，逐行补守卫会让整行
                     // 先消失再插入，跳得比翻一下更显眼；整块出现只跳一次，也不会「默认值 → 真实值」翻转。
                     if (uiState.loaded) {
                         add(CardItem("theme") {
@@ -281,73 +282,7 @@ fun SettingsScreen(
                                 onSelectedIndexChange = { index -> viewModel.setLanguage(languages[index]) },
                             )
                         })
-                        // 等 DataStore 首值到达再渲染：否则冷启动会先显示默认「开」，
-                        // 真实值（关）到达后再翻回去，出现「关→开→关」的闪烁。
-                        add(CardItem("blur") {
-                            SettingSwitchRow(
-                                title = stringResource(R.string.koil_set_blur),
-                                subtitle = stringResource(R.string.koil_set_blur_sub),
-                                checked = uiState.blurEnabled,
-                                onCheckedChange = viewModel::setBlurEnabled,
-                            )
-                        })
-                        // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
-                        // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
-                        // 与上面 blur 同一病因：notifyEnabled 默认 true，存量关过的用户冷启动会「开→关」闪
-                        add(CardItem("notify") {
-                            SettingSwitchRow(
-                                title = stringResource(R.string.koil_set_notify),
-                                subtitle = when (channelIssue) {
-                                    UpdateChannelIssue.Disabled ->
-                                        stringResource(R.string.koil_set_notify_sub_channel_off)
-                                    UpdateChannelIssue.Quiet ->
-                                        stringResource(R.string.koil_set_notify_sub_channel_quiet)
-                                    UpdateChannelIssue.None ->
-                                        stringResource(R.string.koil_set_notify_sub)
-                                },
-                                checked = uiState.notifyEnabled && pushPermissionGranted,
-                                onCheckedChange = { on ->
-                                    if (on) {
-                                        if (pushPermissionGranted) {
-                                            viewModel.setNotifyEnabled(true)
-                                        } else {
-                                            // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
-                                            // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
-                                            pendingOpenPush = true
-                                            openNotificationSettings(context)
-                                        }
-                                    } else {
-                                        viewModel.setNotifyEnabled(false)
-                                    }
-                                },
-                            )
-                        })
-                        if (!pushPermissionGranted) {
-                            add(CardItem("notifyDenied") {
-                                Text(
-                                    text = stringResource(R.string.koil_set_notify_denied),
-                                    fontSize = KOiLType.CaptionLarge,
-                                    lineHeight = 14.sp,
-                                    color = KOiLColors.Warning,
-                                    modifier = Modifier
-                                        .padding(horizontal = 16.dp)
-                                        .offset(y = (-3).dp)
-                                        .clickable { openNotificationSettings(context) },
-                                )
-                            })
-                        }
-                    }
-                },
-            )
-            // ===== 导航栏（SmallTitle + 分段卡）=====
-            if (uiState.loaded) {
-                item { SmallTitle(text = stringResource(R.string.koil_set_section_nav)) }
-            }
-            groupedCardItems(
-                keyPrefix = "settings_nav",
-                outerBottomPadding = 12.dp,
-                items = buildList {
-                    if (uiState.loaded) {
+                        // 悬浮样式：底栏形态属于外观，归到本段（原先在「导航」段，与三个手势混在一起）
                         add(CardItem("floatingStyle") {
                             val floatingStyles = FloatingBottomBarStyle.entries
                             val floatingStyleIdx = floatingStyles.indexOf(
@@ -365,60 +300,26 @@ fun SettingsScreen(
                                 },
                             )
                         })
-                        add(CardItem("pagerGesture") {
-                            val pagerModes = PagerGestureMode.entries
-                            val pagerModeIdx = pagerModes.indexOf(
-                                PagerGestureMode.fromStorage(uiState.pagerGestureMode),
-                            ).coerceAtLeast(0)
-                            GlassDropdownPreference(
-                                backdrop = pageBackdrop,
-                                items = pagerModes.map { pagerGestureLabel(it) },
-                                selectedIndex = pagerModeIdx,
-                                title = stringResource(R.string.koil_set_pager_gesture),
-                                summary = pagerModes.getOrElse(pagerModeIdx) { pagerModes.first() }
-                                    .let { pagerGestureLabel(it) },
-                                onSelectedIndexChange = { index ->
-                                    viewModel.setPagerGestureMode(pagerModes[index].storageValue)
-                                },
-                            )
-                        })
-                        // 预测性返回：只有 Android 14 起才有返回预览动画，低版本不显示该开关
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                            add(CardItem("predictiveBack") {
-                                val activity = LocalActivity.current
-                                SettingSwitchRow(
-                                    title = stringResource(R.string.koil_set_predictive_back),
-                                    subtitle = stringResource(R.string.koil_set_predictive_back_sub),
-                                    checked = uiState.predictiveBack,
-                                    onCheckedChange = { enabled ->
-                                        viewModel.setPredictiveBack(enabled)
-                                        // ApplicationInfo 上的标志只能反射改，且要重建 Activity
-                                        // 才会被窗口系统重新读取（与系统行为一致）
-                                        (activity?.application as? KOiLApplication)?.setPredictiveBack(enabled)
-                                        activity?.recreate()
-                                    },
-                                )
-                            })
-                        }
-                        // 页面横移返回：二级页可交互式侧滑关闭（0.9.5 导航层能力，Android 全版本可用）
-                        add(CardItem("swipeDismiss") {
+                        // 等 DataStore 首值到达再渲染：否则冷启动会先显示默认「开」，
+                        // 真实值（关）到达后再翻回去，出现「关→开→关」的闪烁。
+                        add(CardItem("blur") {
                             SettingSwitchRow(
-                                title = stringResource(R.string.koil_set_swipe_dismiss),
-                                subtitle = stringResource(R.string.koil_set_swipe_dismiss_sub),
-                                checked = uiState.swipeDismissEnabled,
-                                onCheckedChange = viewModel::setSwipeDismissEnabled,
+                                title = stringResource(R.string.koil_set_blur),
+                                subtitle = stringResource(R.string.koil_set_blur_sub),
+                                checked = uiState.blurEnabled,
+                                onCheckedChange = viewModel::setBlurEnabled,
                             )
                         })
                     }
                 },
             )
 
-            // ===== 录入（SmallTitle + 分段卡）=====
+            // ===== 偏好：定位 / 油号 =====
             if (uiState.loaded) {
-                item { SmallTitle(text = stringResource(R.string.koil_set_section_entry)) }
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_pref)) }
             }
             groupedCardItems(
-                keyPrefix = "settings_entry",
+                keyPrefix = "settings_pref",
                 outerBottomPadding = 12.dp,
                 items = buildList {
                     if (uiState.loaded) {
@@ -507,6 +408,144 @@ fun SettingsScreen(
                                 )
                             })
                         }
+                    }
+                },
+            )
+
+            // ===== 交互：三个手势 =====
+            if (uiState.loaded) {
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_interaction)) }
+            }
+            groupedCardItems(
+                keyPrefix = "settings_interaction",
+                outerBottomPadding = 12.dp,
+                items = buildList {
+                    if (uiState.loaded) {
+                        add(CardItem("pagerGesture") {
+                            val pagerModes = PagerGestureMode.entries
+                            val pagerModeIdx = pagerModes.indexOf(
+                                PagerGestureMode.fromStorage(uiState.pagerGestureMode),
+                            ).coerceAtLeast(0)
+                            GlassDropdownPreference(
+                                backdrop = pageBackdrop,
+                                items = pagerModes.map { pagerGestureLabel(it) },
+                                selectedIndex = pagerModeIdx,
+                                title = stringResource(R.string.koil_set_pager_gesture),
+                                summary = pagerModes.getOrElse(pagerModeIdx) { pagerModes.first() }
+                                    .let { pagerGestureLabel(it) },
+                                onSelectedIndexChange = { index ->
+                                    viewModel.setPagerGestureMode(pagerModes[index].storageValue)
+                                },
+                            )
+                        })
+                        // 预测性返回：只有 Android 14 起才有返回预览动画，低版本不显示该开关
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                            add(CardItem("predictiveBack") {
+                                val activity = LocalActivity.current
+                                SettingSwitchRow(
+                                    title = stringResource(R.string.koil_set_predictive_back),
+                                    subtitle = stringResource(R.string.koil_set_predictive_back_sub),
+                                    checked = uiState.predictiveBack,
+                                    onCheckedChange = { enabled ->
+                                        viewModel.setPredictiveBack(enabled)
+                                        // ApplicationInfo 上的标志只能反射改，且要重建 Activity
+                                        // 才会被窗口系统重新读取（与系统行为一致）
+                                        (activity?.application as? KOiLApplication)?.setPredictiveBack(enabled)
+                                        activity?.recreate()
+                                    },
+                                )
+                            })
+                        }
+                        // 页面横移返回：二级页可交互式侧滑关闭（0.9.5 导航层能力，Android 全版本可用）
+                        add(CardItem("swipeDismiss") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_swipe_dismiss),
+                                subtitle = stringResource(R.string.koil_set_swipe_dismiss_sub),
+                                checked = uiState.swipeDismissEnabled,
+                                onCheckedChange = viewModel::setSwipeDismissEnabled,
+                            )
+                        })
+                    }
+                },
+            )
+
+            // ===== 消息推送：一处管全应用（总开关 + 调价提醒）=====
+            if (uiState.loaded) {
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_notify)) }
+            }
+            groupedCardItems(
+                keyPrefix = "settings_notify",
+                outerBottomPadding = 12.dp,
+                items = buildList {
+                    if (uiState.loaded) {
+                        // 「系统通知」总开关：调价提醒与新版本提醒共用系统通知权限，
+                        // 一条开关管两端（渠道各自独立，用户仍可在系统设置里单独关掉某个渠道）
+                        // 与 blur 同一病因：notifyEnabled 默认 true，存量关过的用户冷启动会「开→关」闪
+                        add(CardItem("notify") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_notify),
+                                subtitle = when (channelIssue) {
+                                    UpdateChannelIssue.Disabled ->
+                                        stringResource(R.string.koil_set_notify_sub_channel_off)
+                                    UpdateChannelIssue.Quiet ->
+                                        stringResource(R.string.koil_set_notify_sub_channel_quiet)
+                                    UpdateChannelIssue.None ->
+                                        stringResource(R.string.koil_set_notify_sub)
+                                },
+                                checked = uiState.notifyEnabled && pushPermissionGranted,
+                                onCheckedChange = { on ->
+                                    if (on) {
+                                        if (pushPermissionGranted) {
+                                            viewModel.setNotifyEnabled(true)
+                                        } else {
+                                            // HyperOS 通知权限拒绝后运行时请求不弹框（静默拒绝）→ 直接跳系统通知设置，
+                                            // 用户开启后返回 App（ON_RESUME）自动补开开关；跳转用 NEW_TASK + fallback 加固
+                                            pendingOpenPush = true
+                                            openNotificationSettings(context)
+                                        }
+                                    } else {
+                                        viewModel.setNotifyEnabled(false)
+                                    }
+                                },
+                            )
+                        })
+                        if (!pushPermissionGranted) {
+                            add(CardItem("notifyDenied") {
+                                Text(
+                                    text = stringResource(R.string.koil_set_notify_denied),
+                                    fontSize = KOiLType.CaptionLarge,
+                                    lineHeight = 14.sp,
+                                    color = KOiLColors.Warning,
+                                    modifier = Modifier
+                                        .padding(horizontal = 16.dp)
+                                        .offset(y = (-3).dp)
+                                        .clickable { openNotificationSettings(context) },
+                                )
+                            })
+                        }
+                        // 调价提醒原先挂在「油价数据」段，与总开关隔了两段——用户要关提醒得先找对段，
+                        // 挪到总开关下面，一格之内就能看到「总开关 / 其中一路」
+                        add(CardItem("priceAlert") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_price_alert),
+                                subtitle = stringResource(R.string.koil_set_price_alert_sub),
+                                checked = uiState.priceAlert,
+                                onCheckedChange = viewModel::setPriceAlert,
+                            )
+                        })
+                    }
+                },
+            )
+
+            // ===== 阈值与容量：三个数值项 =====
+            if (uiState.loaded) {
+                item { SmallTitle(text = stringResource(R.string.koil_set_section_calc)) }
+            }
+            groupedCardItems(
+                keyPrefix = "settings_calc",
+                outerBottomPadding = 12.dp,
+                items = buildList {
+                    if (uiState.loaded) {
                         add(CardItem("abnormal") {
                             StepperInputRow(
                                 title = stringResource(R.string.koil_set_abnormal),
@@ -549,7 +588,7 @@ fun SettingsScreen(
 
             item { SmallTitle(text = stringResource(R.string.koil_set_section_price_db)) }
 
-            // ===== 数据源与提醒（SmallTitle 缺省不设，直接分段卡）=====
+            // ===== 油价数据库：状态卡 + 取数源（提醒已挪到「消息推送」段）=====
             groupedCardItems(
                 keyPrefix = "settings_source",
                 outerBottomPadding = 12.dp,
@@ -610,18 +649,6 @@ fun SettingsScreen(
                             )
                         })
                     }
-                    // 只给这一行套守卫：本段还挂着油价库状态等独立数据，整段等首值不合适
-                    if (uiState.loaded) {
-                        add(CardItem("priceAlert") {
-                            // —— 调价窗口提醒 / 推送通知 ——
-                            SettingSwitchRow(
-                                title = stringResource(R.string.koil_set_price_alert),
-                                subtitle = stringResource(R.string.koil_set_price_alert_sub),
-                                checked = uiState.priceAlert,
-                                onCheckedChange = viewModel::setPriceAlert,
-                            )
-                        })
-                    }
                     if (priceDbStatus.lastSyncSources.isNotBlank()) {
                         add(CardItem("syncSources") {
 
@@ -644,8 +671,8 @@ fun SettingsScreen(
                     crashCount = CrashReporter.countEntries(crashLogText)
                 }
 
-                // ===== 数据与备份 =====
-                // 6 个出口按「加油记录 / 完整备份 / 油价历史」三组配对，
+                // ===== 资料与同步 =====
+                // 入口按「加油记录 / 完整备份 / 油价历史」三组配对，
                 // 不分组的话 6 行长得一模一样，用户得逐个读副标题才知道谁跟谁是一对。
                 SmallTitle(
                     text = stringResource(R.string.koil_set_section_data),
@@ -653,7 +680,7 @@ fun SettingsScreen(
                 )
             }
 
-            // ===== 数据与备份：导出入口 / 云同步开关 / 云同步面板 =====
+            // ===== 资料与同步：导出入口 / 云同步开关 / 云同步面板 =====
             groupedCardItems(
                 keyPrefix = "settings_data",
                 outerBottomPadding = 12.dp,
@@ -880,7 +907,7 @@ fun SettingsScreen(
         }
             }
 
-            // ===== 关于（完整分区）=====
+            // ===== 关于与支持（完整分区）=====
             // 版本、更新检查、诊断集中到一处；组底距走 groupedCardItems 的 outerBottomPadding。
             aboutSection(
                 crashCount = crashCount,
@@ -935,7 +962,7 @@ internal fun openExternalUrl(context: Context, url: String): Boolean {
  */
 
 /**
- * 「其它」一块（崩溃日志 / 问题反馈 / 关于 KOiL 三行连排），直接产出 lazy item 的
+ * 「关于与支持」一块（崩溃日志 / 问题反馈 / 关于 KOiL 三行连排），直接产出 lazy item 的
  * LazyListScope 扩展；组底距统一走 groupedCardItems 的 outerBottomPadding，不再手写 CardSegment。
  */
 fun LazyListScope.aboutSection(
