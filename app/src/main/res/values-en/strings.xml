@@ -326,7 +326,7 @@
     <string name="koil_noti_update_channel">App updates</string>
     <string name="koil_noti_update_channel_desc">One alert per new version; download and install happen on the About page</string>
     <string name="koil_noti_update_title">KOiL %1$s is available</string>
-    <string name="koil_noti_update_body">Open the About page to check, download and install</string>
+    <string name="koil_noti_update_body">Open to the download &amp; update screen</string>
     <!-- 权限联动提示 -->
     <string name="koil_set_notify_denied">Notification permission is off; push can\'t be delivered. Tap to enable.</string>
     <string name="koil_set_location_denied">Location permission missing; enable it to use location.</string>

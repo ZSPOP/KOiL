@@ -158,13 +158,6 @@ class KOiLApplication : Application() {
                 .onFailure { Log.w("KOiL", "adopt system locale failed: ${it.message}") }
         }
 
-        // 清理 1.2.9 及更早留下的两个僵尸设置键（见 AppSettings.pruneLegacyKeys）。
-        // 没有旧键时只读一次内存即返回，不产生写盘；本段在 1.2.12 删除。
-        appScope.launch {
-            runCatching { GlobalContext.get().get<AppSettings>().pruneLegacyKeys() }
-                .onFailure { Log.w("KOiL", "prune legacy settings keys failed: ${it.message}") }
-        }
-
         // 方案X：油价库首次联网灌库——先灌当前省一整年曲线（即时可用），其余省份由 seedRemainingProvinces 后台补全。
         // 链式执行：灌库完成后再做启动调价检查（避免灌库 + 检查两个网络任务并发抢带宽拖慢首屏数据就绪）。
         appScope.launch {
