@@ -166,36 +166,38 @@
     <string name="koil_ov_md_date">%1$d月%2$d日</string>
 
     <string name="koil_set_title">设置</string>
-    <string name="koil_set_section_general">通用与外观</string>
-    <string name="koil_set_appearance">外观设置</string>
+    <string name="koil_set_section_appearance">外观</string>
+    <string name="koil_set_appearance">主题设置</string>
     <string name="koil_set_language">语言设置</string>
-    <string name="koil_set_section_nav">导航与显示</string>
+    <string name="koil_set_section_pref">偏好</string>
+    <string name="koil_set_section_notify">消息推送</string>
     <string name="koil_set_floating_style">悬浮样式</string>
     <string name="koil_set_blur">模糊效果</string>
     <string name="koil_set_blur_sub">启用表面模糊效果</string>
-    <string name="koil_set_pager_gesture">页面切换手势</string>
+    <string name="koil_set_pager_gesture">切换手势</string>
     <string name="koil_pager_gesture_cross_axis">跨轴拦截</string>
     <string name="koil_pager_gesture_native">预设手势</string>
-    <string name="koil_set_predictive_back">预测返回手势</string>
+    <string name="koil_set_predictive_back">预测手势</string>
     <string name="koil_set_predictive_back_sub">启用预测性返回动画效果</string>
     <string name="koil_style_miuix">玻璃</string>
     <string name="koil_style_ios">iOS风格（液态玻璃）</string>
-    <string name="koil_set_section_entry">录入与计算</string>
+    <string name="koil_set_section_interaction">交互</string>
+    <string name="koil_set_section_calc">阈值与容量</string>
     <string name="koil_set_default_province">默认省份</string>
     <string name="koil_set_default_province_sum">油价查询与定位 · %1$s</string>
     <string name="koil_set_default_grade">默认油号</string>
     <string name="koil_set_default_grade_sum">新建记录时预选 %1$s#</string>
-    <string name="koil_set_tank">油箱容量</string>
-    <string name="koil_set_tank_sub_fmt">油箱容量 %1$dL · 超量录入校验</string>
-    <string name="koil_set_keep_grade">沿用上次油号</string>
+    <string name="koil_set_tank">预设油箱容量</string>
+    <string name="koil_set_tank_sub_fmt">当前设为 %1$dL · 超量录入校验</string>
+    <string name="koil_set_keep_grade">沿用油号</string>
     <string name="koil_set_keep_grade_sub">录入自动带出</string>
     <string name="koil_set_abnormal">异常油耗阈值</string>
     <string name="koil_set_abnormal_sum">偏离平均值±%1$d%%标记异常</string>
     <string name="koil_set_deviation">价格偏差阈值</string>
     <string name="koil_set_deviation_sum">实付单价偏离参考价±%1$d%%</string>
-    <string name="koil_set_price_alert">油价调整窗口提醒</string>
+    <string name="koil_set_price_alert">调价提醒</string>
     <string name="koil_set_price_alert_sub">首页显示下一个调价日、预测与折合</string>
-    <string name="koil_set_section_price_db">油价数据与提醒</string>
+    <string name="koil_set_section_price_db">油价数据库</string>
     <string name="koil_pdb_provinces">省份</string>
     <string name="koil_pdb_grades">油号</string>
     <string name="koil_pdb_adjustments">调价</string>
@@ -203,11 +205,11 @@
     <string name="koil_pdb_update_now">立即更新</string>
     <string name="koil_set_data_io_title">导出与备份</string>
     <string name="koil_set_data_io_sub">加油记录、油价历史与完整备份</string>
-    <string name="koil_set_section_data">数据与备份</string>
-    <string name="koil_set_location">定位</string>
+    <string name="koil_set_section_data">资料与同步</string>
+    <string name="koil_set_location">自动定位</string>
     <string name="koil_set_location_sub">自动识别省份</string>
-    <string name="koil_set_eia_key_title">EIA API Key</string>
-    <string name="koil_set_eia_key_sub">原油估算源（可修改，留空降级腾讯）</string>
+    <string name="koil_set_eia_key_title">API（EIA）</string>
+    <string name="koil_set_eia_key_sub">API 密钥 · 原油估算源（可修改，留空降级腾讯）</string>
     <string name="koil_set_export_records">导出加油记录</string>
     <string name="koil_set_export_records_sub">CSV 格式 · 含派生字段</string>
     <string name="koil_set_import_records">导入加油记录</string>
@@ -373,7 +375,7 @@
     <!-- 云同步（坚果云 WebDAV） -->
     <string name="koil_set_about">关于</string>
     <!-- 设置页分组名：行标题已经叫「关于 KOiL」，分组再叫「关于」会两级同名 -->
-    <string name="koil_set_other">其他</string>
+    <string name="koil_set_other">关于与支持</string>
     <string name="koil_set_about_koil">关于 KOiL</string>
     <string name="koil_about_open_source">开源项目</string>
     <string name="koil_set_about_version">V%1$s (%2$d)</string>
@@ -515,6 +517,6 @@
     <!-- 密码可见性切换按钮的读屏标签 -->
     <string name="koil_a11y_show_secret">显示密码</string>
     <string name="koil_a11y_hide_secret">隐藏密码</string>
-    <string name="koil_set_swipe_dismiss">横移返回手势</string>
+    <string name="koil_set_swipe_dismiss">侧滑返回</string>
     <string name="koil_set_swipe_dismiss_sub">在二级页从屏幕边缘侧滑即可返回上一页</string>
 </resources>
