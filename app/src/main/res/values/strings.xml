@@ -209,7 +209,7 @@
     <string name="koil_set_location">自动定位</string>
     <string name="koil_set_location_sub">自动识别省份</string>
     <string name="koil_set_eia_key_title">API（EIA）</string>
-    <string name="koil_set_eia_key_sub">原油估算源（可修改，留空降级腾讯）</string>
+    <string name="koil_set_eia_key_sub">API 密钥 · 原油估算源（可修改，留空降级腾讯）</string>
     <string name="koil_set_export_records">导出加油记录</string>
     <string name="koil_set_export_records_sub">CSV 格式 · 含派生字段</string>
     <string name="koil_set_import_records">导入加油记录</string>
