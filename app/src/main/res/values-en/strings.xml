@@ -169,10 +169,10 @@
 
     <!-- ===== Settings screen ===== -->
     <string name="koil_set_title">Settings</string>
-    <string name="koil_set_section_appearance">Appearance</string>
+    <string name="koil_set_section_appearance">Appearance presets</string>
     <string name="koil_set_appearance">Theme</string>
     <string name="koil_set_language">Language</string>
-    <string name="koil_set_section_pref">Preferences</string>
+    <string name="koil_set_section_pref">Entry presets</string>
     <string name="koil_set_section_notify">Notifications</string>
     <string name="koil_set_floating_style">Floating style</string>
     <string name="koil_set_blur">Blur effect</string>
@@ -184,7 +184,7 @@
     <string name="koil_set_predictive_back_sub">Enable predictive back animation</string>
     <string name="koil_style_miuix">Glass</string>
     <string name="koil_style_ios">iOS style (liquid glass)</string>
-    <string name="koil_set_section_interaction">Interaction</string>
+    <string name="koil_set_section_interaction">Interaction presets</string>
     <string name="koil_set_section_calc">Limits &amp; capacity</string>
     <string name="koil_set_default_province">Default province</string>
     <string name="koil_set_default_province_sum">Price query &amp; location · %1$s</string>
@@ -212,7 +212,7 @@
     <string name="koil_set_location">Auto location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_eia_key_title">API (EIA)</string>
-    <string name="koil_set_eia_key_sub">API key · Crude estimation source (editable; blank falls back to Tencent)</string>
+    <string name="koil_set_eia_key_sub">Crude source · key editable · blank falls back to Tencent</string>
     <string name="koil_set_export_records">Export records</string>
     <string name="koil_set_export_records_sub">CSV · derived fields</string>
     <string name="koil_set_import_records">Import records</string>
