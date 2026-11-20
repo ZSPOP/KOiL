@@ -212,7 +212,7 @@
     <string name="koil_set_location">Auto location</string>
     <string name="koil_set_location_sub">Auto-detect province</string>
     <string name="koil_set_eia_key_title">API (EIA)</string>
-    <string name="koil_set_eia_key_sub">API key · Crude estimation source (editable; blank falls back to Tencent)</string>
+    <string name="koil_set_eia_key_sub">Crude source · key editable · blank falls back to Tencent</string>
     <string name="koil_set_export_records">Export records</string>
     <string name="koil_set_export_records_sub">CSV · derived fields</string>
     <string name="koil_set_import_records">Import records</string>

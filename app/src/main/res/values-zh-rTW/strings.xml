@@ -209,7 +209,7 @@
     <string name="koil_set_location">自動定位</string>
     <string name="koil_set_location_sub">自動識別省份</string>
     <string name="koil_set_eia_key_title">API（EIA）</string>
-    <string name="koil_set_eia_key_sub">API 金鑰 · 原油估算源（可修改，留空降級騰訊）</string>
+    <string name="koil_set_eia_key_sub">原油源・金鑰可修改・留空降級騰訊源</string>
     <string name="koil_set_export_records">匯出加油記錄</string>
     <string name="koil_set_export_records_sub">CSV 格式 · 含派生欄位</string>
     <string name="koil_set_import_records">匯入加油記錄</string>
