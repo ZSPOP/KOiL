@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -33,20 +31,40 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.drop
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.MutableState
 import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -57,17 +75,16 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
+import com.llpop.koil.ui.component.KOiLNoWhitespaceInput
+import com.llpop.koil.ui.component.KOiLPasswordMask
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.data.sync.SyncReconcile
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.KOiLColors
 import org.koin.androidx.compose.koinViewModel
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 
@@ -85,25 +102,72 @@ internal fun SyncPanelBody(
 ) {
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
-        var urlDraft by remember { mutableStateOf(syncUi.effectiveUrl) }
-        var usernameDraft by remember { mutableStateOf(syncUi.effectiveUsername) }
+        // 三个草稿改用 TextFieldState（Compose 的 state 版文本 API）：
+        // 值版 TextField(value, onValueChange) 已弃用，state 版才有 InputTransformation/OutputTransformation。
+        val urlState = rememberTextFieldState(syncUi.effectiveUrl)
+        val usernameState = rememberTextFieldState(syncUi.effectiveUsername)
         // 密码草稿 = 存储里的真实密码（异步到达后回填一次），眼睛关闭时掩码、点亮显示明文。
         // 没设置过时预填内置默认密码：口径统一由 SyncConfig 给，界面不再自己算一遍。
-        var pwdDraft by remember(syncUi.password) {
-            mutableStateOf(syncUi.effectivePasswordDraft)
+        val pwdState = rememberTextFieldState(syncUi.effectivePasswordDraft)
+
+        // —— 回车跳下一项：三条信号统一收口 ——
+        // 1) 输入法发了 ImeAction → onKeyboardAction
+        // 2) 硬件/外接键盘的 Enter 键事件 → onPreviewKeyEvent
+        // 3) 输入法把回车当成字符提交（中文补空格、英文补换行）→ 被 KOiLNoWhitespaceInput 抹掉时回调
+        // 第 3 条是软键盘最常见的真实路径，也是此前「按回车没反应」的根因。
+        val navGateAt = remember { mutableLongStateOf(0L) }
+        val urlSubmitTick = remember { mutableIntStateOf(0) }
+        val usernameSubmitTick = remember { mutableIntStateOf(0) }
+        val pwdSubmitTick = remember { mutableIntStateOf(0) }
+
+        fun navToNextField() {
+            val now = System.currentTimeMillis()
+            if (now - navGateAt.longValue < 350L) return // 同一次回车被两条信号同时捕获时只跳一次
+            navGateAt.longValue = now
+            focusManager.moveFocus(FocusDirection.Next)
+        }
+
+        fun submitWebDavPassword() {
+            val now = System.currentTimeMillis()
+            if (now - navGateAt.longValue < 350L) return
+            navGateAt.longValue = now
+            val v = pwdState.text.toString()
+            if (v.isNotBlank() && v != syncUi.password) syncVm.setPassword(v)
+            focusManager.clearFocus()
+        }
+
+        LaunchedEffect(Unit) {
+            snapshotFlow { urlSubmitTick.intValue }.drop(1).collect { navToNextField() }
+        }
+        LaunchedEffect(Unit) {
+            snapshotFlow { usernameSubmitTick.intValue }.drop(1).collect { navToNextField() }
+        }
+        LaunchedEffect(Unit) {
+            snapshotFlow { pwdSubmitTick.intValue }.drop(1).collect { submitWebDavPassword() }
         }
         // 只有用户真实输入过的密码才允许被落盘：**绝不**用默认密码兜底。
         // 否则「清空密码 → 重新打开开关 → 点立即备份」会把默认密码写回存储，
         // 用户刚做的停用被自己一次点击静默撤销。这个变量原来自己又算了一遍口径，
         // 与 SyncConfig 分裂，所以现在只判「有没有输入」。
-        val effectivePwd: String? = pwdDraft.takeIf { it.isNotBlank() }
+        val effectivePwd: String? = pwdState.text.toString().takeIf { it.isNotBlank() }
+        // 存储里的值异步到达时回填到输入框；与当前内容一致就不动，避免打断正在输入的光标。
         LaunchedEffect(syncUi.effectiveUrl) {
-            if (urlDraft != syncUi.effectiveUrl) urlDraft = syncUi.effectiveUrl
+            val v = syncUi.effectiveUrl
+            if (urlState.text.toString() != v) urlState.setTextAndPlaceCursorAtEnd(v)
         }
         LaunchedEffect(syncUi.effectiveUsername) {
-            if (usernameDraft != syncUi.effectiveUsername) usernameDraft = syncUi.effectiveUsername
+            val v = syncUi.effectiveUsername
+            if (usernameState.text.toString() != v) usernameState.setTextAndPlaceCursorAtEnd(v)
+        }
+        LaunchedEffect(syncUi.password) {
+            val v = syncUi.effectivePasswordDraft
+            if (pwdState.text.toString() != v) pwdState.setTextAndPlaceCursorAtEnd(v)
         }
         var formExpanded by remember { mutableStateOf(false) }
+        // 三个框各自的焦点句柄：回车（IME Next）显式跳到下一个框，不依赖默认的焦点查找
+        val urlFocus = remember { FocusRequester() }
+        val usernameFocus = remember { FocusRequester() }
+        val pwdFocus = remember { FocusRequester() }
         // 三项 WebDAV 配置框整体抬到键盘上方：请求挂在包住三个框的那个 Column 上，
         // 只有当其中某个框真的拿到焦点时才发请求（避免别的页面弹键盘时被牵连滚动）。
         val webdavBringIntoView = remember { BringIntoViewRequester() }
@@ -161,7 +225,7 @@ internal fun SyncPanelBody(
                             .clip(RoundedCornerShape(18.dp))
                             .background(KOiLColors.Primary)
                             .clickable(enabled = !syncUi.busy) {
-                                syncVm.backupNow(urlDraft, usernameDraft, effectivePwd)
+                                syncVm.backupNow(urlState.text.toString(), usernameState.text.toString(), effectivePwd)
                             }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -189,7 +253,7 @@ internal fun SyncPanelBody(
                             .clip(RoundedCornerShape(18.dp))
                             .background(MiuixTheme.colorScheme.secondaryContainer)
                             .clickable(enabled = !syncUi.busy) {
-                                syncVm.restoreNow(urlDraft, usernameDraft, effectivePwd)
+                                syncVm.restoreNow(urlState.text.toString(), usernameState.text.toString(), effectivePwd)
                             }
                             .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center,
@@ -281,69 +345,95 @@ internal fun SyncPanelBody(
                 if (formExpanded) {
                     Column(modifier = Modifier.bringIntoViewRequester(webdavBringIntoView)) {
                     Spacer(Modifier.height(14.dp))
-                    TextField(
-                        value = urlDraft,
-                        onValueChange = { urlDraft = it },
-                        label = stringResource(R.string.koil_sync_url),
-                        useLabelAsPlaceholder = true,
+                    GlassTextField(
+                        state = urlState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                webdavFieldFocused = state.isFocused
-                                if (!state.isFocused && urlDraft != syncUi.url) syncVm.setUrl(urlDraft)
+                            .focusRequester(urlFocus)
+                            // IME 只给「字符」不给 action 时（部分中文输入法把回车当上屏/换行提交），
+                            // onKeyboardAction 收不到，所以就地在键事件层面拦 Enter。
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    navToNextField()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .onFocusChanged { focusState ->
+                                tappedOnField.value = focusState.isFocused
+                                webdavFieldFocused = focusState.isFocused
+                                val v = urlState.text.toString()
+                                if (!focusState.isFocused && v != syncUi.url) syncVm.setUrl(v)
                             },
-                        singleLine = true,
-                        textStyle = TextStyle(color = MiuixTheme.colorScheme.onBackground),
+                        label = stringResource(R.string.koil_sync_url),
+                        useLabelAsPlaceholder = true,
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        inputTransformation = KOiLNoWhitespaceInput { urlSubmitTick.intValue++ },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Uri,
                             imeAction = androidx.compose.ui.text.input.ImeAction.Next,
                         ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        // 回车显式跳下一个框；不调 performDefaultAction，避免与手动移焦冲突
+                        onKeyboardAction = { navToNextField() },
                     )
                     Spacer(Modifier.height(10.dp))
-                    TextField(
-                        value = usernameDraft,
-                        onValueChange = { usernameDraft = it },
-                        label = stringResource(R.string.koil_sync_username),
-                        useLabelAsPlaceholder = true,
+                    GlassTextField(
+                        state = usernameState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                webdavFieldFocused = state.isFocused
-                                if (!state.isFocused && usernameDraft != syncUi.username) syncVm.setUsername(usernameDraft)
+                            .focusRequester(usernameFocus)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    navToNextField()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .onFocusChanged { focusState ->
+                                tappedOnField.value = focusState.isFocused
+                                webdavFieldFocused = focusState.isFocused
+                                val v = usernameState.text.toString()
+                                if (!focusState.isFocused && v != syncUi.username) syncVm.setUsername(v)
                             },
-                        singleLine = true,
-                        textStyle = TextStyle(color = MiuixTheme.colorScheme.onBackground),
+                        label = stringResource(R.string.koil_sync_username),
+                        useLabelAsPlaceholder = true,
+                        lineLimits = TextFieldLineLimits.SingleLine,
+                        inputTransformation = KOiLNoWhitespaceInput { usernameSubmitTick.intValue++ },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Ascii,
                             imeAction = androidx.compose.ui.text.input.ImeAction.Next,
                         ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        onKeyboardAction = { navToNextField() },
                     )
                     Spacer(Modifier.height(10.dp))
                     var showPwd by remember { mutableStateOf(false) }
-                    TextField(
-                        value = pwdDraft,
-                        onValueChange = { pwdDraft = it },
+                    GlassTextField(
+                        state = pwdState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                tappedOnField.value = state.isFocused
-                                webdavFieldFocused = state.isFocused
-                                if (!state.isFocused && pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
-                                    syncVm.setPassword(pwdDraft)
+                            .focusRequester(pwdFocus)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    submitWebDavPassword()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            .onFocusChanged { focusState ->
+                                tappedOnField.value = focusState.isFocused
+                                webdavFieldFocused = focusState.isFocused
+                                val v = pwdState.text.toString()
+                                if (!focusState.isFocused && v.isNotBlank() && v != syncUi.password) {
+                                    syncVm.setPassword(v)
                                 }
                             },
                         label = stringResource(
@@ -351,31 +441,17 @@ internal fun SyncPanelBody(
                             else R.string.koil_sync_app_password_unset_builtin,
                         ),
                         useLabelAsPlaceholder = true,
-                        singleLine = true,
-                        textStyle = TextStyle(color = MiuixTheme.colorScheme.onBackground),
+                        lineLimits = TextFieldLineLimits.SingleLine,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = androidx.compose.ui.text.input.ImeAction.Done,
                         ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onDone = {
-                                if (pwdDraft.isNotBlank() && pwdDraft != syncUi.password) {
-                                    syncVm.setPassword(pwdDraft)
-                                }
-                                focusManager.clearFocus()
-                            },
-                        ),
-                        colors = TextFieldDefaults.textFieldColors(
-                            backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                            labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                            borderColor = Color.Transparent,
-                        ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                        visualTransformation = if (showPwd) {
-                            androidx.compose.ui.text.input.VisualTransformation.None
-                        } else {
-                            androidx.compose.ui.text.input.PasswordVisualTransformation()
-                        },
+                        // Done：落盘后收起键盘（不调 performDefaultAction，避免与 clearFocus 重复动作）
+                        onKeyboardAction = { submitWebDavPassword() },
+                        // 掩码由 OutputTransformation 承担（state 版没有 visualTransformation 参数）
+                        outputTransformation = if (showPwd) null else KOiLPasswordMask,
+                        // 同前两框：紧跟在 inputTransformation 之后补上回车识别
+                        inputTransformation = KOiLNoWhitespaceInput { pwdSubmitTick.intValue++ },
                         trailingIcon = {
                             IconButton(onClick = { showPwd = !showPwd }) {
                                 Icon(
@@ -416,7 +492,7 @@ internal fun SyncPanelBody(
                                     .padding(top = 4.dp, start = 8.dp)
                                     .clickable {
                                         syncVm.clearPassword()
-                                        pwdDraft = ""
+                                        pwdState.setTextAndPlaceCursorAtEnd("")
                                     },
                             )
                         }
@@ -435,7 +511,7 @@ internal fun SyncPanelBody(
                                 else KOiLColors.Primary
                             )
                             .clickable(enabled = !syncUi.busy) {
-                                syncVm.saveAndTest(urlDraft, usernameDraft, effectivePwd)
+                                syncVm.saveAndTest(urlState.text.toString(), usernameState.text.toString(), effectivePwd)
                             }
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         contentAlignment = Alignment.Center,
@@ -483,15 +559,12 @@ internal fun SyncPanelBody(
         // 云同步恢复确认弹窗（预览 valid/dup/errors，确认后不删本地）
         val syncRestorePreview by syncVm.restorePreview.collectAsStateWithLifecycle()
         syncRestorePreview?.let { preview ->
-            KOiLGlassDialog(show = true, onDismissRequest = syncVm::dismissRestorePreview) {
+            KOiLGlassDialog(
+                show = true,
+                onDismissRequest = syncVm::dismissRestorePreview,
+                title = stringResource(R.string.koil_sync_restore_confirm_title),
+            ) {
                 Column {
-                    Text(
-                        stringResource(R.string.koil_sync_restore_confirm_title),
-                        fontSize = KOiLType.Title,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Spacer(Modifier.height(10.dp))
                     Text(
                         text = pluralStringResource(
                             R.plurals.koil_sync_restore_confirm_msg,
@@ -517,21 +590,25 @@ internal fun SyncPanelBody(
                     }
                     Spacer(Modifier.height(12.dp))
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        // 不设固定 40dp 高度——miuix Button 自带 13dp 垂直内边距，
-                        // 固定高度会挤掉文字上下（内容区仅 14dp < 13sp 文字行高）导致文字下缘被裁
-                        Button(
+                        GlassDialogButton(
                             onClick = syncVm::dismissRestorePreview,
                             modifier = Modifier.weight(1f),
-                        ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
-                        Spacer(Modifier.width(10.dp))
-                        Button(
-                            onClick = syncVm::confirmRestore,
-                            modifier = Modifier.weight(1f),
+                            role = GlassDialogButtonRole.Normal,
                         ) {
                             Text(
-                                stringResource(R.string.koil_sync_restore_confirm, preview.valid),
-                                fontSize = KOiLType.Body,
-                                fontWeight = FontWeight.Medium,
+                                text = stringResource(R.string.koil_common_cancel),
+                                style = MiuixTheme.textStyles.button,
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        GlassDialogButton(
+                            onClick = syncVm::confirmRestore,
+                            modifier = Modifier.weight(1f),
+                            role = GlassDialogButtonRole.Normal,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.koil_sync_restore_confirm, preview.valid),
+                                style = MiuixTheme.textStyles.button,
                             )
                         }
                     }
@@ -561,15 +638,9 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
         corrupt != null -> com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
             onDismissRequest = viewModel::dismissReconcileCorrupt,
+            title = stringResource(R.string.koil_sync_reconcile_corrupt_title),
         ) {
             Column {
-                Text(
-                    stringResource(R.string.koil_sync_reconcile_corrupt_title),
-                    fontSize = KOiLType.Title,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.height(10.dp))
                 Text(
                     stringResource(R.string.koil_sync_reconcile_corrupt_msg),
                     fontSize = KOiLType.Body,
@@ -578,15 +649,27 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
+                    GlassDialogButton(
                         onClick = viewModel::dismissReconcileCorrupt,
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_cancel),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                     Spacer(Modifier.width(10.dp))
-                    Button(
+                    GlassDialogButton(
                         onClick = viewModel::confirmReconcileCorrupt,
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_sync_reconcile_corrupt_overwrite), fontSize = KOiLType.BodySmall) }
+                        role = GlassDialogButtonRole.Destructive,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_sync_reconcile_corrupt_overwrite),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                 }
             }
         }
@@ -595,15 +678,9 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
         pendingDestructive != null -> com.llpop.koil.ui.component.KOiLGlassDialog(
             show = true,
             onDismissRequest = { pendingDestructive = null },
+            title = stringResource(R.string.koil_sync_reconcile_destructive_title),
         ) {
             Column {
-                Text(
-                    stringResource(R.string.koil_sync_reconcile_destructive_title),
-                    fontSize = KOiLType.Title,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.height(10.dp))
                 Text(
                     stringResource(R.string.koil_sync_reconcile_destructive_msg),
                     fontSize = KOiLType.Body,
@@ -612,19 +689,31 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
+                    GlassDialogButton(
                         onClick = { pendingDestructive = null },
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_cancel),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                     Spacer(Modifier.width(10.dp))
-                    Button(
+                    GlassDialogButton(
                         onClick = {
                             val mode = pendingDestructive
                             pendingDestructive = null
                             if (mode != null) viewModel.confirmReconcile(mode)
                         },
                         modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(R.string.koil_sync_reconcile_confirm), fontSize = KOiLType.Body) }
+                        role = GlassDialogButtonRole.Destructive,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_sync_reconcile_confirm),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                 }
             }
         }
@@ -632,15 +721,12 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
         // ③ 对账面板本体
         preview != null -> {
             val st = preview!!.stats
-            com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissReconcile) {
+            com.llpop.koil.ui.component.KOiLGlassDialog(
+                show = true,
+                onDismissRequest = viewModel::dismissReconcile,
+                title = stringResource(R.string.koil_sync_reconcile_title),
+            ) {
                 Column {
-                    Text(
-                        stringResource(R.string.koil_sync_reconcile_title),
-                        fontSize = KOiLType.Title,
-                        fontWeight = FontWeight.Bold,
-                        color = MiuixTheme.colorScheme.onBackground,
-                    )
-                    Spacer(Modifier.height(10.dp))
                     Text(
                         stringResource(R.string.koil_sync_reconcile_counts, st.localCount, st.cloudCount),
                         fontSize = KOiLType.BodyLarge,
@@ -662,9 +748,10 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                     }
                     Spacer(Modifier.height(12.dp))
                     // 默认选项（推荐）放最上：用户不进面板直接点第一个就是最安全的
-                    Button(
+                    GlassDialogButton(
                         onClick = { viewModel.confirmReconcile(SyncReconcile.Mode.MERGE) },
                         modifier = Modifier.fillMaxWidth(),
+                        role = GlassDialogButtonRole.Normal,
                     ) {
                         // 数字为 0 时不说「补进 0 条」——按钮文案要能单独读懂
                         Text(
@@ -673,14 +760,14 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_merge_plain)
                             },
-                            fontSize = KOiLType.Body,
-                            fontWeight = FontWeight.Medium,
+                            style = MiuixTheme.textStyles.button,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Button(
+                    GlassDialogButton(
                         onClick = { pendingDestructive = SyncReconcile.Mode.LOCAL_WINS },
                         modifier = Modifier.fillMaxWidth(),
+                        role = GlassDialogButtonRole.Destructive,
                     ) {
                         Text(
                             text = if (st.cloudOnlyCount > 0) {
@@ -688,13 +775,14 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_local_wins_plain)
                             },
-                            fontSize = KOiLType.Body,
+                            style = MiuixTheme.textStyles.button,
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Button(
+                    GlassDialogButton(
                         onClick = { pendingDestructive = SyncReconcile.Mode.CLOUD_WINS },
                         modifier = Modifier.fillMaxWidth(),
+                        role = GlassDialogButtonRole.Destructive,
                     ) {
                         Text(
                             text = if (st.localOnlyCount > 0) {
@@ -702,7 +790,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
                             } else {
                                 stringResource(R.string.koil_sync_reconcile_cloud_wins_plain)
                             },
-                            fontSize = KOiLType.Body,
+                            style = MiuixTheme.textStyles.button,
                         )
                     }
                     Spacer(Modifier.height(6.dp))
@@ -745,15 +833,12 @@ internal fun ReconcileLine(text: String) {
 internal fun LocalBackupDialog(viewModel: SyncViewModel) {
     val backups by viewModel.localBackups.collectAsStateWithLifecycle()
     if (backups.isEmpty()) return
-    com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissLocalBackups) {
+    com.llpop.koil.ui.component.KOiLGlassDialog(
+        show = true,
+        onDismissRequest = viewModel::dismissLocalBackups,
+        title = stringResource(R.string.koil_sync_backup_restore_title),
+    ) {
         Column {
-            Text(
-                stringResource(R.string.koil_sync_backup_restore_title),
-                fontSize = KOiLType.Title,
-                fontWeight = FontWeight.Bold,
-                color = MiuixTheme.colorScheme.onBackground,
-            )
-            Spacer(Modifier.height(8.dp))
             Text(
                 stringResource(R.string.koil_sync_backup_restore_hint),
                 fontSize = KOiLType.BodySmall,

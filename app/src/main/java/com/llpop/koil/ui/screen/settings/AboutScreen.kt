@@ -1,5 +1,3 @@
-@file:OptIn(top.yukonga.miuix.kmp.interfaces.ExperimentalScrollBarApi::class)
-
 package com.llpop.koil.ui.screen.settings
 
 import androidx.compose.foundation.Image
@@ -60,7 +58,8 @@ import androidx.compose.ui.unit.sp
 import com.llpop.koil.BuildConfig
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.KOiLGlassDialog
-import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.blur.ColorBlendToken
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
@@ -113,6 +112,7 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import com.llpop.koil.ui.theme.KOiLType
@@ -645,15 +645,9 @@ private fun AboutContent(
                 onDismissRequest = { sheet = "" },
                 contentPadding = 16.dp,
                 scrollable = true,
+                title = stringResource(titleRes),
             ) {
                 Column {
-                    Text(
-                        text = stringResource(titleRes),
-                        fontSize = KOiLType.TitleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colorScheme.onBackground,
-                    )
-                    Spacer(Modifier.height(10.dp))
                     Text(
                         text = stringResource(bodyRes),
                         fontSize = KOiLType.BodySmall,
@@ -661,8 +655,15 @@ private fun AboutContent(
                         color = colorScheme.onBackgroundVariant,
                     )
                     Spacer(Modifier.height(14.dp))
-                    Button(onClick = { sheet = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(R.string.koil_common_close), fontSize = KOiLType.Body)
+                    GlassDialogButton(
+                        onClick = { sheet = "" },
+                        modifier = Modifier.fillMaxWidth(),
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_close),
+                            style = MiuixTheme.textStyles.button,
+                        )
                     }
                 }
             }

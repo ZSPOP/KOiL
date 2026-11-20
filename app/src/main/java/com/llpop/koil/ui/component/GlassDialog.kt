@@ -29,6 +29,7 @@ fun KOiLGlassDialog(
     show: Boolean,
     onDismissRequest: () -> Unit,
     title: String? = null,
+    summary: String? = null,
     contentPadding: Dp = 20.dp,
     scrollable: Boolean = false,
     maxHeight: Dp? = null,
@@ -47,6 +48,7 @@ fun KOiLGlassDialog(
         show = show,
         backdrop = backdrop,
         title = title,
+        summary = summary,
         maxWidth = maxWidth,
         insideMargin = DpSize(contentPadding, contentPadding),
     ) {

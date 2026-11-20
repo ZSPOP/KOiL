@@ -31,8 +31,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import com.llpop.koil.ui.component.fieldSurfaceColor
 import com.llpop.koil.R
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -74,15 +76,19 @@ fun KOiLDateField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MiuixTheme.colorScheme.secondaryContainer)
+                // 不再写死高度：与 GlassTextField 同构（同一内边距 + 同一行文字高度），
+                // 高度自然相等，也不受系统字体缩放影响
+                .clip(RoundedCornerShape(GlassTextFieldDefaults.CornerRadius))
+                .background(fieldSurfaceColor())
                 .onGloballyPositioned {
                     val b = it.boundsInWindow()
                     fieldBounds = IntRect(b.left.toInt(), b.top.toInt(), b.right.toInt(), b.bottom.toInt())
                 }
                 .clickable(enabled = onDateSelected != null) { showPicker = true }
-                .padding(horizontal = 14.dp),
+                .padding(
+                    horizontal = GlassTextFieldDefaults.InsideMargin.width,
+                    vertical = GlassTextFieldDefaults.InsideMargin.height,
+                ),
             contentAlignment = Alignment.CenterStart,
         ) {
             // 日期可选择（onDateSelected != null）时右侧显示下拉箭头（对齐油号/省份字段），只读不显示
@@ -92,7 +98,7 @@ fun KOiLDateField(
             ) {
                 Text(
                     text = date,
-                    fontSize = KOiLType.Title,
+                    style = MiuixTheme.textStyles.main,
                     fontWeight = FontWeight.Bold,
                     color = MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
