@@ -317,7 +317,7 @@
 
     <string name="koil_set_notify_sub_channel_quiet">系统把这则通知设成了静音：请在 系统设置 → 通知与控制中心 → KOiL → 应用更新 里开启悬浮通知</string>
     <string name="koil_noti_update_channel">应用更新</string>
-    <string name="koil_noti_update_channel_desc">有新版本时提醒一次；下载与安装都在关于页</string>
+    <string name="koil_noti_update_channel_desc">有新版本时提醒一次；点开即可下载与更新</string>
     <string name="koil_noti_update_title">KOiL 有新版本 %1$s</string>
     <string name="koil_noti_update_body">点开进入下载与更新界面</string>
     <!-- 权限联动提示 -->

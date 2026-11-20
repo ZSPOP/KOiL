@@ -324,7 +324,7 @@
 
     <string name="koil_set_notify_sub_channel_quiet">This notification is set to silent: in system settings → Notifications and Control Center → KOiL → App updates, turn on floating notifications</string>
     <string name="koil_noti_update_channel">App updates</string>
-    <string name="koil_noti_update_channel_desc">One alert per new version; download and install happen on the About page</string>
+    <string name="koil_noti_update_channel_desc">One alert per new version; tap to download and update</string>
     <string name="koil_noti_update_title">KOiL %1$s is available</string>
     <string name="koil_noti_update_body">Open to the download &amp; update screen</string>
     <!-- 权限联动提示 -->
