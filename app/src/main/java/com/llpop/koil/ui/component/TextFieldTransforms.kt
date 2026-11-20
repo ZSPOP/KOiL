@@ -34,7 +34,10 @@ fun KOiLNoWhitespaceInput(onSubmitAttempt: () -> Unit = {}): InputTransformation
                 val cleaned = inserted.filterNot { it.isWhitespace() }
                 replace(range.min, range.max, cleaned.toString())
                 // 整段只提交了空白，或提交里带换行 —— 判定为一次回车提交
-                if (cleaned.isEmpty() || inserted.contains('\n') || inserted.contains('\r')) {
+                // 只认「单字符」提交：一次粘贴整段空白不该被当回车
+                if (inserted.length <= 1 && cleaned.isEmpty() && inserted.isNotBlank() ||
+                    inserted.contains('\n') || inserted.contains('\r')
+                ) {
                     submitAttempted = true
                 }
             }
@@ -53,7 +56,10 @@ fun KOiLDecimalInput(onSubmitAttempt: () -> Unit = {}): InputTransformation = In
         val cleaned = inserted.filter { it.isDigit() || it == '.' }
         if (cleaned != inserted) replace(range.min, range.max, cleaned)
         // 整段只提交了空白，或提交里带换行 —— 判定为一次回车（与地址/账号框同一套判据）
-        if (cleaned.isEmpty() && inserted.isNotBlank() || inserted.contains('\n') || inserted.contains('\r')) {
+        // 只认单字符提交：往金额框整段粘贴字母时不该跳字段
+        if (inserted.length <= 1 && cleaned.isEmpty() && inserted.isNotBlank() ||
+            inserted.contains('\n') || inserted.contains('\r')
+        ) {
             submitAttempted = true
         }
     }
@@ -91,7 +97,8 @@ fun KOiLDigitsOnlyInput(onSubmitAttempt: () -> Unit = {}): InputTransformation =
             val inserted = asCharSequence().subSequence(range.min, range.max).toString()
             val cleaned = inserted.filter { it.isDigit() }
             if (cleaned != inserted) replace(range.min, range.max, cleaned)
-            if (cleaned.isEmpty() && inserted.isNotBlank() ||
+            // 同上：只认单字符提交，粘贴整段非数字不触发跳转
+            if (inserted.length <= 1 && cleaned.isEmpty() && inserted.isNotBlank() ||
                 inserted.contains('\n') || inserted.contains('\r')
             ) {
                 submitAttempted = true

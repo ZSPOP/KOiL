@@ -60,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -958,8 +959,15 @@ private fun FormField(
     val errorColor = KOiLColors.Error
     val focusManager = LocalFocusManager.current
     val submitTick = remember { mutableIntStateOf(0) }
+    // 同一次回车可能同时被 ImeAction 与字符提交两条信号捕获：350ms 内只跳一次，
+    // 否则会连跳两个字段（设置页同款门闩）
+    var navGateAt by remember { mutableLongStateOf(0L) }
     val advanceFromField: () -> Unit = {
-        if (isLastField) focusManager.clearFocus() else focusManager.moveFocus(FocusDirection.Next)
+        val now = System.currentTimeMillis()
+        if (now - navGateAt >= 350L) {
+            navGateAt = now
+            if (isLastField) focusManager.clearFocus() else focusManager.moveFocus(FocusDirection.Next)
+        }
     }
     LaunchedEffect(Unit) {
         snapshotFlow { submitTick.intValue }.drop(1).collect { advanceFromField() }
