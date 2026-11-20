@@ -166,10 +166,10 @@
     <string name="koil_ov_md_date">%1$d月%2$d日</string>
 
     <string name="koil_set_title">设置</string>
-    <string name="koil_set_section_appearance">外观</string>
+    <string name="koil_set_section_appearance">外观预设</string>
     <string name="koil_set_appearance">主题设置</string>
     <string name="koil_set_language">语言设置</string>
-    <string name="koil_set_section_pref">偏好</string>
+    <string name="koil_set_section_pref">录入预设</string>
     <string name="koil_set_section_notify">消息推送</string>
     <string name="koil_set_floating_style">悬浮样式</string>
     <string name="koil_set_blur">模糊效果</string>
@@ -181,7 +181,7 @@
     <string name="koil_set_predictive_back_sub">启用预测性返回动画效果</string>
     <string name="koil_style_miuix">玻璃</string>
     <string name="koil_style_ios">iOS风格（液态玻璃）</string>
-    <string name="koil_set_section_interaction">交互</string>
+    <string name="koil_set_section_interaction">交互预设</string>
     <string name="koil_set_section_calc">阈值与容量</string>
     <string name="koil_set_default_province">默认省份</string>
     <string name="koil_set_default_province_sum">油价查询与定位 · %1$s</string>
@@ -209,7 +209,7 @@
     <string name="koil_set_location">自动定位</string>
     <string name="koil_set_location_sub">自动识别省份</string>
     <string name="koil_set_eia_key_title">API（EIA）</string>
-    <string name="koil_set_eia_key_sub">原油源・密钥可修改・留空降级腾讯源</string>
+    <string name="koil_set_eia_key_sub">原油源·密钥可修改·留空降级腾讯源</string>
     <string name="koil_set_export_records">导出加油记录</string>
     <string name="koil_set_export_records_sub">CSV 格式 · 含派生字段</string>
     <string name="koil_set_import_records">导入加油记录</string>

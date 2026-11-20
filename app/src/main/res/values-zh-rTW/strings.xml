@@ -166,10 +166,10 @@
 
     <!-- ===== 設定頁 ===== -->
     <string name="koil_set_title">設定</string>
-    <string name="koil_set_section_appearance">外觀</string>
+    <string name="koil_set_section_appearance">外觀預設</string>
     <string name="koil_set_appearance">主題設定</string>
     <string name="koil_set_language">語言設定</string>
-    <string name="koil_set_section_pref">偏好</string>
+    <string name="koil_set_section_pref">錄入預設</string>
     <string name="koil_set_section_notify">訊息推送</string>
     <string name="koil_set_floating_style">懸浮樣式</string>
     <string name="koil_set_blur">模糊效果</string>
@@ -181,7 +181,7 @@
     <string name="koil_set_predictive_back_sub">啟用預測性返回動畫效果</string>
     <string name="koil_style_miuix">玻璃</string>
     <string name="koil_style_ios">iOS風格（液態玻璃）</string>
-    <string name="koil_set_section_interaction">互動</string>
+    <string name="koil_set_section_interaction">互動預設</string>
     <string name="koil_set_section_calc">閾值與容量</string>
     <string name="koil_set_default_province">預設省份</string>
     <string name="koil_set_default_province_sum">油價查詢與定位 · %1$s</string>
@@ -209,7 +209,7 @@
     <string name="koil_set_location">自動定位</string>
     <string name="koil_set_location_sub">自動識別省份</string>
     <string name="koil_set_eia_key_title">API（EIA）</string>
-    <string name="koil_set_eia_key_sub">原油源・金鑰可修改・留空降級騰訊源</string>
+    <string name="koil_set_eia_key_sub">原油源·金鑰可修改·留空降級騰訊源</string>
     <string name="koil_set_export_records">匯出加油記錄</string>
     <string name="koil_set_export_records_sub">CSV 格式 · 含派生欄位</string>
     <string name="koil_set_import_records">匯入加油記錄</string>
