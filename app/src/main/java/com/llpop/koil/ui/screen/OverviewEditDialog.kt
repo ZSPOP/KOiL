@@ -18,16 +18,35 @@ import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.WaterDrop
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import top.yukonga.miuix.kmp.glass.GlassTextFieldDefaults
+import com.llpop.koil.ui.component.KOiLDecimalInput
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -41,11 +60,12 @@ import androidx.compose.ui.unit.dp
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.sanitizeDecimalInput
 import com.llpop.koil.domain.logic.NumberFormat
+import com.llpop.koil.ui.component.gradeValueLabel
+import com.llpop.koil.ui.component.fieldSurfaceColor
 import com.llpop.koil.ui.screen.overview.DialogUiState
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.ui.component.provinceLabel
 import kotlin.math.abs
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.DropdownArrowEndAction
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -57,6 +77,8 @@ import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.GlassPopupOverlay
 import com.llpop.koil.ui.component.LocalPageBackdrop
 
@@ -153,6 +175,7 @@ internal fun EditRecordDialog(
                     icon = Icons.Filled.Money,
                     value = uiState.editActualAmount,
                     onValueChange = onActualAmountChange,
+                    isLastField = true,
                     keyboardType = KeyboardType.Decimal,
                     error = uiState.editDeviationExceeded || uiState.editOverPayable,
                     modifier = Modifier.weight(1f),
@@ -228,23 +251,29 @@ internal fun EditRecordDialog(
                     Spacer(Modifier.height(20.dp))
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    Button(
+                    GlassDialogButton(
                         onClick = onDismiss,
-                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
-                    ) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.BodyLarge) }
+                        modifier = Modifier.weight(1f),
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_cancel),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                     Spacer(Modifier.width(12.dp))
-                    Button(
+                    GlassDialogButton(
                         onClick = onSave,
-                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                        modifier = Modifier.weight(1f),
                         enabled = uiState.editReady && !uiState.isSavingEdit,
-                        // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐补录卡/首页录入卡）
-                        colors = ButtonDefaults.buttonColors(
-                            color = KOiLColors.Primary,
-                            contentColor = Color.White,
-                            disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
-                        ),
-                    ) { Text(stringResource(R.string.koil_common_save), fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Medium) }
+                        // Primary 角色 = 主色底：校验通过才亮起，置灰语义与原来的蓝色可保存一致
+                        role = GlassDialogButtonRole.Primary,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_save),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                 }
             }
         }
@@ -369,12 +398,15 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MiuixTheme.colorScheme.secondaryContainer)
+                // 与 GlassTextField 同构，高度随行高自然与输入框一致
+                .clip(RoundedCornerShape(GlassTextFieldDefaults.CornerRadius))
+                .background(fieldSurfaceColor())
                 .onGloballyPositioned { anchorBounds.value = it.boundsInWindow() }
                 .clickable { showPicker.value = true }
-                .padding(horizontal = 14.dp),
+                .padding(
+                    horizontal = GlassTextFieldDefaults.InsideMargin.width,
+                    vertical = GlassTextFieldDefaults.InsideMargin.height,
+                ),
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(
@@ -383,7 +415,7 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
             ) {
                 Text(
                     text = if (province.isBlank()) stringResource(R.string.koil_add_pick_province) else provinceLabel(province),
-                    fontSize = KOiLType.BodyLarge,
+                    style = MiuixTheme.textStyles.main,
                     fontWeight = if (province.isBlank()) FontWeight.Normal else FontWeight.Bold,
                     color = if (province.isBlank()) MiuixTheme.colorScheme.onBackgroundVariant else MiuixTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -547,13 +579,35 @@ internal fun EditField(
     readOnly: Boolean = false,
     error: Boolean = false,
     placeholder: String? = null,
+    /** 本窗口最后一个可编辑字段：回车=收键盘，而不是跳下一项 */
+    isLastField: Boolean = false,
 ) {
     val errorColor = KOiLColors.Error
-    val tfColors = TextFieldDefaults.textFieldColors(
-        backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-        labelColor = if (error) errorColor else MiuixTheme.colorScheme.onSecondaryContainer,
-        borderColor = if (error) errorColor else Color.Transparent,
-    )
+    val focusManager = LocalFocusManager.current
+    val submitTick = remember { mutableIntStateOf(0) }
+    val advanceFromField: () -> Unit = {
+        if (isLastField) focusManager.clearFocus() else focusManager.moveFocus(FocusDirection.Next)
+    }
+    LaunchedEffect(Unit) {
+        snapshotFlow { submitTick.intValue }.drop(1).collect { advanceFromField() }
+    }
+    val state = rememberTextFieldState(value)
+    var fieldFocused by remember { mutableStateOf(false) }
+    // 外部值变更时回填；只在未聚焦时覆盖，避免打断正在输入的光标
+    LaunchedEffect(value, fieldFocused) {
+        if (!fieldFocused && state.text.toString() != value) {
+            state.setTextAndPlaceCursorAtEnd(value)
+        }
+    }
+    LaunchedEffect(state) {
+        snapshotFlow { state.text.toString() }.drop(1).collect { onValueChange(it) }
+    }
+    // 与设置页同一套配色：默认玻璃表面底色 + 聚焦主色边框，错误态只换红色
+    val tfColors = if (error) {
+        GlassTextFieldDefaults.textFieldColors(labelColor = errorColor, borderColor = errorColor)
+    } else {
+        GlassTextFieldDefaults.textFieldColors()
+    }
     Column(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
@@ -572,24 +626,42 @@ internal fun EditField(
         Spacer(Modifier.height(6.dp))
         // miuix TextField 无 placeholder 参数，用 Box 叠加层实现"待计算"占位（value 为空时显示）
         Box(modifier = Modifier.fillMaxWidth()) {
-            TextField(
-                value = value,
-                onValueChange = { onValueChange(it.sanitizeDecimalInput()) },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-                singleLine = true,
+            GlassTextField(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 只读字段（自动计算的应付）不参与焦点序列
+                    .focusProperties { canFocus = !readOnly }
+                    .onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            advanceFromField()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    .onFocusChanged { fieldFocused = it.isFocused },
                 readOnly = readOnly,
+                lineLimits = TextFieldLineLimits.SingleLine,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = keyboardType,
+                    imeAction = if (isLastField) ImeAction.Done else ImeAction.Next,
+                ),
+                onKeyboardAction = { advanceFromField() },
                 colors = tfColors,
-                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                inputTransformation = KOiLDecimalInput { submitTick.intValue++ },
             )
-            if (placeholder != null && value.isEmpty()) {
+            if (placeholder != null && state.text.isEmpty()) {
                 Text(
                     text = placeholder,
-                    fontSize = KOiLType.BodyLarge,
+                    // 与框内输入文字同字号
+                    style = MiuixTheme.textStyles.main,
                     color = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.5f),
                     modifier = Modifier
                         .align(Alignment.CenterStart)
-                        .padding(start = 14.dp),
+                        .padding(start = GlassTextFieldDefaults.InsideMargin.width),
                 )
             }
         }
@@ -625,12 +697,15 @@ internal fun GradePriceSelect(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 52.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(MiuixTheme.colorScheme.secondaryContainer)
+                // 与 GlassTextField 同构（同圆角 / 同内边距 / 同行高），高度自然相等
+                .clip(RoundedCornerShape(GlassTextFieldDefaults.CornerRadius))
+                .background(fieldSurfaceColor())
                 .onGloballyPositioned { anchorBounds.value = it.boundsInWindow() }
                 .clickable { showMenu.value = true }
-                .padding(horizontal = 14.dp),
+                .padding(
+                    horizontal = GlassTextFieldDefaults.InsideMargin.width,
+                    vertical = GlassTextFieldDefaults.InsideMargin.height,
+                ),
             contentAlignment = Alignment.CenterStart,
         ) {
             Row(
@@ -638,13 +713,12 @@ internal fun GradePriceSelect(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "$grade# · ${price?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L"}",
-                    fontSize = KOiLType.BodyLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onBackground,
+                    // 与首页录入卡共用 gradeValueLabel：柴油不再显示成 `0#`
+                    text = gradeValueLabel(grade, price),
+                    style = MiuixTheme.textStyles.main,
                     maxLines = 1,
+                    modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.weight(1f))
                 // 锚点只挂右侧箭头：值留在左边，面板右边缘对齐字段右边
                 Row(
                     modifier = Modifier.glassPopupAnchorValue(popupAnchor),

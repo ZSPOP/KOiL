@@ -28,7 +28,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.WaterDrop
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -78,7 +77,6 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassIconButton
@@ -440,15 +438,9 @@ fun OverviewScreen(
             contentPadding = 20.dp,
             scrollable = true,
             maxHeight = 480.dp,
+            title = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
         ) {
             Column(Modifier.fillMaxWidth()) {
-                Text(
-                    text = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
-                    fontSize = KOiLType.TitleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MiuixTheme.colorScheme.onBackground,
-                )
-                Spacer(Modifier.height(4.dp))
                 uiState.abnormalRecords.forEachIndexed { index, d ->
                     val rec = d.record
                     val isHigh = d.consumptionStatus == ConsumptionStatus.HIGH
@@ -715,20 +707,29 @@ fun OverviewScreen(
                         Spacer(Modifier.height(20.dp))
                     }
                     Row(modifier = Modifier.fillMaxWidth()) {
-                        Button(onClick = viewModel::cancelBackfill, modifier = Modifier.weight(1f).heightIn(min = 44.dp)) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.BodyLarge) }
+                        GlassDialogButton(
+                            onClick = viewModel::cancelBackfill,
+                            modifier = Modifier.weight(1f),
+                            role = GlassDialogButtonRole.Normal,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.koil_common_cancel),
+                                style = MiuixTheme.textStyles.button,
+                            )
+                        }
                         Spacer(Modifier.width(12.dp))
-                        Button(
+                        GlassDialogButton(
                             onClick = viewModel::saveBackfill,
-                            modifier = Modifier.weight(1f).heightIn(min = 44.dp),
+                            modifier = Modifier.weight(1f),
                             enabled = dlg.backfillReady && !dlg.isSavingBackfill,
-                            // 全部校验通过 → 蓝色可保存；否则灰色置灰（对齐首页录入卡 addRecord）
-                            colors = ButtonDefaults.buttonColors(
-                                color = KOiLColors.Primary,
-                                contentColor = Color.White,
-                                disabledColor = MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                                disabledContentColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.4f),
-                            ),
-                        ) { Text(stringResource(R.string.koil_common_save), fontSize = KOiLType.BodyLarge, fontWeight = FontWeight.Medium) }
+                            // Primary 角色 = 主色底：录满才亮起，与原来「蓝色可保存」的语义一致
+                            role = GlassDialogButtonRole.Primary,
+                        ) {
+                            Text(
+                                text = stringResource(R.string.koil_common_save),
+                                style = MiuixTheme.textStyles.button,
+                            )
+                        }
                     }
                 }
             }

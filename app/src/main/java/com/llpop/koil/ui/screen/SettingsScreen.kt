@@ -21,11 +21,11 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.CardSegment
+import com.llpop.koil.ui.component.KOiLPasswordMask
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -36,6 +36,18 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import top.yukonga.miuix.kmp.basic.IconButton
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.flow.drop
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import top.yukonga.miuix.kmp.glass.GlassTextField
+import com.llpop.koil.ui.component.KOiLNoWhitespaceInput
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -45,7 +57,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -91,6 +102,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.withContext
@@ -608,26 +621,51 @@ fun SettingsScreen(
                                         Column {
                                             Spacer(Modifier.height(8.dp))
                                             var showKey by remember { mutableStateOf(false) }
-                                            TextField(
-                                                value = eiaKey,
-                                                onValueChange = { viewModel.setEiaApiKey(it) },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                singleLine = true,
+                                            val eiaState = rememberTextFieldState(eiaKey)
+                                            // DataStore 侧的值异步到达时回填；内容一致就不动，不打断正在输入的光标
+                                            LaunchedEffect(eiaKey) {
+                                                if (eiaState.text.toString() != eiaKey) {
+                                                    eiaState.setTextAndPlaceCursorAtEnd(eiaKey)
+                                                }
+                                            }
+                                            // 输入写回 ViewModel；drop(1) 跳过初值那一次，避免开局无谓回写
+                                            LaunchedEffect(eiaState) {
+                                                snapshotFlow { eiaState.text.toString() }
+                                                    .drop(1)
+                                                    .collect { viewModel.setEiaApiKey(it) }
+                                            }
+                                            GlassTextField(
+                                                state = eiaState,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    // 外接键盘的回车从这里进来，软键盘走下面的键盘动作 / 字符提交两条路
+                                                    .onPreviewKeyEvent { event ->
+                                                        if (event.type == KeyEventType.KeyDown &&
+                                                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                                        ) {
+                                                            viewModel.setEiaApiKey(eiaState.text.toString())
+                                                            focusManager.clearFocus()
+                                                            true
+                                                        } else {
+                                                            false
+                                                        }
+                                                    },
+                                                lineLimits = TextFieldLineLimits.SingleLine,
                                                 keyboardOptions = KeyboardOptions(
                                                     keyboardType = KeyboardType.Ascii,
                                                     imeAction = androidx.compose.ui.text.input.ImeAction.Done,
                                                 ),
-                                                colors = TextFieldDefaults.textFieldColors(
-                                                    backgroundColor = MiuixTheme.colorScheme.secondaryContainer,
-                                                    labelColor = MiuixTheme.colorScheme.onSecondaryContainer,
-                                                    borderColor = Color.Transparent,
-                                                ),
-                                                cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
-                                                visualTransformation = if (showKey) {
-                                                    androidx.compose.ui.text.input.VisualTransformation.None
-                                                } else {
-                                                    androidx.compose.ui.text.input.PasswordVisualTransformation()
+                                                // 回车 = 提交 + 收键盘；同时抹掉输入法回车补的空格，
+                                                // 否则尾部空格会被写进 DataStore 并让 EIA 鉴权失败
+                                                inputTransformation = KOiLNoWhitespaceInput {
+                                                    viewModel.setEiaApiKey(eiaState.text.toString())
+                                                    focusManager.clearFocus()
                                                 },
+                                                onKeyboardAction = {
+                                                    viewModel.setEiaApiKey(eiaState.text.toString())
+                                                    focusManager.clearFocus()
+                                                },
+                                                outputTransformation = if (showKey) null else KOiLPasswordMask,
                                                 trailingIcon = {
                                                     IconButton(onClick = { showKey = !showKey }) {
                                                         Icon(
@@ -717,7 +755,9 @@ fun SettingsScreen(
                             )
                         })
                     }
-                    if (syncUi.enabled) {
+                    // 未配置时也要露出面板：否则清空密码 → 开关被关 → 面板随之消失，
+                    // 用户既开不了开关也找不到填密码的地方（整块功能死锁）
+                    if (syncUi.enabled || !syncUi.configured) {
                         add(CardItem("syncPanel") {
                             SyncPanelBody(tappedOnField = tappedOnField, focusManager = focusManager)
                         })
@@ -727,66 +767,82 @@ fun SettingsScreen(
 
             item {
                 if (showDataIoDialog.value) {
-            KOiLGlassDialog(
-                show = true,
-                onDismissRequest = { showDataIoDialog.value = false },
-                // 内容零内边距：行节点吃满面板宽度，按下高亮才能横向铺满
-                contentPadding = 0.dp,
-            ) {
-                // 只按面板本身的 32dp 圆角裁一刀，让高亮四角跟面板对齐
-                Column(modifier = Modifier.clip(RoundedCornerShape(32.dp))) {
-                    // 不设「数据与备份」标题——入口行本身就叫「导出与备份」，
-                    // 弹窗再顶一个近义大标题只是重复占高度，直接让选项当首屏内容。
-                    // —— CSV 段：人可读、Excel 能开 ——
-                    DataIoDialogItem(
-                        title = stringResource(R.string.koil_set_export_records),
-                        subtitle = stringResource(R.string.koil_set_export_records_sub),
-                        onClick = {
-                            showDataIoDialog.value = false
-                            viewModel.exportCsv()
-                        },
-                    )
-                    DataIoDialogItem(
-                dividerAbove = true,
-                        title = stringResource(R.string.koil_set_import_records),
-                        subtitle = stringResource(R.string.koil_set_import_records_sub),
-                        onClick = {
-                            showDataIoDialog.value = false
-                            importLauncher.launch(arrayOf("text/csv", "*/*"))
-                        },
-                    )
-                    DataIoDialogItem(
-                dividerAbove = true,
-                        title = stringResource(R.string.koil_set_export_price_history),
-                        subtitle = stringResource(R.string.koil_set_export_price_history_sub),
-                        onClick = {
-                            showDataIoDialog.value = false
-                            viewModel.exportOilPriceHistory()
-                        },
-                    )
+                    KOiLGlassDialog(
+                        show = true,
+                        onDismissRequest = { showDataIoDialog.value = false },
+                        // 内容零内边距：行贴面板边，按下高亮才能横向铺满整个弹窗
+                        contentPadding = 0.dp,
+                    ) {
+                        // 只做裁剪、不铺底色：圆角取 32dp 与面板一致，高亮四角跟面板重合
+                        CardSegment(
+                            isFirst = true,
+                            isLast = true,
+                            cornerRadius = 32.dp,
+                            outerHorizontalPadding = 0.dp,
+                            insidePadding = PaddingValues(0.dp),
+                            color = Color.Transparent,
+                        ) {
+                            // 不设「数据与备份」标题——入口行本身就叫「导出与备份」，
+                            // 弹窗再顶一个近义大标题只是重复占高度，直接让选项当首屏内容。
+                            // 行节点铺满面板宽（高亮才能满宽），文字靠 insideMargin 补回 20dp 内缩
+                            // 20dp 面板内边距 + 16dp 行内边距的合计：行节点仍铺满面板宽（高亮满宽），
+                            // 内容四边都退回默认的 36dp，和未改前的位置一致
+                            val rowMargin = PaddingValues(36.dp)
+                            // —— CSV 段：人可读、Excel 能开 ——
+                            DataIoDialogItem(
+                                insideMargin = rowMargin,
+                                title = stringResource(R.string.koil_set_export_records),
+                                subtitle = stringResource(R.string.koil_set_export_records_sub),
+                                onClick = {
+                                    showDataIoDialog.value = false
+                                    viewModel.exportCsv()
+                                },
+                            )
+                            DataIoDialogItem(
+                                dividerAbove = true,
+                                insideMargin = rowMargin,
+                                title = stringResource(R.string.koil_set_import_records),
+                                subtitle = stringResource(R.string.koil_set_import_records_sub),
+                                onClick = {
+                                    showDataIoDialog.value = false
+                                    importLauncher.launch(arrayOf("text/csv", "*/*"))
+                                },
+                            )
+                            DataIoDialogItem(
+                                dividerAbove = true,
+                                insideMargin = rowMargin,
+                                title = stringResource(R.string.koil_set_export_price_history),
+                                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
+                                onClick = {
+                                    showDataIoDialog.value = false
+                                    viewModel.exportOilPriceHistory()
+                                },
+                            )
 
-                    // —— JSON 段：整包、只有本 App 能恢复 ——
-                    DataIoDialogItem(
-                dividerAbove = true,
-                        title = stringResource(R.string.koil_set_backup),
-                        subtitle = stringResource(R.string.koil_set_backup_sub),
-                        onClick = {
-                            showDataIoDialog.value = false
-                            viewModel.exportBackup()
-                        },
-                    )
-                    DataIoDialogItem(
-                dividerAbove = true,
-                        title = stringResource(R.string.koil_set_restore),
-                        subtitle = stringResource(R.string.koil_set_restore_sub),
-                        onClick = {
-                            showDataIoDialog.value = false
-                            backupLauncher.launch(arrayOf("application/json", "*/*"))
-                        },
-                    )
+                            // —— JSON 段：整包、只有本 App 能恢复 ——
+                            DataIoDialogItem(
+                                dividerAbove = true,
+                                insideMargin = rowMargin,
+                                title = stringResource(R.string.koil_set_backup),
+                                subtitle = stringResource(R.string.koil_set_backup_sub),
+                                onClick = {
+                                    showDataIoDialog.value = false
+                                    viewModel.exportBackup()
+                                },
+                            )
+                            DataIoDialogItem(
+                                dividerAbove = true,
+                                insideMargin = rowMargin,
+                                title = stringResource(R.string.koil_set_restore),
+                                subtitle = stringResource(R.string.koil_set_restore_sub),
+                                onClick = {
+                                    showDataIoDialog.value = false
+                                    backupLauncher.launch(arrayOf("application/json", "*/*"))
+                                },
+                            )
+                        }
+                    }
                 }
-            }
-        }
 
         if (showCrashDialog) {
             KOiLGlassDialog(
@@ -794,25 +850,14 @@ fun SettingsScreen(
                 onDismissRequest = { showCrashDialog = false },
                 contentPadding = 16.dp,
                 scrollable = true,
+                title = stringResource(R.string.koil_set_crash_log),
+                summary = if (crashCount > 0) {
+                    pluralStringResource(R.plurals.koil_set_crash_count, crashCount, crashCount)
+                } else {
+                    null
+                },
             ) {
                 Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = stringResource(R.string.koil_set_crash_log),
-                            fontSize = KOiLType.Headline,
-                            fontWeight = FontWeight.Bold,
-                            color = MiuixTheme.colorScheme.onBackground,
-                            modifier = Modifier.weight(1f),
-                        )
-                        if (crashCount > 0) {
-                            Text(
-                                text = pluralStringResource(R.plurals.koil_set_crash_count, crashCount, crashCount),
-                                fontSize = KOiLType.BodySmall,
-                                color = MiuixTheme.colorScheme.onBackgroundVariant,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
                     if (crashLogText.isBlank()) {
                         Text(
                             text = stringResource(R.string.koil_set_crash_none),
@@ -831,57 +876,46 @@ fun SettingsScreen(
                     Spacer(Modifier.height(16.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         if (crashLogText.isNotBlank()) {
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                                    .clickable {
-                                        crashScope.launch {
-                                            CrashReporter.clear(crashContext)
-                                            crashLogText = ""
-                                            crashCount = 0
-                                            android.widget.Toast.makeText(
-                                                crashContext,
-                                                crashClearedText,
-                                                android.widget.Toast.LENGTH_SHORT,
-                                            ).show()
-                                        }
-                                    }
-                                    .padding(vertical = 11.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.koil_set_crash_clear),
-                                    fontSize = KOiLType.BodyLarge,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MiuixTheme.colorScheme.onBackground,
-                                )
-                            }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (crashLogText.isNotBlank()) KOiLColors.Primary else KOiLColors.Primary.copy(alpha = 0.4f))
-                                .clickable(enabled = crashLogText.isNotBlank()) {
+                            GlassDialogButton(
+                                onClick = {
                                     crashScope.launch {
-                                        val ok = withContext(Dispatchers.IO) { CrashReporter.exportToDownloads(crashContext) }
+                                        CrashReporter.clear(crashContext)
+                                        crashLogText = ""
+                                        crashCount = 0
                                         android.widget.Toast.makeText(
                                             crashContext,
-                                            if (ok) crashExportOkText else crashExportFailText,
+                                            crashClearedText,
                                             android.widget.Toast.LENGTH_SHORT,
                                         ).show()
                                     }
+                                },
+                                modifier = Modifier.weight(1f),
+                                role = GlassDialogButtonRole.Normal,
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.koil_set_crash_clear),
+                                    style = MiuixTheme.textStyles.button,
+                                )
+                            }
+                        }
+                        GlassDialogButton(
+                            onClick = {
+                                crashScope.launch {
+                                    val ok = withContext(Dispatchers.IO) { CrashReporter.exportToDownloads(crashContext) }
+                                    android.widget.Toast.makeText(
+                                        crashContext,
+                                        if (ok) crashExportOkText else crashExportFailText,
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
                                 }
-                                .padding(vertical = 11.dp),
-                            contentAlignment = Alignment.Center,
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = crashLogText.isNotBlank(),
+                            role = GlassDialogButtonRole.Normal,
                         ) {
                             Text(
                                 text = stringResource(R.string.koil_set_crash_export),
-                                fontSize = KOiLType.BodyLarge,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.White,
+                                style = MiuixTheme.textStyles.button,
                             )
                         }
                     }

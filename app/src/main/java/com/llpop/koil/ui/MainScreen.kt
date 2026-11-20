@@ -252,7 +252,8 @@ fun MainScreen(
                             )
                         } else {
                             // 官方 OS4 玻璃胶囊导航条：材质、描边、阴影由组件内置，
-                            // 不再自己叠 textureBlur。Scaffold 已消费底部 inset，这里关掉组件自带的 insets。
+                            // 不再自己叠 textureBlur。底部 inset 由组件自己按 navigationBars 计算
+                            // （与自研 iOS 底栏一致），Scaffold 的 bottomBar 槽位不重复消费。
                             GlassNavigationBar(
                                 items = glassNavigationItems,
                                 selectedIndex = selectedTab,

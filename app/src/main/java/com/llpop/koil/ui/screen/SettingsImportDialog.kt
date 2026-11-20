@@ -32,8 +32,9 @@ import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.theme.KOiLColors
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.runtime.mutableIntStateOf
 import com.llpop.koil.ui.theme.KOiLType
@@ -55,10 +56,12 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
             stringResource(R.string.koil_import_tab_conflict, preview.mileageConflicts.size) to preview.mileageConflicts,
             stringResource(R.string.koil_import_tab_error, preview.errors.size) to preview.errors,
         )
-        com.llpop.koil.ui.component.KOiLGlassDialog(show = true, onDismissRequest = viewModel::dismissImportPreview) {
+        com.llpop.koil.ui.component.KOiLGlassDialog(
+            show = true,
+            onDismissRequest = viewModel::dismissImportPreview,
+            title = stringResource(R.string.koil_import_title),
+        ) {
             Column {
-                Text(stringResource(R.string.koil_import_title), fontSize = KOiLType.Title, fontWeight = FontWeight.Bold, color = MiuixTheme.colorScheme.onBackground)
-                Spacer(Modifier.height(10.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -167,11 +170,26 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(modifier = Modifier.fillMaxWidth()) {
-                    // 与恢复弹窗一致——不设固定 40dp 高度，防文字下缘被裁
-                    Button(onClick = viewModel::dismissImportPreview, modifier = Modifier.weight(1f)) { Text(stringResource(R.string.koil_common_cancel), fontSize = KOiLType.Body) }
+                    GlassDialogButton(
+                        onClick = viewModel::dismissImportPreview,
+                        modifier = Modifier.weight(1f),
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_common_cancel),
+                            style = MiuixTheme.textStyles.button,
+                        )
+                    }
                     Spacer(Modifier.width(10.dp))
-                    Button(onClick = viewModel::confirmImport, modifier = Modifier.weight(1f)) {
-                        Text(stringResource(R.string.koil_import_confirm, preview.valid.size), fontSize = KOiLType.Body, fontWeight = FontWeight.Medium)
+                    GlassDialogButton(
+                        onClick = viewModel::confirmImport,
+                        modifier = Modifier.weight(1f),
+                        role = GlassDialogButtonRole.Normal,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.koil_import_confirm, preview.valid.size),
+                            style = MiuixTheme.textStyles.button,
+                        )
                     }
                 }
             }

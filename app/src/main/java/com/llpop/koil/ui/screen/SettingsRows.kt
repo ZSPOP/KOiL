@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +18,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.drop
+import com.llpop.koil.ui.component.KOiLDigitsOnlyInput
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
@@ -53,6 +65,7 @@ import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLColors
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
@@ -73,6 +86,7 @@ internal fun DataIoDialogItem(
     subtitle: String,
     onClick: () -> Unit,
     dividerAbove: Boolean = false,
+    insideMargin: PaddingValues = BasicComponentDefaults.InsideMargin,
 ) {
     // 弹窗内的动作行交回 ArrowPreference，不再自绘 0.5dp 分割线
     // （设置类页面无分割线，行与行靠 insideMargin 的 16dp 留白区分）。
@@ -81,6 +95,7 @@ internal fun DataIoDialogItem(
     ArrowPreference(
         title = title,
         summary = subtitle,
+        insideMargin = insideMargin,
         onClick = onClick,
     )
 }
@@ -192,8 +207,22 @@ internal fun StepperInputRow(
     val fieldWidthPx = remember { mutableIntStateOf(0) }
     val fieldDensity = LocalDensity.current
     val clamped = value.coerceIn(range)
+    // 输入内容交给 TextFieldState（值版 BasicTextField 整个 API 已弃用），draft 只保留「是否在编辑」这层语义
+    val fieldState = rememberTextFieldState()
+    LaunchedEffect(fieldState) {
+        snapshotFlow { fieldState.text.toString() }.drop(1).collect { raw ->
+            if (draft.value != null) draft.value = raw
+        }
+    }
     fun commitField() {
-        draft.value?.toIntOrNull()?.coerceIn(range)?.let { onCommit(it) }
+        // 已经提交过就不再重复（imeAction、Enter 键、字符提交可能同时到达）
+        if (draft.value == null) {
+            fieldFocused.value = false
+            return
+        }
+        // 直接读 state，避免 snapshotFlow 滞后一帧丢掉最后键入的字符
+        val raw = fieldState.text.toString().ifEmpty { draft.value.orEmpty() }
+        raw.toIntOrNull()?.coerceIn(range)?.let { onCommit(it) }
         draft.value = null
         fieldFocused.value = false
     }
@@ -234,7 +263,8 @@ internal fun StepperInputRow(
                     .clickable(
                         onClickLabel = stringResource(R.string.koil_stepper_decrease, title),
                     ) {
-                        val base = draft.value?.toIntOrNull() ?: clamped
+                        val base = fieldState.text.toString().toIntOrNull()
+                            ?.takeIf { draft.value != null } ?: clamped
                         draft.value = null
                         fieldFocused.value = false
                         onCommit((base - step).coerceIn(range))
@@ -250,7 +280,10 @@ internal fun StepperInputRow(
                     modifier = Modifier
                         .onSizeChanged { if (it.width > 0) fieldWidthPx.intValue = it.width }
                         .clip(RoundedCornerShape(8.dp))
-                        .clickable { draft.value = clamped.toString() }
+                        .clickable {
+                            fieldState.setTextAndPlaceCursorAtEnd(clamped.toString())
+                            draft.value = clamped.toString()
+                        }
                         .padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -281,7 +314,7 @@ internal fun StepperInputRow(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = draft.value!!,
+                            text = fieldState.text.toString(),
                             fontSize = KOiLType.Title,
                             fontWeight = FontWeight.Bold,
                             color = Color.Transparent,
@@ -290,26 +323,36 @@ internal fun StepperInputRow(
                     }
                     // 实际输入层：精确宽度 = 测量层宽，文字居中
                     BasicTextField(
-                        value = draft.value!!,
-                        onValueChange = { raw -> draft.value = raw.filter { it.isDigit() } },
+                        state = fieldState,
+                        // 回车三条路径统一收口：都只是清焦点，落盘交给 onFocusChanged → commitField
+                        inputTransformation = KOiLDigitsOnlyInput { focusManager.clearFocus() },
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Number,
                             imeAction = androidx.compose.ui.text.input.ImeAction.Done,
                         ),
-                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
-                            onDone = { focusManager.clearFocus() },
-                        ),
-                        singleLine = true,
+                        onKeyboardAction = { focusManager.clearFocus() },
+                        lineLimits = TextFieldLineLimits.SingleLine,
                         textStyle = TextStyle(
                             fontSize = KOiLType.Title,
                             fontWeight = FontWeight.Bold,
                             color = MiuixTheme.colorScheme.onBackground,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         ),
-                        cursorBrush = SolidColor(MiuixTheme.colorScheme.onBackground),
+                        // 与 EIA / 云备份（GlassTextField 默认 cursorBrush = colors.borderColor）同一光标色
+                        cursorBrush = SolidColor(MiuixTheme.colorScheme.primary),
                         modifier = Modifier
                             .width(with(fieldDensity) { fieldWidthPx.intValue.toDp() })
                             .focusRequester(fieldFocus)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                ) {
+                                    focusManager.clearFocus()
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
                             .onFocusChanged { state ->
                                 if (state.isFocused) {
                                     fieldFocused.value = true
@@ -336,7 +379,8 @@ internal fun StepperInputRow(
                     .clickable(
                         onClickLabel = stringResource(R.string.koil_stepper_increase, title),
                     ) {
-                        val base = draft.value?.toIntOrNull() ?: clamped
+                        val base = fieldState.text.toString().toIntOrNull()
+                            ?.takeIf { draft.value != null } ?: clamped
                         draft.value = null
                         fieldFocused.value = false
                         onCommit((base + step).coerceIn(range))
