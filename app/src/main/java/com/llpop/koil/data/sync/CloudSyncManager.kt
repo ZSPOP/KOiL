@@ -143,11 +143,28 @@ class CloudSyncManager(
         } else stored
     }
 
-    /** 连接测试（设置页「保存并测试连接」）：读取最新配置，PROPFIND 验证认证与可达性 */
-    suspend fun testConnection(): Boolean {
-        val url = SyncConfig.effectiveUrl(settings.syncUrl.first())
-        val username = SyncConfig.effectiveUsername(settings.syncUsername.first())
-        val password = getAppPassword()
+    /**
+     * 连接测试（设置页「保存并测试连接」）：PROPFIND 验证认证与可达性。
+     *
+     * 三个 override 是「用用户刚输入的值直接测」的入口。落盘是异步的，
+     * 写完再回头从存储里读一次，等于拿「我以为是新的、其实是旧的」快照去认证——
+     * 曾经的症状就是：清空后重填密码点保存报「账号密码不对」，
+     * 再点一下账号框（触发第二轮落盘）却又通了。测试就该拿手里的草稿值测，不绕存储。
+     *
+     * 空值分工：调用方（SyncViewModel）已经把三个草稿的空白统一转成 null，
+     * 「没填」这个语义在界面层判定，权威在那里；本函数只在 password 上再兜一层
+     * isNotBlank——因为 `passwordOverride ?: getAppPassword()` 的含义是「null 才回落已有密码」，
+     * 传空串会让请求带着空密码出去、被误报成凭据错误。url/username 不需要同样的兜底：
+     * 空白会由 effectiveUrl/effectiveUsername 回落到默认值。
+     */
+    suspend fun testConnection(
+        urlOverride: String? = null,
+        usernameOverride: String? = null,
+        passwordOverride: String? = null,
+    ): Boolean {
+        val url = SyncConfig.effectiveUrl(urlOverride ?: settings.syncUrl.first())
+        val username = SyncConfig.effectiveUsername(usernameOverride ?: settings.syncUsername.first())
+        val password = passwordOverride?.takeIf { it.isNotBlank() } ?: getAppPassword()
         if (url.isBlank() || username.isBlank() || password.isBlank()) return false
         return client.checkConnection(url, username, password)
     }

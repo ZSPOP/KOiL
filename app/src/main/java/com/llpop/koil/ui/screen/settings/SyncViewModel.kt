@@ -186,47 +186,56 @@ class SyncViewModel(
             try {
                 settings.setSyncEnabled(on)
                 if (!on) return@launch
-                if (!manager.isConfigured()) return@launch
-                if (recordDao.count() == 0) {
-                    // 新机/空库：拉云端预览 → 确认弹窗（不直接写库）
-                    loadRestorePreview()
-                    return@launch
-                }
-                // 非空库：首次配对先对账，用户选完才动数据。
-                // 旧实现在这里直接 pushNow，云端独有记录被静默吞掉、用户完全不知道发生了什么。
-                if (!settings.syncEverConfigured.first()) {
-                    when (val probe = manager.probeReconcile()) {
-                        // 云端还没有快照 = 没有对账对象，弹完整面板只是多一步
-                        CloudSyncManager.ReconcileProbe.NoCloud -> {
-                            _message.value = "first_upload:${recordDao.count()}"
-                            manager.pushNow(force = true)
-                        }
-                        is CloudSyncManager.ReconcileProbe.Ready -> {
-                            _reconcile.value = probe.preview
-                        }
-                        // 文件在、但读不懂：一个字都不写，交给用户决定是否覆盖
-                        is CloudSyncManager.ReconcileProbe.Corrupt -> {
-                            _reconcileCorrupt.value = probe
-                        }
-                    }
-                } else {
-                    // 已配对过：走常规推送。若上次是 corrupt，reprobeCorruptIfNeeded 会先探一次——
-                    // 读不懂就挂面板（否则「关掉再打开」也回不到人工入口），
-                    // 云端已被别的设备改回可读/删掉就直接推，不用挂一个空面板。
-                    val corrupt = manager.reprobeCorruptIfNeeded()
-                    if (corrupt != null) {
-                        _reconcileCorrupt.value = corrupt
-                        _message.value = "backup_corrupt"
-                    } else {
-                        manager.pushNow(force = true)
-                    }
-                }
+                runAfterEnable()
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 _message.value = "backup_failed"
             } finally {
                 _busy.value = false
+            }
+        }
+    }
+
+    /**
+     * 开关打开之后的后续动作：空库拉预览、首次配对先对账、已配对直接推。
+     * 抽成 suspend 方法是因为「保存并测试连接」成功后也要走同一套——
+     * 否则用户在设置页填完密码，连上了、开关却是关的，还得再手动开一次。
+     */
+    private suspend fun runAfterEnable() {
+        if (!manager.isConfigured()) return
+        if (recordDao.count() == 0) {
+            // 新机/空库：拉云端预览 → 确认弹窗（不直接写库）
+            loadRestorePreview()
+            return
+        }
+        // 非空库：首次配对先对账，用户选完才动数据。
+        // 旧实现在这里直接 pushNow，云端独有记录被静默吞掉、用户完全不知道发生了什么。
+        if (!settings.syncEverConfigured.first()) {
+            when (val probe = manager.probeReconcile()) {
+                // 云端还没有快照 = 没有对账对象，弹完整面板只是多一步
+                CloudSyncManager.ReconcileProbe.NoCloud -> {
+                    _message.value = "first_upload:${recordDao.count()}"
+                    manager.pushNow(force = true)
+                }
+                is CloudSyncManager.ReconcileProbe.Ready -> {
+                    _reconcile.value = probe.preview
+                }
+                // 文件在、但读不懂：一个字都不写，交给用户决定是否覆盖
+                is CloudSyncManager.ReconcileProbe.Corrupt -> {
+                    _reconcileCorrupt.value = probe
+                }
+            }
+        } else {
+            // 已配对过：走常规推送。若上次是 corrupt，reprobeCorruptIfNeeded 会先探一次——
+            // 读不懂就挂面板（否则「关掉再打开」也回不到人工入口），
+            // 云端已被别的设备改回可读/删掉就直接推，不用挂一个空面板。
+            val corrupt = manager.reprobeCorruptIfNeeded()
+            if (corrupt != null) {
+                _reconcileCorrupt.value = corrupt
+                _message.value = "backup_corrupt"
+            } else {
+                manager.pushNow(force = true)
             }
         }
     }
@@ -469,19 +478,37 @@ class SyncViewModel(
         )
     }
 
-    /** 保存配置并测试连接：草稿落盘（挂起等待）→ PROPFIND 验证，结果经 message 反馈 */
+    /**
+     * 保存配置并测试连接：草稿落盘（挂起等待）→ PROPFIND 验证。
+     *
+     * 两处刻意的选择：
+     * 1. 测试用**手里的草稿值**，不回读存储——落盘是异步写，回读可能拿到旧快照。
+     * 2. 连上就把开关打开并跑一次同步。用户点这个按钮的语义就是「用这套配置开始同步」，
+     *    否则连上了、开关还关着，他得再点一次开关才算数。
+     */
     fun saveAndTest(
         urlDraft: String? = null,
         usernameDraft: String? = null,
         passwordDraft: String? = null,
     ) {
-        if (_busy.value) return
-        _busy.value = true
+        if (!_busy.compareAndSet(false, true)) return
         viewModelScope.launch {
             try {
                 persistDrafts(urlDraft, usernameDraft, passwordDraft)
-                val ok = manager.testConnection()
-                _message.value = if (ok) "config_saved" else "config_test_failed"
+                val ok = manager.testConnection(
+                    urlOverride = urlDraft?.takeIf { it.isNotBlank() },
+                    usernameOverride = usernameDraft?.takeIf { it.isNotBlank() },
+                    passwordOverride = passwordDraft?.takeIf { it.isNotBlank() },
+                )
+                if (ok) {
+                    settings.setSyncEnabled(true)
+                    _message.value = "config_saved"
+                    runAfterEnable()
+                } else {
+                    _message.value = "config_test_failed"
+                }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _message.value = "config_test_failed"
             } finally {

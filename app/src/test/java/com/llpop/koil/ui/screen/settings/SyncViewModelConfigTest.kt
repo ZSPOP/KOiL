@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -129,6 +130,30 @@ class SyncViewModelConfigTest {
         assertEquals(
             SyncConfig.DEFAULT_APP_PASSWORD,
             SyncConfig.effectivePassword("", settings.syncPasswordEverSet.first()),
+        )
+    }
+
+    @Test
+    fun `清除之后把同一个内置密码填回来_必须真的落盘`() = runBlocking {
+        // 症状：点清除 → 重新输入密码（就是内置那个）→ 点保存并测试 → 报账号密码不对；
+        // 再点一下账号框（走失焦自动保存，那条路径没有内置值守卫）却又通了。
+        // 根因是这里：everSet 已被清除置为 true，有效密码口径变成「空」，不再回落默认，
+        // 而落盘守卫又把「等于内置默认」的输入静默丢了 —— 两条一起把用户填的密码吃掉了。
+        settings.setSyncAppPassword("")
+        settings.setSyncPasswordEncrypted(false)
+        settings.setSyncPasswordEverSet(true)
+        // 清除后确实没有可用的有效密码
+        assertEquals("", SyncConfig.effectivePassword("", settings.syncPasswordEverSet.first()))
+
+        SyncDraftWriter.persist(settings, null, null, SyncConfig.DEFAULT_APP_PASSWORD)
+
+        val rawPwd = settings.rawSyncConfig().third
+        assertNotNull("设置过之后再填回同一个密码必须落盘，否则认证用的是空密码", rawPwd)
+        assertTrue("落盘内容不能为空", rawPwd.orEmpty().isNotBlank())
+        // 落盘后有效密码就是用户填的那个值
+        assertEquals(
+            SyncConfig.DEFAULT_APP_PASSWORD,
+            SyncConfig.effectivePassword(settings.syncAppPassword.first(), settings.syncPasswordEverSet.first()),
         )
     }
 }
