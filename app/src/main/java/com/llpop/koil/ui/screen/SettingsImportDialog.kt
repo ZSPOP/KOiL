@@ -297,7 +297,10 @@ private fun CapsuleTabRow(
             .padding(3.dp)
             .height(IntrinsicSize.Min)
             .onSizeChanged { trackWidth = it.width }
-            .pointerInput(labels.size, slot, layoutDirection) {
+            // key 只留真正影响手势语义的两项：格数与本地方向。轨道宽度不进 key——
+            // 字体缩放等导致宽度变化时，拖动逻辑每帧自己读 size.width，不该重启手势、
+            // 把正在拖的那一下丢掉。
+            .pointerInput(labels.size, layoutDirection) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val width = size.width.toFloat()
