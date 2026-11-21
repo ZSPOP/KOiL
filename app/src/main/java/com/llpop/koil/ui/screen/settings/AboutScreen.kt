@@ -620,10 +620,12 @@ private fun AboutContent(
                             ArrowPreference(
                                 title = stringResource(R.string.koil_set_about_terms),
                                 onClick = { sheet = "terms" },
+                                holdDownState = sheet == "terms",
                             )
                             ArrowPreference(
                                 title = stringResource(R.string.koil_set_about_privacy),
                                 onClick = { sheet = "privacy" },
+                                holdDownState = sheet == "privacy",
                             )
                         }
 

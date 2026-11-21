@@ -66,6 +66,7 @@ import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.domain.logic.ConsumptionStatus
@@ -189,6 +190,9 @@ fun OverviewScreen(
         "3m" to stringResource(R.string.koil_range_3m),
     )
 
+    // 范围档位：内容区横滑切档要用，横滑方向与内容翻页一致（左滑进下一档）
+    val rangeIndex = rangeLabels.indexOfFirst { it.first == uiState.range }.coerceAtLeast(0)
+
     val pageBackdrop = rememberBlurBackdrop()
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_ov_title),
@@ -205,7 +209,13 @@ fun OverviewScreen(
                 .horizontalCutoutPadding()
                 .scrollEndHaptic()
                 .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                // 数据页的横滑归范围档位（页面翻页在本页已停用），纵向滚动与卡片点击不受影响
+                .dragToSwitchTab(
+                    tabCount = rangeLabels.size,
+                    selectedIndex = rangeIndex,
+                    onSelect = { idx -> viewModel.setRange(rangeLabels[idx].first) },
+                ),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
             // bottom 只留底栏槽高，与添加页、设置页一致
             contentPadding = pageContentPadding(innerPadding, extraBottom = bottomPadding),
