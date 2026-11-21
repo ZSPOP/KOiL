@@ -74,6 +74,7 @@ import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.BackNavigationIcon
 import com.llpop.koil.ui.component.KOiLScreenScaffold
+import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
 import com.llpop.koil.ui.component.blur.overScrollVertical
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
@@ -131,7 +132,14 @@ fun OilPriceDetailScreen(
                 .horizontalCutoutPadding()
                 .scrollEndHaptic()
                 .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                // 整页内容横滑切油号：与顶部轨道同一组档位，方向与内容翻页一致（左滑进下一档）。
+                // 二级页不在主 Pager 里，没有翻页手势与它抢。
+                .dragToSwitchTab(
+                    tabCount = state.grades.size,
+                    selectedIndex = state.grades.indexOf(state.grade).coerceAtLeast(0),
+                    onSelect = { idx -> viewModel.selectGrade(state.grades[idx]) },
+                ),
             // 横向边距由四张卡的 outerHorizontalPadding(12dp) 承担；
             // 顶部在顶栏下方再让 12dp 呼吸（extraTop），随顶栏折叠联动
             contentPadding = pageContentPadding(innerPadding, extraTop = 12.dp),

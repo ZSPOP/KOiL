@@ -31,6 +31,12 @@ fun KOiLGlassDialog(
     title: String? = null,
     summary: String? = null,
     contentPadding: Dp = 20.dp,
+    /**
+     * 面板内边距直接按四边给，优先于 [contentPadding]。
+     * 横向给 0 时内容列贴到面板边，行节点的按下高亮就能横向铺满，四个角由面板自己的
+     * squircle 裁切；纵向仍留出上下白。弹窗类面板按这个口径传 [DpSize]。
+     */
+    insideMargin: DpSize? = null,
     scrollable: Boolean = false,
     maxHeight: Dp? = null,
     widthFraction: Float? = null,
@@ -50,7 +56,7 @@ fun KOiLGlassDialog(
         title = title,
         summary = summary,
         maxWidth = maxWidth,
-        insideMargin = DpSize(contentPadding, contentPadding),
+        insideMargin = insideMargin ?: DpSize(contentPadding, contentPadding),
     ) {
         CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
         Column(

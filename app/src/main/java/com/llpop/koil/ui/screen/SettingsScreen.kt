@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.CardItem
-import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLPasswordMask
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -57,13 +56,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.Manifest
@@ -82,6 +81,7 @@ import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
+import com.llpop.koil.ui.component.GlassDialogTextButton
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -104,6 +104,12 @@ import top.yukonga.miuix.kmp.basic.TextFieldDefaults
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Backup
+import top.yukonga.miuix.kmp.icon.extended.File
+import top.yukonga.miuix.kmp.icon.extended.FileDownloads
+import top.yukonga.miuix.kmp.icon.extended.Import
+import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.util.CrashReporter
 import kotlinx.coroutines.withContext
@@ -729,6 +735,7 @@ fun SettingsScreen(
                             subtitle = stringResource(R.string.koil_set_data_io_sub),
                             value = "",
                             onClick = { showDataIoDialog.value = true },
+                            holdDownState = showDataIoDialog.value,
                         )
                     })
                     if (syncUi.loaded) {
@@ -770,77 +777,78 @@ fun SettingsScreen(
                     KOiLGlassDialog(
                         show = true,
                         onDismissRequest = { showDataIoDialog.value = false },
-                        // 内容零内边距：行贴面板边，按下高亮才能横向铺满整个弹窗
-                        contentPadding = 0.dp,
+                        // 标题与入口行同名，让弹窗自己说清「这是哪几个动作」，
+                        // 内容里就不再重复顶一个大标题。
+                        title = stringResource(R.string.koil_set_data_io_title),
+                        // 横向内边距归零 → 行节点铺满面板宽，按下高亮横向满宽，
+                        // 四个角由面板自己的 squircle 裁切；纵向 24 留出上下白。
+                        // 不再包 CardSegment：那层圆角裁剪会把短行裁成胶囊，比面板直接裁更“厚”。
+                        insideMargin = DpSize(0.dp, 24.dp),
                     ) {
-                        // 只做裁剪、不铺底色：圆角取 32dp 与面板一致，高亮四角跟面板重合
-                        CardSegment(
-                            isFirst = true,
-                            isLast = true,
-                            cornerRadius = 32.dp,
-                            outerHorizontalPadding = 0.dp,
-                            insidePadding = PaddingValues(0.dp),
-                            color = Color.Transparent,
-                        ) {
-                            // 不设「数据与备份」标题——入口行本身就叫「导出与备份」，
-                            // 弹窗再顶一个近义大标题只是重复占高度，直接让选项当首屏内容。
-                            // 行节点铺满面板宽（高亮才能满宽），文字靠 insideMargin 补回 20dp 内缩
-                            // 20dp 面板内边距 + 16dp 行内边距的合计：行节点仍铺满面板宽（高亮满宽），
-                            // 内容四边都退回默认的 36dp，和未改前的位置一致
-                            val rowMargin = PaddingValues(36.dp)
-                            // —— CSV 段：人可读、Excel 能开 ——
-                            DataIoDialogItem(
-                                insideMargin = rowMargin,
-                                title = stringResource(R.string.koil_set_export_records),
-                                subtitle = stringResource(R.string.koil_set_export_records_sub),
-                                onClick = {
-                                    showDataIoDialog.value = false
-                                    viewModel.exportCsv()
-                                },
-                            )
-                            DataIoDialogItem(
-                                dividerAbove = true,
-                                insideMargin = rowMargin,
-                                title = stringResource(R.string.koil_set_import_records),
-                                subtitle = stringResource(R.string.koil_set_import_records_sub),
-                                onClick = {
-                                    showDataIoDialog.value = false
-                                    importLauncher.launch(arrayOf("text/csv", "*/*"))
-                                },
-                            )
-                            DataIoDialogItem(
-                                dividerAbove = true,
-                                insideMargin = rowMargin,
-                                title = stringResource(R.string.koil_set_export_price_history),
-                                subtitle = stringResource(R.string.koil_set_export_price_history_sub),
-                                onClick = {
-                                    showDataIoDialog.value = false
-                                    viewModel.exportOilPriceHistory()
-                                },
-                            )
+                        // 行内边距 24/12：横向 24 是文字缩进、行节点仍然铺满面板宽，
+                        // 所以高亮满宽；纵向 12 撑出的行高让 5 条选项排满一屏又不互相黏住。
+                        val rowMargin = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+                        // —— CSV 段：人可读、Excel 能开 ——
+                        DataIoDialogItem(
+                            insideMargin = rowMargin,
+                            icon = MiuixIcons.FileDownloads,
+                            title = stringResource(R.string.koil_set_export_records),
+                            onClick = {
+                                showDataIoDialog.value = false
+                                viewModel.exportCsv()
+                            },
+                        )
+                        DataIoDialogItem(
+                            dividerAbove = true,
+                            insideMargin = rowMargin,
+                            icon = MiuixIcons.Import,
+                            title = stringResource(R.string.koil_set_import_records),
+                            onClick = {
+                                showDataIoDialog.value = false
+                                importLauncher.launch(arrayOf("text/csv", "*/*"))
+                            },
+                        )
+                        DataIoDialogItem(
+                            dividerAbove = true,
+                            insideMargin = rowMargin,
+                            icon = MiuixIcons.File,
+                            title = stringResource(R.string.koil_set_export_price_history),
+                            onClick = {
+                                showDataIoDialog.value = false
+                                viewModel.exportOilPriceHistory()
+                            },
+                        )
 
-                            // —— JSON 段：整包、只有本 App 能恢复 ——
-                            DataIoDialogItem(
-                                dividerAbove = true,
-                                insideMargin = rowMargin,
-                                title = stringResource(R.string.koil_set_backup),
-                                subtitle = stringResource(R.string.koil_set_backup_sub),
-                                onClick = {
-                                    showDataIoDialog.value = false
-                                    viewModel.exportBackup()
-                                },
-                            )
-                            DataIoDialogItem(
-                                dividerAbove = true,
-                                insideMargin = rowMargin,
-                                title = stringResource(R.string.koil_set_restore),
-                                subtitle = stringResource(R.string.koil_set_restore_sub),
-                                onClick = {
-                                    showDataIoDialog.value = false
-                                    backupLauncher.launch(arrayOf("application/json", "*/*"))
-                                },
-                            )
-                        }
+                        // —— JSON 段：整包、只有本 App 能恢复 ——
+                        DataIoDialogItem(
+                            dividerAbove = true,
+                            insideMargin = rowMargin,
+                            icon = MiuixIcons.Backup,
+                            title = stringResource(R.string.koil_set_backup),
+                            onClick = {
+                                showDataIoDialog.value = false
+                                viewModel.exportBackup()
+                            },
+                        )
+                        DataIoDialogItem(
+                            dividerAbove = true,
+                            insideMargin = rowMargin,
+                            icon = MiuixIcons.MoveFile,
+                            title = stringResource(R.string.koil_set_restore),
+                            onClick = {
+                                showDataIoDialog.value = false
+                                backupLauncher.launch(arrayOf("application/json", "*/*"))
+                            },
+                        )
+                        // 取消：横向 24、顶部 12。弹窗也能点外部或返回关闭，
+                        // 这里是给「一项都不想选」一个明确的出口。
+                        GlassDialogTextButton(
+                            text = stringResource(R.string.koil_common_cancel),
+                            onClick = { showDataIoDialog.value = false },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp, start = 24.dp, end = 24.dp),
+                        )
                     }
                 }
 
@@ -947,6 +955,7 @@ fun SettingsScreen(
                 crashCount = crashCount,
                 onOpenCrashLog = { showCrashDialog = true },
                 onOpenAbout = onOpenAbout,
+                crashDialogOpen = showCrashDialog,
             )
         }
     }
@@ -1003,6 +1012,8 @@ fun LazyListScope.aboutSection(
     crashCount: Int,
     onOpenCrashLog: () -> Unit,
     onOpenAbout: () -> Unit,
+    /** 崩溃日志弹窗是否正开在这一行上：开着时该行保持按下高亮，点的是哪一行不会断线 */
+    crashDialogOpen: Boolean = false,
 ) {
     item {
         SmallTitle(
@@ -1023,6 +1034,7 @@ fun LazyListScope.aboutSection(
                     subtitle = stringResource(R.string.koil_set_crash_log_sub),
                     value = if (crashCount > 0) pluralStringResource(R.plurals.koil_set_crash_count, crashCount, crashCount) else "",
                     onClick = onOpenCrashLog,
+                    holdDownState = crashDialogOpen,
                 )
             },
             CardItem("feedback") {

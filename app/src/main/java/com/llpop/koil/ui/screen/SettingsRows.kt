@@ -83,8 +83,9 @@ internal val GRADES = listOf("92", "95", "98", "0")
 @Composable
 internal fun DataIoDialogItem(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     dividerAbove: Boolean = false,
     insideMargin: PaddingValues = BasicComponentDefaults.InsideMargin,
 ) {
@@ -96,6 +97,16 @@ internal fun DataIoDialogItem(
         title = title,
         summary = subtitle,
         insideMargin = insideMargin,
+        startAction = icon?.let { vector ->
+            {
+                Icon(
+                    imageVector = vector,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(end = 16.dp),
+                )
+            }
+        },
         onClick = onClick,
     )
 }
@@ -106,6 +117,11 @@ internal fun SettingRow(
     subtitle: String,
     value: String,
     onClick: () -> Unit,
+    /**
+     * 该行拉起的弹窗是否正开在它上面。为 true 时这一行保持按下高亮，
+     * 让「我点的是这一行」在弹窗盖住页面之后仍有连续反馈。
+     */
+    holdDownState: Boolean = false,
     showArrow: Boolean = true,
     arrowIcon: androidx.compose.ui.graphics.vector.ImageVector =
         Icons.AutoMirrored.Filled.KeyboardArrowRight,
@@ -118,6 +134,7 @@ internal fun SettingRow(
         title = title,
         summary = subtitle.ifEmpty { null },
         onClick = onClick,
+        holdDownState = holdDownState,
         endActions = {
             if (badgeDot) {
                 Box(

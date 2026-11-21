@@ -311,6 +311,12 @@ fun MainScreen(
                             state = pagerState,
                             orientation = Orientation.Horizontal,
                         )
+                        // 数据页（page 1）的横滑留给页内的范围档位：这一页临时退回 Native
+                        // （不做跨轴拦截）并关掉 Pager 自身横滑，横滑就不会同时翻页；
+                        // 首页与设置页仍按设置里的模式正常翻页。
+                        val overviewPageActive by remember {
+                            derivedStateOf { pagerState.settledPage == 1 }
+                        }
                         HorizontalPager(
                                 state = pagerState,
                                 // 跨轴拦截：横滑前先判主轴（页面内垂直滚动与翻页不打架）；
@@ -320,15 +326,19 @@ fun MainScreen(
                                     .pagerGestureOverride(
                                         pagerState = pagerState,
                                         flingBehavior = pagerFlingBehavior,
-                                        mode = pagerInterceptionMode,
+                                        mode = if (overviewPageActive) {
+                                            PagerInterceptionMode.Native
+                                        } else {
+                                            pagerInterceptionMode
+                                        },
                                     ),
                                 verticalAlignment = Alignment.Top,
                                 // 预载相邻页：滑动时页面已组合完毕，动画帧只有绘制无组合，
                                 // 避免切换时整页首帧组合造成的掉帧
                                 beyondViewportPageCount = 1,
                                 overscrollEffect = null,
-                                userScrollEnabled = !interceptPagerGestures,
-                                pageNestedScrollConnection = if (interceptPagerGestures) {
+                                userScrollEnabled = !interceptPagerGestures && !overviewPageActive,
+                                pageNestedScrollConnection = if (interceptPagerGestures && !overviewPageActive) {
                                     PagerGestureNestedScrollConnection
                                 } else {
                                     nativePagerNestedScrollConnection
