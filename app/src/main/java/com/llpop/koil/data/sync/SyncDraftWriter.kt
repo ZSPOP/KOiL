@@ -1,6 +1,7 @@
 package com.llpop.koil.data.sync
 
 import com.llpop.koil.data.settings.AppSettings
+import kotlinx.coroutines.flow.first
 
 /**
  * 配置草稿落盘：**只写用户真实输入**，内置默认值一律不落盘。
@@ -32,7 +33,15 @@ object SyncDraftWriter {
         if (usernameDraft != null) {
             settings.setSyncUsername(if (SyncConfig.isBuiltInUsername(usernameDraft)) "" else usernameDraft)
         }
-        if (!passwordDraft.isNullOrBlank() && !SyncConfig.isBuiltInPassword(passwordDraft)) {
+        // 「命中内置默认密码就不落盘」这条守卫有个副作用必须先放行：用户点过「清除」之后
+        // `everSet` 已经是 true，此时有效密码口径是「设置过又被清空 = 空」，不再回落默认。
+        // 他如果把同一个密码重新填回来（很常见：清除只是想重置一下），守卫会静默丢掉这次输入，
+        // 结果就是「填了密码、点保存并测试、却报账号密码不对」，而同样的密码换个入口（失焦自动保存）
+        // 又能存进去——同一份输入两种结果。
+        // 因此只有「从未设置过」（全新安装、草稿自带默认值）才跳过；设置过就必须真的写进去。
+        val passwordIsBuiltIn = SyncConfig.isBuiltInPassword(passwordDraft.orEmpty())
+        val passwordEverSet = settings.syncPasswordEverSet.first()
+        if (!passwordDraft.isNullOrBlank() && (!passwordIsBuiltIn || passwordEverSet)) {
             val encrypted = CryptoHelper.encrypt(passwordDraft)
             if (encrypted != null) {
                 settings.setSyncAppPassword(encrypted)

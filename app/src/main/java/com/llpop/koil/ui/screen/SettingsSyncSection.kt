@@ -437,8 +437,13 @@ internal fun SyncPanelBody(
                                 }
                             },
                         label = stringResource(
-                            if (syncUi.passwordSet) R.string.koil_sync_app_password_set
-                            else R.string.koil_sync_app_password_unset_builtin,
+                            when {
+                                syncUi.passwordSet -> R.string.koil_sync_app_password_set
+                                // 设置过又被清空 = 用户主动停用，有效密码为空，不会再回落内置默认。
+                                // 这里若还说「将使用内置预设密码」，就是在骗他：填不填都能连的错觉。
+                                syncUi.passwordEverSet -> R.string.koil_sync_app_password_unset
+                                else -> R.string.koil_sync_app_password_unset_builtin
+                            },
                         ),
                         useLabelAsPlaceholder = true,
                         lineLimits = TextFieldLineLimits.SingleLine,
