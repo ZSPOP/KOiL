@@ -352,17 +352,31 @@ internal fun RecordCard(
                     Spacer(Modifier.height(9.dp))
                     HintLine(stringResource(R.string.koil_ov_distance_anomaly))
                 } else if (record.consumptionStatus == ConsumptionStatus.PENDING && record.pendingOil != null) {
-                    // 半箱/区间异常：待下次加满一次结算，显示自锚点以来的累计（不显示 km——
-                    // 区间最终里程要等结算才确定，提前显示易与结算后的油耗区间混淆）
+                    // 半箱/区间异常：两种状态分开说——后面还没满箱时是真的在等；后面已经有满箱把它
+                    // 并进去时，只说明并入哪天哪段（不给本条单独挂油耗数字，那段的油量/里程不属于它）
                     Spacer(Modifier.height(9.dp))
-                    HintLine(
-                        stringResource(
-                            R.string.koil_ov_pending_settle,
-                            record.pendingCount,
-                            NumberFormat.fixed2(record.pendingOil),
-                            NumberFormat.fixed2(record.pendingActual ?: 0.0),
+                    val settledDate = record.settledByDate
+                    val settledValue = record.settledConsumption
+                    if (settledDate != null && settledValue != null) {
+                        HintLine(
+                            stringResource(
+                                R.string.koil_ov_pending_merged,
+                                settledDate.takeLast(5),
+                                NumberFormat.measure(settledValue),
+                            )
                         )
-                    )
+                    } else {
+                        // 仍待结算：显示自锚点以来的累计（不显示 km——
+                        // 区间最终里程要等结算才确定，提前显示易与结算后的油耗区间混淆）
+                        HintLine(
+                            stringResource(
+                                R.string.koil_ov_pending_settle,
+                                record.pendingCount,
+                                NumberFormat.fixed2(record.pendingOil),
+                                NumberFormat.fixed2(record.pendingActual ?: 0.0),
+                            )
+                        )
+                    }
                 } else if (record.consumptionStatus == ConsumptionStatus.NO_BASE) {
                     // 无满箱锚点：首个满箱=基准已建立；半箱=暂无基准（上次满油时间未知，不显示累计）
                     Spacer(Modifier.height(9.dp))
