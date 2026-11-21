@@ -1,10 +1,14 @@
 package com.llpop.koil.ui.component
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -12,7 +16,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
@@ -73,6 +79,70 @@ fun KOiLFormSheet(
                 ),
             content = content,
         )
+        }
+    }
+}
+
+/**
+ * KOiL 玻璃底部列表弹层：标题 + 可滚动内容 + 钉在底部的按钮区。
+ *
+ * 与 [KOiLFormSheet] 的分工：表单页整页滚动、按钮跟着内容走，靠「读完再点」；
+ * 纯展示的明细只要「列表能滚、按钮常在」，用这个。内容区高度封顶 [maxContentHeight]，
+ * 行数超出后只在内容区内部滚动，面板不再继续长高，底部按钮始终露在外面。
+ *
+ * 布局契约同 [KOiLFormSheet]：`insideMargin` 传 0，横向内距交给内容块自己给；
+ * 底部导航栏让位由按钮区承担，滚到列表末尾时不会被系统手势条压住。
+ */
+@Composable
+fun KOiLListSheet(
+    show: Boolean,
+    onDismissRequest: () -> Unit,
+    title: String? = null,
+    modifier: Modifier = Modifier,
+    maxContentHeight: Dp = 480.dp,
+    footer: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val backdrop = LocalPageBackdrop.current
+    GlassBottomSheet(
+        show = show,
+        onDismissRequest = onDismissRequest,
+        backdrop = backdrop,
+        modifier = modifier,
+        title = title,
+        insideMargin = DpSize(0.dp, 0.dp),
+        renderInRootScaffold = true,
+        enableNestedScroll = true,
+    ) {
+        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp),
+            ) {
+                // 越界修饰符同样挂在滚动容器外层：内层挂它看不到容器外的手势，
+                // 下拉回弹与「内容拉到头再交给面板」的交接都会失效
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = maxContentHeight)
+                        .overScrollVertical()
+                        .verticalScroll(rememberScrollState()),
+                    content = content,
+                )
+                if (footer != null) {
+                    KOiLHorizontalDivider(Modifier.padding(horizontal = 16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp, end = 16.dp, top = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        content = footer,
+                    )
+                }
+            }
         }
     }
 }

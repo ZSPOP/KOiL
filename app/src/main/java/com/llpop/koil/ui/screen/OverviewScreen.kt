@@ -436,21 +436,32 @@ fun OverviewScreen(
     }
     }
 
-    // 异常明细弹窗（有异常时点异常卡弹出）；KOiLGlassDialog 滚动容器是
-    // Box，多个直接子项会全部叠在同一位置，必须在 content 内包 Column 垂直排列；补标题（title 参数未渲染）；偏差取绝对值
+    // 异常明细弹层（有异常时点异常卡拉起）：从玻璃弹窗换成底部弹层——明细条数不定，
+    // 弹层里内容区自己滚、底部「关闭」钉住，长列表不用把整页撑到顶；偏差取绝对值
     // 数据页的弹窗/弹层是脚手架的兄弟节点，不在 KOiLScreenScaffold 的 CompositionLocal 作用域内，
     // 不显式补 backdrop 的话，官方玻璃组件采样源为 null，只能回落成不透明底色（看起来「没有玻璃」）。
     CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
     if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
-        com.llpop.koil.ui.component.KOiLGlassDialog(
+        com.llpop.koil.ui.component.KOiLListSheet(
             show = true,
             onDismissRequest = { showAbnormalDetail = false },
-            contentPadding = 20.dp,
-            scrollable = true,
-            maxHeight = 480.dp,
             title = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
+            maxContentHeight = 480.dp,
+            footer = {
+                GlassDialogButton(
+                    onClick = { showAbnormalDetail = false },
+                    modifier = Modifier.weight(1f),
+                    role = GlassDialogButtonRole.Normal,
+                ) {
+                    Text(
+                        text = stringResource(R.string.koil_common_close),
+                        style = MiuixTheme.textStyles.button,
+                    )
+                }
+            },
         ) {
-            Column(Modifier.fillMaxWidth()) {
+            // 面板 insideMargin 为 0，横向内距由内容块自己给；末行不画分隔线
+            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
                 uiState.abnormalRecords.forEachIndexed { index, d ->
                     val rec = d.record
                     val isHigh = d.consumptionStatus == ConsumptionStatus.HIGH
