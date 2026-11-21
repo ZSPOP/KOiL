@@ -688,8 +688,12 @@ class SettingsViewModel(
                             d.oilConsumption != null && d.consumptionStatus == ConsumptionStatus.HIGH -> "偏高"
                             d.oilConsumption != null && d.consumptionStatus == ConsumptionStatus.LOW -> "偏低"
                             d.oilConsumption != null -> "正常"
-                            d.consumptionStatus == ConsumptionStatus.PENDING ->
-                                d.settledByDate?.let { "已并入${it.takeLast(5)}" } ?: "待结算"
+                            d.consumptionStatus == ConsumptionStatus.PENDING -> when {
+                                d.settledByDate != null -> "已并入${d.settledByDate.takeLast(5)}"
+                                // 加满了但区间里程为 0：不是"没加满"，别混成同一句话
+                                r.isFullTank -> "同点未结算"
+                                else -> "待结算"
+                            }
                             d.consumptionStatus == ConsumptionStatus.NO_BASE -> "无基准"
                             else -> "-"
                         }

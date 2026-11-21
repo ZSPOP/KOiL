@@ -48,6 +48,11 @@ data class RecordWithDerived(
     val settledByDate: String? = null,
     /** 吸收它的那段满箱区间的油耗（L/100km），即该满箱记录结算出的数字 */
     val settledConsumption: Double? = null,
+    /**
+     * 吸收它的那段是短途（< [MIN_DISTANCE]）：数字仍成立但单条失真风险大，满箱那条卡片会标
+     * 「短途参考」，这里同样要标——否则并入文案会让人以为这是个可信的段值。
+     */
+    val settledShortInterval: Boolean = false,
 )
 
 /**
@@ -219,13 +224,19 @@ object DerivedCalculator {
         // 出数字——列表要说的是「已并入哪天哪段」，而不是把同一段油耗在两条记录上各挂一次。
         var settleDate: String? = null
         var settleConsumption: Double? = null
+        var settleShort = false
         for (i in result.indices.reversed()) {
             val d = result[i]
             if (d.oilConsumption != null) {
                 settleDate = d.record.reoilDate
                 settleConsumption = d.oilConsumption
+                settleShort = d.shortInterval
             } else if (d.consumptionStatus == ConsumptionStatus.PENDING && settleDate != null) {
-                result[i] = d.copy(settledByDate = settleDate, settledConsumption = settleConsumption)
+                result[i] = d.copy(
+                    settledByDate = settleDate,
+                    settledConsumption = settleConsumption,
+                    settledShortInterval = settleShort,
+                )
             }
         }
         return result

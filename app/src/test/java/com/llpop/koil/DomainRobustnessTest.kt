@@ -198,8 +198,41 @@ class DomainRobustnessTest {
         assertEquals(ConsumptionStatus.PENDING, out[1].consumptionStatus)
         assertEquals("2026-01-15", out[1].settledByDate)
         assertEquals(6.67, out[1].settledConsumption!!, 0.01)
+        // 900km 不是短途，并入文案不需要带「短途参考」
+        assertFalse(out[1].settledShortInterval)
         // 结算的那条自身不需要"并入"指向
         assertNull(out[2].settledByDate)
+    }
+
+    @Test
+    fun `并入段是短途时标短途参考`() {
+        // F(10000) P(10030, 10L) F(10060)：区间只有 60km，短途也照常闭合结算
+        val out = DerivedCalculator.compute(
+            listOf(
+                rec(1, "2026-01-01", 10_000.0),
+                rec(2, "2026-01-05", 10_030.0).copy(isFullTank = false, oilAmount = 10.0),
+                rec(3, "2026-01-09", 10_060.0),
+            ), 20.0
+        )
+        assertEquals("2026-01-09", out[1].settledByDate)
+        assertTrue(out[1].settledShortInterval)
+        assertTrue(out[2].shortInterval)
+    }
+
+    @Test
+    fun `同点加油同样回填并入去向`() {
+        // 同点满箱（span=0）不闭合、锚点不动，但后面 r3 一闭结算，r2 也是被吸收的一方
+        val out = DerivedCalculator.compute(
+            listOf(
+                rec(1, "2026-01-01", 10_000.0),
+                rec(2, "2026-01-05", 10_000.0),
+                rec(3, "2026-01-10", 10_500.0),
+            ), 20.0
+        )
+        assertEquals(ConsumptionStatus.PENDING, out[1].consumptionStatus)
+        assertTrue(out[1].record.isFullTank)
+        assertEquals("2026-01-10", out[1].settledByDate)
+        assertEquals(16.0, out[1].settledConsumption!!, 1e-9)
     }
 
     @Test

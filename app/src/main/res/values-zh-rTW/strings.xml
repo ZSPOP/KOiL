@@ -140,6 +140,10 @@
     <string name="koil_ov_unit_price_station">油站單價 ¥%1$s/L</string>
     <string name="koil_ov_pending_settle">未加滿 · 待下次加滿後結算（已累計 %1$d 次 / %2$s L / %3$s 元）</string>
     <string name="koil_ov_pending_merged">未加滿 · 已併入 %1$s 的滿箱結算（該段 %2$s L/100km）</string>
+    <string name="koil_ov_pending_merged_short">未加滿 · 已併入 %1$s 的滿箱結算（該段 %2$s L/100km，短途參考）</string>
+    <string name="koil_ov_same_point_settle">同點加油 · 未結算（已累計 %1$d 次 / %2$s L / %3$s 元）</string>
+    <string name="koil_ov_same_point_merged">同點加油 · 已併入 %1$s 的滿箱結算（該段 %2$s L/100km）</string>
+    <string name="koil_ov_same_point_merged_short">同點加油 · 已併入 %1$s 的滿箱結算（該段 %2$s L/100km，短途參考）</string>
     <string name="koil_ov_no_base">暫無滿油基準，待加滿後開始結算</string>
     <string name="koil_ov_base_set">已建立滿油基準，待下次加滿後結算</string>
     <string name="koil_ov_short_interval_tag">短途參考</string>
