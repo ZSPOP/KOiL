@@ -184,6 +184,72 @@ class DomainRobustnessTest {
     }
 
     @Test
+    fun `半箱被后续满箱吸收后回填并入的日期与段油耗`() {
+        // 同「半箱累计」三段：半箱 r2 的油量并进 r3 的区间结算（(20+40)/900 = 6.67）
+        val out = DerivedCalculator.compute(
+            listOf(
+                rec(1, "2026-01-01", 10_000.0),
+                rec(2, "2026-01-08", 10_400.0).copy(isFullTank = false, oilAmount = 20.0),
+                rec(3, "2026-01-15", 10_900.0),
+            ), 20.0
+        )
+        // 半箱自身仍然不出数字：结算值只挂在吸收它的那条满箱上，不在两条记录上各挂一次
+        assertNull(out[1].oilConsumption)
+        assertEquals(ConsumptionStatus.PENDING, out[1].consumptionStatus)
+        assertEquals("2026-01-15", out[1].settledByDate)
+        assertEquals(6.67, out[1].settledConsumption!!, 0.01)
+        // 900km 不是短途，并入文案不需要带「短途参考」
+        assertFalse(out[1].settledShortInterval)
+        // 结算的那条自身不需要"并入"指向
+        assertNull(out[2].settledByDate)
+    }
+
+    @Test
+    fun `并入段是短途时标短途参考`() {
+        // F(10000) P(10030, 10L) F(10060)：区间只有 60km，短途也照常闭合结算
+        val out = DerivedCalculator.compute(
+            listOf(
+                rec(1, "2026-01-01", 10_000.0),
+                rec(2, "2026-01-05", 10_030.0).copy(isFullTank = false, oilAmount = 10.0),
+                rec(3, "2026-01-09", 10_060.0),
+            ), 20.0
+        )
+        assertEquals("2026-01-09", out[1].settledByDate)
+        assertTrue(out[1].settledShortInterval)
+        assertTrue(out[2].shortInterval)
+    }
+
+    @Test
+    fun `同点加油同样回填并入去向`() {
+        // 同点满箱（span=0）不闭合、锚点不动，但后面 r3 一闭结算，r2 也是被吸收的一方
+        val out = DerivedCalculator.compute(
+            listOf(
+                rec(1, "2026-01-01", 10_000.0),
+                rec(2, "2026-01-05", 10_000.0),
+                rec(3, "2026-01-10", 10_500.0),
+            ), 20.0
+        )
+        assertEquals(ConsumptionStatus.PENDING, out[1].consumptionStatus)
+        assertTrue(out[1].record.isFullTank)
+        assertEquals("2026-01-10", out[1].settledByDate)
+        assertEquals(16.0, out[1].settledConsumption!!, 1e-9)
+    }
+
+    @Test
+    fun `末尾半箱后面还没有满箱时不回填并入去向`() {
+        // 最后一条仍是半箱：它确实还在等，不能谎报"已并入"
+        val out = DerivedCalculator.compute(
+            listOf(
+                rec(1, "2026-01-01", 10_000.0),
+                rec(2, "2026-01-08", 10_500.0).copy(isFullTank = false, oilAmount = 30.0),
+            ), 20.0
+        )
+        assertEquals(ConsumptionStatus.PENDING, out[1].consumptionStatus)
+        assertNull(out[1].settledByDate)
+        assertNull(out[1].settledConsumption)
+    }
+
+    @Test
     fun `同点满箱不闭合且累计保留到下一区间`() {
         // F(10000) F(10000 同点) F(10500)：span=0 不产出（除零），锚点不动，
         // 锚点之后累计的 r2 40L 并入下一区间：区间油量 = 40+40 = 80L / 500km = 16 L/100km

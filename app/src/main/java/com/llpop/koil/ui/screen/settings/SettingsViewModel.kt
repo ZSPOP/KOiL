@@ -679,7 +679,8 @@ class SettingsViewModel(
                         val distanceStr = distance?.fmtMileage() ?: "-"
                         // 油耗状态（满箱区间口径，与总览页一致）：
                         // 首条(无上一条)→-；回拨/异常段→异常；短途闭合区间→短途参考；
-                        // 未满→待结算；无锚点→无基准；否则按阈值判定 正常/偏高/偏低
+                        // 未满且后续已有满箱→已并入那天的段结算；未满且仍在等→待结算；无锚点→无基准；
+                        // 否则按阈值判定 正常/偏高/偏低
                         val status = when {
                             distance == null -> "-"
                             d.distanceAnomaly && d.oilConsumption == null -> "异常"
@@ -687,7 +688,12 @@ class SettingsViewModel(
                             d.oilConsumption != null && d.consumptionStatus == ConsumptionStatus.HIGH -> "偏高"
                             d.oilConsumption != null && d.consumptionStatus == ConsumptionStatus.LOW -> "偏低"
                             d.oilConsumption != null -> "正常"
-                            d.consumptionStatus == ConsumptionStatus.PENDING -> "待结算"
+                            d.consumptionStatus == ConsumptionStatus.PENDING -> when {
+                                d.settledByDate != null -> "已并入${d.settledByDate.takeLast(5)}"
+                                // 加满了但区间里程为 0：不是"没加满"，别混成同一句话
+                                r.isFullTank -> "同点未结算"
+                                else -> "待结算"
+                            }
                             d.consumptionStatus == ConsumptionStatus.NO_BASE -> "无基准"
                             else -> "-"
                         }
