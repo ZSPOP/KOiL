@@ -84,9 +84,11 @@ def main() -> None:
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         sys.exit(f"error: --date 需要 YYYY-MM-DD，收到 {date}")
 
-    # 对齐自检：CI 要求 KOIL_RELEASE_DATE 等于 tag 提交日期或其次日
+    # 对齐自检：CI 要求 KOIL_RELEASE_DATE 等于 tag 提交日期或其次日。
+    # 手写值与默认值走同一道检查：默认值此刻必然通过，但条件写全，
+    # 以后改默认值来源（比如改读最近 commit 日期）时不会静默放过。
     allowed = {commit_day, commit_day + _dt.timedelta(days=1)}
-    if date not in {d.isoformat() for d in allowed} and args.date:
+    if date not in {d.isoformat() for d in allowed}:
         print(f"⚠ 手写的 {date} 不在 CI 允许区间 {min(allowed)} ~ {max(allowed)}"
               f"（提交日或其次日）；Release 流水线会以「发布日期不符」失败")
 
@@ -129,7 +131,8 @@ def main() -> None:
     print("\n还要人工做：")
     print(f"  0. KOIL_RELEASE_DATE 要对齐 tag 所指提交的日期（通常就是合 main 那天），"
           f"允许当天或次日：跨天发版时用 --date <提交那天>"
-          f"（CI 比对的是提交日期，不是打 tag 的日期）")
+          f"（CI 比对的是提交日期，不是打 tag 的日期）；"
+          f"若合并拖过了午夜，日期要改成实际合并那天再提 PR")
     print(f"  1. 在 CHANGELOG 的「## {new_name}」下补条目（脚本只插标题）")
     print(f"  2. 发版时打 tag：{tag}")
 
