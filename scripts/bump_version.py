@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+
+_CST = _dt.timezone(_dt.timedelta(hours=8))  # Asia/Shanghai，固定偏移，不依赖机器时区/tzdata
 import re
 import sys
 from pathlib import Path
@@ -71,13 +73,28 @@ def main() -> None:
     cur = parse_version(gradle_text)
     nxt = next_version(cur)
     tag = "V{}.{}.{}".format(*nxt)
-    date = args.date or _dt.date.today().isoformat()
+    # 日期锚定北京时间：CI 比对的是 tag 提交在 Asia/Shanghai 的日期，不跟构建机时区走
+    now = _dt.datetime.now(_CST)
+    commit_day = now.date()
+    # 23 点后跑的 bump，提交多半已落到次日；默认按次日写，免得再撞一次跨午夜
+    if now.hour >= 23:
+        commit_day += _dt.timedelta(days=1)
+        print(f"⚠ 当前 {now:%H:%M}（Asia/Shanghai），现在提交会跨到次日，日期默认按 {commit_day} 算")
+    date = args.date or commit_day.isoformat()
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
         sys.exit(f"error: --date 需要 YYYY-MM-DD，收到 {date}")
 
+    # 对齐自检：CI 要求 KOIL_RELEASE_DATE 等于 tag 提交日期或其次日。
+    # 手写值与默认值走同一道检查：默认值此刻必然通过，但条件写全，
+    # 以后改默认值来源（比如改读最近 commit 日期）时不会静默放过。
+    allowed = {commit_day, commit_day + _dt.timedelta(days=1)}
+    if date not in {d.isoformat() for d in allowed}:
+        print(f"⚠ 手写的 {date} 不在 CI 允许区间 {min(allowed)} ~ {max(allowed)}"
+              f"（提交日或其次日）；Release 流水线会以「发布日期不符」失败")
+
     print(f"当前：{cur[0]}.{cur[1]}.{cur[2]}")
     print(f"下一个：{nxt[0]}.{nxt[1]}.{nxt[2]}   （tag 用 {tag}）")
-    print(f"发布日期：{date}")
+    print(f"发布日期：{date}   （现在 {now:%Y-%m-%d %H:%M} Asia/Shanghai）")
 
     if not args.apply:
         print("\n这是预览。加 --apply 才会改文件。")
@@ -114,7 +131,8 @@ def main() -> None:
     print("\n还要人工做：")
     print(f"  0. KOIL_RELEASE_DATE 要对齐 tag 所指提交的日期（通常就是合 main 那天），"
           f"允许当天或次日：跨天发版时用 --date <提交那天>"
-          f"（CI 比对的是提交日期，不是打 tag 的日期）")
+          f"（CI 比对的是提交日期，不是打 tag 的日期）；"
+          f"若合并拖过了午夜，日期要改成实际合并那天再提 PR")
     print(f"  1. 在 CHANGELOG 的「## {new_name}」下补条目（脚本只插标题）")
     print(f"  2. 发版时打 tag：{tag}")
 
