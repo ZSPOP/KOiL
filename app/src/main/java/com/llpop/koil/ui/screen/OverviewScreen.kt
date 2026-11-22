@@ -64,7 +64,6 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
-import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
@@ -411,7 +410,13 @@ fun OverviewScreen(
         ) {
             // 官方 FloatingActionButton：默认 60dp 圆形、主色底、4dp 阴影；
             // 滚到底时整体降到 alpha 0.4（仍可点）
-            // 官方玻璃图标按钮：44dp 圆形玻璃胶囊（顶栏按钮同款材质），比 60dp FAB 小
+            // 官方玻璃图标按钮：44dp 圆形玻璃胶囊（顶栏按钮同款材质），比 60dp FAB 小。
+            // backdrop 必须取列表内容层（pageBackdrop）：它录的是 surface + drawContent()，
+            // 玻璃才采得到正下方滚动的卡片、做出真实折射；早先取 LocalWallpaperBackdrop
+            // （只录纯底色）时采样到的是一整块纯色，观感只剩「半透明填充 + 描边」。
+            // 按钮是列表的兄弟节点、绘制在之上，不在该层录制范围内，不存在采样到自身的问题。
+            // 模糊关闭、或不支持 RuntimeShader 的机型，rememberBlurBackdrop 都返回 null，
+            // 自动回落填充 + 描边，与其他玻璃组件一致（两个条件任一即可触发）。
             GlassIconButton(
                 onClick = {
                     scope.launch {
@@ -422,7 +427,7 @@ fun OverviewScreen(
                     }
                 },
                 modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
-                backdrop = LocalWallpaperBackdrop.current,
+                backdrop = pageBackdrop,
                 size = 44.dp,
             ) {
                 Icon(
