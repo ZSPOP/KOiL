@@ -415,7 +415,8 @@ fun OverviewScreen(
             // 玻璃才采得到正下方滚动的卡片、做出真实折射；早先取 LocalWallpaperBackdrop
             // （只录纯底色）时采样到的是一整块纯色，观感只剩「半透明填充 + 描边」。
             // 按钮是列表的兄弟节点、绘制在之上，不在该层录制范围内，不存在采样到自身的问题。
-            // 模糊关闭时 rememberBlurBackdrop 返回 null，自动回落填充 + 描边，与其他玻璃组件一致。
+            // 模糊关闭、或不支持 RuntimeShader 的机型，rememberBlurBackdrop 都返回 null，
+            // 自动回落填充 + 描边，与其他玻璃组件一致（两个条件任一即可触发）。
             GlassIconButton(
                 onClick = {
                     scope.launch {
