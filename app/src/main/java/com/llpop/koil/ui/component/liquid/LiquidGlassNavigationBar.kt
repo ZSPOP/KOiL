@@ -83,7 +83,7 @@ import top.yukonga.miuix.kmp.basic.BadgedBox
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.blur
 import top.yukonga.miuix.kmp.blur.drawBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -200,7 +200,7 @@ internal fun IosLiquidGlassNavigationBar(
     items: List<NavigationItem>,
     selectedIndex: Int,
     onItemClick: (Int) -> Unit,
-    backdrop: LayerBackdrop?,
+    backdrop: Backdrop?,
     isBlurActive: Boolean,
     isDark: Boolean,
     showLabels: Boolean,

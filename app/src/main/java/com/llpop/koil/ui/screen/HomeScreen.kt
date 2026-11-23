@@ -1,6 +1,9 @@
 package com.llpop.koil.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -90,6 +93,7 @@ import com.llpop.koil.ui.component.gradeValueLabel
 import com.llpop.koil.ui.component.fieldSurfaceColor
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.CardItem
+import com.llpop.koil.ui.component.LocalOnGlassSurface
 import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLScreenScaffold
@@ -119,11 +123,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import com.llpop.koil.ui.component.GlassPopupOverlay
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.LocalPageBackdrop
 
 /**
@@ -216,11 +220,11 @@ fun HomeScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
+                )
                 // edge-to-edge 下键盘不 resize 窗口，补 imePadding 让表单底部（实付/提交按钮）不被键盘遮挡
                 .imePadding(),
             // 底部留白统一走 contentPadding（与总览页、设置页同一种写法）。
@@ -365,7 +369,10 @@ fun HomeScreen(
                         }
                     },
                     CardItem("submit") {
-                        Box(modifier = Modifier.padding(8.dp)) {
+                        // 底部 16dp = miuix 行内基准（BasicComponentDefaults.InsideMargin），与
+                        // 设置页等卡片末行到卡底的距离一致；原先四边统一 8dp，玻璃整卡化后
+                        // 按钮离卡片下缘明显比别的卡窄
+                        Box(modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 16.dp)) {
                             // 添加记录按钮（全部校验通过 → 蓝色可提交，否则一律提交不了）
                             Button(
                     onClick = viewModel::addRecord,
@@ -452,6 +459,55 @@ private fun PermissionDialog(
     }
 }
 
+// ===== 油价卡头部的迷你胶囊按钮 =====
+/**
+ * 油价卡标题行右侧的定位/省份胶囊。
+ *
+ * 用实心 surfaceVariant 铺在采样玻璃上会显成一块「贴片」，更糟的是默认波纹（Ripple）是
+ * 亮色矩形/圆，按下瞬间比按钮本身亮得多，在两个小胶囊上格外跳。玻璃面上因此改为
+ * onSurface 薄涂 + 0.8dp 细边，按下只加深底色（不走 indication），边界由细边交代。
+ * 非玻璃面（模糊关闭 / 实色卡）保持原来的实色底 + 按下加深，不加边。
+ */
+@Composable
+private fun GlassAwareHeaderChip(
+    onGlass: Boolean,
+    fallbackBg: Color,
+    onClick: () -> Unit,
+    padding: PaddingValues,
+    content: @Composable () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val shape = RoundedCornerShape(8.dp)
+    // 玻璃面上这两枚胶囊彻底不铺底：0.07 的灰底 + 描边在深色玻璃上仍会被看成
+    // 「贴上去的方块」。可点的暗示由图标本身和省份文字后的 ⌄ 承担，按下才浮出一层
+    // 很淡的底（0.12），松手即消失。
+    val bg = when {
+        onGlass -> MiuixTheme.colorScheme.onSurface.copy(alpha = if (pressed) 0.12f else 0f)
+        pressed -> fallbackBg.copy(alpha = (fallbackBg.alpha * 1.8f).coerceAtMost(1f))
+        else -> fallbackBg
+    }
+    Box(
+        // 命中区仍撑到 48×48dp：胶囊本身只有 30×24dp 左右，远低于 Material 的 48dp 建议
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            // indication = null 时无需 clip 抑制波纹矩形；裁圆角只为视觉一致
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(shape)
+                .background(bg)
+                .padding(padding),
+            contentAlignment = Alignment.Center,
+        ) {
+            content()
+        }
+    }
+}
+
 // ===== 油价四宫格卡 =====
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -468,7 +524,15 @@ private fun OilPriceCard(
     // 主题是设置项（跟随系统/浅色/深色）：必须读实际生效值，读系统值会在手动主题下反色
     val dark = LocalKOiLDarkTheme.current
     val accent = MiuixTheme.colorScheme.primary            // 深色=#0A84FF 柔和亮蓝 / 浅色=#0071E3
-    val containerBg = if (dark) MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f) else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
+    // 玻璃卡内的小胶囊按钮不能再铺实色灰：0.6 alpha 的 surfaceVariant 叠在采样玻璃上会
+    // 变成一块「贴片」，与周围透出的底色断开。玻璃面上换成 onSurface 的低 alpha 中性薄涂，
+    // 可点的语义由图标/箭头自身承担。
+    val onGlass = LocalOnGlassSurface.current
+    val containerBg = when {
+        onGlass -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.07f)
+        dark -> MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        else -> KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
+    }
     val containerText = if (dark) accent else KOiLColors.OnPrimaryContainer
     // 深色档与「油耗偏高」共用 AttentionNight：同为「需要注意」语义，不再各留一个值。
     val urgentColor = if (dark) KOiLColors.AttentionNight else KOiLColors.AttentionDay
@@ -505,49 +569,35 @@ private fun OilPriceCard(
                     softWrap = false,
                 )
             }
-            // 定位按钮
-            // 命中区取 48×48dp（视觉仍是小胶囊）：30×24dp 远低于 Material 的 48dp 建议，
-            // 手指点偏就落到省份按钮上。做法是外层撑开 48dp 承担点击，内层保持原样只管外观。
-            // clip 必须放在 clickable 之前——否则按下波纹是 48dp 外层的矩形色块
-            //（真机反馈"点击出现矩形色块"）。裁成圆角后波纹跟随圆角轮廓。
-            Box(
-                modifier = Modifier
-                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable(onClick = onLocateClick),
-                contentAlignment = Alignment.Center,
+            // 定位按钮：48×48dp 命中区托着一个小胶囊，视觉尺寸不变。
+            // 玻璃面上不走波纹——默认波纹是亮色矩形/圆，叠在采样玻璃上比按钮本身还显眼，
+            // 点击反馈改成胶囊底色加深（见 GlassAwareHeaderChip）。
+            GlassAwareHeaderChip(
+                onGlass = onGlass,
+                fallbackBg = containerBg,
+                onClick = onLocateClick,
+                padding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
             ) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerBg)
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.MyLocation,
-                        contentDescription = stringResource(R.string.koil_add_locate_cd),
-                        tint = containerText,
-                        modifier = Modifier.size(14.dp),
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Filled.MyLocation,
+                    contentDescription = stringResource(R.string.koil_add_locate_cd),
+                    tint = containerText,
+                    modifier = Modifier.size(14.dp),
+                )
             }
             Spacer(Modifier.width(2.dp))
             // 省份选择按钮（点击弹官方玻璃下拉菜单，锚定按钮、跟随位置）
-            // 同定位按钮——clip 在 clickable 之前，波纹圆角不出现矩形色块
-            Box(
-                modifier = Modifier
-                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { showProvincePicker.value = true },
-                contentAlignment = Alignment.Center,
+            // 同上——玻璃面上去波纹，点击反馈走底色
+            GlassAwareHeaderChip(
+                onGlass = onGlass,
+                fallbackBg = containerBg,
+                onClick = { showProvincePicker.value = true },
+                padding = PaddingValues(horizontal = 10.dp, vertical = 5.dp),
             ) {
                 Row(
                     modifier = Modifier
                         // 记录可见胶囊自身的窗口坐标，官方玻璃面板按这个矩形对齐到正下方
-                        .onGloballyPositioned { provinceBounds = it.boundsInWindow() }
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(containerBg)
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                        .onGloballyPositioned { provinceBounds = it.boundsInWindow() },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     // 省份文字 14sp Bold + 箭头直接跟随（无手动间距）
@@ -656,9 +706,16 @@ private fun OilPriceCard(
             val suggestionColor = if (stranded) MiuixTheme.colorScheme.onBackgroundVariant
                 else if (urgent) urgentColor
                 else accent
-            val bgColor = if (dark) Color(0xFF17191D)
-                else if (urgent) urgentColor.copy(alpha = 0.16f)
-                else KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
+            // 提醒条是玻璃卡内部的强调块：底色留半透，让卡片的磨砂底透上来，
+            // 不自己再叠一层采样（否则同区域内两层模糊，观感变灰、多一层绘制）。
+            // 0xFF17191D 这类「按实色卡调的深色块」铺在采样玻璃上仍会显成一贴片，
+            // 玻璃面上统一退成 onSurface 中性薄涂，强调交给左侧色条 + 橙色文字。
+            val bgColor = when {
+                onGlass -> MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                dark -> Color(0xFF17191D).copy(alpha = 0.45f)
+                urgent -> urgentColor.copy(alpha = 0.16f)
+                else -> KOiLColors.PrimaryContainer.copy(alpha = 0.5f)
+            }
             val textColor = if (urgent) urgentColor
                 else if (dark) accent
                 else KOiLColors.OnPrimaryContainer
@@ -1135,7 +1192,7 @@ private fun GradeField(
     ) {
         gradeLabels.forEach { g ->
             val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
-            else stringResource(R.string.koil_add_grade_gasoline, g)
+                else stringResource(R.string.koil_add_grade_gasoline, g)
             GlassPopupItem(
                 text = label,
                 selected = g == grade,
@@ -1170,17 +1227,25 @@ private fun PrecheckBanner(uiState: AddUiState) {
         "add_failed" -> stringResource(R.string.koil_precheck_add_failed_generic)  // 固定文案，不透出内部异常
         else -> stringResource(R.string.koil_precheck_default)
     }
+    // 语义容器色是 10% alpha 的 tint，按实色卡调的；铺到采样玻璃上仍会显成一块色片。
+    // 玻璃面上把 tint 再压一半、默认态的实心灰换成 onSurface 薄涂，语义交给文字色本身。
+    val onGlass = LocalOnGlassSurface.current
     val (bgColor, textColor) = when {
         precheck.isDuplicate || precheck.mileageDecreased ->
-            KOiLColors.ErrorContainer to KOiLColors.Error
+            (if (onGlass) KOiLColors.ErrorContainer.copy(alpha = 0.055f) else KOiLColors.ErrorContainer) to
+                KOiLColors.Error
         precheck.priceDeviationExceeded ->
-            KOiLColors.CautionContainer to KOiLColors.Caution
+            (if (onGlass) KOiLColors.CautionContainer.copy(alpha = 0.055f) else KOiLColors.CautionContainer) to
+                KOiLColors.Caution
         // "已添加"与"可提交"同用绿色成功态（灰色默认态会像提示又像报错）
         precheck.isReady || precheck.messageKey == "added" ->
-            KOiLColors.SuccessContainer to KOiLColors.Success
+            (if (onGlass) KOiLColors.SuccessContainer.copy(alpha = 0.055f) else KOiLColors.SuccessContainer) to
+                KOiLColors.Success
         else ->
             // 在卡组内做凹槽底：用主题的次要禁用色，深色下比卡片亮一档、浅色下是浅灰
-            MiuixTheme.colorScheme.disabledSecondaryVariant to MiuixTheme.colorScheme.onBackgroundVariant
+            (if (onGlass) MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+            else MiuixTheme.colorScheme.disabledSecondaryVariant) to
+                MiuixTheme.colorScheme.onBackgroundVariant
     }
     Box(
         modifier = Modifier

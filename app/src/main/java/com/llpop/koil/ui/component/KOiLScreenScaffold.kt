@@ -11,13 +11,23 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import com.llpop.koil.ui.component.liquid.rememberCombinedBackdrop
+import androidx.compose.foundation.background
+import com.llpop.koil.ui.component.effect.BgEffectBackground
+import com.llpop.koil.ui.theme.LocalWallpaperEnabled
+import com.llpop.koil.ui.theme.LocalWallpaperPlaying
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * 页面级 Scaffold —— 统一各 Screen 的顶栏模式（HomeScreen / SettingsScreen）：
@@ -43,7 +53,11 @@ fun KOiLScreenScaffold(
     navigationIcon: (@Composable () -> Unit)? = null,
     backdrop: LayerBackdrop? = null,
     listState: LazyListState? = null,
-    overlay: @Composable (backdrop: LayerBackdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
+    // 二级页（关于 / 油价明细）脱离一级页 Pager：外层那份"钉在屏幕上的壁纸层"
+    // 只属于三个一级页，二级页若跟着透明就会露出一片纯色（"没底"）。置 true 时
+    // 本页自己建壁纸层并铺 surface 底 —— 与官方 AboutPage 的写法一致。
+    ownWallpaper: Boolean = false,
+    overlay: @Composable (backdrop: Backdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
     content: @Composable (
         innerPadding: PaddingValues,
         topPadding: Dp,
@@ -73,23 +87,92 @@ fun KOiLScreenScaffold(
         }
     }
 
+    // 官方 AboutPage 的做法：内容与顶栏分开录进各自的 backdrop，
+    // 覆盖层采样两者合并的层 —— 这样覆盖层既不会采到自己的宿主，也不会采到 scrim。
+    val barBackdrop = if (blurActive) rememberLayerBackdrop() else null
+    // 外层（MainScreen）已经提供了「固定壁纸」层时：本页不再自建壁纸层、也不再铺底，
+    // 壁纸钉在屏幕上，翻页只移动这一页的内容；页面容器透明，让外层壁纸透上来。
+    val inheritedWallpaperBackdrop = if (ownWallpaper) null else LocalWallpaperBackdrop.current
+    val wallpaperBackdrop = if (blurActive && inheritedWallpaperBackdrop == null) rememberLayerBackdrop() else null
+    // 本页实际可用的壁纸层：自建的那份优先，其次是外层 Pager 钉住的那份。
+    val pageWallpaper = wallpaperBackdrop ?: inheritedWallpaperBackdrop
+    val overlayBackdrop = if (backdrop != null && barBackdrop != null) {
+        // 内容层现在不含壁纸了：覆盖层（长按浮层等）的玻璃要把壁纸垫在最下面，
+        // 否则采到的只有 surface 灰。
+        if (pageWallpaper != null) {
+            rememberCombinedBackdrop(
+                rememberCombinedBackdrop(pageWallpaper, backdrop),
+                barBackdrop,
+            )
+        } else {
+            rememberCombinedBackdrop(backdrop, barBackdrop)
+        }
+    } else {
+        backdrop
+    }
+    // 顶栏的采样源 —— 与官方 GlassPage 一致，采「壁纸层 + 内容层」的整层，
+    // 而不是只采壁纸：官方顶栏的渐进模糊靠"内容滚到顶栏下面"产生纹理，
+    // 只给壁纸层时模糊的是平滑色阶，观感上就是"上滑没模糊了"。
+    // 壁纸层在 MainScreen（固定不动），内容层是本页录制层，两层各自按当前坐标取像素。
+    val topBarBackdrop: Backdrop? = when {
+        pageWallpaper != null && backdrop != null -> rememberCombinedBackdrop(pageWallpaper, backdrop)
+        pageWallpaper != null -> pageWallpaper
+        else -> backdrop
+    }
+
+    // 外层（MainScreen 的 Scaffold）已经有整页录制层时沿用它：官方的 GlassDialog /
+    // GlassBottomSheet 采的就是 pageBackdrop（含顶栏 + 底栏 + 内容）那一层。
+    val inheritedPageBackdrop = LocalPageBackdrop.current
     CompositionLocalProvider(
-        LocalPageBackdrop provides backdrop,
+        LocalPageBackdrop provides (inheritedPageBackdrop ?: backdrop),
+        // 壁纸层 backdrop：页面内玻璃组件采「底色 + 壁纸」那层（官方 GlassPage 的
+        // tabBackdrop 同一用法），不能采自己所在的录制层。
+        LocalWallpaperBackdrop provides (wallpaperBackdrop ?: inheritedWallpaperBackdrop),
     ) {
     Scaffold(
         modifier = modifier,
+        containerColor = Color.Transparent,
         topBar = {
-            BlurredBar(backdrop = backdrop, blurActive = blurActive) {
-                AdaptiveTopAppBar(
-                    title = title,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = navigationIcon ?: {},
-                )
+            Box(modifier = if (barBackdrop != null) Modifier.layerBackdrop(barBackdrop) else Modifier) {
+                BlurredBar(backdrop = topBarBackdrop, blurActive = blurActive) {
+                    AdaptiveTopAppBar(
+                        title = title,
+                        scrollBehavior = scrollBehavior,
+                        navigationIcon = navigationIcon ?: {},
+                    )
+                }
             }
         },
     ) { innerPadding ->
         val focusManager = LocalFocusManager.current
-        Box(modifier = Modifier.fillMaxSize()) {
+        val wallpaper = LocalWallpaperEnabled.current
+        // 外层已有固定壁纸（三个一级页）时，这里什么都不画：直接透出 MainScreen 的
+        // 壁纸层。只有脱离 Pager 的场景（没有外层壁纸）才沿用旧结构 —— 官方 GlassPage
+        // 的「壁纸层 + 内容层」都录在页面自己这一层里，壁纸层垫 surface 并画流动底。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier),
+        ) {
+            if (wallpaperBackdrop != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .layerBackdrop(wallpaperBackdrop)
+                        .background(MiuixTheme.colorScheme.surface),
+                ) {
+                    if (wallpaper) {
+                        // 只有一份动态底时由外层常驻播放；这里是"没有外层壁纸"的回退路径。
+                        val wallpaperPlaying = LocalWallpaperPlaying.current
+                        BgEffectBackground(
+                            dynamicBackground = wallpaperPlaying,
+                            modifier = Modifier.fillMaxSize(),
+                            isFullSize = true,
+                        ) {
+                        }
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -106,7 +189,7 @@ fun KOiLScreenScaffold(
                 )
             }
             // 覆盖层（backdrop 录制树外，可安全采样 backdrop 而不自采样递归）
-            overlay(backdrop, innerPadding, innerPadding.calculateTopPadding())
+            overlay(overlayBackdrop, innerPadding, innerPadding.calculateTopPadding())
         }
     }
     }

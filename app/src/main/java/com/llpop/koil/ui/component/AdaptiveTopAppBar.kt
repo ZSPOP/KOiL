@@ -71,16 +71,25 @@ fun AdaptiveTopAppBar(
     val startInset = LocalTopBarStartInset.current
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bandBrush = remember(surfaceColor) { GlassTopAppBarDefaults.bandBrush(surfaceColor) }
+    // 口径照官方 utils/PageUtils.kt 的 AdaptiveTopAppBar：
+    // contentOffset < -1f 或弹性位移 overscrollOffset < -1f（阈值 1px 而不是 0，
+    // 并计入手势下拉产生的 overscroll，否则"刚离开顶点"那一帧顶栏带不跟手）
     val resolvedContentScrolled by remember(scrollBehavior, isContentScrolled) {
         derivedStateOf {
-            isContentScrolled ?: (scrollBehavior?.state?.let { it.contentOffset < 0f } ?: false)
+            isContentScrolled ?: (scrollBehavior?.state?.let {
+                it.contentOffset < -1f || it.overscrollOffset < -1f
+            } ?: false)
         }
     }
+    // 官方原句（PageUtils.kt 的 AdaptiveTopAppBar）：
+    //   val contentInsetModifier = Modifier.appPageTopBarInsets()
+    // 顶栏自己消费内容区横向内距与 Top 安全区，Scaffold 不再替它垫。
+    val contentInsetModifier = Modifier.appPageTopBarInsets()
     GlassTopAppBar(
         title = title,
         isContentScrolled = resolvedContentScrolled,
         modifier = modifier,
-        contentModifier = contentModifier.topBarStartInset(startInset),
+        contentModifier = contentModifier.topBarStartInset(startInset).then(contentInsetModifier),
         expandable = expandable,
         subtitle = subtitle,
         progressiveBlur = LocalBlurEnabled.current,
@@ -88,7 +97,7 @@ fun AdaptiveTopAppBar(
         scrollBehavior = scrollBehavior,
         bandBrush = bandBrush,
         bandOverhang = GlassTopAppBarDefaults.BandOverhang,
-        defaultWindowInsetsPadding = defaultWindowInsetsPadding,
+        defaultWindowInsetsPadding = false,
         titleAlpha = { titleAlpha() * barTitleAlpha() },
         backgroundAlpha = backgroundAlpha,
         navigationIcon = navigationIcon,

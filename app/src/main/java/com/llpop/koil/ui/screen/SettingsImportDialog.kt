@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
+import com.llpop.koil.ui.component.LocalOnGlassSurface
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.ui.theme.KOiLType
 import kotlinx.coroutines.launch
@@ -292,7 +293,15 @@ private fun CapsuleTabRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(capsule)
-            .background(colors.surfaceVariant.copy(alpha = 0.35f))
+            // 轨道：实色卡上 35% surfaceVariant 是一层浅灰，铺到采样玻璃上（浅色主题
+            // 下 surfaceVariant 接近纯白）会变成一条白杠；玻璃面换成 onSurface 的极低 alpha。
+            .background(
+                if (LocalOnGlassSurface.current) {
+                    colors.onSurface.copy(alpha = 0.05f)
+                } else {
+                    colors.surfaceVariant.copy(alpha = 0.35f)
+                },
+            )
             .border(1.dp, colors.onSurface.copy(alpha = 0.08f), capsule)
             .padding(3.dp)
             .height(IntrinsicSize.Min)

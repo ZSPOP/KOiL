@@ -61,6 +61,7 @@ import com.llpop.koil.ui.component.KOiLGlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.blur.ColorBlendToken
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
@@ -428,6 +429,11 @@ private fun AboutContent(
     val blurEnabled by rememberBlurEnabled()
     val effectBackground = isRuntimeShaderSupported() && blurEnabled
 
+    // 官方 AboutPage 是成套的另一组参数，故意不接入 KOiLGlassSpec：
+    // 60f 半径 / RoundedCornerShape(16.dp) / Overlay_Thin_Light（暗）· Pured_Regular_Light（亮）
+    // / brightness 0 · contrast 1 · saturation 1，与 example/shared/.../AboutPage.kt 逐项一致。
+    // 接进全站 spec 会变成 BlurDemo 那套（半径减半、混色换档、叠加亮度对比度饱和度），
+    // 等于把「官方关于页」改成「demo 面板」，因此这里保持原样。
     val cardBlendColors = remember(isDark) {
         if (isDark) ColorBlendToken.Overlay_Thin_Light
         else ColorBlendToken.Pured_Regular_Light
@@ -532,9 +538,11 @@ private fun AboutContent(
             state = lazyListState,
             modifier = Modifier
                 .fillMaxSize()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection),
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
+                ),
             contentPadding = PaddingValues(
                 top = scrollPadding.calculateTopPadding(),
                 start = scrollPadding.calculateStartPadding(layoutDirection),

@@ -58,7 +58,13 @@ fun KOiLGlassDialog(
         maxWidth = maxWidth,
         insideMargin = insideMargin ?: DpSize(contentPadding, contentPadding),
     ) {
-        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
+        // 弹层自身就是玻璃面：同时广播 LocalOnGlassSurface，让内部的提示条/分割线
+        // 按「采样底」而不是「实色 surfaceContainer」挑颜色（否则 10% tint 的语义块
+        // 会变成贴在玻璃上的一块色片）。
+        CompositionLocalProvider(
+            LocalPageBackdrop provides backdrop,
+            LocalOnGlassSurface provides (backdrop != null),
+        ) {
         Column(
             // 内容列吃满弹窗可用宽度：官方 demo 的弹窗内容里总有 fillMaxWidth 的元素，
             // 少了它按钮 Row 的 weight 会算不出整宽，按下高亮只能画出被内容裁掉的一截。

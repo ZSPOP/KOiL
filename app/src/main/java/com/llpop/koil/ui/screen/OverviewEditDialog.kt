@@ -76,11 +76,11 @@ import com.llpop.koil.ui.theme.KOiLType
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.LocalOnGlassSurface
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.GlassPopupOverlay
-import com.llpop.koil.ui.component.LocalPageBackdrop
 
 
 
@@ -317,13 +317,17 @@ internal fun BackfillPrecheckHint(
     }
     val blocking = beforeFirst || sameDayExists ||
         mileageConflictType.isNotBlank() || deviationExceeded || overPayable || overTank
+    val onGlass = LocalOnGlassSurface.current
+    // 语义容器色是 10% alpha 的 tint，按实色卡调的；弹层是采样玻璃面时再压一半，
+    // 否则整条会显成一贴色片。语义交给文字色本身。
     val (bg, fg) = if (blocking) KOiLColors.CautionContainer to KOiLColors.Caution
     else KOiLColors.SuccessContainer to KOiLColors.Success
+    val bgOnGlass = if (onGlass) bg.copy(alpha = 0.055f) else bg
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(bg)
+            .background(bgOnGlass)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(text, fontSize = KOiLType.BodySmall, color = fg)
@@ -333,11 +337,14 @@ internal fun BackfillPrecheckHint(
 /** 补录/编辑保存失败提示（红色），不静默吞异常 */
 @Composable
 internal fun SaveErrorHint() {
+    // 同上方校验条：玻璃面上把 tint 压薄，避免红色块贴片
+    val onGlass = LocalOnGlassSurface.current
+    val bg = if (onGlass) KOiLColors.ErrorContainer.copy(alpha = 0.055f) else KOiLColors.ErrorContainer
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(KOiLColors.ErrorContainer)
+            .background(bg)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(
@@ -359,14 +366,27 @@ internal fun MileageRangeHint(rangeMin: Double?, rangeMax: Double?) {
         else ->
             stringResource(R.string.koil_ov_bf_mileage_range_max, rangeMax?.toInt() ?: 0)
     }
+    // 实色卡上这层是 8% 白 + 固定灰字；铺到采样玻璃上，白底会发亮成一块贴片，
+    // 灰字在浅色主题的白玻璃上也发虚。玻璃面换成 onSurface 极低 alpha 的凹槽 + 跟随主题的灰。
+    val onGlass = LocalOnGlassSurface.current
+    val hintBg = if (onGlass) {
+        MiuixTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+    } else {
+        Color(0x14FFFFFF)
+    }
+    val hintTextColor = if (onGlass) {
+        MiuixTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+    } else {
+        Color(0xFF9AA0A6)
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x14FFFFFF))
+            .background(hintBg)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
-        Text(text, fontSize = KOiLType.BodySmall, color = Color(0xFF9AA0A6))
+        Text(text, fontSize = KOiLType.BodySmall, color = hintTextColor)
     }
 }
 
@@ -498,11 +518,17 @@ internal fun PaymentSummaryCard(
         }
     }
 
+    // 优惠概览块：实色卡上 35% surfaceVariant 是一层很浅的灰；铺到采样玻璃上，
+    // 浅色主题下 surfaceVariant 接近白，会变成一块明显的白卡片。玻璃面上换成
+    // onSurface 的极低 alpha 凹槽，只负责和输入框区分层次。
+    val onGlass = LocalOnGlassSurface.current
+    val summaryBg = if (onGlass) MiuixTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+    else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .background(summaryBg)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         Column {
@@ -713,7 +739,7 @@ internal fun GradePriceSelect(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    // 与首页录入卡共用 gradeValueLabel：柴油不再显示成 `0#`
+                    // 与首页录入卡共用 gradeValueLabel：油号统一只显示标号（`0#` / `92#`）
                     text = gradeValueLabel(grade, price),
                     style = MiuixTheme.textStyles.main,
                     maxLines = 1,
@@ -739,7 +765,7 @@ internal fun GradePriceSelect(
     ) {
         gradeLabels.forEach { g ->
             val label = if (g == "0") stringResource(R.string.koil_add_grade_diesel)
-            else stringResource(R.string.koil_add_grade_gasoline, g)
+                else stringResource(R.string.koil_add_grade_gasoline, g)
             GlassPopupItem(
                 text = label,
                 selected = g == grade,

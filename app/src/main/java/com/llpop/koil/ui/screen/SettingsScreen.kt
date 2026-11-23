@@ -82,6 +82,7 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.GlassDialogTextButton
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -123,7 +124,6 @@ import com.llpop.koil.data.update.updateChannelIssue
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
@@ -244,11 +244,11 @@ fun SettingsScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
+                )
                 .imePadding()
                 .pointerInput(Unit) {
                     awaitEachGesture {
@@ -327,6 +327,14 @@ fun SettingsScreen(
                                 subtitle = stringResource(R.string.koil_set_blur_sub),
                                 checked = uiState.blurEnabled,
                                 onCheckedChange = viewModel::setBlurEnabled,
+                            )
+                        })
+                        add(CardItem("wallpaper") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_wallpaper),
+                                subtitle = stringResource(R.string.koil_set_wallpaper_sub),
+                                checked = uiState.wallpaperEnabled,
+                                onCheckedChange = viewModel::setWallpaperEnabled,
                             )
                         })
                     }

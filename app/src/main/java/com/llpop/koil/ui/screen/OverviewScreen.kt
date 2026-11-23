@@ -64,8 +64,8 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
-import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.domain.logic.ConsumptionStatus
@@ -79,9 +79,20 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.material.GlassShape
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
+import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
+import com.llpop.koil.ui.component.effect.LocalKOiLGlassSpec
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.material.edgeStroke
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.BlurColors
+import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
@@ -89,7 +100,6 @@ import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
@@ -189,8 +199,6 @@ fun OverviewScreen(
         "3m" to stringResource(R.string.koil_range_3m),
     )
 
-    // 范围档位：内容区横滑切档要用，横滑方向与内容翻页一致（左滑进下一档）
-    val rangeIndex = rangeLabels.indexOfFirst { it.first == uiState.range }.coerceAtLeast(0)
 
     val pageBackdrop = rememberBlurBackdrop()
     KOiLScreenScaffold(
@@ -204,16 +212,10 @@ fun OverviewScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                // 数据页的横滑归范围档位（页面翻页在本页已停用），纵向滚动与卡片点击不受影响
-                .dragToSwitchTab(
-                    tabCount = rangeLabels.size,
-                    selectedIndex = rangeIndex,
-                    onSelect = { idx -> viewModel.setRange(rangeLabels[idx].first) },
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
                 ),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
             // bottom 只留底栏槽高，与添加页、设置页一致
@@ -279,11 +281,56 @@ fun OverviewScreen(
                         modifier = Modifier.weight(1f),
                         insideMargin = PaddingValues(start = 4.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
                     )
-                    // 補錄用胶囊按钮（主色浅底 + 加号图标），点击区域加大
+                    // 補錄胶囊的玻璃：不走顶栏按钮那套材质（在页面内容里会被顶栏的
+                    // dynamic 材质带成实心色块），而是与卡片完全同一套 —— 同一个
+                    // KOiLGlassSpec + textureBlur + Colored Thin 混色，只把形状换成 16dp 胶囊。
+                    // 采样目标同样是壁纸层（按钮在页面录制层内，不能采自己那层）。
+                    val glassSpec = LocalKOiLGlassSpec.current
+                    val darkTheme = LocalKOiLDarkTheme.current
+                    val wallpaperBackdrop = LocalWallpaperBackdrop.current
+                    // 与卡片同一条门槛：只看模糊总开关，动态壁纸开关不参与（关壁纸时
+                    // 采到的是 surface 纯色，薄纱效果仍成立）
+                    val backfillGlassActive = wallpaperBackdrop != null &&
+                        glassSpec.enabled &&
+                        LocalBlurEnabled.current &&
+                        isRuntimeShaderSupported()
+                    val backfillShape = remember { GlassShape(16.dp) }
+                    val backfillStroke: (() -> EdgeStroke?)? = if (
+                        !backfillGlassActive || glassSpec.edgeTier == KOiLGlassEdgeTier.Disabled
+                    ) {
+                        null
+                    } else {
+                        rememberKOiLGlassEdgeStroke(isDark = darkTheme, spec = glassSpec)
+                            .let { st -> remember(st) { { st.value } } }
+                    }
+                    val backfillSurface = if (backfillGlassActive) {
+                        Modifier
+                            .textureBlur(
+                                backdrop = wallpaperBackdrop,
+                                shape = backfillShape,
+                                blurRadius = glassSpec.blurRadius,
+                                noiseCoefficient = glassSpec.noiseCoefficient,
+                                colors = BlurColors(
+                                    blendColors = glassSpec.blendColors(darkTheme),
+                                    brightness = glassSpec.brightness(darkTheme),
+                                    contrast = glassSpec.contrast,
+                                    saturation = glassSpec.saturation,
+                                ),
+                                enabled = true,
+                            )
+                            .then(
+                                if (backfillStroke != null) {
+                                    Modifier.edgeStroke(shape = backfillShape, stroke = backfillStroke)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                    } else {
+                        Modifier.clip(backfillShape).background(KOiLColors.Primary.copy(alpha = 0.12f))
+                    }
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                            .then(backfillSurface)
                             .clickable { viewModel.openBackfill() }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -348,7 +395,9 @@ fun OverviewScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.38f))
+                    // 遮罩（屏蔽罩）压到 0.40：0.22 压不住、长按菜单聚焦感不足，
+                    // 0.34 实测仍偏亮，0.40 能把底压到只剩一层氛围又不至于死黑
+                    .background(Color.Black.copy(alpha = 0.40f))
                     .clickable {
                         moreMenuFor = null
                         actionRecord = null
@@ -371,7 +420,11 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Edit,
                             label = stringResource(R.string.koil_ov_edit),
-                            bg = if (LocalKOiLDarkTheme.current) KOiLColors.PrimaryDark else KOiLColors.Primary,
+                            color = if (LocalKOiLDarkTheme.current) KOiLColors.PrimaryDark else KOiLColors.Primary,
+                            // 必须采「壁纸层」而不是 pageBackdrop：长按浮层本身就在
+                            // pageBackdrop 的录制层内部，玻璃去采自己所在的层会直接崩
+                            //（回顶按钮同样传 null 规避）。壁纸层在页面之下，安全且同材质。
+                            backdrop = LocalWallpaperBackdrop.current,
                         ) {
                             moreMenuFor = null
                             actionRecord?.let { viewModel.startEdit(it.record) }
@@ -381,7 +434,8 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Delete,
                             label = stringResource(R.string.koil_ov_delete),
-                            bg = KOiLColors.Danger,
+                            color = KOiLColors.Danger,
+                            backdrop = LocalWallpaperBackdrop.current,
                         ) {
                             val rec = actionRecord
                             moreMenuFor = null
@@ -427,7 +481,7 @@ fun OverviewScreen(
                     }
                 },
                 modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
-                backdrop = pageBackdrop,
+                backdrop = null,
                 size = 44.dp,
             ) {
                 Icon(

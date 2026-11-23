@@ -179,6 +179,8 @@
     <string name="koil_set_floating_style">懸浮樣式</string>
     <string name="koil_set_blur">模糊效果</string>
     <string name="koil_set_blur_sub">啟用表面模糊效果</string>
+    <string name="koil_set_wallpaper">動態壁紙</string>
+    <string name="koil_set_wallpaper_sub">用動態流動的底色作為頁面背景</string>
     <string name="koil_set_pager_gesture">切換手勢</string>
     <string name="koil_pager_gesture_cross_axis">跨軸攔截</string>
     <string name="koil_pager_gesture_native">預設手勢</string>

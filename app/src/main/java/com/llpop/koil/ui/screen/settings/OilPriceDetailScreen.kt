@@ -67,18 +67,18 @@ import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.CardSegment
+import com.llpop.koil.ui.component.LocalOnGlassSurface
 import com.llpop.koil.ui.component.GlassPopupOverlay
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.BackNavigationIcon
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
-import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
 import com.llpop.koil.ui.component.blur.overScrollVertical
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
 import com.llpop.koil.ui.theme.KOiLColors
@@ -117,6 +117,7 @@ fun OilPriceDetailScreen(
 
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
+        ownWallpaper = true,
         backdrop = backdrop,
         listState = listState,
         navigationIcon = { BackNavigationIcon(onClick = onBack) },
@@ -128,17 +129,12 @@ fun OilPriceDetailScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                // 整页内容横滑切油号：与顶部轨道同一组档位，方向与内容翻页一致（左滑进下一档）。
-                // 二级页不在主 Pager 里，没有翻页手势与它抢。
-                .dragToSwitchTab(
-                    tabCount = state.grades.size,
-                    selectedIndex = state.grades.indexOf(state.grade).coerceAtLeast(0),
-                    onSelect = { idx -> viewModel.selectGrade(state.grades[idx]) },
+                // 录制层由 KOiLScreenScaffold 的外层 Box 统一挂载；这里再挂一次同一个
+                // backdrop 会造成绘制期重入 record → "Recording currently in progress" 闪退
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
                 ),
             // 横向边距由四张卡的 outerHorizontalPadding(12dp) 承担；
             // 顶部在顶栏下方再让 12dp 呼吸（extraTop），随顶栏折叠联动
@@ -311,6 +307,7 @@ fun OilPriceDetailScreen(
                     isFirst = true,
                     isLast = true,
                     outerBottomPadding = 12.dp,
+                    glass = true,
                 ) {
                     // 水平内距交给容器（与数据页一致）：线本身不写水平内距，跟着容器走
                     Column(
@@ -377,6 +374,7 @@ fun OilPriceDetailScreen(
                     isFirst = true,
                     isLast = true,
                     outerBottomPadding = 12.dp,
+                    glass = true,
                 ) {
                     PriceTrendCanvas(
                         items = state.items,
@@ -400,6 +398,8 @@ fun OilPriceDetailScreen(
                     isLast = true,
                     outerBottomPadding = 12.dp,
                     insidePadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    // 与上方两张卡统一走全站玻璃参数；模糊/壁纸关闭或不支持 RuntimeShader 时回落实色
+                    glass = true,
                 ) {
                     timeline.forEachIndexed { idx, row ->
                         AdjustTimelineItem(
@@ -503,7 +503,13 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
     val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
     val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f)
     val lineColor = KOiLColors.Primary
-    val bubbleBg = MiuixTheme.colorScheme.surfaceContainer
+    // 数据点气泡：实色卡上 surfaceContainer 才和卡面对得上；卡片是采样玻璃时这里
+    // 会变成一块实色贴片，换成 onSurface 的极低 alpha（描边和文字仍按主题走）。
+    val bubbleBg = if (LocalOnGlassSurface.current) {
+        MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+    } else {
+        MiuixTheme.colorScheme.surfaceContainer
+    }
     val bubbleBorder = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.25f)
     val dotInnerColor = MiuixTheme.colorScheme.surface
     val onBgColor = MiuixTheme.colorScheme.onBackground

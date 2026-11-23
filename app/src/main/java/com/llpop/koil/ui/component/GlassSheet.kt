@@ -62,7 +62,12 @@ fun KOiLFormSheet(
         // 面板本身由库抬到键盘顶；键盘可见时底部只留 ImeGap，
         // 收起时才让出系统导航栏 + 16dp（那时它是真实占位）
         val imeVisible = WindowInsets.isImeVisible
-        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
+        // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
+        // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
+        CompositionLocalProvider(
+            LocalPageBackdrop provides backdrop,
+            LocalOnGlassSurface provides (backdrop != null),
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -114,7 +119,12 @@ fun KOiLListSheet(
         renderInRootScaffold = true,
         enableNestedScroll = true,
     ) {
-        CompositionLocalProvider(LocalPageBackdrop provides backdrop) {
+        // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
+        // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
+        CompositionLocalProvider(
+            LocalPageBackdrop provides backdrop,
+            LocalOnGlassSurface provides (backdrop != null),
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()

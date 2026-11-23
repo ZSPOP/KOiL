@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
@@ -36,19 +37,23 @@ val LocalTopBarStartInset = staticCompositionLocalOf<() -> Dp> { { 0.dp } }
 fun rememberBlurEnabled(): State<Boolean> =
     rememberUpdatedState(isRuntimeShaderSupported() && LocalBlurEnabled.current)
 
+/**
+ * 页面内容录制层。
+ *
+ * 这里**不再给录制层垫 surface 底色**：壁纸层已经提到 MainScreen 里（三个一级页容器透明），
+ * 内容层若铺一层 surface，顶栏采「壁纸 + 内容」的合并层时壁纸会被整片盖成 surface 色
+ * （深色主题下就是一片黑块）。与官方 GlassPage 一致 —— 那里的 backdrop 就是一个纯
+ * `rememberLayerBackdrop()`，录制内容本身、透明处透出下面的壁纸。
+ */
 @Composable
 fun rememberBlurBackdrop(enabled: Boolean = LocalBlurEnabled.current): LayerBackdrop? {
     if (!enabled || !isRuntimeShaderSupported()) return null
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    return rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
+    return rememberLayerBackdrop()
 }
 
 @Composable
 fun Modifier.defaultBlurEffect(
-    backdrop: LayerBackdrop,
+    backdrop: Backdrop,
 ): Modifier = this.textureBlur(
     backdrop = backdrop,
     shape = RectangleShape,
