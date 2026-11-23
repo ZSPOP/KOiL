@@ -1,10 +1,13 @@
 package com.llpop.koil.ui.component.effect
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.compositionLocalOf
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.material.EdgeStroke
 import top.yukonga.miuix.kmp.material.EdgeStrokes
+import com.llpop.koil.ui.theme.LocalWallpaperEnabled
 
 /**
  * 玻璃卡的描边档位：与官方 example `EdgeStrokeConfig.Container` 同名同义。
@@ -66,3 +69,34 @@ data class KOiLGlassSpec(
 
 /** 玻璃卡参数作用域；默认即 [KOiLGlassSpec] 的官方默认值。 */
 val LocalKOiLGlassSpec = compositionLocalOf { KOiLGlassSpec() }
+
+/**
+ * 按「底材」取实际生效的参数。
+ *
+ * - 动态壁纸开（彩色流动底）：[KOiLGlassSpec] 原值（Colored Thin，为彩色底调的）。
+ * - 动态壁纸关（纯 surface 底）：切官方 `GlassMaterials.puredThinGlass(isDark)` ——
+ *   Colored Thin 的浅色档两层都在压暗（Overlay 60% + SoftLight 50%），纯 #F7F7F7 底
+ *   会被压成灰块，brightness 0.18 补不回来；puredThin 的浅色档本身就在提亮。
+ *
+ * 所有自绘玻璃（卡片、補錄胶囊…）都必须经这里取参数，否则关壁纸时材质会和卡片不一致。
+ */
+@Composable
+fun rememberEffectiveGlassSpec(): KOiLGlassSpec {
+    val baseSpec = LocalKOiLGlassSpec.current
+    val solidBackground = !LocalWallpaperEnabled.current
+    return if (solidBackground) {
+        remember(baseSpec) {
+            baseSpec.copy(
+                blurRadius = KOiLBlurTokens.PURED_THIN_BLUR_RADIUS,
+                blendLight = KOiLBlurTokens.puredThin(false),
+                blendDark = KOiLBlurTokens.puredThin(true),
+                brightnessLight = 0f,
+                brightnessDark = 0f,
+                contrast = 1f,
+                saturation = 1f,
+            )
+        }
+    } else {
+        baseSpec
+    }
+}

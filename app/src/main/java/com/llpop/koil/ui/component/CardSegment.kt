@@ -16,9 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
 import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
-import com.llpop.koil.ui.component.effect.LocalKOiLGlassSpec
-import com.llpop.koil.ui.component.effect.KOiLBlurTokens
-import com.llpop.koil.ui.theme.LocalWallpaperEnabled
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import top.yukonga.miuix.kmp.blur.BlurColors
@@ -69,27 +67,9 @@ fun CardSegment(
     val glassShape = remember(topCornerRadius, bottomCornerRadius) {
         GlassShape(topCornerRadius, topCornerRadius, bottomCornerRadius, bottomCornerRadius)
     }
-    val baseSpec = LocalKOiLGlassSpec.current
-    // 底是纯色（动态壁纸关）时切官方 `puredThinGlass(isDark)` 口径：
-    // ColoredThin 那套是给彩色壁纸调的（浅色档两层压暗 60%/50%，纯 #F7F7F7 底上会压成灰块，
-    // brightness 0.18 补不回来）。puredThinGlass 是官方唯一针对纯色底给的材质，
-    // 浅色档本身就在提亮，纯色底上直接呈现官方玻璃观感。
-    val solidBackground = !LocalWallpaperEnabled.current
-    val glassSpec = if (solidBackground) {
-        remember(baseSpec) {
-            baseSpec.copy(
-                blurRadius = KOiLBlurTokens.PURED_THIN_BLUR_RADIUS,
-                blendLight = KOiLBlurTokens.puredThin(false),
-                blendDark = KOiLBlurTokens.puredThin(true),
-                brightnessLight = 0f,
-                brightnessDark = 0f,
-                contrast = 1f,
-                saturation = 1f,
-            )
-        }
-    } else {
-        baseSpec
-    }
+    // 按底材取参数：动态壁纸关（纯色底）时自动切官方 puredThinGlass 口径，
+    // 与 補錄胶囊等其它自绘玻璃共用同一处判定（rememberEffectiveGlassSpec）。
+    val glassSpec = rememberEffectiveGlassSpec()
     val isDark = LocalKOiLDarkTheme.current
     // 玻璃只看「模糊总开关」：关掉动态壁纸只是底层不再流动，壁纸层仍是一块 surface 纯色，
     // 采样它得到的是一层薄纱 + 描边，玻璃照样成立（这是设计意图，不要把两个开关绑在一起）。

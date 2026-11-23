@@ -86,6 +86,7 @@ import top.yukonga.miuix.kmp.material.GlassShape
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
 import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
 import com.llpop.koil.ui.component.effect.LocalKOiLGlassSpec
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.material.edgeStroke
@@ -206,6 +207,45 @@ fun OverviewScreen(
         modifier = modifier,
         backdrop = pageBackdrop,
         listState = listState,
+        // 返回顶部按钮放在覆盖层：这层在 backdrop 录制树之外，采样 overlayBackdrop
+        // （壁纸 + 内容 + 顶栏三层合并）。放在 content 里的话按钮落在 pageBackdrop
+        // 录制树内部，采自己那层会崩，只能传 null —— 玻璃就退化成填充 + 描边了。
+        overlay = { overlayBackdrop, _, _ ->
+            Box(Modifier.fillMaxSize()) {
+                // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
+                // 竖直位置 = 底栏留白 + 16.dp（按钮 44dp），滚到底时降到 alpha 0.4（仍可点）。
+                // 智能回顶：可见项序号 > 60 时先 scrollToItem 瞬移到近顶，再短动画收尾到 0。
+                AnimatedVisibility(
+                    visible = showBackToTop,
+                    enter = fadeIn() + scaleIn(initialScale = 0.6f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.6f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
+                ) {
+                    GlassIconButton(
+                        onClick = {
+                            scope.launch {
+                                if (listState.firstVisibleItemIndex > 60) {
+                                    listState.scrollToItem(60)
+                                }
+                                listState.animateScrollToItem(0)
+                            }
+                        },
+                        modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
+                        backdrop = overlayBackdrop,
+                        size = 44.dp,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowUp,
+                            contentDescription = stringResource(R.string.koil_back_to_top),
+                            tint = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        },
     ) { innerPadding, topPadding, scrollBehavior, pageBackdrop ->
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -285,7 +325,8 @@ fun OverviewScreen(
                     // dynamic 材质带成实心色块），而是与卡片完全同一套 —— 同一个
                     // KOiLGlassSpec + textureBlur + Colored Thin 混色，只把形状换成 16dp 胶囊。
                     // 采样目标同样是壁纸层（按钮在页面录制层内，不能采自己那层）。
-                    val glassSpec = LocalKOiLGlassSpec.current
+                    // 与卡片同一处判定：关壁纸（纯色底）时切官方 puredThinGlass 口径
+                    val glassSpec = rememberEffectiveGlassSpec()
                     val darkTheme = LocalKOiLDarkTheme.current
                     val wallpaperBackdrop = LocalWallpaperBackdrop.current
                     // 与卡片同一条门槛：只看模糊总开关，动态壁纸开关不参与（关壁纸时
@@ -449,49 +490,6 @@ fun OverviewScreen(
             }
         }
 
-        // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
-        // 竖直位置 = 底栏留白 + 16.dp（按钮 44dp）。列表 bottom 只留底栏留白，与另两页一致；
-        // 滚到底时按钮降到 alpha 0.4（仍可点），不需要在列表底部预留额外占位。
-        // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
-        // 再短动画收尾到 0；近处保持平滑 animateScrollToItem，不从深处慢速长飞。
-        AnimatedVisibility(
-            visible = showBackToTop,
-            enter = fadeIn() + scaleIn(initialScale = 0.6f),
-            exit = fadeOut() + scaleOut(targetScale = 0.6f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
-        ) {
-            // 官方 FloatingActionButton：默认 60dp 圆形、主色底、4dp 阴影；
-            // 滚到底时整体降到 alpha 0.4（仍可点）
-            // 官方玻璃图标按钮：44dp 圆形玻璃胶囊（顶栏按钮同款材质），比 60dp FAB 小。
-            // backdrop 必须取列表内容层（pageBackdrop）：它录的是 surface + drawContent()，
-            // 玻璃才采得到正下方滚动的卡片、做出真实折射；早先取 LocalWallpaperBackdrop
-            // （只录纯底色）时采样到的是一整块纯色，观感只剩「半透明填充 + 描边」。
-            // 按钮是列表的兄弟节点、绘制在之上，不在该层录制范围内，不存在采样到自身的问题。
-            // 模糊关闭、或不支持 RuntimeShader 的机型，rememberBlurBackdrop 都返回 null，
-            // 自动回落填充 + 描边，与其他玻璃组件一致（两个条件任一即可触发）。
-            GlassIconButton(
-                onClick = {
-                    scope.launch {
-                        if (listState.firstVisibleItemIndex > 60) {
-                            listState.scrollToItem(60)
-                        }
-                        listState.animateScrollToItem(0)
-                    }
-                },
-                modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
-                backdrop = null,
-                size = 44.dp,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.koil_back_to_top),
-                    tint = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
     }
     }
 
