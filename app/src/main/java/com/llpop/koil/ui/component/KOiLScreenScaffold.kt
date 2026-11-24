@@ -149,6 +149,7 @@ fun KOiLScreenScaffold(
         // 外层已有固定壁纸（三个一级页）时，这里什么都不画：直接透出 MainScreen 的
         // 壁纸层。只有脱离 Pager 的场景（没有外层壁纸）才沿用旧结构 —— 官方 GlassPage
         // 的「壁纸层 + 内容层」都录在页面自己这一层里，壁纸层垫 surface 并画流动底。
+        Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,8 +189,11 @@ fun KOiLScreenScaffold(
                     backdrop,
                 )
             }
-            // 覆盖层（backdrop 录制树外，可安全采样 backdrop 而不自采样递归）
-            overlay(overlayBackdrop, innerPadding, innerPadding.calculateTopPadding())
+        }
+        // 覆盖层：必须在 backdrop 录制层**外面**。写在里面时，覆盖层内的玻璃采
+        // overlayBackdrop（含这层自己）→ 绘制期重入 record，表现为"滚一下让返顶按钮
+        // 出现就闪退"（Recording currently in progress）。
+        overlay(overlayBackdrop, innerPadding, innerPadding.calculateTopPadding())
         }
     }
     }
