@@ -419,10 +419,12 @@ internal fun RecordCard(
                         animationSpec = tween(240, easing = FastOutSlowInEasing),
                         expandFrom = Alignment.Top,
                     ) + fadeIn(animationSpec = tween(120)),
+                    // fadeOut 与 shrinkVertically 同长：若淡出更短，最后一段会「内容已透明、
+                    // 卡片还在空缩」，观感像内容先消失（第二轮评审 P3-1）。
                     exit = shrinkVertically(
                         animationSpec = tween(200, easing = FastOutSlowInEasing),
                         shrinkTowards = Alignment.Top,
-                    ) + fadeOut(animationSpec = tween(90)),
+                    ) + fadeOut(animationSpec = tween(200)),
                 ) {
                     Column {
                         val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
