@@ -6,9 +6,13 @@ import com.llpop.koil.data.local.dao.KOiLPriceDao
 import com.llpop.koil.data.local.entity.KOiLPriceEntity
 import com.llpop.koil.data.oil.OilPriceDbSyncer
 import com.llpop.koil.data.oil.OilPriceNetwork
+import com.llpop.koil.data.oil.PriceDbOutcome
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.util.AppClock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -63,6 +67,7 @@ data class OilPriceDetailParams(
 class OilPriceDetailViewModel(
     private val priceDao: KOiLPriceDao,
     private val settings: AppSettings,
+    private val syncer: OilPriceDbSyncer,
 ) : ViewModel() {
 
     private val provinceFlow = MutableStateFlow("广东")
@@ -82,6 +87,43 @@ class OilPriceDetailViewModel(
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OilPriceDetailUiState())
+
+    // ===== 下拉刷新：手动拉一次油价库 =====
+    // 明细列表本身由 DAO Flow 实时驱动，下拉刷新要做的不是「重读列表」，而是「去源站
+    // 检查一次有没有新调价」——与设置页「立即更新」同一入口（force=true 绕过开关与 8h 节流）。
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing = _refreshing.asStateFlow()
+
+    /** 刷新结果提示：UI 层用 formatNotice 翻成本地化文案后走 Snackbar */
+    private val _refreshNotice = MutableStateFlow<ExportNotice?>(null)
+    val refreshNotice = _refreshNotice.asStateFlow()
+
+    fun refresh() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        viewModelScope.launch {
+            try {
+                val result = syncer.checkAndUpdate(force = true)
+                _refreshNotice.value = when {
+                    result.outcome is PriceDbOutcome.Busy -> ExportNotice("pdb_busy")
+                    result.success && result.newRecords > 0 ->
+                        ExportNotice("pdb_update_ok", listOf(result.newRecords))
+                    result.success -> ExportNotice("pdb_update_none")
+                    else -> null
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _refreshNotice.value = ExportNotice("pdb_update_failed", listOf(e.message ?: ""))
+            } finally {
+                _refreshing.value = false
+            }
+        }
+    }
+
+    fun consumeRefreshNotice() {
+        _refreshNotice.value = null
+    }
 
     fun selectProvince(province: String) {
         if (province in OilPriceDbSyncer.PROVINCES) provinceFlow.value = province

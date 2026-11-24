@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -129,6 +130,28 @@ fun OilPriceDetailScreen(
         // —— 明细页整体滚动容器（LazyColumn + contentPadding 页面骨架）——
         // 时间线仅 20 条左右，整页收在一个 item 里一次性渲染；单 item 下
         // firstVisibleItemScrollOffset 就等于总滚动距离。
+        // 下拉刷新：包住整页列表（官方用法：contentPadding 与列表同值；
+        // app bar 的滚动连接由 pageScrollModifiers 负责，不再重复喂给 PullToRefresh）
+        val detailContentPadding = pageContentPadding(innerPadding, extraTop = 12.dp)
+        val detailRefreshing by viewModel.refreshing.collectAsStateWithLifecycle()
+        val detailRefreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
+        val detailSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+        // formatNotice 是 @Composable（内部 stringResource），必须在组合期解析，不能放进副作用
+        val detailRefreshText = detailRefreshNotice?.let { notice ->
+            notice.key?.let { com.llpop.koil.ui.screen.formatNotice(it, notice.args) }
+        }
+        LaunchedEffect(detailRefreshNotice) {
+            if (detailRefreshNotice != null) {
+                if (detailRefreshText != null) detailSnackbar(detailRefreshText)
+                viewModel.consumeRefreshNotice()
+            }
+        }
+        top.yukonga.miuix.kmp.basic.PullToRefresh(
+            isRefreshing = detailRefreshing,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = detailContentPadding,
+        ) {
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -140,9 +163,11 @@ fun OilPriceDetailScreen(
                     showTopAppBar = true,
                     topAppBarScrollBehavior = scrollBehavior,
                 ),
+            // 下拉刷新自己接管 overScroll，列表侧关掉，避免两层回弹
+            overscrollEffect = null,
             // 横向边距由四张卡的 outerHorizontalPadding(12dp) 承担；
             // 顶部在顶栏下方再让 12dp 呼吸（extraTop），随顶栏折叠联动
-            contentPadding = pageContentPadding(innerPadding, extraTop = 12.dp),
+            contentPadding = detailContentPadding,
         ) {
             item(key = CONTENT_KEY) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -435,6 +460,7 @@ fun OilPriceDetailScreen(
             }
         }
     }
+        }
 }
 
 /**
