@@ -180,8 +180,8 @@
     <string name="koil_set_section_pref">Entry presets</string>
     <string name="koil_set_section_notify">Notifications</string>
     <string name="koil_set_floating_style">Floating style</string>
-    <string name="koil_set_blur">Blur effect</string>
-    <string name="koil_set_blur_sub">Enable surface blur effect</string>
+    <string name="koil_set_blur">Glass effect</string>
+    <string name="koil_set_blur_sub">Enable glass material effect</string>
     <string name="koil_set_wallpaper">Dynamic wallpaper</string>
     <string name="koil_set_wallpaper_sub">Use an animated flowing background</string>
     <string name="koil_set_pager_gesture">Switch gesture</string>
