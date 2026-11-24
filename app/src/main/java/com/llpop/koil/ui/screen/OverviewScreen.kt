@@ -565,6 +565,7 @@ fun OverviewScreen(
                 }
             }
         }
+    }
 
     // 删除确认弹窗（防误删）
     pendingDelete?.let { rec ->
@@ -810,6 +811,5 @@ fun OverviewScreen(
                 }
             }
         }
-    }
     }
 }
