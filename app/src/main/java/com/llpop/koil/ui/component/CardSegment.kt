@@ -171,7 +171,7 @@ fun CardSegment(
     }
     val indicationToUse = if (showIndication) LocalIndication.current else null
     val clickableModifier =
-        remember(isClickable, interactionSource, indicationToUse) {
+        remember(isClickable, onLongPress != null, interactionSource, indicationToUse) {
             if (isClickable && interactionSource != null) {
                 Modifier.combinedClickable(
                     interactionSource = interactionSource,
