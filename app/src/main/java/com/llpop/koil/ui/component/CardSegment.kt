@@ -59,7 +59,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *   否则点击既无涟漪也无下沉，会被当成「点击坏了」。
  * - 内容层不要再挂自己的 `clickable` / `combinedClickable`：内层先消费，落在内容区的点击到不了本组件，
  *   `SinkFeedback` 也收不到 press，等于没有反馈。需要整卡可点时，把内层手势上移成本组件的
- *   `onClick` / `onLongPress`（顺序不能反，例如 `OverviewRecordCard` 目前仍是内层手势）。
+ *   `onClick` / `onLongPress`（顺序不能反）。
  */
 @Composable
 fun CardSegment(

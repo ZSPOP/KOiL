@@ -1,7 +1,6 @@
 package com.llpop.koil.ui.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,8 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +52,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.llpop.koil.ui.theme.KOiLType
 
 
@@ -111,6 +109,12 @@ internal fun RecordCard(
             // 与各页分组卡同一套全站玻璃参数（LocalKOiLGlassSpec）；
             // 模糊/壁纸任一关闭或设备不支持 RuntimeShader 时自动回落实色
             glass = true,
+            // 点击/长按由卡片本体承担（官方 Card 语义：手势在背景之内、内容之外），
+            // 这样 Sink 下沉覆盖整段玻璃；内容层不再挂自己的 combinedClickable，
+            // 否则内层先消费、Sink 收不到 press，表现为"点了有反应但没反馈"。
+            pressFeedbackType = PressFeedbackType.Sink,
+            onClick = { if (showMoreMenu) onMoreMenu(record) else expanded = !expanded },
+            onLongPress = { if (!showMoreMenu) onMoreMenu(record) },
         ) {
             // CardSegment 内容槽是 ColumnScope；异常竖条要 matchParentSize 叠在内容上，
             // 因此显式包一层 Box 承接原来的 BoxScope 布局（列表项间距由调用处 padding(bottom) 给）。
@@ -136,16 +140,11 @@ internal fun RecordCard(
                     )
                 }
             }
+            // 手势已上移到 CardSegment 的 onClick/onLongPress（配合 pressFeedbackType = Sink）；
+            // 这里再挂 clickable 会内层先消费，导致外层 Sink 收不到 press，等于没有按压反馈。
             Column(
                 modifier = Modifier
-                    .padding(start = if (isAbnormal) 16.dp else 16.dp, end = 16.dp, top = 13.dp, bottom = 13.dp)
-                    // 不设按压涟漪（直角长方形），点击不进入编辑；长按=弹出中央圆按钮
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { if (showMoreMenu) onMoreMenu(record) else expanded = !expanded },
-                        onLongClick = { if (!showMoreMenu) onMoreMenu(record) },
-                    ),
+                    .padding(start = if (isAbnormal) 16.dp else 16.dp, end = 16.dp, top = 13.dp, bottom = 13.dp),
             ) {
                 // —— 顶行：日期链（新日期 ← 旧日期 + 天数胶囊） ····· 右侧实付金额 ——
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
