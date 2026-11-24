@@ -53,6 +53,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * @param topCornerRadius 顶角半径，默认按 [isFirst] 推导；可覆写。
  * @param bottomCornerRadius 底角半径，默认按 [isLast] 推导；传动画值可让展开/收起时圆角平滑过渡而非突变。
  * @param insidePadding 段内留白（同 Card 的 `insideMargin` 语义）。
+ *
+ * ## 接入要求
+ * - 传 [onClick] / [onLongPress] 时必须同时指定 [pressFeedbackType] = `Sink`（或把 [showIndication] 打开），
+ *   否则点击既无涟漪也无下沉，会被当成「点击坏了」。
+ * - 内容层不要再挂自己的 `clickable` / `combinedClickable`：内层先消费，落在内容区的点击到不了本组件，
+ *   `SinkFeedback` 也收不到 press，等于没有反馈。需要整卡可点时，把内层手势上移成本组件的
+ *   `onClick` / `onLongPress`（顺序不能反，例如 `OverviewRecordCard` 目前仍是内层手势）。
  */
 @Composable
 fun CardSegment(
@@ -145,13 +152,13 @@ fun CardSegment(
     // 交互链照官方 Card.kt：pressable 在卡片本体外层承担 Sink/Tilt 变换与按住态，
     // combinedClickable 在内容层承担点击；两者共用同一条 interactionSource。
     val isClickable = onClick != null || onLongPress != null
-    val needsInteractionSource =
-        isClickable || pressFeedbackType != PressFeedbackType.None || holdDownState
-    val interactionSource = if (needsInteractionSource) remember { MutableInteractionSource() } else null
+    // 与官方 Card.kt:99 一致：无条件创建，使用处再判空 —— 条件 remember 会在
+    // needsInteractionSource 翻转时重建实例，把进行中的按住态/涟漪掐断。
+    val interactionSource = remember { MutableInteractionSource() }
     val currentOnClick by rememberUpdatedState(onClick)
     val currentOnLongPress by rememberUpdatedState(onLongPress)
 
-    if (interactionSource != null && holdDownState) {
+    if (holdDownState) {
         LaunchedEffect(interactionSource) {
             val hold = HoldDownInteraction.HoldDown()
             interactionSource.emit(hold)
@@ -172,7 +179,7 @@ fun CardSegment(
     val indicationToUse = if (showIndication) LocalIndication.current else null
     val clickableModifier =
         remember(isClickable, onLongPress != null, interactionSource, indicationToUse) {
-            if (isClickable && interactionSource != null) {
+            if (isClickable) {
                 Modifier.combinedClickable(
                     interactionSource = interactionSource,
                     indication = indicationToUse,
