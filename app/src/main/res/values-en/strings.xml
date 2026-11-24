@@ -9,6 +9,7 @@
 
     <!-- ===== Common buttons ===== -->
     <string name="koil_common_cancel">Cancel</string>
+    <string name="koil_common_confirm">OK</string>
     <string name="koil_common_save">Save</string>
 
     <!-- ===== Add / Log screen ===== -->
@@ -536,6 +537,7 @@
     <string name="koil_sync_backup_restore_broken">This copy cannot be read</string>
     <string name="koil_local_backup_broken">This copy cannot be parsed; nothing was modified</string>
     <!-- TalkBack label for number stepper buttons; %1$s is the setting title -->
+    <string name="koil_stepper_picker">Choose %1$s</string>
     <string name="koil_stepper_decrease">Decrease %1$s</string>
     <string name="koil_stepper_increase">Increase %1$s</string>
     <!-- TalkBack label for the password visibility toggle -->
