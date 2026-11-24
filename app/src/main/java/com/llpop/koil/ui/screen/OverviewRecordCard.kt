@@ -1,7 +1,6 @@
 package com.llpop.koil.ui.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,8 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +58,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.llpop.koil.ui.theme.KOiLType
 
 
@@ -111,6 +115,12 @@ internal fun RecordCard(
             // 与各页分组卡同一套全站玻璃参数（LocalKOiLGlassSpec）；
             // 模糊/壁纸任一关闭或设备不支持 RuntimeShader 时自动回落实色
             glass = true,
+            // 点击/长按由卡片本体承担（官方 Card 语义：手势在背景之内、内容之外），
+            // 这样 Sink 下沉覆盖整段玻璃；内容层不再挂自己的 combinedClickable，
+            // 否则内层先消费、Sink 收不到 press，表现为"点了有反应但没反馈"。
+            pressFeedbackType = PressFeedbackType.Sink,
+            onClick = { if (showMoreMenu) onMoreMenu(record) else expanded = !expanded },
+            onLongPress = { if (!showMoreMenu) onMoreMenu(record) },
         ) {
             // CardSegment 内容槽是 ColumnScope；异常竖条要 matchParentSize 叠在内容上，
             // 因此显式包一层 Box 承接原来的 BoxScope 布局（列表项间距由调用处 padding(bottom) 给）。
@@ -136,16 +146,11 @@ internal fun RecordCard(
                     )
                 }
             }
+            // 手势已上移到 CardSegment 的 onClick/onLongPress（配合 pressFeedbackType = Sink）；
+            // 这里再挂 clickable 会内层先消费，导致外层 Sink 收不到 press，等于没有按压反馈。
             Column(
                 modifier = Modifier
-                    .padding(start = if (isAbnormal) 16.dp else 16.dp, end = 16.dp, top = 13.dp, bottom = 13.dp)
-                    // 不设按压涟漪（直角长方形），点击不进入编辑；长按=弹出中央圆按钮
-                    .combinedClickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = { if (showMoreMenu) onMoreMenu(record) else expanded = !expanded },
-                        onLongClick = { if (!showMoreMenu) onMoreMenu(record) },
-                    ),
+                    .padding(start = if (isAbnormal) 16.dp else 16.dp, end = 16.dp, top = 13.dp, bottom = 13.dp),
             ) {
                 // —— 顶行：日期链（新日期 ← 旧日期 + 天数胶囊） ····· 右侧实付金额 ——
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -406,7 +411,21 @@ internal fun RecordCard(
                 }
 
                 // —— 点击展开明细——油耗对比条 + 较油站单价优惠 ——
-                AnimatedVisibility(visible = expanded) {
+                // 不用默认 expandIn/expandOut：它们带缩放成分，玻璃卡会"先缩再长"，
+                // 与 Sink 松手回弹叠在一起显得黏滞。改成纯纵向展开 + 淡入，节奏更利落。
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically(
+                        animationSpec = tween(240, easing = FastOutSlowInEasing),
+                        expandFrom = Alignment.Top,
+                    ) + fadeIn(animationSpec = tween(120)),
+                    // fadeOut 与 shrinkVertically 同长：若淡出更短，最后一段会「内容已透明、
+                    // 卡片还在空缩」，观感像内容先消失（第二轮评审 P3-1）。
+                    exit = shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing),
+                        shrinkTowards = Alignment.Top,
+                    ) + fadeOut(animationSpec = tween(200)),
+                ) {
                     Column {
                         val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
                         val goodColor = if (darkBg) KOiLColors.GoodNight else KOiLColors.GoodDay
