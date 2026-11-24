@@ -1,5 +1,17 @@
 # KOiL CHANGELOG
 
+## 1.3.1
+
+**界面**
+
+- 数据页记录卡启用官方 `Sink` 按压反馈：按下时整段玻璃卡一起下沉、松手回弹；点击与长按手势从内容层上移到卡片本体，点卡片上下留白也能展开明细
+- 记录明细展开 / 收起改为纯纵向展开 + 淡入（展开 240ms、收起 200ms），去掉默认动画的缩放成分，不再与按压回弹叠在一起发黏；收起淡出与收缩同长，消除尾段「内容已透明、卡片还在空缩」
+
+**依赖**
+
+- `miuix` 升级 `0.9.5-beta04`：底部弹层与弹窗动效对齐 HyperOS（`DialogMotion` / `SheetMotion`），`Switch` 重写，玻璃弹层底边描边去除，backdrop 滑动同步与遮罩释放时机修复，顶栏渐进模糊优化，并新增 `GlassCard`
+- `CardSegment` 补齐官方 `Card` 同款交互参数（`pressFeedbackType` / `showIndication` / `holdDownState` / `onClick` / `onLongPress`），全部默认关闭，现有调用观感不变
+
 ## 1.3.0
 
 **修复**
