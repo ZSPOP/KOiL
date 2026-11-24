@@ -1,6 +1,9 @@
 package com.llpop.koil.ui.component
 
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,7 +12,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
@@ -19,13 +25,21 @@ import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
 import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.interfaces.HoldDownInteraction
 import top.yukonga.miuix.kmp.material.EdgeStroke
 import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.material.edgeStroke
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.squircle.squircleSurface
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.utils.SinkFeedback
+import top.yukonga.miuix.kmp.utils.TiltFeedback
+import top.yukonga.miuix.kmp.utils.pressable
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -39,6 +53,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * @param topCornerRadius 顶角半径，默认按 [isFirst] 推导；可覆写。
  * @param bottomCornerRadius 底角半径，默认按 [isLast] 推导；传动画值可让展开/收起时圆角平滑过渡而非突变。
  * @param insidePadding 段内留白（同 Card 的 `insideMargin` 语义）。
+ *
+ * ## 接入要求
+ * - 传 [onClick] / [onLongPress] 时必须同时指定 [pressFeedbackType] = `Sink`（或把 [showIndication] 打开），
+ *   否则点击既无涟漪也无下沉，会被当成「点击坏了」。
+ * - 内容层不要再挂自己的 `clickable` / `combinedClickable`：内层先消费，落在内容区的点击到不了本组件，
+ *   `SinkFeedback` 也收不到 press，等于没有反馈。需要整卡可点时，把内层手势上移成本组件的
+ *   `onClick` / `onLongPress`（顺序不能反，例如 `OverviewRecordCard` 目前仍是内层手势）。
  */
 @Composable
 fun CardSegment(
@@ -59,6 +80,17 @@ fun CardSegment(
      * 半径 / 混色 / 噪声 / 描边档位 / 倾斜驱动 / 亮度统一由 [LocalKOiLGlassSpec] 给。
      */
     glass: Boolean = false,
+    /**
+     * 按下反馈：`Sink` 整段下沉、`Tilt` 倾斜，与官方 `Card` / `GlassCard` 走同一套
+     * `Modifier.pressable` + 官方 `SinkFeedback` / `TiltFeedback`，不是自绘缩放。
+     */
+    pressFeedbackType: PressFeedbackType = PressFeedbackType.None,
+    /** 是否显示系统 indication。官方 `Card` 默认关（只靠 Sink/Tilt 表达按压）。 */
+    showIndication: Boolean = false,
+    /** 外部按住态（例如父级胶囊被按住时整卡同步下沉），镜像进 interactionSource。 */
+    holdDownState: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 玻璃段走官方 GlassShape（CornerBasedShape + smoothing = 连续角）：项目实色卡用
@@ -117,6 +149,51 @@ fun CardSegment(
         topCornerRadius == 0.dp && bottomCornerRadius == 0.dp -> Modifier.background(color)
         else -> Modifier.squircleSurface(color, topCornerRadius, topCornerRadius, bottomCornerRadius, bottomCornerRadius)
     }
+    // 交互链照官方 Card.kt：pressable 在卡片本体外层承担 Sink/Tilt 变换与按住态，
+    // combinedClickable 在内容层承担点击；两者共用同一条 interactionSource。
+    val isClickable = onClick != null || onLongPress != null
+    // 与官方 Card.kt:99 一致：无条件创建，使用处再判空 —— 条件 remember 会在
+    // needsInteractionSource 翻转时重建实例，把进行中的按住态/涟漪掐断。
+    val interactionSource = remember { MutableInteractionSource() }
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
+
+    if (holdDownState) {
+        LaunchedEffect(interactionSource) {
+            val hold = HoldDownInteraction.HoldDown()
+            interactionSource.emit(hold)
+            try {
+                awaitCancellation()
+            } finally {
+                withContext(NonCancellable) { interactionSource.emit(HoldDownInteraction.Release(hold)) }
+            }
+        }
+    }
+    val pressFeedback = remember(pressFeedbackType) {
+        when (pressFeedbackType) {
+            PressFeedbackType.None -> null
+            PressFeedbackType.Sink -> SinkFeedback()
+            PressFeedbackType.Tilt -> TiltFeedback()
+        }
+    }
+    val indicationToUse = if (showIndication) LocalIndication.current else null
+    val clickableModifier =
+        remember(isClickable, onLongPress != null, interactionSource, indicationToUse) {
+            if (isClickable) {
+                Modifier.combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = indicationToUse,
+                    onClick = { currentOnClick?.invoke() },
+                    onLongClick = if (onLongPress != null) {
+                        { currentOnLongPress?.invoke() }
+                    } else {
+                        null
+                    },
+                )
+            } else {
+                Modifier
+            }
+        }
     // 玻璃真正生效时向子级广播「在玻璃上」，让分割线等按实色卡设计的交界色自动换掉
     CompositionLocalProvider(
         LocalContentColor provides contentColor,
@@ -131,7 +208,13 @@ fun CardSegment(
                     top = outerTopPadding,
                     bottom = outerBottomPadding,
                 )
+                .pressable(
+                    interactionSource = if (pressFeedback != null) interactionSource else null,
+                    indication = pressFeedback,
+                    delay = null,
+                )
                 .then(background)
+                .then(clickableModifier)
                 .padding(insidePadding),
             content = content,
         )
