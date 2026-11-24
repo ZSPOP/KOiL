@@ -15,6 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -405,7 +411,19 @@ internal fun RecordCard(
                 }
 
                 // —— 点击展开明细——油耗对比条 + 较油站单价优惠 ——
-                AnimatedVisibility(visible = expanded) {
+                // 不用默认 expandIn/expandOut：它们带缩放成分，玻璃卡会"先缩再长"，
+                // 与 Sink 松手回弹叠在一起显得黏滞。改成纯纵向展开 + 淡入，节奏更利落。
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = expandVertically(
+                        animationSpec = tween(240, easing = FastOutSlowInEasing),
+                        expandFrom = Alignment.Top,
+                    ) + fadeIn(animationSpec = tween(120)),
+                    exit = shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing),
+                        shrinkTowards = Alignment.Top,
+                    ) + fadeOut(animationSpec = tween(90)),
+                ) {
                     Column {
                         val darkBg = MiuixTheme.colorScheme.background.luminance() < 0.5f
                         val goodColor = if (darkBg) KOiLColors.GoodNight else KOiLColors.GoodDay
