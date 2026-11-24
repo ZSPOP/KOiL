@@ -109,7 +109,6 @@ import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.provinceLabel
 import kotlinx.coroutines.flow.first
 import org.koin.androidx.compose.koinViewModel
-import android.widget.Toast
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
@@ -151,8 +150,10 @@ fun HomeScreen(
 
     // 定位权限提醒弹窗显隐
     val showPermissionDialog = remember { mutableStateOf(false) }
-    // 定位成功一次性提示（Toast，文案走 stringResource 本地化）
+    // 定位成功一次性提示（Snackbar，文案走 stringResource 本地化）
     val context = LocalContext.current
+    // 一次性反馈统一走全局 Snackbar（挂在根宿主，切页不丢）
+    val snackbar = com.llpop.koil.ui.component.rememberSnackbar()
     // 首页不再显示任何「有新版本」提示：新版本改由系统通知告知一次，
     // 下载与安装全部留在关于页（通知点进来直接落在那一页）。
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
@@ -162,7 +163,7 @@ fun HomeScreen(
     }
     LaunchedEffect(uiState.locateMessage, locateToast) {
         if (locateToast != null) {
-            Toast.makeText(context, locateToast, Toast.LENGTH_SHORT).show()
+            snackbar(locateToast)
             viewModel.clearLocateMessage()
         }
     }
@@ -179,7 +180,7 @@ fun HomeScreen(
     // 录入成功的一次性反馈（清除状态，避免下次进入页面重复提示）
     LaunchedEffect(uiState.addSuccess) {
         if (uiState.addSuccess) {
-            Toast.makeText(context, R.string.koil_precheck_added, Toast.LENGTH_SHORT).show()
+            snackbar(context.getString(R.string.koil_precheck_added))
             viewModel.consumeAddSuccess()
         }
     }

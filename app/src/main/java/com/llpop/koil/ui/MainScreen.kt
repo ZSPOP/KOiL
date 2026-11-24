@@ -51,6 +51,8 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -221,6 +223,8 @@ fun MainScreen(
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
             val scope = rememberCoroutineScope()
+            // 全局提示宿主：所有页面/弹窗共用一条 Snackbar 通道（替代散落的 Toast）
+            val snackbarHostState = remember { SnackbarHostState() }
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
             // 二级页（关于 / 调价明细）改由导航层承载：back stack 里 Main 常驻，
             // 二级页作为 entry 压栈，转场与交互式侧滑返回由 NavDisplay 负责
@@ -278,6 +282,7 @@ fun MainScreen(
                 com.llpop.koil.ui.component.LocalWallpaperBackdrop provides wallpaperBackdrop,
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
                 com.llpop.koil.ui.component.LocalPageBackdrop provides pageBackdrop,
+                com.llpop.koil.ui.component.LocalSnackbarHostState provides snackbarHostState,
             ) {
                 // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
                 // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
@@ -288,6 +293,8 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color.Transparent,
                     contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+                    // 提示挂在根宿主：盖在页面与底栏之上、弹层之下，切页不中断
+                    snackbarHost = { SnackbarHost(snackbarHostState) },
                 ) {
             NavDisplay(
                 backStack = backStack,
