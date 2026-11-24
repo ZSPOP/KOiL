@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.screen
 
+import com.llpop.koil.ui.component.rememberPopupBackdrop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -625,7 +626,7 @@ private fun OilPriceCard(
                 show = showProvincePicker.value,
                 anchorBounds = provinceBounds,
                 anchor = provinceAnchor,
-                backdrop = LocalPageBackdrop.current,
+                backdrop = rememberPopupBackdrop(),
                 onDismissRequest = { showProvincePicker.value = false },
                 maxHeight = 360.dp,
             ) {
@@ -1186,7 +1187,7 @@ private fun GradeField(
         show = showMenu.value,
         anchorBounds = gradeBounds,
         anchor = gradeAnchor,
-        backdrop = LocalPageBackdrop.current,
+        backdrop = rememberPopupBackdrop(),
         onDismissRequest = { showMenu.value = false },
         maxHeight = 360.dp,
     ) {

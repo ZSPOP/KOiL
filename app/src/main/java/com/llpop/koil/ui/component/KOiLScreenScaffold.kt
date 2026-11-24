@@ -120,8 +120,9 @@ fun KOiLScreenScaffold(
         else -> backdrop
     }
 
-    // 外层（MainScreen 的 Scaffold）已经有整页录制层时沿用它：官方的 GlassDialog /
-    // GlassBottomSheet 采的就是 pageBackdrop（含顶栏 + 底栏 + 内容）那一层。
+    // 弹层（GlassDialog / GlassBottomSheet / 下拉）由外层根宿主渲染，落在本页录制层
+    // 之外，因此它们采样「外层整页层」（含顶栏 + 底栏 + 内容、不含弹层自身）正是
+    // 官方 GlassDialog 注释要求的语义。没有外层时退回本页 backdrop。
     val inheritedPageBackdrop = LocalPageBackdrop.current
     CompositionLocalProvider(
         LocalPageBackdrop provides (inheritedPageBackdrop ?: backdrop),

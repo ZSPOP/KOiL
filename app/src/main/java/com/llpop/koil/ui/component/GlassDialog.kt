@@ -47,8 +47,10 @@ fun KOiLGlassDialog(
     } else {
         DialogDefaults.MaxWidth
     }
-    // 同 GlassSheet：弹窗内容在根弹层宿主里组合，backdrop 必须在此捕获后重新下发
-    val backdrop = LocalPageBackdrop.current
+    // 同 GlassSheet：弹窗内容在根弹层宿主里组合，backdrop 必须在此捕获后重新下发。
+    // 采样源 = 底色层 + 页面层 50%：宿主页是卡片堆叠时，整页 1.0 会把每张卡的圆角轮廓
+    // 透出来；压到一半后结构退成柔和层次，底色的连续感保留。
+    val backdrop = rememberOverlayBackdrop(DialogContentAlpha)
     GlassDialog(
         onDismissRequest = onDismissRequest,
         show = show,
@@ -56,6 +58,8 @@ fun KOiLGlassDialog(
         title = title,
         summary = summary,
         maxWidth = maxWidth,
+        // 材质统一从 KOiLGlassOverlayMaterials 取，与底部弹层同一档
+        material = KOiLGlassOverlayMaterials.dialog(),
         insideMargin = insideMargin ?: DpSize(contentPadding, contentPadding),
     ) {
         // 弹层自身就是玻璃面：同时广播 LocalOnGlassSurface，让内部的提示条/分割线
@@ -63,6 +67,7 @@ fun KOiLGlassDialog(
         // 会变成贴在玻璃上的一块色片）。
         CompositionLocalProvider(
             LocalPageBackdrop provides backdrop,
+            LocalOverlayBackdropApplied provides (backdrop != null),
             LocalOnGlassSurface provides (backdrop != null),
         ) {
         Column(

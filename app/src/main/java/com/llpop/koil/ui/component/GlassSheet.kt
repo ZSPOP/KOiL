@@ -21,8 +21,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+
+/**
+ * 弹层的采样源：底色层全量 + 页面层按 [SheetContentAlpha] 合成.
+ *
+ * 结构照官方 `GlassPage.kt` 的 `secondaryBackdrop`（两层同层绘制、坐标残差透传首层），
+ * 唯一偏离是页面层权重 —— 官方等权 1.0，这里压到一半：宿主页的卡片分组与实心主色块
+ * 在 60dp 高斯下会摊成整片色块，1.0 挡不住；压下来之后底色连续、结构只剩一层。
+ */
+@Composable
+private fun rememberSheetBackdrop(): Backdrop? = rememberOverlayBackdrop(SheetContentAlpha)
 
 /**
  * KOiL 玻璃底部弹层：直接委托官方 [GlassBottomSheet]。
@@ -48,13 +59,15 @@ fun KOiLFormSheet(
     // 在函数作用域（= 调用点）先取到页面 backdrop：弹层内容在根弹层宿主里组合，
     // 那里读 LocalPageBackdrop 是 null，必须在这里捕获后重新下发，否则里面的
     // 下拉面板/日历只能回落成纯色
-    val backdrop = LocalPageBackdrop.current
+    val backdrop = rememberSheetBackdrop()
     GlassBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         backdrop = backdrop,
         modifier = modifier,
         title = title,
+        // 材质统一从 KOiLGlassOverlayMaterials 取，与确认弹窗同一档
+        material = KOiLGlassOverlayMaterials.sheet(),
         insideMargin = DpSize(0.dp, 0.dp),
         renderInRootScaffold = true,
         enableNestedScroll = true,
@@ -66,6 +79,7 @@ fun KOiLFormSheet(
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
         CompositionLocalProvider(
             LocalPageBackdrop provides backdrop,
+            LocalOverlayBackdropApplied provides (backdrop != null),
             LocalOnGlassSurface provides (backdrop != null),
         ) {
         Column(
@@ -108,13 +122,16 @@ fun KOiLListSheet(
     footer: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val backdrop = LocalPageBackdrop.current
+    // 同 KOiLFormSheet：底色层 + 内容层按权重合成
+    val backdrop = rememberSheetBackdrop()
     GlassBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         backdrop = backdrop,
         modifier = modifier,
         title = title,
+        // 同 KOiLFormSheet：材质统一入口
+        material = KOiLGlassOverlayMaterials.sheet(),
         insideMargin = DpSize(0.dp, 0.dp),
         renderInRootScaffold = true,
         enableNestedScroll = true,
@@ -123,6 +140,7 @@ fun KOiLListSheet(
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
         CompositionLocalProvider(
             LocalPageBackdrop provides backdrop,
+            LocalOverlayBackdropApplied provides (backdrop != null),
             LocalOnGlassSurface provides (backdrop != null),
         ) {
             Column(

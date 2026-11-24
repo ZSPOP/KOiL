@@ -279,6 +279,16 @@ fun MainScreen(
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
                 com.llpop.koil.ui.component.LocalPageBackdrop provides pageBackdrop,
             ) {
+                // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
+                // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
+                // layerBackdrop、不录制**。这样弹层落在 pageBackdrop 录制层之外，
+                // 玻璃采样「整页含顶栏底栏、排除弹层自身」才成立；否则弹层被录进
+                // 自己正在采的层里，轻则背景错位透出自己，重则绘制期重入直接闪退。
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+                ) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { nav.pop() },
@@ -291,6 +301,9 @@ fun MainScreen(
                     // 录「顶栏 + 底栏 + 内容」整页，排除弹层与 scrim
                     modifier = Modifier.layerBackdrop(pageBackdrop),
                     containerColor = Color.Transparent,
+                    // 弹层统一交给外层根宿主渲染：这层在录制层内部，若也渲染弹层，
+                    // 弹层会被录进 pageBackdrop，采样即自我包含。
+                    popupHost = {},
                     bottomBar = {
                         if (isFloatingStyleIos) {
                             // iOS 液态玻璃悬浮导航条
@@ -422,6 +435,7 @@ fun MainScreen(
             }
             }
             }
+                }
         }
         }
     }

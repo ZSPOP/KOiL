@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.screen
 
+import com.llpop.koil.ui.component.rememberPopupBackdrop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -455,7 +456,7 @@ internal fun ProvinceSelectField(province: String, onProvinceChange: (String) ->
         show = showPicker.value,
         anchorBounds = anchorBounds.value,
         anchor = popupAnchor,
-        backdrop = LocalPageBackdrop.current,
+        backdrop = rememberPopupBackdrop(),
         onDismissRequest = { showPicker.value = false },
         maxHeight = 360.dp,
     ) {
@@ -759,7 +760,7 @@ internal fun GradePriceSelect(
         show = showMenu.value,
         anchorBounds = anchorBounds.value,
         anchor = popupAnchor,
-        backdrop = LocalPageBackdrop.current,
+        backdrop = rememberPopupBackdrop(),
         onDismissRequest = { showMenu.value = false },
         maxHeight = 240.dp,
     ) {

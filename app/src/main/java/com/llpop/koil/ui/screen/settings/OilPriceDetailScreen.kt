@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.screen.settings
 
+import com.llpop.koil.ui.component.rememberPopupBackdrop
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -69,7 +70,10 @@ import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.CardSegment
 import com.llpop.koil.ui.component.LocalOnGlassSurface
 import com.llpop.koil.ui.component.GlassPopupOverlay
+import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
@@ -152,6 +156,10 @@ fun OilPriceDetailScreen(
             val provinceAnchor = remember { mutableStateOf<IntRect?>(null) }
             var yearMenuExpanded by remember { mutableStateOf(false) }
             val yearAnchor = remember { mutableStateOf<IntRect?>(null) }
+            // 官方下拉的锚点：值文本挂 glassPopupAnchorValue 后，展开时值淡出、
+            // 面板以值文本为锚（与设置页 GlassDropdownPreference 同一套行为）
+            val provinceAnchorHandle = rememberGlassPopupAnchor()
+            val yearAnchorHandle = rememberGlassPopupAnchor()
             // 点击已展开的 pill 时，Popup 先因「外部点击」触发 onDismissRequest 收起，
             // 同一击又落到 pill 的 toggle 上 → 立刻重新展开，表现为「收起又弹开」闪烁。
             // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不展开。
@@ -175,6 +183,7 @@ fun OilPriceDetailScreen(
                     DropdownPill(
                         label = provinceLabel(state.province),
                         expanded = provinceMenuExpanded,
+                        anchorHandle = provinceAnchorHandle,
                         onToggle = {
                             val justDismissed = provinceDismissAt > 0 &&
                                 AppClock.millis() - provinceDismissAt < 350
@@ -185,7 +194,8 @@ fun OilPriceDetailScreen(
                                         GlassPopupOverlay(
                         show = provinceMenuExpanded,
                         anchorBounds = provinceAnchor.value.toFloatRect(),
-                        backdrop = LocalPageBackdrop.current,
+                        anchor = provinceAnchorHandle,
+                        backdrop = rememberPopupBackdrop(),
                         onDismissRequest = {
                             provinceMenuExpanded = false
                             provinceDismissAt = AppClock.millis()
@@ -215,6 +225,7 @@ fun OilPriceDetailScreen(
                         DropdownPill(
                             label = stringResource(R.string.koil_detail_year, state.year),
                             expanded = yearMenuExpanded,
+                            anchorHandle = yearAnchorHandle,
                             onToggle = {
                                 val justDismissed = yearDismissAt > 0 &&
                                     AppClock.millis() - yearDismissAt < 350
@@ -225,7 +236,8 @@ fun OilPriceDetailScreen(
                                                 GlassPopupOverlay(
                             show = yearMenuExpanded,
                             anchorBounds = yearAnchor.value.toFloatRect(),
-                            backdrop = LocalPageBackdrop.current,
+                            anchor = yearAnchorHandle,
+                            backdrop = rememberPopupBackdrop(),
                             onDismissRequest = {
                                 yearMenuExpanded = false
                                 yearDismissAt = AppClock.millis()
@@ -440,33 +452,46 @@ private fun DropdownPill(
     label: String,
     expanded: Boolean,
     onToggle: () -> Unit,
+    anchorHandle: GlassPopupAnchor? = null,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    // 胶囊底与锚面分成两层：官方 glassPopupAnchorValue 会把挂上去的内容包成一块独立的
+    // 玻璃锚面（GlassAnchorSurface，自带采样底）。若整条 pill 都挂上去，展开时会多出
+    // 第二块底，和菜单面板叠在一起。这里只让「文字 + 箭头」进锚面，胶囊底留在外层，
+    // 并在展开期间隐去，避免面板下方露出一条多余的底。
+    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f))
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .background(
+                if (expanded) Color.Transparent
+                else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f),
+            )
+            .clickable(onClick = onToggle),
     ) {
-        Text(
-            text = label,
-            fontSize = KOiLType.Body,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onBackground,
-            maxLines = 1,
-            softWrap = false,
-        )
-        Spacer(Modifier.width(4.dp))
-        Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = MiuixTheme.colorScheme.onBackgroundVariant,
-            // 展开时箭头轻微上转，给出状态反馈
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .size(18.dp)
-                .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
-        )
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .then(if (anchorHandle != null) Modifier.glassPopupAnchorValue(anchorHandle) else Modifier),
+        ) {
+            Text(
+                text = label,
+                fontSize = KOiLType.Body,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                // 展开时箭头轻微上转，给出状态反馈
+                modifier = Modifier
+                    .size(18.dp)
+                    .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
+            )
+        }
     }
 }
 

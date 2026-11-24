@@ -494,10 +494,9 @@ fun OverviewScreen(
     }
 
     // 异常明细弹层（有异常时点异常卡拉起）：从玻璃弹窗换成底部弹层——明细条数不定，
-    // 弹层里内容区自己滚、底部「关闭」钉住，长列表不用把整页撑到顶；偏差取绝对值
-    // 数据页的弹窗/弹层是脚手架的兄弟节点，不在 KOiLScreenScaffold 的 CompositionLocal 作用域内，
-    // 不显式补 backdrop 的话，官方玻璃组件采样源为 null，只能回落成不透明底色（看起来「没有玻璃」）。
-    CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
+    // 弹层里内容区自己滚、底部「关闭」钉住，长列表不用把整页撑到顶；偏差取绝对值。
+    // 弹层由 MainScreen 的根宿主渲染、在页面录制层之外，采样源直接用外层的整页 backdrop，
+    // 这里不需要再补一份 CompositionLocal。
     if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
         com.llpop.koil.ui.component.KOiLListSheet(
             show = true,
@@ -566,7 +565,6 @@ fun OverviewScreen(
                 }
             }
         }
-    }
 
     // 删除确认弹窗（防误删）
     pendingDelete?.let { rec ->
