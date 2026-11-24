@@ -4,18 +4,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * 油号选择框里那一行值：`92# · ¥7.89/L` / `0# 柴油 · ¥7.89/L`。
+ * 油号选择框里那一行值：`92# · ¥7.89/L` / `0# · ¥7.89/L`。
  *
  * 首页录入卡与补录/编辑弹窗原来各写一套（首页是「油号 中黑 + 价格 小字灰」两段，
  * 弹窗是「油号 · 价格」整段粗体，且柴油在弹窗里显示成 `0#`）。收成一处后两边同源。
@@ -26,12 +24,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable
 @ReadOnlyComposable
 internal fun gradeValueLabel(grade: String, price: Double?): AnnotatedString {
-    // 柴油必须带品名（0# 单独读不懂），汽油标号本身已足够
-    val label = if (grade == "0") {
-        stringResource(R.string.koil_add_grade_diesel)
-    } else {
-        "$grade#"
-    }
+    // 统一只显示标号：`92#` / `0#`。原先柴油写成 `0# 柴油`，比汽油标号长一截，
+    // 半宽字段里会把后面的价格挤没（卡片、明细、摘要本来就都显示 `0#`）。
+    val label = "$grade#"
     val priceText = price?.let { "¥${NumberFormat.measure(it)}/L" } ?: "¥--/L"
     val mainSize = MiuixTheme.textStyles.main.fontSize
     val onSurface = MiuixTheme.colorScheme.onBackground

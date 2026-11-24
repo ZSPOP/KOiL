@@ -77,6 +77,11 @@ android {
         release {
             // 正式签名（keystore.properties 存在时）；否则回退 debug 签名
             signingConfig = if (hasReleaseSigning) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+            // 测试包开关（-PkoilTestApk）：独立包名 .test + 版本名 -test，与正式版并存
+            if (project.hasProperty("koilTestApk")) {
+                applicationIdSuffix = ".test"
+                versionNameSuffix = "-test"
+            }
             // 开启 R8 代码压缩 + 资源压缩：material-icons-extended 有大量未引用图标与调试符号，
             // 不压缩会显著放大产物体积。混淆在 proguard-rules.pro 里用 -dontobfuscate 关闭（只做 shrink/optimize）：
             // ① CrashReporter 会把堆栈写进文件给用户看，保留原类名才看得懂；

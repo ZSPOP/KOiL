@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -132,10 +131,12 @@ internal fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
             // 空状态引导——可一键前往录入页（仅当宿主传入导航回调时显示）
             if (onAddClick != null) {
                 Spacer(Modifier.height(16.dp))
+                // 低饱和主色底 + 主色文字：实心高饱和大色块在玻璃浮层下会被糊成整块，
+                // 空态本身只是引导位，不需要抢视觉权重
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(18.dp))
-                        .background(KOiLColors.Primary)
+                        .background(KOiLColors.Primary.copy(alpha = 0.12f))
                         .clickable(onClick = onAddClick)
                         .padding(horizontal = 22.dp, vertical = 8.dp),
                 ) {
@@ -143,7 +144,7 @@ internal fun EmptyHistoryBox(onAddClick: (() -> Unit)? = null) {
                         text = stringResource(R.string.koil_ov_empty_action),
                         fontSize = KOiLType.Body,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
+                        color = KOiLColors.Primary,
                     )
                 }
             }

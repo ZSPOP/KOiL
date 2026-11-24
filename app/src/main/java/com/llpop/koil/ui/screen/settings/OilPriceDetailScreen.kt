@@ -1,5 +1,6 @@
 package com.llpop.koil.ui.screen.settings
 
+import com.llpop.koil.ui.component.rememberPopupBackdrop
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -67,18 +68,21 @@ import androidx.compose.ui.unit.sp
 import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.CardSegment
+import com.llpop.koil.ui.component.LocalOnGlassSurface
 import com.llpop.koil.ui.component.GlassPopupOverlay
+import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
+import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
+import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.BackNavigationIcon
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
-import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
 import com.llpop.koil.ui.component.blur.overScrollVertical
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
 import com.llpop.koil.ui.theme.KOiLColors
@@ -117,6 +121,7 @@ fun OilPriceDetailScreen(
 
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
+        ownWallpaper = true,
         backdrop = backdrop,
         listState = listState,
         navigationIcon = { BackNavigationIcon(onClick = onBack) },
@@ -128,17 +133,12 @@ fun OilPriceDetailScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                // 整页内容横滑切油号：与顶部轨道同一组档位，方向与内容翻页一致（左滑进下一档）。
-                // 二级页不在主 Pager 里，没有翻页手势与它抢。
-                .dragToSwitchTab(
-                    tabCount = state.grades.size,
-                    selectedIndex = state.grades.indexOf(state.grade).coerceAtLeast(0),
-                    onSelect = { idx -> viewModel.selectGrade(state.grades[idx]) },
+                // 录制层由 KOiLScreenScaffold 的外层 Box 统一挂载；这里再挂一次同一个
+                // backdrop 会造成绘制期重入 record → "Recording currently in progress" 闪退
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
                 ),
             // 横向边距由四张卡的 outerHorizontalPadding(12dp) 承担；
             // 顶部在顶栏下方再让 12dp 呼吸（extraTop），随顶栏折叠联动
@@ -156,6 +156,10 @@ fun OilPriceDetailScreen(
             val provinceAnchor = remember { mutableStateOf<IntRect?>(null) }
             var yearMenuExpanded by remember { mutableStateOf(false) }
             val yearAnchor = remember { mutableStateOf<IntRect?>(null) }
+            // 官方下拉的锚点：值文本挂 glassPopupAnchorValue 后，展开时值淡出、
+            // 面板以值文本为锚（与设置页 GlassDropdownPreference 同一套行为）
+            val provinceAnchorHandle = rememberGlassPopupAnchor()
+            val yearAnchorHandle = rememberGlassPopupAnchor()
             // 点击已展开的 pill 时，Popup 先因「外部点击」触发 onDismissRequest 收起，
             // 同一击又落到 pill 的 toggle 上 → 立刻重新展开，表现为「收起又弹开」闪烁。
             // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不展开。
@@ -179,6 +183,7 @@ fun OilPriceDetailScreen(
                     DropdownPill(
                         label = provinceLabel(state.province),
                         expanded = provinceMenuExpanded,
+                        anchorHandle = provinceAnchorHandle,
                         onToggle = {
                             val justDismissed = provinceDismissAt > 0 &&
                                 AppClock.millis() - provinceDismissAt < 350
@@ -189,7 +194,8 @@ fun OilPriceDetailScreen(
                                         GlassPopupOverlay(
                         show = provinceMenuExpanded,
                         anchorBounds = provinceAnchor.value.toFloatRect(),
-                        backdrop = LocalPageBackdrop.current,
+                        anchor = provinceAnchorHandle,
+                        backdrop = rememberPopupBackdrop(),
                         onDismissRequest = {
                             provinceMenuExpanded = false
                             provinceDismissAt = AppClock.millis()
@@ -219,6 +225,7 @@ fun OilPriceDetailScreen(
                         DropdownPill(
                             label = stringResource(R.string.koil_detail_year, state.year),
                             expanded = yearMenuExpanded,
+                            anchorHandle = yearAnchorHandle,
                             onToggle = {
                                 val justDismissed = yearDismissAt > 0 &&
                                     AppClock.millis() - yearDismissAt < 350
@@ -229,7 +236,8 @@ fun OilPriceDetailScreen(
                                                 GlassPopupOverlay(
                             show = yearMenuExpanded,
                             anchorBounds = yearAnchor.value.toFloatRect(),
-                            backdrop = LocalPageBackdrop.current,
+                            anchor = yearAnchorHandle,
+                            backdrop = rememberPopupBackdrop(),
                             onDismissRequest = {
                                 yearMenuExpanded = false
                                 yearDismissAt = AppClock.millis()
@@ -311,6 +319,7 @@ fun OilPriceDetailScreen(
                     isFirst = true,
                     isLast = true,
                     outerBottomPadding = 12.dp,
+                    glass = true,
                 ) {
                     // 水平内距交给容器（与数据页一致）：线本身不写水平内距，跟着容器走
                     Column(
@@ -377,6 +386,7 @@ fun OilPriceDetailScreen(
                     isFirst = true,
                     isLast = true,
                     outerBottomPadding = 12.dp,
+                    glass = true,
                 ) {
                     PriceTrendCanvas(
                         items = state.items,
@@ -400,6 +410,8 @@ fun OilPriceDetailScreen(
                     isLast = true,
                     outerBottomPadding = 12.dp,
                     insidePadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    // 与上方两张卡统一走全站玻璃参数；模糊/壁纸关闭或不支持 RuntimeShader 时回落实色
+                    glass = true,
                 ) {
                     timeline.forEachIndexed { idx, row ->
                         AdjustTimelineItem(
@@ -440,33 +452,46 @@ private fun DropdownPill(
     label: String,
     expanded: Boolean,
     onToggle: () -> Unit,
+    anchorHandle: GlassPopupAnchor? = null,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    // 胶囊底与锚面分成两层：官方 glassPopupAnchorValue 会把挂上去的内容包成一块独立的
+    // 玻璃锚面（GlassAnchorSurface，自带采样底）。若整条 pill 都挂上去，展开时会多出
+    // 第二块底，和菜单面板叠在一起。这里只让「文字 + 箭头」进锚面，胶囊底留在外层，
+    // 并在展开期间隐去，避免面板下方露出一条多余的底。
+    Box(
         modifier = Modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f))
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .background(
+                if (expanded) Color.Transparent
+                else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f),
+            )
+            .clickable(onClick = onToggle),
     ) {
-        Text(
-            text = label,
-            fontSize = KOiLType.Body,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onBackground,
-            maxLines = 1,
-            softWrap = false,
-        )
-        Spacer(Modifier.width(4.dp))
-        Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
-            contentDescription = null,
-            tint = MiuixTheme.colorScheme.onBackgroundVariant,
-            // 展开时箭头轻微上转，给出状态反馈
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .size(18.dp)
-                .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
-        )
+                .padding(horizontal = 14.dp, vertical = 8.dp)
+                .then(if (anchorHandle != null) Modifier.glassPopupAnchorValue(anchorHandle) else Modifier),
+        ) {
+            Text(
+                text = label,
+                fontSize = KOiLType.Body,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onBackground,
+                maxLines = 1,
+                softWrap = false,
+            )
+            Spacer(Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MiuixTheme.colorScheme.onBackgroundVariant,
+                // 展开时箭头轻微上转，给出状态反馈
+                modifier = Modifier
+                    .size(18.dp)
+                    .graphicsLayer { rotationZ = if (expanded) 180f else 0f },
+            )
+        }
     }
 }
 
@@ -503,7 +528,13 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
     val gridColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.1f)
     val labelColor = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.6f)
     val lineColor = KOiLColors.Primary
-    val bubbleBg = MiuixTheme.colorScheme.surfaceContainer
+    // 数据点气泡：实色卡上 surfaceContainer 才和卡面对得上；卡片是采样玻璃时这里
+    // 会变成一块实色贴片，换成 onSurface 的极低 alpha（描边和文字仍按主题走）。
+    val bubbleBg = if (LocalOnGlassSurface.current) {
+        MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+    } else {
+        MiuixTheme.colorScheme.surfaceContainer
+    }
     val bubbleBorder = MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.25f)
     val dotInnerColor = MiuixTheme.colorScheme.surface
     val onBgColor = MiuixTheme.colorScheme.onBackground

@@ -52,6 +52,8 @@ import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.blur.Backdrop
+import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 
@@ -106,6 +108,9 @@ internal fun RecordCard(
             isFirst = true,
             isLast = true,
             outerBottomPadding = 0.dp,
+            // 与各页分组卡同一套全站玻璃参数（LocalKOiLGlassSpec）；
+            // 模糊/壁纸任一关闭或设备不支持 RuntimeShader 时自动回落实色
+            glass = true,
         ) {
             // CardSegment 内容槽是 ColumnScope；异常竖条要 matchParentSize 叠在内容上，
             // 因此显式包一层 Box 承接原来的 BoxScope 布局（列表项间距由调用处 padding(bottom) 给）。
@@ -534,31 +539,39 @@ internal fun HintLine(text: String) {
     }
 }
 
-/** 长按弹出的圆形操作按钮（图标 + 文字标签） */
+/**
+ * 长按弹出的圆形操作按钮（玻璃圆 + 图标 + 文字标签）。
+ *
+ * 原来是主色/危险色的实心大圆 + 白字，压在玻璃页上像两块塑料片。现在直接走官方
+ * [GlassIconButton]：真采样 backdrop（页面列表内容层）做折射，材质、描边、阴影、
+ * 按下时内容 alpha 渐暗和按压叠加层都由框架统一给，与顶栏/回顶按钮同一套玻璃语言。
+ * 语义（编辑/删除）仍留在图标与文字的颜色上，不靠整块实色喊。
+ *
+ * backdrop 为 null（模糊开关关闭 / 机型不支持 RuntimeShader）时，官方组件自动回落成
+ * 填充 + 描边，视觉和玻璃态一致只是不折射。
+ */
 @Composable
 internal fun LongPressCircleAction(
     icon: ImageVector,
     label: String,
-    bg: Color,
+    color: Color,
+    backdrop: Backdrop?,
     onClick: () -> Unit,
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .background(bg)
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
+        GlassIconButton(
+            onClick = onClick,
+            backdrop = backdrop,
+            size = 54.dp,
         ) {
-            Icon(icon, contentDescription = label, tint = Color.White, modifier = Modifier.size(24.dp))
+            Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(6.dp))
         Text(
             text = label,
             fontSize = KOiLType.BodySmall,
             fontWeight = FontWeight.Medium,
-            color = Color.White,
+            color = color,
         )
     }
 }

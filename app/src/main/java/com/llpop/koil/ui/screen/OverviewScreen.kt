@@ -64,8 +64,8 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
-import com.llpop.koil.ui.component.dragToSwitchTab
 import com.llpop.koil.ui.component.pageContentPadding
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.domain.logic.ConsumptionStatus
@@ -79,9 +79,21 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.material.GlassShape
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
+import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
+import com.llpop.koil.ui.component.effect.LocalKOiLGlassSpec
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.material.edgeStroke
+import top.yukonga.miuix.kmp.material.EdgeStroke
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.BlurColors
+import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
@@ -89,7 +101,6 @@ import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
@@ -189,8 +200,6 @@ fun OverviewScreen(
         "3m" to stringResource(R.string.koil_range_3m),
     )
 
-    // 范围档位：内容区横滑切档要用，横滑方向与内容翻页一致（左滑进下一档）
-    val rangeIndex = rangeLabels.indexOfFirst { it.first == uiState.range }.coerceAtLeast(0)
 
     val pageBackdrop = rememberBlurBackdrop()
     KOiLScreenScaffold(
@@ -198,22 +207,55 @@ fun OverviewScreen(
         modifier = modifier,
         backdrop = pageBackdrop,
         listState = listState,
+        // 返回顶部按钮放在覆盖层：这层在 backdrop 录制树之外，采样 overlayBackdrop
+        // （壁纸 + 内容 + 顶栏三层合并）。放在 content 里的话按钮落在 pageBackdrop
+        // 录制树内部，采自己那层会崩，只能传 null —— 玻璃就退化成填充 + 描边了。
+        overlay = { overlayBackdrop, _, _ ->
+            Box(Modifier.fillMaxSize()) {
+                // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
+                // 竖直位置 = 底栏留白 + 16.dp（按钮 44dp），滚到底时降到 alpha 0.4（仍可点）。
+                // 智能回顶：可见项序号 > 60 时先 scrollToItem 瞬移到近顶，再短动画收尾到 0。
+                AnimatedVisibility(
+                    visible = showBackToTop,
+                    enter = fadeIn() + scaleIn(initialScale = 0.6f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.6f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
+                ) {
+                    GlassIconButton(
+                        onClick = {
+                            scope.launch {
+                                if (listState.firstVisibleItemIndex > 60) {
+                                    listState.scrollToItem(60)
+                                }
+                                listState.animateScrollToItem(0)
+                            }
+                        },
+                        modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
+                        backdrop = overlayBackdrop,
+                        size = 44.dp,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowUp,
+                            contentDescription = stringResource(R.string.koil_back_to_top),
+                            tint = MiuixTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+            }
+        },
     ) { innerPadding, topPadding, scrollBehavior, pageBackdrop ->
         Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
-                // 数据页的横滑归范围档位（页面翻页在本页已停用），纵向滚动与卡片点击不受影响
-                .dragToSwitchTab(
-                    tabCount = rangeLabels.size,
-                    selectedIndex = rangeIndex,
-                    onSelect = { idx -> viewModel.setRange(rangeLabels[idx].first) },
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
                 ),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
             // bottom 只留底栏槽高，与添加页、设置页一致
@@ -279,11 +321,57 @@ fun OverviewScreen(
                         modifier = Modifier.weight(1f),
                         insideMargin = PaddingValues(start = 4.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
                     )
-                    // 補錄用胶囊按钮（主色浅底 + 加号图标），点击区域加大
+                    // 補錄胶囊的玻璃：不走顶栏按钮那套材质（在页面内容里会被顶栏的
+                    // dynamic 材质带成实心色块），而是与卡片完全同一套 —— 同一个
+                    // KOiLGlassSpec + textureBlur + Colored Thin 混色，只把形状换成 16dp 胶囊。
+                    // 采样目标同样是壁纸层（按钮在页面录制层内，不能采自己那层）。
+                    // 与卡片同一处判定：关壁纸（纯色底）时切官方 puredThinGlass 口径
+                    val glassSpec = rememberEffectiveGlassSpec()
+                    val darkTheme = LocalKOiLDarkTheme.current
+                    val wallpaperBackdrop = LocalWallpaperBackdrop.current
+                    // 与卡片同一条门槛：只看模糊总开关，动态壁纸开关不参与（关壁纸时
+                    // 采到的是 surface 纯色，薄纱效果仍成立）
+                    val backfillGlassActive = wallpaperBackdrop != null &&
+                        glassSpec.enabled &&
+                        LocalBlurEnabled.current &&
+                        isRuntimeShaderSupported()
+                    val backfillShape = remember { GlassShape(16.dp) }
+                    val backfillStroke: (() -> EdgeStroke?)? = if (
+                        !backfillGlassActive || glassSpec.edgeTier == KOiLGlassEdgeTier.Disabled
+                    ) {
+                        null
+                    } else {
+                        rememberKOiLGlassEdgeStroke(isDark = darkTheme, spec = glassSpec)
+                            .let { st -> remember(st) { { st.value } } }
+                    }
+                    val backfillSurface = if (backfillGlassActive) {
+                        Modifier
+                            .textureBlur(
+                                backdrop = wallpaperBackdrop,
+                                shape = backfillShape,
+                                blurRadius = glassSpec.blurRadius,
+                                noiseCoefficient = glassSpec.noiseCoefficient,
+                                colors = BlurColors(
+                                    blendColors = glassSpec.blendColors(darkTheme),
+                                    brightness = glassSpec.brightness(darkTheme),
+                                    contrast = glassSpec.contrast,
+                                    saturation = glassSpec.saturation,
+                                ),
+                                enabled = true,
+                            )
+                            .then(
+                                if (backfillStroke != null) {
+                                    Modifier.edgeStroke(shape = backfillShape, stroke = backfillStroke)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                    } else {
+                        Modifier.clip(backfillShape).background(KOiLColors.Primary.copy(alpha = 0.12f))
+                    }
                     Row(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(KOiLColors.Primary.copy(alpha = 0.12f))
+                            .then(backfillSurface)
                             .clickable { viewModel.openBackfill() }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -348,7 +436,9 @@ fun OverviewScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.38f))
+                    // 遮罩（屏蔽罩）压到 0.40：0.22 压不住、长按菜单聚焦感不足，
+                    // 0.34 实测仍偏亮，0.40 能把底压到只剩一层氛围又不至于死黑
+                    .background(Color.Black.copy(alpha = 0.40f))
                     .clickable {
                         moreMenuFor = null
                         actionRecord = null
@@ -371,7 +461,11 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Edit,
                             label = stringResource(R.string.koil_ov_edit),
-                            bg = if (LocalKOiLDarkTheme.current) KOiLColors.PrimaryDark else KOiLColors.Primary,
+                            color = if (LocalKOiLDarkTheme.current) KOiLColors.PrimaryDark else KOiLColors.Primary,
+                            // 必须采「壁纸层」而不是 pageBackdrop：长按浮层本身就在
+                            // pageBackdrop 的录制层内部，玻璃去采自己所在的层会直接崩
+                            //（回顶按钮同样传 null 规避）。壁纸层在页面之下，安全且同材质。
+                            backdrop = LocalWallpaperBackdrop.current,
                         ) {
                             moreMenuFor = null
                             actionRecord?.let { viewModel.startEdit(it.record) }
@@ -381,7 +475,8 @@ fun OverviewScreen(
                         LongPressCircleAction(
                             icon = Icons.Filled.Delete,
                             label = stringResource(R.string.koil_ov_delete),
-                            bg = KOiLColors.Danger,
+                            color = KOiLColors.Danger,
+                            backdrop = LocalWallpaperBackdrop.current,
                         ) {
                             val rec = actionRecord
                             moreMenuFor = null
@@ -395,57 +490,13 @@ fun OverviewScreen(
             }
         }
 
-        // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
-        // 竖直位置 = 底栏留白 + 16.dp（按钮 44dp）。列表 bottom 只留底栏留白，与另两页一致；
-        // 滚到底时按钮降到 alpha 0.4（仍可点），不需要在列表底部预留额外占位。
-        // 智能回顶：可见项序号 > 60（几千条记录的深处）时先 scrollToItem 瞬移到近顶，
-        // 再短动画收尾到 0；近处保持平滑 animateScrollToItem，不从深处慢速长飞。
-        AnimatedVisibility(
-            visible = showBackToTop,
-            enter = fadeIn() + scaleIn(initialScale = 0.6f),
-            exit = fadeOut() + scaleOut(targetScale = 0.6f),
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = bottomPadding + 16.dp),
-        ) {
-            // 官方 FloatingActionButton：默认 60dp 圆形、主色底、4dp 阴影；
-            // 滚到底时整体降到 alpha 0.4（仍可点）
-            // 官方玻璃图标按钮：44dp 圆形玻璃胶囊（顶栏按钮同款材质），比 60dp FAB 小。
-            // backdrop 必须取列表内容层（pageBackdrop）：它录的是 surface + drawContent()，
-            // 玻璃才采得到正下方滚动的卡片、做出真实折射；早先取 LocalWallpaperBackdrop
-            // （只录纯底色）时采样到的是一整块纯色，观感只剩「半透明填充 + 描边」。
-            // 按钮是列表的兄弟节点、绘制在之上，不在该层录制范围内，不存在采样到自身的问题。
-            // 模糊关闭、或不支持 RuntimeShader 的机型，rememberBlurBackdrop 都返回 null，
-            // 自动回落填充 + 描边，与其他玻璃组件一致（两个条件任一即可触发）。
-            GlassIconButton(
-                onClick = {
-                    scope.launch {
-                        if (listState.firstVisibleItemIndex > 60) {
-                            listState.scrollToItem(60)
-                        }
-                        listState.animateScrollToItem(0)
-                    }
-                },
-                modifier = Modifier.alpha(if (atListBottom) 0.4f else 1f),
-                backdrop = pageBackdrop,
-                size = 44.dp,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.koil_back_to_top),
-                    tint = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-        }
     }
     }
 
     // 异常明细弹层（有异常时点异常卡拉起）：从玻璃弹窗换成底部弹层——明细条数不定，
-    // 弹层里内容区自己滚、底部「关闭」钉住，长列表不用把整页撑到顶；偏差取绝对值
-    // 数据页的弹窗/弹层是脚手架的兄弟节点，不在 KOiLScreenScaffold 的 CompositionLocal 作用域内，
-    // 不显式补 backdrop 的话，官方玻璃组件采样源为 null，只能回落成不透明底色（看起来「没有玻璃」）。
-    CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
+    // 弹层里内容区自己滚、底部「关闭」钉住，长列表不用把整页撑到顶；偏差取绝对值。
+    // 弹层由 MainScreen 的根宿主渲染、在页面录制层之外，采样源直接用外层的整页 backdrop，
+    // 这里不需要再补一份 CompositionLocal。
     if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
         com.llpop.koil.ui.component.KOiLListSheet(
             show = true,
@@ -514,7 +565,6 @@ fun OverviewScreen(
                 }
             }
         }
-    }
 
     // 删除确认弹窗（防误删）
     pendingDelete?.let { rec ->

@@ -69,6 +69,7 @@ data class SettingsUiState(
     val pagerGestureMode: String = "cross_axis",
     // 外观
     val blurEnabled: Boolean = true,
+    val wallpaperEnabled: Boolean = true,
     // 系统交互
     val predictiveBack: Boolean = true,
     val swipeDismissEnabled: Boolean = true,
@@ -543,6 +544,7 @@ class SettingsViewModel(
         settings.floatingBottomBarStyle,
         settings.pagerGestureMode,
         settings.blurEnabled,
+        settings.wallpaperEnabled,
         settings.predictiveBack,
         settings.swipeDismissEnabled,
     ) { args ->
@@ -562,8 +564,9 @@ class SettingsViewModel(
             floatingBottomBarStyle = args[12] as String,
             pagerGestureMode = args[13] as String,
             blurEnabled = args[14] as Boolean,
-            predictiveBack = args[15] as Boolean,
-            swipeDismissEnabled = args[16] as Boolean,
+            wallpaperEnabled = args[15] as Boolean,
+            predictiveBack = args[16] as Boolean,
+            swipeDismissEnabled = args[17] as Boolean,
             loaded = true,
         )
     }.stateIn(viewModelScope, SharingStarted.Eagerly, SettingsUiState())
@@ -582,6 +585,9 @@ class SettingsViewModel(
 
     fun setBlurEnabled(enabled: Boolean) =
         viewModelScope.launch { settings.setBlurEnabled(enabled) }
+
+    fun setWallpaperEnabled(enabled: Boolean) =
+        viewModelScope.launch { settings.setWallpaperEnabled(enabled) }
 
     fun setSwipeDismissEnabled(enabled: Boolean) =
         viewModelScope.launch { settings.setSwipeDismissEnabled(enabled) }

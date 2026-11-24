@@ -149,6 +149,7 @@ class AppSettings(private val context: Context) {
         // ---- 导航栏（悬浮导航 / 样式 / 模式）----
         private val KEY_FLOATING_BOTTOM_BAR_STYLE = stringPreferencesKey("KOiL-floating-bottom-bar-style")
         private val KEY_BLUR_ENABLED = booleanPreferencesKey("KOiL-blur-enabled")
+        private val KEY_WALLPAPER_ENABLED = booleanPreferencesKey("KOiL-wallpaper-enabled")
         private val KEY_PAGER_GESTURE_MODE = stringPreferencesKey("KOiL-pager-gesture-mode")
         private val KEY_PREDICTIVE_BACK = booleanPreferencesKey("KOiL-predictive-back")
         private val KEY_SWIPE_DISMISS = booleanPreferencesKey("KOiL-swipe-dismiss")
@@ -783,6 +784,17 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_BLUR_ENABLED] ?: true }
     suspend fun setBlurEnabled(enabled: Boolean) {
         context.KOiLDataStore.edit { it[KEY_BLUR_ENABLED] = enabled }
+    }
+
+    /**
+     * 动态壁纸开关：开启时页面底换成官方 BgEffectConfig 那套三层流动色（与「关于」页同源，
+     * 深色走 PHONE_DARK / 浅色走 PHONE_LIGHT），关闭时回到 surface 纯色。
+     * 只影响页面底，不改顶栏与玻璃参数。
+     */
+    val wallpaperEnabled: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_WALLPAPER_ENABLED] ?: true }
+    suspend fun setWallpaperEnabled(enabled: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_WALLPAPER_ENABLED] = enabled }
     }
 
     /**

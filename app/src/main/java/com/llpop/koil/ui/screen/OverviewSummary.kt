@@ -48,7 +48,6 @@ import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
-import com.llpop.koil.ui.component.swipeToSwitchTab
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
@@ -87,16 +86,12 @@ internal fun SummaryGrid(
                     backdrop = wallpaper,
                 )
             } else {
+                // 只保留点按切档：整页横滑已经还给 Pager 翻页，标签行上再挂"拖动切档"
+                // 会和翻页手势同时在跑（它不 consume 事件），两个动作一起动很别扭
                 TabRowWithContour(
                     tabs = rangeLabels.map { it.second },
                     selectedTabIndex = rangeIndex,
                     onTabSelected = onRangeSelect,
-                    modifier = Modifier.swipeToSwitchTab(
-                        tabCount = rangeLabels.size,
-                        selectedIndex = rangeIndex,
-                        onSelect = onRangeSelect,
-                        itemSpacing = 5.dp,
-                    ),
                 )
             }
             Spacer(Modifier.height(14.dp))

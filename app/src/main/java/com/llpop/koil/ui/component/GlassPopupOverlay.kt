@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassDropdownPopup
@@ -64,6 +65,9 @@ fun GlassPopupOverlay(
         }
     }
     if (!mounted.value) return
+    // 与弹层/弹窗同一口径：玻璃开关关闭时不出采样层，官方 GlassDropdownPopup 会按
+    // backdrop == null 落到自己的不透明底，避免「开关关了、下拉还糊着」。
+    val effectiveBackdrop = if (LocalBlurEnabled.current) backdrop else null
     PopupLayout(
         visible = mounted,
         enterTransition = EnterTransition.None,
@@ -78,7 +82,7 @@ fun GlassPopupOverlay(
                 onDismissRequest = onDismissRequest,
                 anchorBounds = anchorBounds,
                 anchor = anchor,
-                backdrop = backdrop,
+                backdrop = effectiveBackdrop,
                 modifier = modifier,
                 sizing = GlassPopupSizing(
                     minWidth = minWidth,

@@ -82,8 +82,10 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.GlassDialogTextButton
+import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.pageContentPadding
+import com.llpop.koil.ui.component.rememberPageBackdropForGlass
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
@@ -123,7 +125,6 @@ import com.llpop.koil.data.update.updateChannelIssue
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
-import com.llpop.koil.ui.component.horizontalCutoutPadding
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
@@ -244,11 +245,11 @@ fun SettingsScreen(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (pageBackdrop != null) Modifier.layerBackdrop(pageBackdrop) else Modifier)
-                .horizontalCutoutPadding()
-                .scrollEndHaptic()
-                .overScrollVertical(scrollBehavior)
-                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .pageScrollModifiers(
+                    enableScrollEndHaptic = true,
+                    showTopAppBar = true,
+                    topAppBarScrollBehavior = scrollBehavior,
+                )
                 .imePadding()
                 .pointerInput(Unit) {
                     awaitEachGesture {
@@ -281,7 +282,7 @@ fun SettingsScreen(
                             val themeModes = AppSettings.ThemeMode.entries
                             val themeModeIdx = themeModes.indexOf(uiState.themeMode).coerceAtLeast(0)
                             GlassDropdownPreference(
-                                backdrop = pageBackdrop,
+                                backdrop = rememberPageBackdropForGlass(),
                                 items = themeModes.map { themeLabel(it) },
                                 selectedIndex = themeModeIdx,
                                 title = stringResource(R.string.koil_set_appearance),
@@ -293,7 +294,7 @@ fun SettingsScreen(
                             val languages = AppSettings.Language.entries
                             val languageIdx = languages.indexOf(uiState.language).coerceAtLeast(0)
                             GlassDropdownPreference(
-                                backdrop = pageBackdrop,
+                                backdrop = rememberPageBackdropForGlass(),
                                 items = languages.map { langLabel(it) },
                                 selectedIndex = languageIdx,
                                 title = stringResource(R.string.koil_set_language),
@@ -308,7 +309,7 @@ fun SettingsScreen(
                                 FloatingBottomBarStyle.fromStorage(uiState.floatingBottomBarStyle),
                             ).coerceAtLeast(0)
                             GlassDropdownPreference(
-                                backdrop = pageBackdrop,
+                                backdrop = rememberPageBackdropForGlass(),
                                 items = floatingStyles.map { styleLabel(it) },
                                 selectedIndex = floatingStyleIdx,
                                 title = stringResource(R.string.koil_set_floating_style),
@@ -327,6 +328,14 @@ fun SettingsScreen(
                                 subtitle = stringResource(R.string.koil_set_blur_sub),
                                 checked = uiState.blurEnabled,
                                 onCheckedChange = viewModel::setBlurEnabled,
+                            )
+                        })
+                        add(CardItem("wallpaper") {
+                            SettingSwitchRow(
+                                title = stringResource(R.string.koil_set_wallpaper),
+                                subtitle = stringResource(R.string.koil_set_wallpaper_sub),
+                                checked = uiState.wallpaperEnabled,
+                                onCheckedChange = viewModel::setWallpaperEnabled,
                             )
                         })
                     }
@@ -386,7 +395,7 @@ fun SettingsScreen(
                                 val provinces = PROVINCES
                                 val provinceIdx = provinces.indexOf(uiState.defaultProvince).coerceAtLeast(0)
                                 GlassDropdownPreference(
-                                    backdrop = pageBackdrop,
+                                    backdrop = rememberPageBackdropForGlass(),
                                     items = provinces.map { provinceLabel(it) },
                                     selectedIndex = provinceIdx,
                                     title = stringResource(R.string.koil_set_default_province),
@@ -413,7 +422,7 @@ fun SettingsScreen(
                                 val oilGrades = GRADES
                                 val gradeIdx = oilGrades.indexOf(uiState.defaultOilGrade).coerceAtLeast(0)
                                 GlassDropdownPreference(
-                                    backdrop = pageBackdrop,
+                                    backdrop = rememberPageBackdropForGlass(),
                                     items = oilGrades.map { "${it}#" },
                                     selectedIndex = gradeIdx,
                                     title = stringResource(R.string.koil_set_default_grade),
@@ -446,7 +455,7 @@ fun SettingsScreen(
                                 PagerGestureMode.fromStorage(uiState.pagerGestureMode),
                             ).coerceAtLeast(0)
                             GlassDropdownPreference(
-                                backdrop = pageBackdrop,
+                                backdrop = rememberPageBackdropForGlass(),
                                 items = pagerModes.map { pagerGestureLabel(it) },
                                 selectedIndex = pagerModeIdx,
                                 title = stringResource(R.string.koil_set_pager_gesture),
@@ -962,12 +971,9 @@ fun SettingsScreen(
 
     // 省份选择弹窗
 
-    // CSV 导入预览弹窗
-    // 与数据页同一问题：这层调用在脚手架外面，拿不到脚手架内部的 LocalPageBackdrop，
-    // 需要显式补上页面 backdrop，否则官方玻璃弹窗只能回落成不透明底色
-    CompositionLocalProvider(LocalPageBackdrop provides pageBackdrop) {
-        ImportPreviewDialog(viewModel)
-    }
+    // 导入预览弹窗由 MainScreen 的根宿主渲染、在页面录制层之外，
+    // 采样源直接沿用外层的整页 backdrop，这里不需要再补 CompositionLocal。
+    ImportPreviewDialog(viewModel)
 }
 
 // ===== 组件 =====

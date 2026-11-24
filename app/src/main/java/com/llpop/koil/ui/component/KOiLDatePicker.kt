@@ -184,7 +184,7 @@ fun KOiLDatePickerDialog(
         show = true,
         anchorBounds = anchorRect,
         anchor = anchor,
-        backdrop = com.llpop.koil.ui.component.LocalPageBackdrop.current,
+        backdrop = rememberPopupBackdrop(),
         onDismissRequest = onDismiss,
         // 6 行月份 + 字体放大时内容约 548dp，480dp 会把底部“今天”裁掉
         maxHeight = 600.dp,

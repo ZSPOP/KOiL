@@ -49,6 +49,10 @@ class MainViewModel(
     val blurEnabled: StateFlow<Boolean> = settings.blurEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    /** 动态壁纸开关（三层流动底） */
+    val wallpaperEnabled: StateFlow<Boolean> = settings.wallpaperEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     /** 页面横移返回开关 */
     val swipeDismissEnabled: StateFlow<Boolean> = settings.swipeDismissEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)

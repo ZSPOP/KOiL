@@ -36,6 +36,9 @@ import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.component.BlurredBar
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
+import com.llpop.koil.ui.component.rememberAppPageInsets
+import com.llpop.koil.ui.component.effect.BgEffectBackground
+import com.llpop.koil.ui.component.liquid.rememberCombinedBackdrop
 import com.llpop.koil.ui.component.liquid.IosLiquidGlassNavigationBar
 import com.llpop.koil.ui.screen.HomeScreen
 import com.llpop.koil.ui.screen.OverviewScreen
@@ -64,6 +67,7 @@ import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 
 /**
  * 主界面：三 Tab（录入 / 总览 / 设置）+ 底部导航 + 主题三档。
@@ -85,6 +89,7 @@ fun MainScreen(
     val language by viewModel.language.collectAsStateWithLifecycle()
     val floatingStyle by viewModel.floatingBottomBarStyle.collectAsStateWithLifecycle()
     val blurEnabled by viewModel.blurEnabled.collectAsStateWithLifecycle()
+    val wallpaperEnabled by viewModel.wallpaperEnabled.collectAsStateWithLifecycle()
     val pagerGestureMode by viewModel.pagerGestureMode.collectAsStateWithLifecycle()
     val swipeDismissEnabled by viewModel.swipeDismissEnabled.collectAsStateWithLifecycle()
     // 页面切换手势：与 miuix PagerInterceptionMode 一一对应（cross_axis = 跨轴拦截）
@@ -134,7 +139,29 @@ fun MainScreen(
     }
     check(registryOwner != null) { "KOiL: 无法从 baseContext 解析 ActivityResultRegistryOwner" }
 
+    // 切到别的 App / 回桌面时主动清焦点。
+    // 系统在窗口重新拿到焦点时会把焦点还给 ComposeView 上最后聚焦的那个节点 —— 首页录入卡的
+    // 输入框正好就是它，于是回到 App 会「白弹一次键盘」；更糟的是首页那个
+    // 「键盘可见 && 首页输入框有焦点 → formBringIntoView」的副作用会顺着 Pager 的滚动链
+    // 把整页拽回首页，看起来像「自动跳到首页并把光标放进输入框」。
+    // force = true 连 focus 组一起清，避免有节点残留可被系统恢复。
+    val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    LaunchedEffect(windowInfo) {
+        androidx.compose.runtime.snapshotFlow { windowInfo.isWindowFocused }
+            .collect { isFocused -> if (!isFocused) focusManager.clearFocus(force = true) }
+    }
+
+    // 官方 AppHost 的做法：只有宿主把平台安全区、外部 padding 和导航 chrome 合并一次，
+    // 页面用 LocalAppPageInsets 读。我们外层没有 rail / 搜索胶囊，两者恒为 0。
+    val appPageInsets = rememberAppPageInsets(
+        hostPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+        startAlreadyReserved = false,
+        overlayStart = { 0.dp },
+        searchTop = { 0.dp },
+    )
     androidx.compose.runtime.CompositionLocalProvider(
+        com.llpop.koil.ui.component.LocalAppPageInsets provides appPageInsets,
         // 把"应用语言"显式注入组合。Dialog/Popup 是独立组合根，会用窗口自己的
         // configuration 覆盖 LocalConfiguration/LocalContext（MainScreen 的覆盖到不了），
         // 而自定义 CompositionLocal 会随父组合继承 —— 弹窗据此把语言重新盖回去。
@@ -144,31 +171,52 @@ fun MainScreen(
         androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
         // 模糊效果总开关：一路往下传给页面 Scaffold / 弹层 / 底栏，关掉即全部回落不透明
         LocalBlurEnabled provides blurEnabled,
+        // 动态壁纸：开关开启时页面底层跑 BgEffectBackground 流动色，关闭时为 surface
+        com.llpop.koil.ui.theme.LocalWallpaperEnabled provides wallpaperEnabled,
     ) {
         KOiLTheme(darkTheme = darkTheme) {
-        // 底栏玻璃 backdrop：drawRect(surface) + drawContent() 录制页面真实内容，
-        // 供悬浮导航条/底栏模糊采样产生通透感（用 surface 铺底）。
-        // 页面底色 = Miuix Scaffold 默认 containerColor=surface（浅 #F7F7F7 / 深 #000000），
-        // 卡片为 surfaceContainer（浅白 / 深 #242424），两者天然拉开色差。
         val surfaceColor = MiuixTheme.colorScheme.surface
-        val bottomBarBackdrop = rememberBlurBackdrop()
-        val bottomBarBlurActive = bottomBarBackdrop != null
-
-        // 背景层 backdrop：只录制这层纯底色，供列表内的玻璃组件采样。
-        // 不能复用 bottomBarBackdrop（它录制的是整个 Pager，组件采样自己所在层会崩）。
+        // 录制层与官方 GlassPage 一一对应：
+        //  - wallpaperBackdrop：只录「固定壁纸」这一层（壁纸钉在屏幕上，翻页只移动其上的内容）
+        //  - contentBackdrop：录 Pager 里所有页面的内容（官方页内的 `backdrop` 那一层）
+        //  - pageBackdrop：录整个 Scaffold（底栏 + 内容 + 各页顶栏），供弹层/浮层采样，
+        //    对应官方 `Scaffold(modifier = Modifier.layerBackdrop(pageBackdrop))`
         val wallpaperBackdrop = rememberLayerBackdrop()
+        val contentBackdrop = rememberBlurBackdrop()
+        val pageBackdrop = rememberLayerBackdrop()
+        // 官方底栏是 `GlassNavigationBar(backdrop = backdrop)` —— 采「壁纸 + 内容」那一层，
+        // 内容从底栏下面滚过时底栏会有真实折射。这里用同一语义：壁纸层 + Pager 内容层。
+        val navBarBackdrop = if (blurEnabled && isRuntimeShaderSupported()) {
+            if (contentBackdrop != null) rememberCombinedBackdrop(wallpaperBackdrop, contentBackdrop) else wallpaperBackdrop
+        } else {
+            null
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 // 最底层填充：Scaffold 已透明，若不铺背景会露出窗口底色
                 .background(surfaceColor),
         ) {
+            // 顺序与官方 GlassPage 一致：先 layerBackdrop 再 background。
+            // .background() 写在 layerBackdrop 之前的话，底色在录制层**外面**，
+            // 录制层里只剩动态底；一旦关掉动态壁纸，层就是全透明的，所有玻璃
+            // （卡片 / 顶栏 / 底栏）采样到空层 → 提亮成一片白灰块。
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(surfaceColor)
-                    .layerBackdrop(wallpaperBackdrop),
-            )
+                    .layerBackdrop(wallpaperBackdrop)
+                    .background(surfaceColor),
+            ) {
+                // 唯一一份动态底，常驻播放：壁纸不随页面平移，色阶也不会因翻页重新计时。
+                if (wallpaperEnabled) {
+                    BgEffectBackground(
+                        dynamicBackground = true,
+                        modifier = Modifier.fillMaxSize(),
+                        isFullSize = true,
+                    ) {
+                    }
+                }
+            }
             // 三页用 HorizontalPager 承载：
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
@@ -228,7 +276,19 @@ fun MainScreen(
 
             androidx.compose.runtime.CompositionLocalProvider(
                 com.llpop.koil.ui.component.LocalWallpaperBackdrop provides wallpaperBackdrop,
+                // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
+                com.llpop.koil.ui.component.LocalPageBackdrop provides pageBackdrop,
             ) {
+                // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
+                // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
+                // layerBackdrop、不录制**。这样弹层落在 pageBackdrop 录制层之外，
+                // 玻璃采样「整页含顶栏底栏、排除弹层自身」才成立；否则弹层被录进
+                // 自己正在采的层里，轻则背景错位透出自己，重则绘制期重入直接闪退。
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+                ) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { nav.pop() },
@@ -237,7 +297,13 @@ fun MainScreen(
                 entry<Route.Main>(swipeDismiss = swipeDismiss) {
 
             Scaffold(
+                    // 官方：Scaffold(modifier = Modifier.fillMaxSize().layerBackdrop(pageBackdrop))
+                    // 录「顶栏 + 底栏 + 内容」整页，排除弹层与 scrim
+                    modifier = Modifier.layerBackdrop(pageBackdrop),
                     containerColor = Color.Transparent,
+                    // 弹层统一交给外层根宿主渲染：这层在录制层内部，若也渲染弹层，
+                    // 弹层会被录进 pageBackdrop，采样即自我包含。
+                    popupHost = {},
                     bottomBar = {
                         if (isFloatingStyleIos) {
                             // iOS 液态玻璃悬浮导航条
@@ -245,8 +311,8 @@ fun MainScreen(
                                 items = navigationItems,
                                 selectedIndex = selectedTab,
                                 onItemClick = { index -> scope.launch { pagerState.springAnimateToPage(index) } },
-                                backdrop = bottomBarBackdrop,
-                                isBlurActive = bottomBarBlurActive,
+                                backdrop = navBarBackdrop,
+                                isBlurActive = navBarBackdrop != null,
                                 isDark = isDark,
                                 showLabels = true,
                             )
@@ -258,7 +324,7 @@ fun MainScreen(
                                 items = glassNavigationItems,
                                 selectedIndex = selectedTab,
                                 onSelect = { index -> scope.launch { pagerState.springAnimateToPage(index) } },
-                                backdrop = if (bottomBarBlurActive) bottomBarBackdrop else null,
+                                backdrop = navBarBackdrop,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp),
@@ -270,24 +336,17 @@ fun MainScreen(
                     // 槽位区域显示页面内容本身而非裸露背景色带），
                     // 顶部 inset 交给各页内 Scaffold 的 TopAppBar 处理（外层 MainPage
                     // Scaffold 只传 bottomPadding，内层 page Scaffold 管 topBar），此处不加 top padding。
-                    // layerBackdrop(bottomBarBackdrop) 挂在 HorizontalPager 外层
-                    // （录制整个 Pager 含所有页面内容），悬浮条在 bottomBar 槽位不在录制范围内，安全；
-                    // 左右滑动切换时悬浮条永远能采样到页面内容 → 滑动过程保持通透。
+                    // 底栏采样固定壁纸层（见上方 navBarBackdrop），不再录制整页内容。
                     val contentModifier = Modifier.fillMaxSize()
                     // 底部留白直接取 Scaffold 算出的槽高：悬浮胶囊与普通栏都适用，
                     // 不再按"胶囊高度 + 20dp"硬编码猜测（胶囊尺寸一变就会错）
                     val bottomPad = innerPadding.calculateBottomPadding()
+                    // Pager 内容录制层：录所有页面内容（不含底栏 —— 底栏是 Scaffold 的
+                    // bottomBar 槽位，不在本录制树内，底栏采样它不会自采样）。
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            // 模糊关掉时没有 backdrop，也就不挂录制层（底栏直接吃 surface 色）
-                            .then(
-                                if (bottomBarBackdrop != null) {
-                                    Modifier.layerBackdrop(bottomBarBackdrop)
-                                } else {
-                                    Modifier
-                                },
-                            ),
+                            .then(if (contentBackdrop != null) Modifier.layerBackdrop(contentBackdrop) else Modifier),
                     ) {
                         // flingBehavior 用 miuix PagerNavigationSpringSpec：
                         // 页面切换/松手回弹的弹簧曲线统一，避免默认 fling 的
@@ -311,12 +370,12 @@ fun MainScreen(
                             state = pagerState,
                             orientation = Orientation.Horizontal,
                         )
-                        // 数据页（page 1）的横滑留给页内的范围档位：这一页临时退回 Native
-                        // （不做跨轴拦截）并关掉 Pager 自身横滑，横滑就不会同时翻页；
-                        // 首页与设置页仍按设置里的模式正常翻页。
-                        val overviewPageActive by remember {
-                            derivedStateOf { pagerState.settledPage == 1 }
-                        }
+                        // 三页同一套手势管线：数据页不再有"整页横滑切档"，也就不需要按页把
+                        // mode 临时退回 Native / 关掉 Pager 自身横滑。早先那样做时，一旦用户开着
+                        // 跨轴拦截（cross_axis），数据页是"拦截器不装节点 + Pager 自己被关"，
+                        // 横滑两边都没人接 → 数据页滑不动。这里统一交给设置里的模式处理，
+                        // 也顺带消掉了"mode 在 settle 途中按页切换 → 拦截器 detach 取消 settle
+                        // → 页面卡在两页中间"的那个老问题（现在 mode 不再随当前页变化）。
                         HorizontalPager(
                                 state = pagerState,
                                 // 跨轴拦截：横滑前先判主轴（页面内垂直滚动与翻页不打架）；
@@ -326,26 +385,26 @@ fun MainScreen(
                                     .pagerGestureOverride(
                                         pagerState = pagerState,
                                         flingBehavior = pagerFlingBehavior,
-                                        mode = if (overviewPageActive) {
-                                            PagerInterceptionMode.Native
-                                        } else {
-                                            pagerInterceptionMode
-                                        },
+                                        mode = pagerInterceptionMode,
                                     ),
                                 verticalAlignment = Alignment.Top,
                                 // 预载相邻页：滑动时页面已组合完毕，动画帧只有绘制无组合，
                                 // 避免切换时整页首帧组合造成的掉帧
                                 beyondViewportPageCount = 1,
                                 overscrollEffect = null,
-                                userScrollEnabled = !interceptPagerGestures && !overviewPageActive,
-                                pageNestedScrollConnection = if (interceptPagerGestures && !overviewPageActive) {
+                                // 拦截器模式下由跨轴拦截节点接管横滑，Pager 自带滑动关掉，
+                                // 避免两条手势管线互相抢；native 模式则完全交给 Pager。
+                                userScrollEnabled = !interceptPagerGestures,
+                                pageNestedScrollConnection = if (interceptPagerGestures) {
                                     PagerGestureNestedScrollConnection
                                 } else {
                                     nativePagerNestedScrollConnection
                                 },
                                 flingBehavior = pagerFlingBehavior,
                         ) { page ->
-                                when (page) {
+                            // 动态底已提到 Pager 之外（全局一份常驻播放），页面里不需要
+                            // 再按可见性择时推进色阶。
+                            when (page) {
                                     0 -> HomeScreen(
                                         modifier = contentModifier,
                                         bottomPadding = bottomPad,
@@ -376,6 +435,7 @@ fun MainScreen(
             }
             }
             }
+                }
         }
         }
     }

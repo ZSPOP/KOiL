@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.Backdrop
 import com.llpop.koil.ui.component.blur.defaultBlurEffect
 import com.llpop.koil.ui.component.blur.rememberBlurEnabled
 
@@ -15,7 +15,7 @@ import com.llpop.koil.ui.component.blur.rememberBlurEnabled
  */
 @Composable
 fun BlurredBar(
-    backdrop: LayerBackdrop?,
+    backdrop: Backdrop?,
     blurActive: Boolean = rememberBlurEnabled().value,
     forceTextureBlur: Boolean = false,
     content: @Composable () -> Unit,

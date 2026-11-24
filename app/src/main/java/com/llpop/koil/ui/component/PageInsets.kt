@@ -1,6 +1,7 @@
 package com.llpop.koil.ui.component
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.Dp
@@ -33,26 +34,33 @@ fun pageContentPadding(
     extraEnd: Dp = 0.dp,
     extraBottom: Dp = 0.dp,
 ): PaddingValues {
-    return remember(innerPadding, outerPadding, extraTop, extraStart, extraEnd, extraBottom) {
+    // 与官方 PageUtils.kt 的 pageContentPadding 一致：再并入 LocalAppPageInsets.contentInsets，
+    // 横向/顶部安全区由它统一给，页面不再各自挂 horizontalCutoutPadding。
+    val pagePadding = LocalAppPageInsets.current.contentInsets.asPaddingValues()
+    return remember(innerPadding, outerPadding, pagePadding, extraTop, extraStart, extraEnd, extraBottom) {
         object : PaddingValues {
             override fun calculateLeftPadding(layoutDirection: LayoutDirection): Dp = maxOf(
                 innerPadding.calculateLeftPadding(layoutDirection),
                 outerPadding.calculateLeftPadding(layoutDirection),
+                pagePadding.calculateLeftPadding(layoutDirection),
             ) + if (layoutDirection == LayoutDirection.Ltr) extraStart else extraEnd
 
             override fun calculateRightPadding(layoutDirection: LayoutDirection): Dp = maxOf(
                 innerPadding.calculateRightPadding(layoutDirection),
                 outerPadding.calculateRightPadding(layoutDirection),
+                pagePadding.calculateRightPadding(layoutDirection),
             ) + if (layoutDirection == LayoutDirection.Rtl) extraStart else extraEnd
 
             override fun calculateTopPadding(): Dp = maxOf(
                 innerPadding.calculateTopPadding(),
                 outerPadding.calculateTopPadding(),
+                pagePadding.calculateTopPadding(),
             ) + extraTop
 
             override fun calculateBottomPadding(): Dp = maxOf(
                 innerPadding.calculateBottomPadding(),
                 outerPadding.calculateBottomPadding(),
+                pagePadding.calculateBottomPadding(),
             ) + extraBottom
         }
     }
