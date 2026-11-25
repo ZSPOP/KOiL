@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -110,7 +111,13 @@ private val DownColor = KOiLColors.PriceDown
  * 油价明细页：省份（下拉）/油号切换 → 今年累计涨跌汇总 + 价格走势图 + 调价时间线。
  * 由设置页「油價數據庫」卡片入口进入；返回手势/返回按钮回到设置页。
  */
-private const val CONTENT_KEY = "oil-price-detail-content"
+// 拆 item：筛选区 / 空态 / 汇总卡 / 走势卡 / 时间线卡各自成项，
+// 滚出视口后不再组合与绘制（原先整页一个 item，Lazy 虚拟化完全失效）
+private const val FILTER_KEY = "oil-price-detail-filter"
+private const val EMPTY_KEY = "oil-price-detail-empty"
+private const val SUMMARY_KEY = "oil-price-detail-summary"
+private const val TREND_KEY = "oil-price-detail-trend"
+private const val TIMELINE_KEY = "oil-price-detail-timeline"
 
 @Composable
 fun OilPriceDetailScreen(
@@ -126,17 +133,35 @@ fun OilPriceDetailScreen(
 
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
-        ownWallpaper = true,
+        // 普通二级页：与官方默认二级页一致的不透明 surface，
+        // 不建壁纸层、不继承外层壁纸（页面上不出现任何动态壁纸成分）
+        opaqueSurface = true,
         backdrop = backdrop,
         listState = listState,
         navigationIcon = { BackNavigationIcon(onClick = onBack) },
     ) { innerPadding, topPadding, scrollBehavior, _ ->
         // —— 明细页整体滚动容器（LazyColumn + contentPadding 页面骨架）——
-        // 时间线仅 20 条左右，整页收在一个 item 里一次性渲染；单 item 下
-        // firstVisibleItemScrollOffset 就等于总滚动距离。
+        // 筛选区 / 汇总卡 / 走势卡 / 时间线卡各为一个 item：滚出视口即停止
+        // 组合与绘制，纵向滑动只承担进入视口的那部分。
         // 下拉刷新：包住整页列表（官方用法：contentPadding 与列表同值；
         // app bar 的滚动连接由 pageScrollModifiers 负责，不再重复喂给 PullToRefresh）
         val detailContentPadding = pageContentPadding(innerPadding, extraTop = 12.dp)
+
+        // 筛选区状态放在列表外的组合作用域：拆 item 后各 item 会随视口回收，
+        // 状态若挂在 item 内，展开中的下拉会跟着被回收而丢失
+        var provinceMenuExpanded by remember { mutableStateOf(false) }
+        val provinceAnchor = remember { mutableStateOf<IntRect?>(null) }
+        var yearMenuExpanded by remember { mutableStateOf(false) }
+        val yearAnchor = remember { mutableStateOf<IntRect?>(null) }
+        // 官方下拉的锚点：值文本挂 glassPopupAnchorValue 后，展开时值淡出、
+        // 面板以值文本为锚（与设置页 GlassDropdownPreference 同一套行为）
+        val provinceAnchorHandle = rememberGlassPopupAnchor()
+        val yearAnchorHandle = rememberGlassPopupAnchor()
+        // 点击已展开的 pill 时，Popup 先因「外部点击」触发 onDismissRequest 收起，
+        // 同一击又落到 pill 的 toggle 上 → 立刻重新展开，表现为「收起又弹开」闪烁。
+        // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不展开。
+        var provinceDismissAt by remember { mutableLongStateOf(0L) }
+        var yearDismissAt by remember { mutableLongStateOf(0L) }
         val detailRefreshing by viewModel.refreshing.collectAsStateWithLifecycle()
         val detailRefreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
         val detailSnackbar = rememberSnackbar(
@@ -176,7 +201,7 @@ fun OilPriceDetailScreen(
             // 顶部在顶栏下方再让 12dp 呼吸（extraTop），随顶栏折叠联动
             contentPadding = detailContentPadding,
         ) {
-            item(key = CONTENT_KEY) {
+            item(key = FILTER_KEY) {
             Column(modifier = Modifier.fillMaxWidth()) {
 
             // —— 筛选区重排——
@@ -184,19 +209,6 @@ fun OilPriceDetailScreen(
             //       + 左右箭头，筛选区顶会占大半屏且 31 省里定位难）；下拉用官方玻璃 GlassPopupOverlay，
             //       视觉/动效与设置页省份选择一致。
             // 行 2：油号分段控件——固定 4 项（92/95/98/0）整行等宽分段，不横滑。
-            var provinceMenuExpanded by remember { mutableStateOf(false) }
-            val provinceAnchor = remember { mutableStateOf<IntRect?>(null) }
-            var yearMenuExpanded by remember { mutableStateOf(false) }
-            val yearAnchor = remember { mutableStateOf<IntRect?>(null) }
-            // 官方下拉的锚点：值文本挂 glassPopupAnchorValue 后，展开时值淡出、
-            // 面板以值文本为锚（与设置页 GlassDropdownPreference 同一套行为）
-            val provinceAnchorHandle = rememberGlassPopupAnchor()
-            val yearAnchorHandle = rememberGlassPopupAnchor()
-            // 点击已展开的 pill 时，Popup 先因「外部点击」触发 onDismissRequest 收起，
-            // 同一击又落到 pill 的 toggle 上 → 立刻重新展开，表现为「收起又弹开」闪烁。
-            // 记录 dismiss 时间戳，紧随其后（350ms 内）的 pill 点击视为同一次手势、不展开。
-            var provinceDismissAt by remember { mutableLongStateOf(0L) }
-            var yearDismissAt by remember { mutableLongStateOf(0L) }
             // 横向 12dp 与卡片外边距同值
             // （contentPadding 已不含横向，非卡内容自己补）
             Column(modifier = Modifier.padding(horizontal = 12.dp)) {
@@ -296,8 +308,14 @@ fun OilPriceDetailScreen(
             Spacer(Modifier.height(10.dp))
 
             // —— 油号用官方 GlassSegmentedTabRow（一条轨道 + 轨道内指示块滑动）——
-            val gradeIndex = state.grades.indexOf(state.grade).coerceAtLeast(0)
-            val onGradeSelect: (Int) -> Unit = { idx -> viewModel.selectGrade(state.grades[idx]) }
+            // 分段控件的索引与回调在数据不变时保持同一实例，
+            // 避免 TabRow 每次重组都收到新 lambda 而整段重组
+            val gradeIndex = remember(state.grades, state.grade) {
+                state.grades.indexOf(state.grade).coerceAtLeast(0)
+            }
+            val onGradeSelect: (Int) -> Unit = remember(state.grades) {
+                { idx: Int -> viewModel.selectGrade(state.grades[idx]) }
+            }
             val wallpaper = LocalWallpaperBackdrop.current
             if (wallpaper != null) {
                 GlassSegmentedTabRow(
@@ -326,8 +344,11 @@ fun OilPriceDetailScreen(
             if (state.years.isEmpty()) {
                 Spacer(Modifier.height(2.dp))
             }
+            }
+            }
 
             if (state.items.isEmpty()) {
+                item(key = EMPTY_KEY) {
                 // —— 空态 ——
                 Box(
                     modifier = Modifier
@@ -341,7 +362,9 @@ fun OilPriceDetailScreen(
                         color = MiuixTheme.colorScheme.onBackgroundVariant,
                     )
                 }
+                }
             } else {
+                item(key = SUMMARY_KEY) {
                 // —— 涨跌汇总卡：两行（最新价与净涨跌 / 调价次数统计）合成一段卡片 ——
                 // 别再拆成上下两段：分段拼接会在接缝处漏出一条贯穿卡片全宽的浅线
                 // （两段各自 squircleSurface 抗锯齿的结果），它盖住真正的分割线，
@@ -412,7 +435,9 @@ fun OilPriceDetailScreen(
                         }
                     }
                 }
+                }
 
+                item(key = TREND_KEY) {
                 // —— 价格走势图（套圆角卡片，与汇总卡视觉统一）——
                 CardSegment(
                     isFirst = true,
@@ -425,16 +450,20 @@ fun OilPriceDetailScreen(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                     )
                 }
+                }
 
+                item(key = TIMELINE_KEY) {
                 // —— 调价时间线（最新在上）——
                 // 左轨道（涨红/跌绿/搁浅空心灰 + 淡色竖线串起节奏），
                 // 右侧每行一条贯穿全宽的幅度导轨（彩段长度 = |幅度| / 区间最大幅度），
                 // 避免「只有两行文字、中间一大片空」。
-                val timeline = state.items.asReversed()
+                val timeline = remember(state.items) { state.items.asReversed() }
                 // 归一化基准：当前筛选区间的最大单次幅度。取不到时退化为 1 元，
                 // 避免全 0 导致除零（coerceAtLeast 兜底）。
-                val maxAbsDiff = timeline.maxOfOrNull { kotlin.math.abs(it.diff ?: 0.0) }
-                    ?.coerceAtLeast(0.01) ?: 1.0
+                val maxAbsDiff = remember(timeline) {
+                    timeline.maxOfOrNull { kotlin.math.abs(it.diff ?: 0.0) }
+                        ?.coerceAtLeast(0.01) ?: 1.0
+                }
                 // 时间线整体作为一段卡片：组底距挂在 CardSegment 上，
                 // 末项换成别的内容也不会丢
                 CardSegment(
@@ -454,7 +483,6 @@ fun OilPriceDetailScreen(
                         )
                     }
                 }
-            }
                 }
             }
 
@@ -573,7 +601,7 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
     val onBgColor = MiuixTheme.colorScheme.onBackground
     val prices = items.map { it.price }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
-    Canvas(
+    Spacer(
         modifier = modifier
             .fillMaxWidth()
             .height(170.dp)
@@ -618,180 +646,184 @@ private fun PriceTrendCanvas(items: List<PriceAdjustItem>, modifier: Modifier = 
                         }
                     }
                 }
-            },
-    ) {
-        if (prices.isEmpty()) return@Canvas
-        val padL = 38.dp.toPx()
-        val padR = 12.dp.toPx()
-        val padT = 10.dp.toPx()
-        val padB = 24.dp.toPx()
-        val w = size.width - padL - padR
-        val h = size.height - padT - padB
-
-        val minP = prices.minOrNull() ?: 0.0
-        val maxP = prices.maxOrNull() ?: 0.0
-        val span = (maxP - minP).coerceAtLeast(0.1)
-        // 上下留 15% 边距
-        val lo = minP - span * 0.15
-        val hi = maxP + span * 0.15
-        val range = (hi - lo).coerceAtLeast(0.1)
-
-        // 横向网格 + 价格刻度
-        val gridLines = 4
-        for (i in 0..gridLines) {
-            val frac = i.toFloat() / gridLines
-            val y = padT + h * frac
-            drawLine(
-                color = gridColor,
-                start = Offset(padL, y),
-                end = Offset(padL + w, y),
-                strokeWidth = 1.dp.toPx(),
-            )
-            val pv = hi - range * frac
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        153,
-                        (labelColor.red * 255).toInt(),
-                        (labelColor.green * 255).toInt(),
-                        (labelColor.blue * 255).toInt(),
-                    )
-                    textSize = 10.dp.toPx()
-                }
-                drawText(NumberFormat.measure(pv), 2.dp.toPx(), y + 3.dp.toPx(), paint)
             }
-        }
-
-        fun xAt(i: Int): Float = padL + (i.toFloat() / (prices.size - 1).coerceAtLeast(1)) * w
-        fun yAt(v: Double): Float = padT + h - (((v - lo) / range).toFloat() * h)
-
-        // 曲线下方面积渐变填充（提升图表可读性与专业观感）
-        val fillPath = Path().apply {
-            prices.forEachIndexed { i, v ->
-                val x = xAt(i)
-                val y = yAt(v)
-                if (i == 0) moveTo(x, y) else lineTo(x, y)
-            }
-            lineTo(xAt(prices.size - 1), padT + h)
-            lineTo(xAt(0), padT + h)
-            close()
-        }
-        drawPath(
-            path = fillPath,
-            brush = Brush.verticalGradient(
-                colors = listOf(lineColor.copy(alpha = 0.20f), lineColor.copy(alpha = 0.02f)),
-                startY = padT,
-                endY = padT + h,
-            ),
-        )
-
-        // 折线
-        val path = Path()
-        prices.forEachIndexed { i, v ->
-            val x = xAt(i)
-            val y = yAt(v)
-            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-        }
-        drawPath(
-            path = path,
-            color = lineColor,
-            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()),
-        )
-        // 端点圆点
-        drawCircle(color = lineColor, radius = 3.dp.toPx(), center = Offset(xAt(0), yAt(prices.first())))
-        drawCircle(color = lineColor, radius = 4.dp.toPx(), center = Offset(xAt(prices.size - 1), yAt(prices.last())))
-
-        // 选中点：竖虚线 + 放大圆点 + 气泡（日期 + 价格）
-        val sel = selectedIndex
-        if (sel != null && sel in prices.indices) {
-            val sx = xAt(sel)
-            val sy = yAt(prices[sel])
-            drawLine(
-                color = labelColor.copy(alpha = 0.8f),
-                start = Offset(sx, padT),
-                end = Offset(sx, size.height - padB),
-                strokeWidth = 1.dp.toPx(),
-            )
-            drawCircle(color = lineColor, radius = 5.dp.toPx(), center = Offset(sx, sy))
-            drawCircle(
-                color = dotInnerColor,
-                radius = 2.dp.toPx(),
-                center = Offset(sx, sy),
-            )
-            // 气泡文字
-            val bubbleText = "${items[sel].label}  ¥${NumberFormat.measure(items[sel].price)}"
-            drawContext.canvas.nativeCanvas.apply {
-                val paint = android.graphics.Paint().apply {
-                    color = android.graphics.Color.argb(
-                        255,
-                        (onBgColor.red * 255).toInt(),
-                        (onBgColor.green * 255).toInt(),
-                        (onBgColor.blue * 255).toInt(),
-                    )
-                    textSize = 10.dp.toPx()
-                    isAntiAlias = true
-                }
-                val textW = paint.measureText(bubbleText)
-                val bubbleW = textW + 12.dp.toPx()
-                val bubbleH = 20.dp.toPx()
-                // 气泡优先放在点上方；上方空间不足则放下方（且不压日期刻度）
-                val above = sy - bubbleH - 8.dp.toPx() > padT
-                val bubbleY = if (above) {
-                    sy - bubbleH - 8.dp.toPx()
+            .drawWithCache {
+                if (prices.isEmpty()) {
+                    onDrawBehind { }
                 } else {
-                    (sy + 10.dp.toPx()).coerceAtMost(size.height - padB - bubbleH)
-                }
-                val bubbleX = (sx - bubbleW / 2).coerceIn(padL, size.width - padR - bubbleW)
-                // 画圆角矩形气泡
-                drawRoundRect(
-                    color = bubbleBg,
-                    topLeft = Offset(bubbleX, bubbleY),
-                    size = androidx.compose.ui.geometry.Size(bubbleW, bubbleH),
-                    cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
-                )
-                drawRoundRect(
-                    color = bubbleBorder,
-                    topLeft = Offset(bubbleX, bubbleY),
-                    size = androidx.compose.ui.geometry.Size(bubbleW, bubbleH),
-                    cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()),
-                )
-                drawText(
-                    bubbleText,
-                    bubbleX + 6.dp.toPx(),
-                    bubbleY + 14.dp.toPx(),
-                    paint,
-                )
-            }
-        }
+                    val padL = 38.dp.toPx()
+                    val padR = 12.dp.toPx()
+                    val padT = 10.dp.toPx()
+                    val padB = 24.dp.toPx()
+                    val w = size.width - padL - padR
+                    val h = size.height - padT - padB
 
-        // 日期标签：首、尾 + 中间等距 2 个（点少时只画首尾，避免重叠）
-        drawContext.canvas.nativeCanvas.apply {
-            val paint = android.graphics.Paint().apply {
-                color = android.graphics.Color.argb(
-                    153,
-                    (labelColor.red * 255).toInt(),
-                    (labelColor.green * 255).toInt(),
-                    (labelColor.blue * 255).toInt(),
-                )
-                textSize = 10.dp.toPx()
-            }
-            val n = prices.size
-            val labelIdx = if (n >= 8) listOf(0, n / 4, n / 2, n * 3 / 4, n - 1).distinct() else listOf(0, n - 1)
-            labelIdx.forEach { i ->
-                val label = items[i].label
-                val x = xAt(i)
-                val textW = paint.measureText(label)
-                // 首标签左对齐、尾标签右对齐、中间居中对齐，避免越界
-                val drawX = when (i) {
-                    0 -> padL
-                    n - 1 -> (x - textW).coerceAtLeast(padL)
-                    else -> (x - textW / 2).coerceIn(padL, padL + w - textW)
+                    val minP = prices.minOrNull() ?: 0.0
+                    val maxP = prices.maxOrNull() ?: 0.0
+                    val span = (maxP - minP).coerceAtLeast(0.1)
+                    // 上下留 15% 边距
+                    val lo = minP - span * 0.15
+                    val hi = maxP + span * 0.15
+                    val range = (hi - lo).coerceAtLeast(0.1)
+
+                    fun xAt(i: Int): Float = padL + (i.toFloat() / (prices.size - 1).coerceAtLeast(1)) * w
+                    fun yAt(v: Double): Float = padT + h - (((v - lo) / range).toFloat() * h)
+
+                    // —— 尺寸/数据相关的几何与画笔：这里只算一次 ——
+                    // 滚动重绘、选中气泡逐帧变化都只走 onDrawBehind，
+                    // 不再每帧重建 Path、渐变 Brush 与文本 Paint
+                    val gridLines = 4
+                    val gridYs = (0..gridLines).map { i ->
+                        val frac = i.toFloat() / gridLines
+                        padT + h * frac to NumberFormat.measure(hi - range * frac)
+                    }
+
+                    val fillPath = Path().apply {
+                        prices.forEachIndexed { i, v ->
+                            val x = xAt(i)
+                            val y = yAt(v)
+                            if (i == 0) moveTo(x, y) else lineTo(x, y)
+                        }
+                        lineTo(xAt(prices.size - 1), padT + h)
+                        lineTo(xAt(0), padT + h)
+                        close()
+                    }
+                    val fillBrush = Brush.verticalGradient(
+                        colors = listOf(lineColor.copy(alpha = 0.20f), lineColor.copy(alpha = 0.02f)),
+                        startY = padT,
+                        endY = padT + h,
+                    )
+                    val linePath = Path().apply {
+                        prices.forEachIndexed { i, v ->
+                            val x = xAt(i)
+                            val y = yAt(v)
+                            if (i == 0) moveTo(x, y) else lineTo(x, y)
+                        }
+                    }
+                    val lineStroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx())
+
+                    val gridPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.argb(
+                            153,
+                            (labelColor.red * 255).toInt(),
+                            (labelColor.green * 255).toInt(),
+                            (labelColor.blue * 255).toInt(),
+                        )
+                        textSize = 10.dp.toPx()
+                    }
+                    val bubblePaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.argb(
+                            255,
+                            (onBgColor.red * 255).toInt(),
+                            (onBgColor.green * 255).toInt(),
+                            (onBgColor.blue * 255).toInt(),
+                        )
+                        textSize = 10.dp.toPx()
+                        isAntiAlias = true
+                    }
+
+                    // 日期标签：首、尾 + 中间等距 2 个（点少时只画首尾，避免重叠）
+                    val n = prices.size
+                    val labelIdx = if (n >= 8) {
+                        listOf(0, n / 4, n / 2, n * 3 / 4, n - 1).distinct()
+                    } else {
+                        listOf(0, n - 1)
+                    }
+                    val dateLabels = labelIdx.map { i ->
+                        val label = items[i].label
+                        val x = xAt(i)
+                        val textW = gridPaint.measureText(label)
+                        // 首标签左对齐、尾标签右对齐、中间居中对齐，避免越界
+                        val drawX = when (i) {
+                            0 -> padL
+                            n - 1 -> (x - textW).coerceAtLeast(padL)
+                            else -> (x - textW / 2).coerceIn(padL, padL + w - textW)
+                        }
+                        label to drawX
+                    }
+
+                    val hairline = 1.dp.toPx()
+                    val dot3 = 3.dp.toPx()
+                    val dot4 = 4.dp.toPx()
+                    val dot5 = 5.dp.toPx()
+                    val dot2 = 2.dp.toPx()
+
+                    onDrawBehind {
+                        for ((y, text) in gridYs) {
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(padL, y),
+                                end = Offset(padL + w, y),
+                                strokeWidth = hairline,
+                            )
+                            drawContext.canvas.nativeCanvas.drawText(text, 2.dp.toPx(), y + 3.dp.toPx(), gridPaint)
+                        }
+
+                        // 曲线下方面积渐变填充
+                        drawPath(path = fillPath, brush = fillBrush)
+                        // 折线
+                        drawPath(path = linePath, color = lineColor, style = lineStroke)
+                        // 端点圆点
+                        drawCircle(color = lineColor, radius = dot3, center = Offset(xAt(0), yAt(prices.first())))
+                        drawCircle(color = lineColor, radius = dot4, center = Offset(xAt(n - 1), yAt(prices.last())))
+
+                        // 选中点：竖虚线 + 放大圆点 + 气泡（日期 + 价格）
+                        val sel = selectedIndex
+                        if (sel != null && sel in prices.indices) {
+                            val sx = xAt(sel)
+                            val sy = yAt(prices[sel])
+                            drawLine(
+                                color = labelColor.copy(alpha = 0.8f),
+                                start = Offset(sx, padT),
+                                end = Offset(sx, size.height - padB),
+                                strokeWidth = hairline,
+                            )
+                            drawCircle(color = lineColor, radius = dot5, center = Offset(sx, sy))
+                            drawCircle(color = dotInnerColor, radius = dot2, center = Offset(sx, sy))
+
+                            val bubbleText = "${items[sel].label}  ¥${NumberFormat.measure(items[sel].price)}"
+                            val textW = bubblePaint.measureText(bubbleText)
+                            val bubbleW = textW + 12.dp.toPx()
+                            val bubbleH = 20.dp.toPx()
+                            // 气泡优先放在点上方；上方空间不足则放下方（且不压日期刻度）
+                            val above = sy - bubbleH - 8.dp.toPx() > padT
+                            val bubbleY = if (above) {
+                                sy - bubbleH - 8.dp.toPx()
+                            } else {
+                                (sy + 10.dp.toPx()).coerceAtMost(size.height - padB - bubbleH)
+                            }
+                            val bubbleX = (sx - bubbleW / 2).coerceIn(padL, size.width - padR - bubbleW)
+                            drawRoundRect(
+                                color = bubbleBg,
+                                topLeft = Offset(bubbleX, bubbleY),
+                                size = androidx.compose.ui.geometry.Size(bubbleW, bubbleH),
+                                cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                            )
+                            drawRoundRect(
+                                color = bubbleBorder,
+                                topLeft = Offset(bubbleX, bubbleY),
+                                size = androidx.compose.ui.geometry.Size(bubbleW, bubbleH),
+                                cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx()),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = hairline),
+                            )
+                            drawContext.canvas.nativeCanvas.drawText(
+                                bubbleText,
+                                bubbleX + 6.dp.toPx(),
+                                bubbleY + 14.dp.toPx(),
+                                bubblePaint,
+                            )
+                        }
+
+                        // 日期标签
+                        drawContext.canvas.nativeCanvas.apply {
+                            for ((label, drawX) in dateLabels) {
+                                drawText(label, drawX, size.height - 6.dp.toPx(), gridPaint)
+                            }
+                        }
+                    }
                 }
-                drawText(label, drawX, size.height - 6.dp.toPx(), paint)
-            }
-        }
-    }
+            },
+    )
 }
 
 /**

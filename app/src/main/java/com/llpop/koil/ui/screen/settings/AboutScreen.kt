@@ -524,8 +524,21 @@ private fun AboutContent(
     val capsuleVisible by remember { derivedStateOf { scrollProgress() < 0.11f } }
 
     // hero 占位高度：与列表里 logoSpacer 的 Spacer 高度同源，只算一次。
-    val heroSpacerHeight = logoHeightDp + 52.dp +
+    // logoHeightDp 由 onSizeChanged 量的是 Column 全高，已含胶囊槽（52dp），这里不能再补一次。
+    val heroSpacerHeight = logoHeightDp +
         logoPadding.calculateTopPadding() - scrollPadding.calculateTopPadding() + heroToCard
+
+    // 列表尾部补量：只要「滚到底正好把 hero 收满」，不再整屏白给。
+    // 收满条件 = 总内容高 ≥ 视口高 + heroSpacerHeight；总内容 = heroSpacer + 信息卡项 + 尾部项。
+    var viewportHeightDp by remember { mutableStateOf(0.dp) }
+    var infoItemHeightDp by remember { mutableStateOf(0.dp) }
+    var aboutContentHeightDp by remember { mutableStateOf(0.dp) }
+    // 未测到内容高度前先不补，避免首帧白占一整屏再回缩（首帧后补上，滚动停在顶部，用户看不到跳动）
+    val tailFillHeight = if (infoItemHeightDp <= 0.dp || aboutContentHeightDp <= 0.dp) {
+        0.dp
+    } else {
+        (viewportHeightDp - infoItemHeightDp - aboutContentHeightDp).coerceAtLeast(0.dp)
+    }
 
     BgEffectBackground(
         dynamicBackground = effectBackground,
@@ -539,6 +552,8 @@ private fun AboutContent(
             state = lazyListState,
             modifier = Modifier
                 .fillMaxSize()
+                // 视口高 = LazyColumn 的实际高度（Scaffold 内容区），尾部补量按它算
+                .onSizeChanged { viewportHeightDp = with(density) { it.height.toDp() } }
                 .pageScrollModifiers(
                     enableScrollEndHaptic = true,
                     showTopAppBar = true,
@@ -563,7 +578,13 @@ private fun AboutContent(
 
 
             item(key = "updateInfo") {
-                Box(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                Box(
+                    modifier = Modifier
+                        // onSizeChanged 放在 padding 外，量到的才是这一项的真实占位（含底距）
+                        .onSizeChanged { infoItemHeightDp = with(density) { it.height.toDp() } }
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp),
+                ) {
                     KoilAboutInfoCard(
                         versionName = BuildConfig.VERSION_NAME,
                         versionCode = BuildConfig.VERSION_CODE,
@@ -578,10 +599,15 @@ private fun AboutContent(
 
             item(key = "about") {
                 Box {
-                    // 预留一屏余量：内容滚完后仍能继续滚，hero 才能随滚动连续收满
-                    Spacer(Modifier.fillParentMaxHeight())
+                    // 尾部补量：只补到「视口 + heroSpacer」所需的差值（≈ 屏高 − 信息卡 − 本项内容），
+                    // 不再用 fillParentMaxHeight 白给一整屏。Box 高度取两者较大值，所以这里补的是
+                    // 「内容不够一屏视口」的那一段，滚到底时 hero 正好收满、卡下不再留大片空白。
+                    Spacer(Modifier.height(tailFillHeight))
                     Column(
-                        modifier = Modifier.padding(bottom = 12.dp),
+                        modifier = Modifier
+                            // 量本项内容高（含 padding bottom 与 systemBars spacer），喂给补量公式
+                            .onSizeChanged { aboutContentHeightDp = with(density) { it.height.toDp() } }
+                            .padding(bottom = 12.dp),
                     ) {
                         SmallTitle(text = stringResource(R.string.koil_about_open_source))
                         Card(
