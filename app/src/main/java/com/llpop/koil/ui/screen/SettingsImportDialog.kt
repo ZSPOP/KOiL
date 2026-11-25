@@ -33,7 +33,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,7 +92,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
         // pagerState.currentPage 只在越过中线的瞬间跳一档，滑动过程中读它拿不到连续位置；
         // 叠上 currentPageOffsetFraction 再取整，页签高亮就能跟着手指连续切换，不用等松手。
         val tabIndex by remember(pagerState) {
-            derivedStateOf {
+            computedStateOf {
                 (pagerState.currentPage + pagerState.currentPageOffsetFraction)
                     .roundToInt()
                     .coerceIn(0, tabs.lastIndex)

@@ -22,7 +22,7 @@ import top.yukonga.miuix.kmp.nav.core.NavKey
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -244,7 +244,7 @@ fun MainScreen(
             // 根宿主 Scaffold 没有 bottomBar，Snackbar 默认贴底 12dp；这里实测页面 Scaffold
             // 的底部槽高并回填，让提示落在导航条上方（与官方 demo 的摆放一致）
             var snackbarBottomInset by remember { mutableStateOf(0.dp) }
-            val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
+            val selectedTab by remember { computedStateOf { pagerState.currentPage } }
             // 官方玻璃底栏的即时选中：点击 tab 时先本地置索引，指示器当场 spring 走位；
             // Pager 落位（settledPage 变化）后再交回 currentPage。官方 demo 是 onSelect 直接
             // set selectedIndex，我们这里由 Pager 派生，不补这一层指示器要等页面过半才动。
