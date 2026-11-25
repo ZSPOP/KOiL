@@ -61,7 +61,6 @@ import com.llpop.koil.ui.theme.LocalWallpaperScrollGate
 import com.llpop.koil.ui.theme.WallpaperScrollGate
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
-import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SnackbarHost
@@ -91,7 +90,6 @@ import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
  * 底部导航条采用悬浮导航体系：
  * - 底栏固定悬浮（不提供开关），只可选悬浮样式
  * - 悬浮样式：Miuix（官方玻璃胶囊 GlassNavigationBar） / iOS 液态玻璃（IosLiquidGlassNavigationBar）
- * 非悬浮时保留普通 NavigationBar + BlurredBar 模糊。
  */
 @Composable
 fun MainScreen(

@@ -326,6 +326,8 @@ fun OilPriceDetailScreen(
                     selectedIndex = gradeIndex,
                     onSelect = onGradeSelect,
                     backdrop = wallpaper,
+                    // 同数据总览页：控件在页面内容里，静止态回到纯 trackColor，恒 0f
+                    surfaceAlpha = 0f,
                 )
             } else {
                 TabRowWithContour(
