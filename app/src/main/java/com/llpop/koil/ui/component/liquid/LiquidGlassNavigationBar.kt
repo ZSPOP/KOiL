@@ -500,11 +500,21 @@ internal fun IosLiquidGlassNavigationBar(
                             modifier = Modifier
                                 .clearAndSetSemantics {}
                                 .alpha(0f)
-                                // 这一层只负责把 tab 内容录进 tabsBackdrop（供按压指示层采合成层），
-                                // 本身 alpha=0 完全不可见：原先挂的 blur + lens 每帧都在算却看不见，
-                                // 属于纯浪费，这里只保留录制，不挂玻璃。
                                 .layerBackdrop(tabsBackdrop)
                                 .graphicsLayer { translationX = panelOffset }
+                                .drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { pillShape },
+                                    effects = {
+                                        vibrancy()
+                                        blur(4.dp.toPx(), 4.dp.toPx())
+                                        lens(
+                                            refractionHeight = 24.dp.toPx(),
+                                            refractionAmount = 24.dp.toPx(),
+                                        )
+                                    },
+                                    onDrawSurface = { drawRect(containerColor) },
+                                )
                                 .then(interactiveHighlight.modifier)
                                 .height(indicatorHeight)
                                 .padding(horizontal = 4.dp),
