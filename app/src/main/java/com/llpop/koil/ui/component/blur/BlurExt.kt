@@ -19,6 +19,7 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical as miuixOverScrollVertical
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
 
 /**
  * 背景模糊扩展：开关、backdrop 录制、顶栏模糊形态，以及 BlurredBar 所需的默认模糊修饰符。
@@ -70,7 +71,7 @@ fun Modifier.defaultBlurEffect(
  * 顶栏的折叠/渐变带随之跟手（与参考实现同一套写法，升级 miuix 时无需改动）。
  */
 @Composable
-fun Modifier.overScrollVertical(scrollBehavior: top.yukonga.miuix.kmp.basic.ScrollBehavior): Modifier {
+fun Modifier.overScrollVertical(scrollBehavior: ScrollBehavior): Modifier {
     val state = scrollBehavior.state
     // 回调跨组合复用：否则每次重组都会换一个新 lambda，modifier 变化会让滚动容器重建接线
     val onOffsetChanged: (Float) -> Unit = remember(state) {

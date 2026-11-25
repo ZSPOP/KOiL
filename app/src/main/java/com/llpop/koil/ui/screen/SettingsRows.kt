@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.input.key.Key
@@ -50,9 +51,13 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.NumberPicker
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.glass.GlassDialogButton
+import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import androidx.compose.runtime.mutableIntStateOf
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.component.KOiLGlassDialog
 
 
 
@@ -282,7 +287,7 @@ internal fun StepperInputRow(
         }
     }
     if (pickerOpen) {
-        com.llpop.koil.ui.component.KOiLGlassDialog(
+        KOiLGlassDialog(
             show = true,
             onDismissRequest = { pickerOpen = false },
             title = title,
@@ -290,7 +295,7 @@ internal fun StepperInputRow(
             contentPadding = 16.dp,
         ) {
             Column {
-                top.yukonga.miuix.kmp.basic.NumberPicker(
+                NumberPicker(
                     value = pendingTick,
                     onValueChange = { pendingTick = it },
                     modifier = Modifier.fillMaxWidth(),
@@ -301,26 +306,26 @@ internal fun StepperInputRow(
                 )
                 Spacer(Modifier.height(16.dp))
                 Row(
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    top.yukonga.miuix.kmp.glass.GlassDialogButton(
+                    GlassDialogButton(
                         onClick = { pickerOpen = false },
                         modifier = Modifier.weight(1f),
-                        role = top.yukonga.miuix.kmp.glass.GlassDialogButtonRole.Normal,
+                        role = GlassDialogButtonRole.Normal,
                     ) {
                         Text(
                             text = stringResource(R.string.koil_common_cancel),
                             style = MiuixTheme.textStyles.button,
                         )
                     }
-                    top.yukonga.miuix.kmp.glass.GlassDialogButton(
+                    GlassDialogButton(
                         onClick = {
                             onCommit((range.first + pendingTick * safeStep).coerceIn(range))
                             pickerOpen = false
                         },
                         modifier = Modifier.weight(1f),
-                        role = top.yukonga.miuix.kmp.glass.GlassDialogButtonRole.Primary,
+                        role = GlassDialogButtonRole.Primary,
                     ) {
                         Text(
                             text = stringResource(R.string.koil_common_confirm),

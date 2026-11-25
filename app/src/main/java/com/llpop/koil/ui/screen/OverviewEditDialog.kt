@@ -82,6 +82,9 @@ import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.GlassPopupOverlay
+import com.llpop.koil.ui.component.FullTankSwitchRow
+import com.llpop.koil.ui.component.KOiLDateField
+import com.llpop.koil.ui.component.KOiLFormSheet
 
 
 
@@ -99,7 +102,7 @@ internal fun EditRecordDialog(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    com.llpop.koil.ui.component.KOiLFormSheet(
+    KOiLFormSheet(
         show = true,
         onDismissRequest = onDismiss,
         title = stringResource(R.string.koil_ov_edit_title),
@@ -111,7 +114,7 @@ internal fun EditRecordDialog(
             Spacer(Modifier.height(14.dp))
             // 第一行：日期（只读，不可修改）+ 油号（联动当日参考单价）
             Row(verticalAlignment = Alignment.Top) {
-                com.llpop.koil.ui.component.KOiLDateField(
+                KOiLDateField(
                     modifier = Modifier.weight(1f),
                     date = uiState.editDate,
                     recordDates = uiState.editRecordDates,
@@ -189,7 +192,7 @@ internal fun EditRecordDialog(
                 // 实测字段底→标题顶 34dp，改后约 21–24dp，含行内留白）；
             // 块内上距 8dp 在行内；bottomInset 维持默认 8dp → 高亮停在块下缘，
             // 块下缘 → 下方内容块的 16dp 由下面 Column 的 top 16dp 在高亮之外补。
-            com.llpop.koil.ui.component.FullTankSwitchRow(
+            FullTankSwitchRow(
                 checked = uiState.editIsFullTank,
                 onCheckedChange = onFullTankChange,
             )

@@ -103,6 +103,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
+import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.glass.GlassDropdownPreference
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
@@ -122,7 +123,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.data.update.UpdateChannelIssue
 import com.llpop.koil.data.update.updateChannelIssue
+import com.llpop.koil.data.update.UpdateChecker
 import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.rememberSnackbar
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -237,8 +240,8 @@ fun SettingsScreen(
         val crashExportFailText = stringResource(R.string.koil_set_crash_export_fail)
         val crashScope = rememberCoroutineScope()
         // 崩溃日志操作结果走全局 Snackbar
-        val crashSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
-            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+        val crashSnackbar = rememberSnackbar(
+            duration = SnackbarDuration.Long,
             withDismissAction = true,
         )
         val syncVm: SyncViewModel = koinViewModel()
@@ -941,8 +944,8 @@ fun SettingsScreen(
 
         // 导出/备份/更新结果提示：全局 Snackbar 短暂提醒（自动消失，不用常驻卡片）
         val exportNotice by viewModel.exportMessage.collectAsStateWithLifecycle()
-        val exportSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
-            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+        val exportSnackbar = rememberSnackbar(
+            duration = SnackbarDuration.Long,
             withDismissAction = true,
         )
         val exportText = exportNotice.key?.let { formatNotice(it, exportNotice.args) }
@@ -1034,7 +1037,7 @@ fun LazyListScope.aboutSection(
             },
             CardItem("feedback") {
                 val context = LocalContext.current
-                val feedbackSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+                val feedbackSnackbar = rememberSnackbar()
                 // 同样在组合期取文案，避免 onClick 里读 LocalContext 的资源
                 val openFailedText = stringResource(R.string.koil_set_about_open_failed)
                 SettingRow(
@@ -1053,7 +1056,7 @@ fun LazyListScope.aboutSection(
                 // 红点要一直亮到装上最新版为止 —— 装成功后版本号不再比本机新，红点自然灭。
                 val updateChecker = remember {
                     org.koin.core.context.GlobalContext.get()
-                        .get<com.llpop.koil.data.update.UpdateChecker>()
+                        .get<UpdateChecker>()
                 }
                 val target by updateChecker.updateTarget()
                     .collectAsStateWithLifecycle(initialValue = null)

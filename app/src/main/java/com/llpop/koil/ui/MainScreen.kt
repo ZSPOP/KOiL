@@ -40,6 +40,11 @@ import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.component.BlurredBar
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.rememberAppPageInsets
+import com.llpop.koil.ui.component.LocalAppLocale
+import com.llpop.koil.ui.component.LocalAppPageInsets
+import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.LocalSnackbarHostState
+import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.effect.BgEffectBackground
 import com.llpop.koil.ui.component.liquid.rememberCombinedBackdrop
 import com.llpop.koil.ui.component.liquid.IosLiquidGlassNavigationBar
@@ -47,8 +52,10 @@ import com.llpop.koil.ui.screen.HomeScreen
 import com.llpop.koil.ui.screen.OverviewScreen
 import com.llpop.koil.ui.screen.SettingsScreen
 import com.llpop.koil.ui.screen.settings.OilPriceDetailScreen
+import com.llpop.koil.ui.screen.settings.AboutScreen
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLTheme
+import com.llpop.koil.ui.theme.LocalWallpaperEnabled
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -67,6 +74,7 @@ import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.util.LocaleManager
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
@@ -122,7 +130,7 @@ fun MainScreen(
     val systemLocales = baseConfig.locales
     val locale = remember(language, systemLocales) {
         if (language == AppSettings.Language.SYSTEM) systemLocales[0]
-        else com.llpop.koil.util.LocaleManager.resolve(language)
+        else LocaleManager.resolve(language)
     }
     val overrideConfig = remember(locale, baseConfig) {
         android.content.res.Configuration(baseConfig).apply { setLocale(locale) }
@@ -166,18 +174,18 @@ fun MainScreen(
         searchTop = { 0.dp },
     )
     androidx.compose.runtime.CompositionLocalProvider(
-        com.llpop.koil.ui.component.LocalAppPageInsets provides appPageInsets,
+        LocalAppPageInsets provides appPageInsets,
         // 把"应用语言"显式注入组合。Dialog/Popup 是独立组合根，会用窗口自己的
         // configuration 覆盖 LocalConfiguration/LocalContext（MainScreen 的覆盖到不了），
         // 而自定义 CompositionLocal 会随父组合继承 —— 弹窗据此把语言重新盖回去。
-        com.llpop.koil.ui.component.LocalAppLocale provides locale,
+        LocalAppLocale provides locale,
         androidx.compose.ui.platform.LocalConfiguration provides overrideConfig,
         androidx.compose.ui.platform.LocalContext provides localizedContext,
         androidx.activity.compose.LocalActivityResultRegistryOwner provides registryOwner,
         // 模糊效果总开关：一路往下传给页面 Scaffold / 弹层 / 底栏，关掉即全部回落不透明
         LocalBlurEnabled provides blurEnabled,
         // 动态壁纸：开关开启时页面底层跑 BgEffectBackground 流动色，关闭时为 surface
-        com.llpop.koil.ui.theme.LocalWallpaperEnabled provides wallpaperEnabled,
+        LocalWallpaperEnabled provides wallpaperEnabled,
     ) {
         KOiLTheme(darkTheme = darkTheme) {
         val surfaceColor = MiuixTheme.colorScheme.surface
@@ -285,10 +293,10 @@ fun MainScreen(
             val swipeDismiss = if (swipeDismissEnabled) swipeBackDirection else null
 
             androidx.compose.runtime.CompositionLocalProvider(
-                com.llpop.koil.ui.component.LocalWallpaperBackdrop provides wallpaperBackdrop,
+                LocalWallpaperBackdrop provides wallpaperBackdrop,
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
-                com.llpop.koil.ui.component.LocalPageBackdrop provides pageBackdrop,
-                com.llpop.koil.ui.component.LocalSnackbarHostState provides snackbarHostState,
+                LocalPageBackdrop provides pageBackdrop,
+                LocalSnackbarHostState provides snackbarHostState,
             ) {
                 // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
                 // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
@@ -458,7 +466,7 @@ fun MainScreen(
                     }
                 }
                 entry<Route.About>(swipeDismiss = swipeDismiss) {
-                    com.llpop.koil.ui.screen.settings.AboutScreen(onBack = { nav.pop() })
+                    AboutScreen(onBack = { nav.pop() })
                 }
                 entry<Route.OilPriceDetail>(swipeDismiss = swipeDismiss) {
                     OilPriceDetailScreen(onBack = { nav.pop() })

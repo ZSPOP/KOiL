@@ -58,6 +58,7 @@ import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.component.LocalOnGlassSurface
+import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.ui.theme.KOiLType
 import kotlinx.coroutines.launch
@@ -97,7 +98,7 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                     .coerceIn(0, tabs.lastIndex)
             }
         }
-        com.llpop.koil.ui.component.KOiLGlassDialog(
+        KOiLGlassDialog(
             show = true,
             onDismissRequest = viewModel::dismissImportPreview,
             title = stringResource(R.string.koil_import_title),

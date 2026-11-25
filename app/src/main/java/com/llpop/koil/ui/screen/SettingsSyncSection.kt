@@ -79,12 +79,14 @@ import com.llpop.koil.ui.component.KOiLNoWhitespaceInput
 import com.llpop.koil.ui.component.KOiLPasswordMask
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
+import com.llpop.koil.ui.component.rememberSnackbar
 import com.llpop.koil.data.sync.SyncReconcile
 import com.llpop.koil.ui.screen.settings.SyncViewModel
 import com.llpop.koil.ui.theme.KOiLColors
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 
@@ -542,8 +544,8 @@ internal fun SyncPanelBody(
 
         // 云同步结果提示（备份/恢复）：走全局 Snackbar
         val syncMessage by syncVm.message.collectAsStateWithLifecycle()
-        val syncSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
-            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+        val syncSnackbar = rememberSnackbar(
+            duration = SnackbarDuration.Long,
             withDismissAction = true,
         )
         val syncText = syncMessage?.let { formatSyncNotice(it) }
@@ -639,7 +641,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
 
     when {
         // ① 云端那份读不懂：只说「没动数据」，覆盖入口放在次要位置
-        corrupt != null -> com.llpop.koil.ui.component.KOiLGlassDialog(
+        corrupt != null -> KOiLGlassDialog(
             show = true,
             onDismissRequest = viewModel::dismissReconcileCorrupt,
             title = stringResource(R.string.koil_sync_reconcile_corrupt_title),
@@ -679,7 +681,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
         }
 
         // ② 破坏性二次确认
-        pendingDestructive != null -> com.llpop.koil.ui.component.KOiLGlassDialog(
+        pendingDestructive != null -> KOiLGlassDialog(
             show = true,
             onDismissRequest = { pendingDestructive = null },
             title = stringResource(R.string.koil_sync_reconcile_destructive_title),
@@ -725,7 +727,7 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
         // ③ 对账面板本体
         preview != null -> {
             val st = preview!!.stats
-            com.llpop.koil.ui.component.KOiLGlassDialog(
+            KOiLGlassDialog(
                 show = true,
                 onDismissRequest = viewModel::dismissReconcile,
                 title = stringResource(R.string.koil_sync_reconcile_title),
@@ -837,7 +839,7 @@ internal fun ReconcileLine(text: String) {
 internal fun LocalBackupDialog(viewModel: SyncViewModel) {
     val backups by viewModel.localBackups.collectAsStateWithLifecycle()
     if (backups.isEmpty()) return
-    com.llpop.koil.ui.component.KOiLGlassDialog(
+    KOiLGlassDialog(
         show = true,
         onDismissRequest = viewModel::dismissLocalBackups,
         title = stringResource(R.string.koil_sync_backup_restore_title),
