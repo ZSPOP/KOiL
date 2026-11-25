@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -405,6 +407,15 @@ internal fun IosLiquidGlassNavigationBar(
     Column(modifier = modifier.fillMaxWidth()) {
         BoxWithConstraints(
             modifier = Modifier
+                // 水平安全区：横屏时底部导航条跑到侧边、挖孔屏/圆角屏两侧也有
+                // displayCutout，只按「底部 navigationBars」让位会让胶囊贴到屏幕侧沿。
+                // union 后只取横向，纵向仍由上面的 bottomPaddingValue 单独计算
+                .padding(
+                    WindowInsets.displayCutout
+                        .union(WindowInsets.navigationBars)
+                        .only(WindowInsetsSides.Horizontal)
+                        .asPaddingValues(),
+                )
                 .padding(bottom = bottomPaddingValue)
                 .fillMaxWidth(),
         ) {

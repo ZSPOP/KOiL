@@ -71,7 +71,7 @@ fun KOiLFormSheet(
         insideMargin = DpSize(0.dp, 0.dp),
         renderInRootScaffold = true,
         enableNestedScroll = true,
-    ) {
+    ) { innerPadding ->
         // 面板本身由库抬到键盘顶；键盘可见时底部只留 ImeGap，
         // 收起时才让出系统导航栏 + 16dp（那时它是真实占位）
         val imeVisible = WindowInsets.isImeVisible
@@ -85,6 +85,10 @@ fun KOiLFormSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                // rc01 起 header（拖拽把手 + 标题）浮在正文之上，库把 header 高度
+                // 作为 PaddingValues 传下来（insideMargin 传 0 时由正文自己消费）：
+                // 不接这一趟，正文首行会被标题压住
+                .padding(top = innerPadding.calculateTopPadding())
                 // 越界修饰符必须挂在滚动容器外层（与页面列表同一写法）：
                 // 放内层时它看不到滚动容器之外的手势，越界与交接都不会触发
                 .overScrollVertical()
@@ -135,7 +139,7 @@ fun KOiLListSheet(
         insideMargin = DpSize(0.dp, 0.dp),
         renderInRootScaffold = true,
         enableNestedScroll = true,
-    ) {
+    ) { innerPadding ->
         // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
         CompositionLocalProvider(
@@ -151,10 +155,13 @@ fun KOiLListSheet(
             ) {
                 // 越界修饰符同样挂在滚动容器外层：内层挂它看不到容器外的手势，
                 // 下拉回弹与「内容拉到头再交给面板」的交接都会失效
+                // rc01 起 header 浮在正文上，这里只在滚动区顶部让出 header 高度，
+                // 底部按钮区不受影响（钉在面板底部的前提不变）
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = maxContentHeight)
+                        .padding(top = innerPadding.calculateTopPadding())
                         .overScrollVertical()
                         .verticalScroll(rememberScrollState()),
                     content = content,
