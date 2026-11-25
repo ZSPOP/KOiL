@@ -135,7 +135,10 @@ fun OilPriceDetailScreen(
         val detailContentPadding = pageContentPadding(innerPadding, extraTop = 12.dp)
         val detailRefreshing by viewModel.refreshing.collectAsStateWithLifecycle()
         val detailRefreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
-        val detailSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+        val detailSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
+            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+            withDismissAction = true,
+        )
         // formatNotice 是 @Composable（内部 stringResource），必须在组合期解析，不能放进副作用
         val detailRefreshText = detailRefreshNotice?.let { notice ->
             notice.key?.let { com.llpop.koil.ui.screen.formatNotice(it, notice.args) }

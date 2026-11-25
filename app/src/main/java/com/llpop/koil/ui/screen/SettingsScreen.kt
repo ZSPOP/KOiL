@@ -237,7 +237,10 @@ fun SettingsScreen(
         val crashExportFailText = stringResource(R.string.koil_set_crash_export_fail)
         val crashScope = rememberCoroutineScope()
         // 崩溃日志操作结果走全局 Snackbar
-        val crashSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+        val crashSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
+            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+            withDismissAction = true,
+        )
         val syncVm: SyncViewModel = koinViewModel()
         val syncUi by syncVm.uiState.collectAsStateWithLifecycle()
         // 健康判定与「已設定完整」同一口径：只用数据层算好的 configured，界面不再自己拼
@@ -938,7 +941,10 @@ fun SettingsScreen(
 
         // 导出/备份/更新结果提示：全局 Snackbar 短暂提醒（自动消失，不用常驻卡片）
         val exportNotice by viewModel.exportMessage.collectAsStateWithLifecycle()
-        val exportSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+        val exportSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
+            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+            withDismissAction = true,
+        )
         val exportText = exportNotice.key?.let { formatNotice(it, exportNotice.args) }
         LaunchedEffect(exportNotice) {
             if (exportText != null) {

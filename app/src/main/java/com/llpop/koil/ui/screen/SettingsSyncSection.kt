@@ -542,7 +542,10 @@ internal fun SyncPanelBody(
 
         // 云同步结果提示（备份/恢复）：走全局 Snackbar
         val syncMessage by syncVm.message.collectAsStateWithLifecycle()
-        val syncSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+        val syncSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
+            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+            withDismissAction = true,
+        )
         val syncText = syncMessage?.let { formatSyncNotice(it) }
         LaunchedEffect(syncMessage) {
             if (syncText != null) {

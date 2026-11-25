@@ -20,20 +20,32 @@ import top.yukonga.miuix.kmp.basic.SnackbarHostState
 val LocalSnackbarHostState = compositionLocalOf<SnackbarHostState?> { null }
 
 /**
- * 返回一个「显示短提示」的函数；宿主不在（例如预览/测试环境）时是空操作，不崩。
+ * 返回一个「显示一条提示」的函数；宿主不在（例如预览/测试环境）时是空操作，不崩。
  *
  * 用法：`val snackbar = rememberSnackbar()`，然后 `snackbar(context.getString(R.string.x))`。
  * 调用点若已在协程里（例如 Dialog 按钮的 `scope.launch`），直接调即可，内部已切到主线程并发。
+ *
+ * 时长约定：
+ * - 即时确认（定位切省、录入成功、链接没拉起）用默认 `Short`（4s），不值得为它加按钮；
+ * - 结果类（备份/恢复、导出、油价库刷新「入库 N 条」等）传 `Long`（10s），此时必须
+ *   `withDismissAction = true`——10 秒的信息没读完就该能手动关掉，官方 × 图标直接可用。
  */
 @Composable
-fun rememberSnackbar(): (String) -> Unit {
+fun rememberSnackbar(
+    duration: SnackbarDuration = SnackbarDuration.Short,
+    withDismissAction: Boolean = false,
+): (String) -> Unit {
     val hostState = LocalSnackbarHostState.current
     val scope = rememberCoroutineScope()
-    return remember(hostState, scope) {
+    return remember(hostState, scope, duration, withDismissAction) {
         { message ->
             if (hostState != null) {
                 scope.launch {
-                    hostState.showSnackbar(message = message, duration = SnackbarDuration.Short)
+                    hostState.showSnackbar(
+                        message = message,
+                        withDismissAction = withDismissAction,
+                        duration = duration,
+                    )
                 }
             }
         }
