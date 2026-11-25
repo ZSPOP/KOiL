@@ -1,5 +1,24 @@
 # KOiL CHANGELOG
 
+## 1.3.7
+
+**界面**
+
+- 分段控件轨道静止态回落纯色：`GlassSegmentedTabRow` 补 `surfaceAlpha = 0f`（数据总览的档位切换、油价明细的油品切换）。官方语义是「只有控件被顶栏压住时才推到 1f」，这两处都在页面卡片里，恒 0f
+- 关于页两张卡改用官方 `GlassCard`：「应用版本 / 发布日期」信息卡与开源卡都撤掉手写 `textureBlur` 与 `CardDefaults` 实底覆盖，改为只铺半透明填充、透出页面动效
+- 全站卡片圆角统一 20dp：`CardSegment` 默认值 16 → 20，与官方 `GlassCardDefaults.CornerRadius` 对齐；卡片补底形状同步（首页三段、总览、设置九组、明细页、记录卡全部生效）
+- 分段拼接卡补 2px 防缝：非末段、底角为 0 的实色段向下多画 2px 同色，修 0.5x 降采样在段间产生的抗锯齿黑缝（玻璃段不吃这条）
+
+**修复**
+
+- 页面列表关闭 Compose 默认过卷效果：`overscrollEffect = null`（首页、总览、设置、关于）。这些列表已挂 miuix 的 `overScrollVertical` 把位移喂给顶栏，两套过卷位移原来叠在同一段手势上
+- 宽屏判断改读容器尺寸：根部 `BoxWithConstraints` 注入 `LocalContainerSize`，不再只看 `LocalWindowInfo.containerSize`（分屏、多窗口、宿主垫外部 padding 时会误判 600dp 阈值）
+
+**内部**
+
+- Compose 1.13 API 迁移：`derivedStateOf` → `computedStateOf`（13 处，不缓存、每次读重算，失效语义仍由同一 policy 决定）；`AnimatedVisibility` → `CapturedAnimatedVisibility`（3 处，退出期子组合立即移除、绘制捕获帧，不再逐帧重测量玻璃层）
+- `derivedStateOf` 与 `AnimatedVisibility` 全仓零残留
+
 ## 1.3.6
 
 **升级**
