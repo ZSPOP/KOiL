@@ -35,7 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.drop
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.component.BlurredBar
@@ -67,6 +69,9 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
+import top.yukonga.miuix.kmp.glass.GlassNavigationRail
+import top.yukonga.miuix.kmp.glass.GlassNavigationRailDefaults
+import top.yukonga.miuix.kmp.glass.rememberGlassNavigationRailState
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -76,7 +81,10 @@ import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.LocalTopBarStartInset
+import com.llpop.koil.ui.component.LocalTopAppBarTitleAlpha
 import com.llpop.koil.util.ContainerSizeProvider
+import com.llpop.koil.util.rememberIsWideScreen
 import com.llpop.koil.util.LocaleManager
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
@@ -107,6 +115,8 @@ fun MainScreen(
     val wallpaperEnabled by viewModel.wallpaperEnabled.collectAsStateWithLifecycle()
     val pagerGestureMode by viewModel.pagerGestureMode.collectAsStateWithLifecycle()
     val swipeDismissEnabled by viewModel.swipeDismissEnabled.collectAsStateWithLifecycle()
+    // 宽屏侧边栏展开态（持久化）
+    val navRailExpanded by viewModel.navRailExpanded.collectAsStateWithLifecycle()
     // 页面切换手势：与 miuix PagerInterceptionMode 一一对应（cross_axis = 跨轴拦截）
     val pagerInterceptionMode = if (pagerGestureMode == "native") {
         PagerInterceptionMode.Native
@@ -237,6 +247,36 @@ fun MainScreen(
                     }
                 }
             }
+            // ---- 宽屏侧边栏（官方 GlassNavigationRail）----
+            // 库 KDoc 原文：“The rail is an overlay… Place it over the page, outside the
+            // recorded backdrop. Move the page clear of the panel with progress.”
+            // 所以 rail 挂在 NavDisplay 同级（见下方 Box），并且避让按 progress 连续驱动。
+            val useRail = rememberIsWideScreen()
+            val railState = if (useRail) {
+                rememberGlassNavigationRailState(initialExpanded = navRailExpanded)
+            } else {
+                null
+            }
+            val railStartInset: () -> Dp = remember(railState) {
+                {
+                    val state = railState
+                    if (state == null) {
+                        0.dp
+                    } else {
+                        (GlassNavigationRailDefaults.Margin + GlassNavigationRailDefaults.ExpandedWidth) * state.progress
+                    }
+                }
+            }
+            // 收起态胶囊压在顶栏中央：官方按 progress 隐藏标题，展开成左面板后标题重新露出
+            val topBarTitleAlpha: () -> Float = remember(railState) { { railState?.progress ?: 1f } }
+            if (railState != null) {
+                // 用户点 rail 内的展开/收起按钮 → 写回设置（drop(1) 跳过首帧初始值）
+                LaunchedEffect(railState) {
+                    snapshotFlow { railState.expanded }.drop(1).collect { viewModel.setNavRailExpanded(it) }
+                }
+                // 存储值晚于首帧到达（或主题/语言重建）时，把持久化状态同步回 rail
+                LaunchedEffect(navRailExpanded) { railState.expanded = navRailExpanded }
+            }
             // 三页用 HorizontalPager 承载：
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
@@ -306,6 +346,15 @@ fun MainScreen(
             }
             val swipeDismiss = if (swipeDismissEnabled) swipeBackDirection else null
 
+            // 官方 AppPageInsets 契约：以浮层形式存在的侧栏算进 contentInsets 的起始侧。
+            // overlayStart 在 layout 阶段惰性读（动画期间不触发整页重组），pageContentPadding
+            // 再把它并进每页的 start —— 五个页面不需要各自传 extraStart。
+            val appPageInsetsWithRail = rememberAppPageInsets(
+                hostPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                startAlreadyReserved = false,
+                overlayStart = railStartInset,
+                searchTop = { 0.dp },
+            )
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperBackdrop provides wallpaperBackdrop,
                 // 滚动闸门交给各页脚手架上报（列表拖拽/惯性滚动）
@@ -313,6 +362,11 @@ fun MainScreen(
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
                 LocalPageBackdrop provides pageBackdrop,
                 LocalSnackbarHostState provides snackbarHostState,
+                // 侧栏起始内缩作用到页面内容与顶栏：前者由 AppPageInsets 并进各页 start，
+                // 后者让顶栏内容右移，避免展开的面板压住标题与返回键
+                LocalAppPageInsets provides appPageInsetsWithRail,
+                LocalTopBarStartInset provides railStartInset,
+                LocalTopAppBarTitleAlpha provides topBarTitleAlpha,
             ) {
                 // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
                 // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
@@ -329,11 +383,15 @@ fun MainScreen(
                             state = snackbarHostState,
                             // 二级页（关于 / 油价明细）没有底栏，提示回到贴底
                             modifier = Modifier.padding(
-                                bottom = if (backStack.last() == Route.Main) snackbarBottomInset else 0.dp,
+                                // 宽屏由侧边栏导航，底栏消失 → 提示回到贴底
+                                bottom = if (backStack.last() == Route.Main && railState == null) snackbarBottomInset else 0.dp,
                             ),
                         )
                     },
                 ) {
+            // 官方结构（AppNavigation.kt）：rail 与 NavDisplay 同级、在录制 backdrop 之外。
+            // 这样二级页压栈时侧边栏仍在，且 rail 自身不会被 pageBackdrop 录进去采样到。
+            Box(Modifier.fillMaxSize()) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { nav.pop() },
@@ -350,6 +408,8 @@ fun MainScreen(
                     // 弹层会被录进 pageBackdrop，采样即自我包含。
                     popupHost = {},
                     bottomBar = {
+                        // 宽屏走侧边栏（官方形态：rail 替代底栏），底栏槽位整体不摆放
+                        if (railState == null) {
                         val bottomBarDensity = LocalDensity.current
                         // 实测底栏高度：底部 inset 由导航条组件自己算（含 navigationBars），
                         // 量到的就是 Scaffold 摆放 Snackbar 时会用到的那段高度
@@ -389,6 +449,7 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
                             )
+                        }
                         }
                         }
                     },
@@ -493,6 +554,22 @@ fun MainScreen(
                 entry<Route.OilPriceDetail>(swipeDismiss = swipeDismiss) {
                     OilPriceDetailScreen(onBack = { nav.pop() })
                 }
+            }
+            if (railState != null) {
+                // 库 KDoc：selectedIndex = -1 表示「当前不在任何一级目标」（二级页）；
+                // 从二级页点 tab 时先把栈收回 Main 再切页，与官方 AppNavigation.kt 一致。
+                GlassNavigationRail(
+                    items = glassNavigationItems,
+                    selectedIndex = if (backStack.last() == Route.Main) navBarImmediateIndex ?: selectedTab else -1,
+                    onSelect = { index ->
+                        if (backStack.last() != Route.Main) nav.popUntil { it is Route.Main }
+                        navBarImmediateIndex = index
+                        scope.launch { pagerState.springAnimateToPage(index) }
+                    },
+                    backdrop = navBarBackdrop,
+                    state = railState,
+                )
+            }
             }
             }
             }
