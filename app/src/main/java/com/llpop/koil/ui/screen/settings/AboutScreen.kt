@@ -112,6 +112,7 @@ import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
@@ -745,7 +746,7 @@ private fun BoxScope.AboutHero(
     layoutDirection: androidx.compose.ui.unit.LayoutDirection,
     density: androidx.compose.ui.unit.Density,
     blurEnabled: Boolean,
-    backdrop: top.yukonga.miuix.kmp.blur.LayerBackdrop?,
+    backdrop: LayerBackdrop?,
     logoBlend: List<BlendColorEntry>,
     iconProgress: () -> Float,
     /** 胶囊单独一条更早的淡出曲线：卡片碰上来之前必须已经化掉 */

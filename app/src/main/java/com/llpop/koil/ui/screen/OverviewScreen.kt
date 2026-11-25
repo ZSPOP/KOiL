@@ -99,6 +99,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.FullTankSwitchRow
+import com.llpop.koil.ui.component.KOiLDateField
+import com.llpop.koil.ui.component.KOiLFormSheet
+import com.llpop.koil.ui.component.KOiLGlassDialog
+import com.llpop.koil.ui.component.KOiLListSheet
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -498,7 +503,7 @@ fun OverviewScreen(
     // 弹层由 MainScreen 的根宿主渲染、在页面录制层之外，采样源直接用外层的整页 backdrop，
     // 这里不需要再补一份 CompositionLocal。
     if (showAbnormalDetail && uiState.abnormalRecords.isNotEmpty()) {
-        com.llpop.koil.ui.component.KOiLListSheet(
+        KOiLListSheet(
             show = true,
             onDismissRequest = { showAbnormalDetail = false },
             title = stringResource(R.string.koil_ov_abnormal_detail_title, uiState.abnormalRecords.size),
@@ -569,7 +574,7 @@ fun OverviewScreen(
 
     // 删除确认弹窗（防误删）
     pendingDelete?.let { rec ->
-        com.llpop.koil.ui.component.KOiLGlassDialog(
+        KOiLGlassDialog(
             show = true,
             onDismissRequest = { pendingDelete = null },
             contentPadding = 20.dp,
@@ -637,7 +642,7 @@ fun OverviewScreen(
 
     // 补录弹窗（source=backfill_modal）
     if (dlg.showBackfillDialog) {
-        com.llpop.koil.ui.component.KOiLFormSheet(
+        KOiLFormSheet(
             show = true,
             onDismissRequest = viewModel::cancelBackfill,
             title = stringResource(R.string.koil_ov_backfill_title),
@@ -649,7 +654,7 @@ fun OverviewScreen(
                 Spacer(Modifier.height(14.dp))
                 // 第一行：日期（日历可改）+ 油号（联动当日参考单价）
                 Row(verticalAlignment = Alignment.Top) {
-                    com.llpop.koil.ui.component.KOiLDateField(modifier = Modifier.weight(1f), date = dlg.backfillDate, recordDates = dlg.backfillRecordDates, onDateSelected = viewModel::setBackfillDate)
+                    KOiLDateField(modifier = Modifier.weight(1f), date = dlg.backfillDate, recordDates = dlg.backfillRecordDates, onDateSelected = viewModel::setBackfillDate)
                     Spacer(Modifier.width(14.dp))
                     GradePriceSelect(
                         grade = dlg.backfillGrade,
@@ -721,7 +726,7 @@ fun OverviewScreen(
                 // 实测字段底→标题顶 34dp，改后约 21–24dp，含行内留白）；
                 // 块内上距 8dp 在行内；bottomInset 维持默认 8dp → 高亮停在块下缘，
                 // 块下缘 → 下方内容块的 16dp 由下面 Column 的 top 16dp 在高亮之外补。
-                com.llpop.koil.ui.component.FullTankSwitchRow(
+                FullTankSwitchRow(
                     checked = dlg.backfillIsFullTank,
                     onCheckedChange = viewModel::setBackfillFullTank,
                 )

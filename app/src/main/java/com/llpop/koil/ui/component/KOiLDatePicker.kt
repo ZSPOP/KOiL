@@ -62,6 +62,7 @@ import com.llpop.koil.R
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.util.AppClock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -70,6 +71,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.abs
 import java.util.Locale
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.component.GlassPopupOverlay
 
 /**
  * 自研日期选择弹窗（柔光玻璃风格）。
@@ -87,7 +89,7 @@ fun KOiLDatePickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     anchorBounds: IntRect? = null,
-    anchor: top.yukonga.miuix.kmp.glass.GlassPopupAnchor? = null,
+    anchor: GlassPopupAnchor? = null,
 ) {
     val initial = remember(initialDate) {
         runCatching { LocalDate.parse(initialDate) }.getOrDefault(AppClock.today())
@@ -180,7 +182,7 @@ fun KOiLDatePickerDialog(
             it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat(),
         )
     } ?: androidx.compose.ui.geometry.Rect.Zero
-    com.llpop.koil.ui.component.GlassPopupOverlay(
+    GlassPopupOverlay(
         show = true,
         anchorBounds = anchorRect,
         anchor = anchor,

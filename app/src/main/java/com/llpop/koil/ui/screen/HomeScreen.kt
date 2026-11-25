@@ -129,6 +129,11 @@ import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import com.llpop.koil.ui.component.GlassPopupOverlay
 import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.rememberSnackbar
+import com.llpop.koil.ui.component.FullTankSwitchRow
+import com.llpop.koil.ui.component.KOiLDateField
+import com.llpop.koil.data.location.LocationHelper
+import com.llpop.koil.data.settings.AppSettings
 
 /**
  * 录入页（M2 完整实现）
@@ -146,14 +151,14 @@ fun HomeScreen(
     viewModel: AddViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val locationHelper = org.koin.compose.koinInject<com.llpop.koil.data.location.LocationHelper>()
+    val locationHelper = org.koin.compose.koinInject<LocationHelper>()
 
     // 定位权限提醒弹窗显隐
     val showPermissionDialog = remember { mutableStateOf(false) }
     // 定位成功一次性提示（Snackbar，文案走 stringResource 本地化）
     val context = LocalContext.current
     // 一次性反馈统一走全局 Snackbar（挂在根宿主，切页不丢）
-    val snackbar = com.llpop.koil.ui.component.rememberSnackbar()
+    val snackbar = rememberSnackbar()
     // 首页不再显示任何「有新版本」提示：新版本改由系统通知告知一次，
     // 下载与安装全部留在关于页（通知点进来直接落在那一页）。
     // 文案在组合期解析（stringResource 跟随 Configuration 变化），
@@ -169,7 +174,7 @@ fun HomeScreen(
     }
 
     // 首次打开：未授权定位时自动弹出定位权限提醒引导（仅一次，之后由用户主动点击定位按钮）
-    val settings = org.koin.compose.koinInject<com.llpop.koil.data.settings.AppSettings>()
+    val settings = org.koin.compose.koinInject<AppSettings>()
     LaunchedEffect(Unit) {
         if (!locationHelper.hasPermission() && !settings.hasPromptedLocation.first()) {
             settings.setHasPromptedLocation(true)
@@ -290,7 +295,7 @@ fun HomeScreen(
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
                             // 第一行：日期（默认今天，只读展示；组件结构与补录/编辑统一，后续开启可编辑直接传回调）+ 油号（联动价格）
                             FormRow {
-                                com.llpop.koil.ui.component.KOiLDateField(
+                                KOiLDateField(
                                     modifier = Modifier.weight(1f),
                                     date = uiState.date,
                                 )
@@ -361,7 +366,7 @@ fun HomeScreen(
                         // 满箱标记（跳枪）：油耗按满箱区间结算的关键输入，默认勾选；整行铺满卡片宽。
                         // 与补录弹窗同一个参数（bottomInset 走默认 8dp）：跳枪行已不在卡片底部，
                         // 高亮停在块下缘即可，块下缘 → 下一段的间距由下面段的容器自己承担。
-                        com.llpop.koil.ui.component.FullTankSwitchRow(
+                        FullTankSwitchRow(
                             checked = uiState.isFullTank,
                             onCheckedChange = viewModel::setFullTank,
                         )

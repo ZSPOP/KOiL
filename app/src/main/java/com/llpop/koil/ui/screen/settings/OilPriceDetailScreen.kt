@@ -92,11 +92,15 @@ import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import com.llpop.koil.ui.component.LocalPageBackdrop
+import com.llpop.koil.ui.component.rememberSnackbar
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.PullToRefresh
+import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.screen.formatNotice
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
 private val UpColor = KOiLColors.PriceUp
@@ -135,13 +139,13 @@ fun OilPriceDetailScreen(
         val detailContentPadding = pageContentPadding(innerPadding, extraTop = 12.dp)
         val detailRefreshing by viewModel.refreshing.collectAsStateWithLifecycle()
         val detailRefreshNotice by viewModel.refreshNotice.collectAsStateWithLifecycle()
-        val detailSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
-            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+        val detailSnackbar = rememberSnackbar(
+            duration = SnackbarDuration.Long,
             withDismissAction = true,
         )
         // formatNotice 是 @Composable（内部 stringResource），必须在组合期解析，不能放进副作用
         val detailRefreshText = detailRefreshNotice?.let { notice ->
-            notice.key?.let { com.llpop.koil.ui.screen.formatNotice(it, notice.args) }
+            notice.key?.let { formatNotice(it, notice.args) }
         }
         LaunchedEffect(detailRefreshNotice) {
             if (detailRefreshNotice != null) {
@@ -149,7 +153,7 @@ fun OilPriceDetailScreen(
                 viewModel.consumeRefreshNotice()
             }
         }
-        top.yukonga.miuix.kmp.basic.PullToRefresh(
+        PullToRefresh(
             isRefreshing = detailRefreshing,
             onRefresh = { viewModel.refresh() },
             modifier = Modifier.fillMaxSize(),
