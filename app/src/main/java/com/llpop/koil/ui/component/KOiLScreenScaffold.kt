@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
@@ -27,6 +28,7 @@ import androidx.compose.foundation.background
 import com.llpop.koil.ui.component.effect.BgEffectBackground
 import com.llpop.koil.ui.theme.LocalWallpaperEnabled
 import com.llpop.koil.ui.theme.LocalWallpaperPlaying
+import com.llpop.koil.ui.theme.LocalWallpaperScrollGate
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
@@ -83,6 +85,18 @@ fun KOiLScreenScaffold(
                     scrollBehavior.state.contentOffset < 0f
             }.collect { residualAtTop ->
                 if (residualAtTop) scrollBehavior.state.contentOffset = 0f
+            }
+        }
+        // 滚动闸门上报：列表在拖拽/惯性滚动期间暂停动态底色阶的时间推进
+        val scrollGate = LocalWallpaperScrollGate.current
+        if (scrollGate != null) {
+            LaunchedEffect(scrolledList, scrollGate) {
+                snapshotFlow { scrolledList.isScrollInProgress }.collect { scrolling ->
+                    scrollGate.report(scrolledList, scrolling)
+                }
+            }
+            DisposableEffect(scrolledList, scrollGate) {
+                onDispose { scrollGate.report(scrolledList, false) }
             }
         }
     }

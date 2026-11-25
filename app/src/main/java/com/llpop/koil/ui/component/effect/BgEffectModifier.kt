@@ -158,7 +158,9 @@ private class BgEffectNode(
         animationJob?.cancel()
         startOffset = animTime
         animationJob = coroutineScope.launch {
-            val minDeltaNanos = 1_000_000_000L / 60L
+            // 壁纸是极慢速的色团流动，60fps 推进与 30fps 肉眼分辨不出；降到 30fps 让整屏
+            // 着色器每帧的填充成本减半，给滚动重绘让出 GPU 带宽。
+            val minDeltaNanos = 1_000_000_000L / 30L
             val origin = withFrameNanos { it }
             var lastEmit = origin
             while (isActive) {
