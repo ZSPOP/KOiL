@@ -431,7 +431,7 @@ private fun AboutContent(
     // 官方 AboutPage 是成套的另一组参数，故意不接入 KOiLGlassSpec：
     // 半径 150f（hero 图标与标题的 DstIn 挖空）/ Overlay_Thin_Light（暗）· Pured_Regular_Light（亮）
     // / brightness 0 · contrast 1 · saturation 1，与 example/shared/.../AboutPage.kt 逐项一致。
-    // 开源卡已改用官方 GlassCard（不自采样、只铺半透明填充），这套混色只服务 hero 与信息卡。
+    // 开源卡已改用官方 GlassCard（不自采样、只铺半透明填充），本组混色不再服务它。
     // 接进全站 spec 会变成 BlurDemo 那套（半径减半、混色换档、叠加亮度对比度饱和度），
     // 等于把「官方关于页」改成「demo 面板」，因此这里保持原样。
     val cardBlendColors = remember(isDark) {
