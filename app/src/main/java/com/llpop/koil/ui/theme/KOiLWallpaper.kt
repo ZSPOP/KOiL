@@ -1,6 +1,10 @@
 package com.llpop.koil.ui.theme
 
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 
 /**
@@ -16,3 +20,30 @@ val LocalWallpaperEnabled = staticCompositionLocalOf { true }
  * 滑到该页时由 LaunchedEffect 续上原相位（floor(stage)+1），不会跳色。
  */
 val LocalWallpaperPlaying = compositionLocalOf { true }
+
+/**
+ * 滚动闸门：任意一页的列表（或 pager）处于拖拽/惯性滚动时置 `scrolling = true`。
+ *
+ * 动态壁纸那份全屏着色器是**常驻** 60fps 帧循环，滚动期间它和整页重录、玻璃模糊抢同一份
+ * GPU 带宽。滚动是用户注意力全在内容上的少数场景，这里在滚动期间把壁纸的时间推进停掉
+ * （动效相位不丢，停下后从原相位续上），松手立即恢复。
+ *
+ * 多页同时挂在 pager 里，所以用引用计数而不是直接赋值：任一页还在滚就算「滚动中」。
+ */
+@Stable
+class WallpaperScrollGate {
+
+    private val activeSources = mutableSetOf<Any>()
+
+    var scrolling by mutableStateOf(false)
+        private set
+
+    fun report(source: Any, isScrolling: Boolean) {
+        val changed = if (isScrolling) activeSources.add(source) else activeSources.remove(source)
+        if (!changed) return
+        val next = activeSources.isNotEmpty()
+        if (next != scrolling) scrolling = next
+    }
+}
+
+val LocalWallpaperScrollGate = compositionLocalOf<WallpaperScrollGate?> { null }

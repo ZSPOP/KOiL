@@ -56,6 +56,8 @@ import com.llpop.koil.ui.screen.settings.AboutScreen
 import com.llpop.koil.ui.theme.FloatingBottomBarStyle
 import com.llpop.koil.ui.theme.KOiLTheme
 import com.llpop.koil.ui.theme.LocalWallpaperEnabled
+import com.llpop.koil.ui.theme.LocalWallpaperScrollGate
+import com.llpop.koil.ui.theme.WallpaperScrollGate
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.NavigationBar
@@ -197,6 +199,8 @@ fun MainScreen(
         val wallpaperBackdrop = rememberLayerBackdrop()
         val contentBackdrop = rememberBlurBackdrop()
         val pageBackdrop = rememberLayerBackdrop()
+        // 滚动闸门：任一页列表在滚时暂停壁纸着色器的时间推进（见 WallpaperScrollGate）
+        val wallpaperScrollGate = remember { WallpaperScrollGate() }
         // 官方底栏是 `GlassNavigationBar(backdrop = backdrop)` —— 采「壁纸 + 内容」那一层，
         // 内容从底栏下面滚过时底栏会有真实折射。这里用同一语义：壁纸层 + Pager 内容层。
         val navBarBackdrop = if (blurEnabled && isRuntimeShaderSupported()) {
@@ -222,8 +226,10 @@ fun MainScreen(
             ) {
                 // 唯一一份动态底，常驻播放：壁纸不随页面平移，色阶也不会因翻页重新计时。
                 if (wallpaperEnabled) {
+                    // 滚动期间暂停时间推进：色阶停在当前相位，松手继续，不跳色。
+                    // 暂停同时也停掉 60fps 的 invalidate 帧循环，把 GPU 让给滚动重绘。
                     BgEffectBackground(
-                        dynamicBackground = true,
+                        dynamicBackground = !wallpaperScrollGate.scrolling,
                         modifier = Modifier.fillMaxSize(),
                         isFullSize = true,
                     ) {
@@ -294,6 +300,8 @@ fun MainScreen(
 
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperBackdrop provides wallpaperBackdrop,
+                // 滚动闸门交给各页脚手架上报（列表拖拽/惯性滚动）
+                LocalWallpaperScrollGate provides wallpaperScrollGate,
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
                 LocalPageBackdrop provides pageBackdrop,
                 LocalSnackbarHostState provides snackbarHostState,
