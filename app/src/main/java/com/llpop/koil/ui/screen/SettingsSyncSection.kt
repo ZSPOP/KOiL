@@ -540,17 +540,16 @@ internal fun SyncPanelBody(
                 }
             }
 
-        // 云同步 Toast（备份/恢复结果）
+        // 云同步结果提示（备份/恢复）：走全局 Snackbar
         val syncMessage by syncVm.message.collectAsStateWithLifecycle()
-        val syncToastContext = LocalContext.current
+        val syncSnackbar = com.llpop.koil.ui.component.rememberSnackbar(
+            duration = top.yukonga.miuix.kmp.basic.SnackbarDuration.Long,
+            withDismissAction = true,
+        )
         val syncText = syncMessage?.let { formatSyncNotice(it) }
         LaunchedEffect(syncMessage) {
             if (syncText != null) {
-                android.widget.Toast.makeText(
-                    syncToastContext,
-                    syncText,
-                    android.widget.Toast.LENGTH_SHORT,
-                ).show()
+                syncSnackbar(syncText)
                 syncVm.consumeMessage()
             }
         }

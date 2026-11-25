@@ -9,6 +9,7 @@
 
     <!-- ===== 通用按钮 ===== -->
     <string name="koil_common_cancel">取消</string>
+    <string name="koil_common_confirm">确定</string>
     <string name="koil_common_save">保存</string>
 
     <!-- ===== 录入页 AddScreen ===== -->
@@ -519,6 +520,7 @@
     <string name="koil_sync_backup_restore_broken">这份副本读不出来</string>
     <string name="koil_local_backup_broken">这份副本无法解析，未做任何修改</string>
     <!-- 数字设置行步进按钮的读屏标签，%1$s 为该设置项标题 -->
+    <string name="koil_stepper_picker">打开%1$s选择器</string>
     <string name="koil_stepper_decrease">减少%1$s</string>
     <string name="koil_stepper_increase">增加%1$s</string>
     <!-- 密码可见性切换按钮的读屏标签 -->

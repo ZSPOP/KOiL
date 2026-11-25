@@ -24,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -31,6 +32,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
@@ -51,6 +54,8 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SnackbarHost
+import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -221,6 +226,11 @@ fun MainScreen(
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
             val scope = rememberCoroutineScope()
+            // 全局提示宿主：所有页面/弹窗共用一条 Snackbar 通道（替代散落的 Toast）
+            val snackbarHostState = remember { SnackbarHostState() }
+            // 根宿主 Scaffold 没有 bottomBar，Snackbar 默认贴底 12dp；这里实测页面 Scaffold
+            // 的底部槽高并回填，让提示落在导航条上方（与官方 demo 的摆放一致）
+            var snackbarBottomInset by remember { mutableStateOf(0.dp) }
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
             // 二级页（关于 / 调价明细）改由导航层承载：back stack 里 Main 常驻，
             // 二级页作为 entry 压栈，转场与交互式侧滑返回由 NavDisplay 负责
@@ -278,6 +288,7 @@ fun MainScreen(
                 com.llpop.koil.ui.component.LocalWallpaperBackdrop provides wallpaperBackdrop,
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
                 com.llpop.koil.ui.component.LocalPageBackdrop provides pageBackdrop,
+                com.llpop.koil.ui.component.LocalSnackbarHostState provides snackbarHostState,
             ) {
                 // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
                 // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
@@ -288,6 +299,16 @@ fun MainScreen(
                     modifier = Modifier.fillMaxSize(),
                     containerColor = Color.Transparent,
                     contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0),
+                    // 提示挂在根宿主：盖在页面与底栏之上、弹层之下，切页不中断
+                    snackbarHost = {
+                        SnackbarHost(
+                            state = snackbarHostState,
+                            // 二级页（关于 / 油价明细）没有底栏，提示回到贴底
+                            modifier = Modifier.padding(
+                                bottom = if (backStack.last() == Route.Main) snackbarBottomInset else 0.dp,
+                            ),
+                        )
+                    },
                 ) {
             NavDisplay(
                 backStack = backStack,
@@ -305,6 +326,15 @@ fun MainScreen(
                     // 弹层会被录进 pageBackdrop，采样即自我包含。
                     popupHost = {},
                     bottomBar = {
+                        val bottomBarDensity = LocalDensity.current
+                        // 实测底栏高度：底部 inset 由导航条组件自己算（含 navigationBars），
+                        // 量到的就是 Scaffold 摆放 Snackbar 时会用到的那段高度
+                        Box(
+                            modifier = Modifier.onGloballyPositioned { coords ->
+                                val h = with(bottomBarDensity) { coords.size.height.toDp() }
+                                if (h != snackbarBottomInset) snackbarBottomInset = h
+                            },
+                        ) {
                         if (isFloatingStyleIos) {
                             // iOS 液态玻璃悬浮导航条
                             IosLiquidGlassNavigationBar(
@@ -329,6 +359,7 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 24.dp),
                             )
+                        }
                         }
                     },
                 ) { innerPadding ->
