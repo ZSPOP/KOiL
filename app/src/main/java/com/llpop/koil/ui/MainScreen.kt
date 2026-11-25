@@ -76,6 +76,7 @@ import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.util.ContainerSizeProvider
 import com.llpop.koil.util.LocaleManager
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
@@ -207,10 +208,11 @@ fun MainScreen(
         } else {
             null
         }
-        Box(
+        // 根部注入容器尺寸（官方 App.kt 同款）：宽屏判断优先读它，不再只看窗口尺寸。
+        // 这里同时就是原来的最底层填充容器，Scaffold 已透明，不铺背景会露出窗口底色。
+        ContainerSizeProvider(
             modifier = Modifier
                 .fillMaxSize()
-                // 最底层填充：Scaffold 已透明，若不铺背景会露出窗口底色
                 .background(surfaceColor),
         ) {
             // 顺序与官方 GlassPage 一致：先 layerBackdrop 再 background。
