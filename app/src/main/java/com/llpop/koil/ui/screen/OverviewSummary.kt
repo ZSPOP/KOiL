@@ -84,6 +84,9 @@ internal fun SummaryGrid(
                     selectedIndex = rangeIndex,
                     onSelect = onRangeSelect,
                     backdrop = wallpaper,
+                    // 本控件在页面内容里、不在顶栏 bottomContent：静止态轨道应回到纯 trackColor
+                    // （官方语义：surfaceAlpha 只在控件被顶栏压住时才推到 1f），这里恒 0f
+                    surfaceAlpha = 0f,
                 )
             } else {
                 // 只保留点按切档：整页横滑已经还给 Pager 翻页，标签行上再挂"拖动切档"

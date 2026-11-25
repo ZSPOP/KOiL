@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.Dp
@@ -72,8 +71,7 @@ import com.llpop.koil.ui.component.blur.rememberBlurEnabled
 import com.llpop.koil.ui.component.liquid.rememberCombinedBackdrop
 import com.llpop.koil.ui.component.effect.BgEffectBackground
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.glass.GlassCard
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
@@ -431,8 +429,9 @@ private fun AboutContent(
     val effectBackground = isRuntimeShaderSupported() && blurEnabled
 
     // 官方 AboutPage 是成套的另一组参数，故意不接入 KOiLGlassSpec：
-    // 60f 半径 / RoundedCornerShape(16.dp) / Overlay_Thin_Light（暗）· Pured_Regular_Light（亮）
+    // 半径 150f（hero 图标与标题的 DstIn 挖空）/ Overlay_Thin_Light（暗）· Pured_Regular_Light（亮）
     // / brightness 0 · contrast 1 · saturation 1，与 example/shared/.../AboutPage.kt 逐项一致。
+    // 开源卡已改用官方 GlassCard（不自采样、只铺半透明填充），本组混色不再服务它。
     // 接进全站 spec 会变成 BlurDemo 那套（半径减半、混色换档、叠加亮度对比度饱和度），
     // 等于把「官方关于页」改成「demo 面板」，因此这里保持原样。
     val cardBlendColors = remember(isDark) {
@@ -612,28 +611,14 @@ private fun AboutContent(
                             .padding(bottom = 12.dp),
                     ) {
                         SmallTitle(text = stringResource(R.string.koil_about_open_source))
-                        Card(
+                        // 官方 GlassCard：不自采样、只画半透明填充（官方注释
+                        // "The card does not sample or blur the backdrop itself"），
+                        // 底层动效直接透出来；手写 textureBlur 与 colors 覆盖一并撤掉
+                        GlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp)
-                                .padding(bottom = 12.dp)
-                                .then(
-                                    if (blurEnabled) {
-                                        Modifier.textureBlur(
-                                            backdrop = backdrop,
-                                            shape = RoundedCornerShape(16.dp),
-                                            blurRadius = 60f,
-                                            colors = BlurColors(blendColors = cardBlendColors),
-                                            enabled = true,
-                                        )
-                                    } else Modifier
-                                ),
-                            // 关键：blur 生效时底色必须透明，否则 Card 自绘的实色会把采样结果整块盖掉。
-                            // 内容色不能给透明：Card 会把 LocalContentColor 设成它，内部谁没显式指定字色就整块看不见
-                            colors = CardDefaults.defaultColors(
-                                if (blurEnabled) Color.Transparent else colorScheme.surfaceContainer,
-                                colorScheme.onSurfaceContainer,
-                            ),
+                                .padding(bottom = 12.dp),
                         ) {
                             val ossProjects = remember {
                                 listOf(

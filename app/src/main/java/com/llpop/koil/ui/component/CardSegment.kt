@@ -17,6 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -129,6 +132,21 @@ fun CardSegment(
         rememberKOiLGlassEdgeStroke(isDark = isDark, spec = glassSpec)
             .let { strokeState -> remember(strokeState) { { strokeState.value } } }
     }
+    // 分段拼接防缝：非末段的底角为 0，两段边界上 0.5x 降采样会产生一条抗锯齿黑缝。
+    // 按官方指导在实色段向下多画 2px 同色（玻璃段是采样绘制，不吃这条）。
+    // 挂在最外层：实色/超椭圆那层内部会 clip，放内层会被裁掉。
+    val seamExtension: Modifier =
+        if (!isLast && bottomCornerRadius == 0.dp && color.alpha >= 1f) {
+            Modifier.drawBehind {
+                drawRect(
+                    color = color,
+                    topLeft = Offset(0f, size.height),
+                    size = Size(size.width, 2.dp.toPx()),
+                )
+            }
+        } else {
+            Modifier
+        }
     val background = when {
         // 毛玻璃段：不再自绘 surface（那层实色会把采样结果盖掉），交给 textureBlur 采样背景
         glassBackdrop != null -> Modifier
@@ -146,8 +164,9 @@ fun CardSegment(
                 enabled = true,
             )
             .then(if (edgeStrokeProvider != null) Modifier.edgeStroke(shape = glassShape, stroke = edgeStrokeProvider) else Modifier)
-        topCornerRadius == 0.dp && bottomCornerRadius == 0.dp -> Modifier.background(color)
-        else -> Modifier.squircleSurface(color, topCornerRadius, topCornerRadius, bottomCornerRadius, bottomCornerRadius)
+        topCornerRadius == 0.dp && bottomCornerRadius == 0.dp ->
+            seamExtension.then(Modifier.background(color))
+        else -> seamExtension.then(Modifier.squircleSurface(color, topCornerRadius, topCornerRadius, bottomCornerRadius, bottomCornerRadius))
     }
     // 交互链照官方 Card.kt：pressable 在卡片本体外层承担 Sink/Tilt 变换与按住态，
     // combinedClickable 在内容层承担点击；两者共用同一条 interactionSource。
