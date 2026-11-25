@@ -18,8 +18,7 @@ import com.llpop.koil.data.update.UpdateDownloadState
 import com.llpop.koil.data.update.resolveCapsuleState
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.glass.GlassCard
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
@@ -143,28 +142,11 @@ fun KoilAboutInfoCard(
     releaseDate: String,
     onCheck: () -> Unit,
     modifier: Modifier = Modifier,
-    blurBackdrop: LayerBackdrop? = null,
-    blurBlendColors: List<BlendColorEntry>? = null,
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(
-                if (blurBackdrop != null) {
-                    Modifier.textureBlur(
-                        backdrop = blurBackdrop,
-                        shape = RoundedCornerShape(16.dp),
-                        blurRadius = 60f,
-                        colors = BlurColors(blendColors = blurBlendColors.orEmpty()),
-                        enabled = true,
-                    )
-                } else Modifier
-            ),
-        // 毛玻璃生效时底色必须透明，否则 Card 自绘的实色会把采样结果整块盖掉
-        colors = CardDefaults.defaultColors(
-            if (blurBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer,
-            MiuixTheme.colorScheme.onSurfaceContainer,
-        ),
+    // 照官方关于页范式（AboutScreen 分组卡）：不再自采样 —— GlassCard 只铺一层半透明填充，
+    // 透出页面底下的动效背景，模糊由页面的采样层承担，卡片自己不再挂 textureBlur。
+    GlassCard(
+        modifier = modifier.fillMaxWidth(),
     ) {
         // 用 BasicComponent 而不是 ArrowPreference：后者把右箭头画死在 endActions 里，
         // 关不掉；这两行不是「跳出去」的入口（「应用版本」点了只是就地检查），不能带箭头。

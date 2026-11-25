@@ -271,6 +271,7 @@ fun SettingsScreen(
                         }
                     }
                 },
+            overscrollEffect = null,
             contentPadding = pageContentPadding(innerPadding, extraBottom = bottomPadding),
         ) {
             // 顶部避让 TopAppBar（含状态栏，折叠时高度联动）
