@@ -528,8 +528,10 @@ private fun AboutContent(
     val heroSpacerHeight = logoHeightDp +
         logoPadding.calculateTopPadding() - scrollPadding.calculateTopPadding() + heroToCard
 
-    // 列表尾部补量：只要「滚到底正好把 hero 收满」，不再整屏白给。
-    // 收满条件 = 总内容高 ≥ 视口高 + heroSpacerHeight；总内容 = heroSpacer + 信息卡项 + 尾部项。
+    // 列表尾部补量：滚到底时不再白给一整屏空白（原先的 fillParentMaxHeight 会撑满一屏）。
+    // 注意补的是「Box(Spacer, Column)」的高度，Box 取子级最大而非相加：
+    // 尾项内容高 A 小于补量时仍会差 A 才收满，故不能写成「必定收满」；
+    // 当前尾项（开源/条款多张卡）远超半屏，手机上触发不了，大屏或大字号折叠时才可能遇到。
     var viewportHeightDp by remember { mutableStateOf(0.dp) }
     var infoItemHeightDp by remember { mutableStateOf(0.dp) }
     var aboutContentHeightDp by remember { mutableStateOf(0.dp) }
@@ -601,7 +603,7 @@ private fun AboutContent(
                 Box {
                     // 尾部补量：只补到「视口 + heroSpacer」所需的差值（≈ 屏高 − 信息卡 − 本项内容），
                     // 不再用 fillParentMaxHeight 白给一整屏。Box 高度取两者较大值，所以这里补的是
-                    // 「内容不够一屏视口」的那一段，滚到底时 hero 正好收满、卡下不再留大片空白。
+                    // 「内容不够一屏视口」的那一段：滚到底时不再空出一整屏（补量见 tailFillHeight 注释）。
                     Spacer(Modifier.height(tailFillHeight))
                     Column(
                         modifier = Modifier
