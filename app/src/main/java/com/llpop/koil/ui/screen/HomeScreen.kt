@@ -178,9 +178,11 @@ fun HomeScreen(
     }
 
     // 录入成功的一次性反馈（清除状态，避免下次进入页面重复提示）
+    // 文案在组合期解析：不能等副作用里再读 context.getString（Configuration 变化后可能拿到旧语种）
+    val precheckAddedText = stringResource(R.string.koil_precheck_added)
     LaunchedEffect(uiState.addSuccess) {
         if (uiState.addSuccess) {
-            snackbar(context.getString(R.string.koil_precheck_added))
+            snackbar(precheckAddedText)
             viewModel.consumeAddSuccess()
         }
     }

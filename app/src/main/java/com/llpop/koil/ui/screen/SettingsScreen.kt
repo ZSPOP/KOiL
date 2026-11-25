@@ -1035,13 +1035,15 @@ fun LazyListScope.aboutSection(
             CardItem("feedback") {
                 val context = LocalContext.current
                 val feedbackSnackbar = com.llpop.koil.ui.component.rememberSnackbar()
+                // 同样在组合期取文案，避免 onClick 里读 LocalContext 的资源
+                val openFailedText = stringResource(R.string.koil_set_about_open_failed)
                 SettingRow(
                     title = stringResource(R.string.koil_set_about_feedback),
                     subtitle = stringResource(R.string.koil_set_about_feedback_sub),
                     value = "",
                     onClick = {
                         if (!openExternalUrl(context, "$KOIL_REPO_URL/issues/new")) {
-                            feedbackSnackbar(context.getString(R.string.koil_set_about_open_failed))
+                            feedbackSnackbar(openFailedText)
                         }
                     },
                 )
