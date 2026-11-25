@@ -60,6 +60,7 @@ import com.llpop.koil.ui.component.KOiLGlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.blur.ColorBlendToken
+import com.llpop.koil.ui.component.blur.LocalTopBarStartInset
 import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
@@ -504,14 +505,16 @@ private fun AboutContent(
         }
     }
 
+    // 宽屏侧边栏（浮层 rail）占据起始侧：本页横向内距不走 pageContentPadding，
+    // 直接在这里补上 rail 的起始内缩，避免展开的面板压住 logo 与返回按钮
     val scrollPadding = PaddingValues(
         top = innerPadding.calculateTopPadding(),
-        start = innerPadding.calculateStartPadding(layoutDirection),
+        start = innerPadding.calculateStartPadding(layoutDirection) + LocalTopBarStartInset.current(),
         end = innerPadding.calculateEndPadding(layoutDirection),
     )
     val logoPadding = PaddingValues(
         top = innerPadding.calculateTopPadding() + 40.dp,
-        start = innerPadding.calculateStartPadding(layoutDirection),
+        start = innerPadding.calculateStartPadding(layoutDirection) + LocalTopBarStartInset.current(),
         end = innerPadding.calculateEndPadding(layoutDirection),
     )
 
