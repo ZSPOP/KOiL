@@ -59,10 +59,6 @@ fun KOiLScreenScaffold(
     // 只属于三个一级页，二级页若跟着透明就会露出一片纯色（"没底"）。置 true 时
     // 本页自己建壁纸层并铺 surface 底 —— 与官方 AboutPage 的写法一致。
     ownWallpaper: Boolean = false,
-    // 是否播放动态壁纸流动（只影响 ownWallpaper 自建的那层）：置 false 时保留
-    // 壁纸层结构与其 surface 底（顶栏/卡片照常采样这一层），但不画流动底色，
-    // 页面上不出现任何动态成分。
-    dynamicWallpaper: Boolean = true,
     overlay: @Composable (backdrop: Backdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
     content: @Composable (
         innerPadding: PaddingValues,
@@ -150,7 +146,10 @@ fun KOiLScreenScaffold(
     ) {
     Scaffold(
         modifier = modifier,
-        containerColor = Color.Transparent,
+        // ownWallpaper 的语义就是「本页脱离外层壁纸、自己负责铺底」：底色不能依赖
+        // 壁纸层是否建立（关掉「玻璃效果」时 backdrop 为 null、壁纸层不建，若这里仍是
+        // 透明就会露出下层壁纸）。故这些页面无条件铺 surface。
+        containerColor = if (ownWallpaper) MiuixTheme.colorScheme.surface else Color.Transparent,
         topBar = {
             Box(modifier = if (barBackdrop != null) Modifier.layerBackdrop(barBackdrop) else Modifier) {
                 BlurredBar(backdrop = topBarBackdrop, blurActive = blurActive) {
@@ -181,7 +180,7 @@ fun KOiLScreenScaffold(
                         .layerBackdrop(wallpaperBackdrop)
                         .background(MiuixTheme.colorScheme.surface),
                 ) {
-                    if (wallpaper && dynamicWallpaper) {
+                    if (wallpaper) {
                         // 只有一份动态底时由外层常驻播放；这里是"没有外层壁纸"的回退路径。
                         val wallpaperPlaying = LocalWallpaperPlaying.current
                         BgEffectBackground(

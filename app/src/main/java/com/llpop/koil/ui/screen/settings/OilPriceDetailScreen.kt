@@ -32,6 +32,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -101,6 +102,7 @@ import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.theme.LocalWallpaperEnabled
 import com.llpop.koil.ui.screen.formatNotice
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
@@ -131,12 +133,12 @@ fun OilPriceDetailScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
+    // 明细页不放任何开关：本页固定自建壁纸层、铺 surface 底（顶栏/卡片玻璃照常采样），
+    // 同时把本页的壁纸绘制置为关闭 —— 底层就是纯 surface，页面上没有动态成分。
+    CompositionLocalProvider(LocalWallpaperEnabled provides false) {
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
-        // 恢复原写法：本页自建壁纸层并铺 surface 底（顶栏/卡片玻璃照旧采样这一层），
-        // 只关掉动态壁纸流动 —— 页面上不出现任何动态成分
         ownWallpaper = true,
-        dynamicWallpaper = false,
         backdrop = backdrop,
         listState = listState,
         navigationIcon = { BackNavigationIcon(onClick = onBack) },
@@ -497,6 +499,7 @@ fun OilPriceDetailScreen(
         }
     }
         }
+    }
 }
 
 /**
