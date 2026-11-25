@@ -2,7 +2,7 @@ package com.llpop.koil.ui.component.effect
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.remember
 import top.yukonga.miuix.kmp.material.EdgeStroke
 import top.yukonga.miuix.kmp.material.sensor.rememberDeviceTilt
@@ -21,7 +21,7 @@ fun rememberKOiLGlassEdgeStroke(
     val baseStroke = spec.edgeTier.resolve(isDark)
     val tilt = rememberDeviceTilt()
     return remember(baseStroke, spec.tiltDriven, spec.primarySensitivity, spec.secondarySensitivity, tilt) {
-        derivedStateOf {
+        computedStateOf {
             when {
                 baseStroke == null -> null
                 !spec.tiltDriven -> baseStroke

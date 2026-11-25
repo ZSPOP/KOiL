@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -75,7 +75,7 @@ fun AdaptiveTopAppBar(
     // contentOffset < -1f 或弹性位移 overscrollOffset < -1f（阈值 1px 而不是 0，
     // 并计入手势下拉产生的 overscroll，否则"刚离开顶点"那一帧顶栏带不跟手）
     val resolvedContentScrolled by remember(scrollBehavior, isContentScrolled) {
-        derivedStateOf {
+        computedStateOf {
             isContentScrolled ?: (scrollBehavior?.state?.let {
                 it.contentOffset < -1f || it.overscrollOffset < -1f
             } ?: false)

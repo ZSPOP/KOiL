@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Money
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.CapturedAnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -39,7 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -136,7 +136,7 @@ fun OverviewScreen(
     var showBackToTop by remember { mutableStateOf(false) }
     // 滚到底（列表无法继续前滚）时按钮不收起，而是降到半透明仍可点：
     // 末卡右下角的金额/单价不会被实心圆盖住，用户又保留一键回顶
-    val atListBottom by remember(listState) { derivedStateOf { !listState.canScrollForward } }
+    val atListBottom by remember(listState) { computedStateOf { !listState.canScrollForward } }
     var moreMenuFor by remember { mutableStateOf<Long?>(null) }
     // 异常卡点击 → 异常明细弹窗
     var showAbnormalDetail by remember { mutableStateOf(false) }
@@ -220,7 +220,7 @@ fun OverviewScreen(
                 // 返回顶部按钮——图标化 + 淡入缩放动效 + 智能回顶。
                 // 竖直位置 = 底栏留白 + 16.dp（按钮 44dp），滚到底时降到 alpha 0.4（仍可点）。
                 // 智能回顶：可见项序号 > 60 时先 scrollToItem 瞬移到近顶，再短动画收尾到 0。
-                AnimatedVisibility(
+                CapturedAnimatedVisibility(
                     visible = showBackToTop,
                     enter = fadeIn() + scaleIn(initialScale = 0.6f),
                     exit = fadeOut() + scaleOut(targetScale = 0.6f),
@@ -433,7 +433,7 @@ fun OverviewScreen(
         }
 
         // 长按全屏操作层——点击任意处收起；圆按钮定位在长按卡片中央
-        AnimatedVisibility(
+        CapturedAnimatedVisibility(
             visible = moreMenuFor != null,
             enter = fadeIn() + scaleIn(initialScale = 0.95f, animationSpec = tween(150)),
             exit = fadeOut() + scaleOut(targetScale = 0.98f, animationSpec = tween(120)),

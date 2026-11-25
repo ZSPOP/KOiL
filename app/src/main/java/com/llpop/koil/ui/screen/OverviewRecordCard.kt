@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.CapturedAnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -413,7 +413,7 @@ internal fun RecordCard(
                 // —— 点击展开明细——油耗对比条 + 较油站单价优惠 ——
                 // 不用默认 expandIn/expandOut：它们带缩放成分，玻璃卡会"先缩再长"，
                 // 与 Sink 松手回弹叠在一起显得黏滞。改成纯纵向展开 + 淡入，节奏更利落。
-                AnimatedVisibility(
+                CapturedAnimatedVisibility(
                     visible = expanded,
                     enter = expandVertically(
                         animationSpec = tween(240, easing = FastOutSlowInEasing),

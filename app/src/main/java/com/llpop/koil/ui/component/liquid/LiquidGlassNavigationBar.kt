@@ -39,7 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -145,14 +145,15 @@ private val GRAVITY_ANGLE_STEP_RAD = (3.0 * PI / 180.0).toFloat()
  * 刻意只返回 State 而不在组合期读值：传感器以约 50Hz 无节流写入 tilt 快照状态，
  * 若在组合期读取，失效会上浮到整个调用方作用域造成每 tick 重组。消费方应把
  * `State.value` 的读取下沉到 drawBackdrop 的 highlight lambda 内（绘制阶段求值），
- * 让传感器更新只触发 draw 失效；derivedStateOf 的结构相等去重再把 draw 失效频率
- * 从传感器速率降到方向真正跨过量化步进时。
+ * 让传感器更新只触发 draw 失效；computedStateOf 沿用结构相等策略做去重，再把 draw 失效频率
+ * 从传感器速率降到方向真正跨过量化步进时。绘制阶段读取天然走「未观察读」分支，
+ * 直接求值、不登记快照依赖，正是这条链需要的形态。
  */
 @Composable
 private fun rememberQuantizedGravityAngle(): State<Float> {
     val tiltState = rememberDeviceTilt()
     return remember(tiltState) {
-        derivedStateOf {
+        computedStateOf {
             val tilt = tiltState.value
             val gx = tilt.gravityX
             val gy = tilt.gravityY
@@ -180,7 +181,7 @@ private fun rememberGravityRotatedStroke(
 ): State<EdgeStroke> {
     val gravityAngle = rememberQuantizedGravityAngle()
     return remember(gravityAngle, base, extraDegrees) {
-        derivedStateOf {
+        computedStateOf {
             val rad = gravityAngle.value + (extraDegrees * PI / 180.0).toFloat()
             val opposite = rad + PI.toFloat()
             base.copy(
@@ -227,7 +228,7 @@ internal fun IosLiquidGlassNavigationBar(
     val offsetAnimation = remember { Animatable(0f) }
     val rubberBandPx = with(density) { 4.dp.toPx() }
     val panelOffset by remember(rubberBandPx) {
-        derivedStateOf {
+        computedStateOf {
             if (totalWidthPx == 0f) {
                 0f
             } else {

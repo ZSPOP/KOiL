@@ -31,7 +31,7 @@ import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.computedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -142,7 +142,7 @@ fun AboutScreen(
     // 滚动进度是帧率级 State：读点限制在 topBar 与各 graphicsLayer，
     // 组合期以值读取会让整个 AboutContent 每帧重组
     val scrollProgressState = remember {
-        derivedStateOf {
+        computedStateOf {
             when {
                 lazyListState.firstVisibleItemIndex > 0 -> 1f
 
@@ -158,9 +158,9 @@ fun AboutScreen(
         }
     }
     // 布尔/夹紧后再 derive，等值去重让顶栏只在阈值区间内重组
-    val heroCollapsed by remember { derivedStateOf { scrollProgressState.value == 1f } }
+    val heroCollapsed by remember { computedStateOf { scrollProgressState.value == 1f } }
     val titleAlpha by remember {
-        derivedStateOf { ((scrollProgressState.value - 0.35f) / 0.65f).coerceIn(0f, 1f) }
+        computedStateOf { ((scrollProgressState.value - 0.35f) / 0.65f).coerceIn(0f, 1f) }
     }
 
     val backdrop = rememberBlurBackdrop()
@@ -517,11 +517,11 @@ private fun AboutContent(
     // logo 在 progress 到 0.5 时完全透明（alpha = (progress - 0.35) / 0.15），此后 hero 不再接收点击：
     // 它压在上层，继续接收等于让一块「看不见的区域」吃掉卡片的点击。
     // 阈值必须跟着淡出完成点走，写 1f 会留出半屏幽灵可点区（#81 一轮评审指出的就是这一处）。
-    // derivedStateOf 只在跨阈值时翻转，不会跟着每一帧滚动重组。
-    val heroInteractive by remember { derivedStateOf { scrollProgress() < 0.5f } }
+    // computedStateOf 继续沿用结构相等策略：只在结果跨阈值时让读点失效，不会跟着每一帧滚动重组。
+    val heroInteractive by remember { computedStateOf { scrollProgress() < 0.5f } }
 
     // 胶囊淡完（p ≈ 0.11）就不再组合：ghost 按钮会让一块看不见的胶囊吃掉滑上来的卡片点击
-    val capsuleVisible by remember { derivedStateOf { scrollProgress() < 0.11f } }
+    val capsuleVisible by remember { computedStateOf { scrollProgress() < 0.11f } }
 
     // hero 占位高度：与列表里 logoSpacer 的 Spacer 高度同源，只算一次。
     // logoHeightDp 由 onSizeChanged 量的是 Column 全高，已含胶囊槽（52dp），这里不能再补一次。
