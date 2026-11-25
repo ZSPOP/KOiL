@@ -59,9 +59,10 @@ fun KOiLScreenScaffold(
     // 只属于三个一级页，二级页若跟着透明就会露出一片纯色（"没底"）。置 true 时
     // 本页自己建壁纸层并铺 surface 底 —— 与官方 AboutPage 的写法一致。
     ownWallpaper: Boolean = false,
-    // 官方普通二级页：不挂任何壁纸层、也不铺透明底 —— 整页铺不透明 surface，
-    // 顶栏/卡片玻璃只采内容层（不采壁纸）。用于脱离一级页 Pager 的二级页。
-    opaqueSurface: Boolean = false,
+    // 是否播放动态壁纸流动（只影响 ownWallpaper 自建的那层）：置 false 时保留
+    // 壁纸层结构与其 surface 底（顶栏/卡片照常采样这一层），但不画流动底色，
+    // 页面上不出现任何动态成分。
+    dynamicWallpaper: Boolean = true,
     overlay: @Composable (backdrop: Backdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
     content: @Composable (
         innerPadding: PaddingValues,
@@ -109,8 +110,8 @@ fun KOiLScreenScaffold(
     val barBackdrop = if (blurActive) rememberLayerBackdrop() else null
     // 外层（MainScreen）已经提供了「固定壁纸」层时：本页不再自建壁纸层、也不再铺底，
     // 壁纸钉在屏幕上，翻页只移动这一页的内容；页面容器透明，让外层壁纸透上来。
-    val inheritedWallpaperBackdrop = if (ownWallpaper || opaqueSurface) null else LocalWallpaperBackdrop.current
-    val wallpaperBackdrop = if (blurActive && inheritedWallpaperBackdrop == null && !opaqueSurface) rememberLayerBackdrop() else null
+    val inheritedWallpaperBackdrop = if (ownWallpaper) null else LocalWallpaperBackdrop.current
+    val wallpaperBackdrop = if (blurActive && inheritedWallpaperBackdrop == null) rememberLayerBackdrop() else null
     // 本页实际可用的壁纸层：自建的那份优先，其次是外层 Pager 钉住的那份。
     val pageWallpaper = wallpaperBackdrop ?: inheritedWallpaperBackdrop
     val overlayBackdrop = if (backdrop != null && barBackdrop != null) {
@@ -149,7 +150,7 @@ fun KOiLScreenScaffold(
     ) {
     Scaffold(
         modifier = modifier,
-        containerColor = if (opaqueSurface) MiuixTheme.colorScheme.surface else Color.Transparent,
+        containerColor = Color.Transparent,
         topBar = {
             Box(modifier = if (barBackdrop != null) Modifier.layerBackdrop(barBackdrop) else Modifier) {
                 BlurredBar(backdrop = topBarBackdrop, blurActive = blurActive) {
@@ -180,7 +181,7 @@ fun KOiLScreenScaffold(
                         .layerBackdrop(wallpaperBackdrop)
                         .background(MiuixTheme.colorScheme.surface),
                 ) {
-                    if (wallpaper) {
+                    if (wallpaper && dynamicWallpaper) {
                         // 只有一份动态底时由外层常驻播放；这里是"没有外层壁纸"的回退路径。
                         val wallpaperPlaying = LocalWallpaperPlaying.current
                         BgEffectBackground(

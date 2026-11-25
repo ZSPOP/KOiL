@@ -133,9 +133,10 @@ fun OilPriceDetailScreen(
 
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
-        // 普通二级页：与官方默认二级页一致的不透明 surface，
-        // 不建壁纸层、不继承外层壁纸（页面上不出现任何动态壁纸成分）
-        opaqueSurface = true,
+        // 恢复原写法：本页自建壁纸层并铺 surface 底（顶栏/卡片玻璃照旧采样这一层），
+        // 只关掉动态壁纸流动 —— 页面上不出现任何动态成分
+        ownWallpaper = true,
+        dynamicWallpaper = false,
         backdrop = backdrop,
         listState = listState,
         navigationIcon = { BackNavigationIcon(onClick = onBack) },
