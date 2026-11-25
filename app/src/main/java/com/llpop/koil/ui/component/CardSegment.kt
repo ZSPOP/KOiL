@@ -64,6 +64,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  *   `SinkFeedback` 也收不到 press，等于没有反馈。需要整卡可点时，把内层手势上移成本组件的
  *   `onClick` / `onLongPress`（顺序不能反）。
  */
+/**
+ * 全站卡片圆角。与官方 `GlassCardDefaults.CornerRadius`（20.dp）对齐：
+ * 关于页两张卡改成 GlassCard 后就是 20dp，拼接卡若留 16dp 会跟它们对不上。
+ */
+val CardCornerRadius: Dp = 20.dp
+
 @Composable
 fun CardSegment(
     isFirst: Boolean,
@@ -71,7 +77,7 @@ fun CardSegment(
     modifier: Modifier = Modifier,
     color: Color = MiuixTheme.colorScheme.surfaceContainer,
     contentColor: Color = MiuixTheme.colorScheme.onSurfaceContainer,
-    cornerRadius: Dp = 16.dp,
+    cornerRadius: Dp = CardCornerRadius,
     topCornerRadius: Dp = if (isFirst) cornerRadius else 0.dp,
     bottomCornerRadius: Dp = if (isLast) cornerRadius else 0.dp,
     outerHorizontalPadding: Dp = 12.dp,
