@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -163,7 +164,7 @@ fun MainScreen(
     val windowInfo = androidx.compose.ui.platform.LocalWindowInfo.current
     val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
     LaunchedEffect(windowInfo) {
-        androidx.compose.runtime.snapshotFlow { windowInfo.isWindowFocused }
+        snapshotFlow { windowInfo.isWindowFocused }
             .collect { isFocused -> if (!isFocused) focusManager.clearFocus(force = true) }
     }
 
@@ -246,6 +247,13 @@ fun MainScreen(
             // 的底部槽高并回填，让提示落在导航条上方（与官方 demo 的摆放一致）
             var snackbarBottomInset by remember { mutableStateOf(0.dp) }
             val selectedTab by remember { derivedStateOf { pagerState.currentPage } }
+            // 官方玻璃底栏的即时选中：点击 tab 时先本地置索引，指示器当场 spring 走位；
+            // Pager 落位（settledPage 变化）后再交回 currentPage。官方 demo 是 onSelect 直接
+            // set selectedIndex，我们这里由 Pager 派生，不补这一层指示器要等页面过半才动。
+            var navBarImmediateIndex by remember { mutableStateOf<Int?>(null) }
+            LaunchedEffect(pagerState) {
+                snapshotFlow { pagerState.settledPage }.collect { navBarImmediateIndex = null }
+            }
             // 二级页（关于 / 调价明细）改由导航层承载：back stack 里 Main 常驻，
             // 二级页作为 entry 压栈，转场与交互式侧滑返回由 NavDisplay 负责
             val backStack = remember { mutableStateListOf<NavKey>(Route.Main) }
@@ -368,12 +376,18 @@ fun MainScreen(
                             // （与自研 iOS 底栏一致），Scaffold 的 bottomBar 槽位不重复消费。
                             GlassNavigationBar(
                                 items = glassNavigationItems,
-                                selectedIndex = selectedTab,
-                                onSelect = { index -> scope.launch { pagerState.springAnimateToPage(index) } },
+                                selectedIndex = navBarImmediateIndex ?: selectedTab,
+                                onSelect = { index ->
+                                    navBarImmediateIndex = index
+                                    scope.launch { pagerState.springAnimateToPage(index) }
+                                },
                                 backdrop = navBarBackdrop,
+                                // 横向 16.dp 对齐官方 demo（demo 用 padding(16.dp)）。
+                                // 底部不自己补：交给组件 defaultWindowInsetsPadding 的
+                                // 系统导航条 inset（16dp 以内给 20dp，见官方 bottomPaddingProvider）。
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 24.dp),
+                                    .padding(horizontal = 16.dp),
                             )
                         }
                         }
