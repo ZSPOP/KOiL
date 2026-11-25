@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.llpop.koil.R
+import com.llpop.koil.ui.component.CardCornerRadius
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
@@ -340,7 +341,7 @@ fun OverviewScreen(
                         glassSpec.enabled &&
                         LocalBlurEnabled.current &&
                         isRuntimeShaderSupported()
-                    val backfillShape = remember { GlassShape(16.dp) }
+                    val backfillShape = remember { GlassShape(CardCornerRadius) }
                     val backfillStroke: (() -> EdgeStroke?)? = if (
                         !backfillGlassActive || glassSpec.edgeTier == KOiLGlassEdgeTier.Disabled
                     ) {
