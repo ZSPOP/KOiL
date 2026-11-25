@@ -240,6 +240,7 @@ fun HomeScreen(
             // 键盘弹起时只留 12dp：此时底部悬浮条已被键盘盖住，再留一整段导航栏高度会像"内容没渲染出来"；
             // 键盘收起才让出 bottomPadding（底栏自身占的高度）。
             // 横向边距不在骨架里给：由 CardSegment / groupedCardItems 的 outerHorizontalPadding(12dp) 承担
+            overscrollEffect = null,
             contentPadding = pageContentPadding(
                 innerPadding,
                 extraBottom = if (imeVisible) ImeGap else bottomPadding,

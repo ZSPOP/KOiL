@@ -264,6 +264,7 @@ fun OverviewScreen(
                 ),
             // 底部留白走 contentPadding；横向边距由卡片组件自己给（与添加页、设置页同一种写法）
             // bottom 只留底栏槽高，与添加页、设置页一致
+            overscrollEffect = null,
             contentPadding = pageContentPadding(innerPadding, extraBottom = bottomPadding),
         ) {
 

@@ -434,6 +434,8 @@ private fun AboutContent(
     // 开源卡已改用官方 GlassCard（不自采样、只铺半透明填充），本组混色不再服务它。
     // 接进全站 spec 会变成 BlurDemo 那套（半径减半、混色换档、叠加亮度对比度饱和度），
     // 等于把「官方关于页」改成「demo 面板」，因此这里保持原样。
+    // 现在只服务两处：更新胶囊按钮的 textureBlur(60f) 与 hero 的 DstIn(150f)；
+    // 信息卡与开源卡已改 GlassCard，不再自采样。
     val cardBlendColors = remember(isDark) {
         if (isDark) ColorBlendToken.Overlay_Thin_Light
         else ColorBlendToken.Pured_Regular_Light
@@ -560,6 +562,7 @@ private fun AboutContent(
                     showTopAppBar = true,
                     topAppBarScrollBehavior = scrollBehavior,
                 ),
+            overscrollEffect = null,
             contentPadding = PaddingValues(
                 top = scrollPadding.calculateTopPadding(),
                 start = scrollPadding.calculateStartPadding(layoutDirection),
@@ -592,8 +595,6 @@ private fun AboutContent(
                         releaseDate = formatReleaseDate(BuildConfig.KOIL_RELEASE_DATE),
                         // 「应用版本」行点了就地检查，不跳转
                         onCheck = { check() },
-                        blurBackdrop = if (blurEnabled) backdrop else null,
-                        blurBlendColors = cardBlendColors,
                     )
                 }
             }
