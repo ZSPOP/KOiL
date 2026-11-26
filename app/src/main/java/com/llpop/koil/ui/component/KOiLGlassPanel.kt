@@ -57,6 +57,8 @@ object KOiLIndicatorAlpha {
  * @param drawEdge 只在整块面是单一轮廓时传 true。多段拼成的卡片逐段画边会在卡中间
  *   拉出一圈圈亮线，所以卡片只在「首段且末段」时传 true。
  * @param surfaceAlpha 整块（底 + 边）的透明度，仅供展开时要让位的胶囊类使用。
+ * @param blurRadius / [blurColors] 只在「该页有既定官方参数基准」时覆盖（关于页的 60f 与
+ *   官方混色层），其余调用方都留空跟随全站 spec —— 颜色层是整块替换，含亮度/对比度/饱和度。
  */
 @Composable
 fun Modifier.koilGlassPanelSurface(
@@ -64,6 +66,10 @@ fun Modifier.koilGlassPanelSurface(
     backdrop: Backdrop? = LocalWallpaperBackdrop.current ?: LocalPageBackdrop.current,
     drawEdge: Boolean = true,
     surfaceAlpha: Float = 1f,
+    /** 只有「本页有既定官方参数基准确」的调用方才覆盖（关于页 60f），默认跟随全站 spec。 */
+    blurRadius: Float? = null,
+    /** 同上：整体替换混色层（含亮度/对比度/饱和度），默认取 spec。 */
+    blurColors: BlurColors? = null,
 ): Modifier? {
     val spec = rememberEffectiveGlassSpec()
     val isDark = LocalKOiLDarkTheme.current
@@ -72,15 +78,15 @@ fun Modifier.koilGlassPanelSurface(
     if (!rememberGlassActive(backdrop)) return null
     val showsEdge = drawEdge && spec.edgeTier != KOiLGlassEdgeTier.Disabled
     return then(
-        remember(spec, isDark, backdrop, showsEdge, surfaceAlpha) {
+        remember(spec, isDark, backdrop, showsEdge, surfaceAlpha, shape, blurRadius, blurColors) {
             Modifier
                 .graphicsLayer { alpha = surfaceAlpha }
                 .textureBlur(
                     backdrop = backdrop,
                     shape = shape,
-                    blurRadius = spec.blurRadius,
+                    blurRadius = blurRadius ?: spec.blurRadius,
                     noiseCoefficient = spec.noiseCoefficient,
-                    colors = BlurColors(
+                    colors = blurColors ?: BlurColors(
                         blendColors = spec.blendColors(isDark),
                         brightness = spec.brightness(isDark),
                         contrast = spec.contrast,

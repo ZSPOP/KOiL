@@ -2,8 +2,8 @@ package com.llpop.koil.ui.component
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,7 +23,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
@@ -88,6 +88,20 @@ fun KoilAboutUpdateButton(
         else -> onDownload
     }
 
+    // 底走全 App 唯一原语：轮廓与 1dp 描边跟全站一条口径；采样半径与混色仍按官方
+    // AboutPage 的 60f / 本页混色传入（关于页有意不接全站 spec，这里只覆盖这两项）。
+    val actionShape = remember { GlassShape(ACTION_CORNER) }
+    val glassSurface = if (blurBackdrop != null) {
+        Modifier.koilGlassPanelSurface(
+            shape = actionShape,
+            backdrop = blurBackdrop,
+            blurRadius = 60f,
+            blurColors = BlurColors(blendColors = blurBlendColors.orEmpty()),
+        )
+    } else {
+        null
+    }
+
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -96,23 +110,12 @@ fun KoilAboutUpdateButton(
             onClick = onClick,
             modifier = Modifier
                 .fillMaxWidth(ACTION_WIDTH_FRACTION)
-                .then(
-                    if (blurBackdrop != null) {
-                        // 和信息卡同一套采样：形状跟随胶囊圆角，底色必须透明，
-                        // 否则 Button 自绘的实色会把采样结果整块盖掉（信息卡踩过同一个坑）
-                        Modifier.textureBlur(
-                            backdrop = blurBackdrop,
-                            shape = RoundedCornerShape(ACTION_CORNER),
-                            blurRadius = 60f,
-                            colors = BlurColors(blendColors = blurBlendColors.orEmpty()),
-                            enabled = true,
-                        )
-                    } else Modifier
-                ),
+                .then(glassSurface ?: Modifier),
             cornerRadius = ACTION_CORNER,
             minHeight = ACTION_HEIGHT,
             colors = ButtonDefaults.buttonColors(
-                color = if (blurBackdrop != null) Color.Transparent
+                // 底色必须透明，否则 Button 自绘的实色会把采样结果整块盖掉（信息卡踩过同一个坑）
+                color = if (glassSurface != null) Color.Transparent
                 else MiuixTheme.colorScheme.surfaceContainer,
                 contentColor = MiuixTheme.colorScheme.onSurfaceContainer,
             ),
