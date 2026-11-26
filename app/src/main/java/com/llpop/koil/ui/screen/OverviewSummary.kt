@@ -22,9 +22,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -47,13 +45,13 @@ import com.llpop.koil.ui.screen.overview.OverviewUiState
 import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
-import com.llpop.koil.ui.component.LocalWallpaperBackdrop
-import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
+import com.llpop.koil.ui.component.KOiLSegmentedTabRow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 
 
@@ -76,22 +74,12 @@ internal fun SummaryGrid(
             // 范围筛选器用官方 GlassSegmentedTabRow（一条轨道 + 轨道内指示块滑动）
             val rangeIndex = rangeLabels.indexOfFirst { it.first == uiState.range }.coerceAtLeast(0)
             val onRangeSelect: (Int) -> Unit = { idx -> onRangeChange(rangeLabels[idx].first) }
-            // 官方 GlassSegmentedTabRow：一条玻璃轨道 + 轨道内滑动指示块。
-            // backdrop 取"背景层"（LocalWallpaperBackdrop），不取页面列表自身的录制层。
-            val wallpaper = LocalWallpaperBackdrop.current
-            // 升起条件：玻璃开且确有壁纸底可采（此时取色与周围玻璃卡片一致）。
-            // 注意这与库里的默认语义不同 —— 库里 surfaceAlpha 升到 1f 的本意是
-            // 「控件被顶栏压住、需要把顶栏内容透出来」；这里是主动让档位轨道在静止态
-            // 也呈玻璃面，属于刻意的观感选择，不是跟随顶栏遮挡。
-            // 不升起时（关玻璃 / 无壁纸底）surfaceAlpha = 0f，走官方 resting 纯色，
-            // 形状、高度、内距与玻璃态完全一致，不换控件。
-            val glassOn = LocalBlurEnabled.current
-            GlassSegmentedTabRow(
+            // 全 App 唯一分段控件（KOiLSegmentedTabRow）：材质、描边、薄纱兜底与
+            // 指示块的滑动/跟手/按压动画都收在组件里，三处调用必然同一套观感
+            KOiLSegmentedTabRow(
                 tabs = rangeLabels.map { it.second },
                 selectedIndex = rangeIndex,
                 onSelect = onRangeSelect,
-                backdrop = wallpaper ?: rememberEmptyBackdrop(),
-                surfaceAlpha = if (wallpaper != null && glassOn) 1f else 0f,
             )
             Spacer(Modifier.height(14.dp))
         }

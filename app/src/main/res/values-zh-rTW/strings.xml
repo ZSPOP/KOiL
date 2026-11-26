@@ -219,13 +219,9 @@
     <string name="koil_set_eia_key_title">API（EIA）</string>
     <string name="koil_set_eia_key_sub">原油源·金鑰可修改·留空降級騰訊源</string>
     <string name="koil_set_export_records">匯出加油記錄</string>
-    <string name="koil_set_export_records_sub">CSV 格式 · 含派生欄位</string>
     <string name="koil_set_import_records">匯入加油記錄</string>
-    <string name="koil_set_import_records_sub">從 CSV 檔案匯入</string>
     <string name="koil_set_backup">完整備份</string>
-    <string name="koil_set_backup_sub">JSON 格式 · 記錄+設定</string>
     <string name="koil_set_export_price_history">匯出油價歷史</string>
-    <string name="koil_set_export_price_history_sub">CSV 格式 · 全部油價庫</string>
     <string name="koil_set_crash_log">崩潰日誌</string>
     <string name="koil_set_crash_log_sub">閃退自動記錄 · 僅存本機 · 保留 10 條</string>
     <plurals name="koil_set_crash_count">
@@ -238,7 +234,10 @@
     <string name="koil_set_crash_clear">清空</string>
     <string name="koil_set_crash_cleared">已清空</string>
     <string name="koil_set_restore">還原備份</string>
-    <string name="koil_set_restore_sub">從 JSON 備份還原記錄+設定</string>
+    <string name="koil_import_tab_short_valid">有效</string>
+    <string name="koil_import_tab_short_dup">重複</string>
+    <string name="koil_import_tab_short_conflict">里程</string>
+    <string name="koil_import_tab_short_error">錯誤</string>
     <string name="koil_import_tab_valid">有效 (%1$d)</string>
     <string name="koil_import_tab_dup">重複 (%1$d)</string>
     <string name="koil_import_tab_conflict">里程衝突 (%1$d)</string>

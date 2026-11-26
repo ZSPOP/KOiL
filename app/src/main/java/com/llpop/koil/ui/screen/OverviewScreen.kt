@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -19,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -36,22 +34,18 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.computedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.platform.LocalDensity
@@ -61,14 +55,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.llpop.koil.R
-import com.llpop.koil.ui.component.CardCornerRadius
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.groupedCardItems
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.pageContentPadding
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.llpop.koil.domain.logic.ConsumptionStatus
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.overview.OverviewViewModel
@@ -83,32 +75,20 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.glass.GlassIconButton
-import top.yukonga.miuix.kmp.material.GlassShape
-import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
-import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
-import com.llpop.koil.ui.component.effect.LocalKOiLGlassSpec
-import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
-import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
-import top.yukonga.miuix.kmp.material.edgeStroke
-import top.yukonga.miuix.kmp.material.EdgeStroke
-import top.yukonga.miuix.kmp.blur.textureBlur
-import top.yukonga.miuix.kmp.blur.BlurColors
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
-import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.FullTankSwitchRow
 import com.llpop.koil.ui.component.KOiLDateField
 import com.llpop.koil.ui.component.KOiLFormSheet
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.component.KOiLListSheet
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
-import com.llpop.koil.ui.component.blur.overScrollVertical
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import com.llpop.koil.ui.component.KOiLGlassCapsule
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 
 
@@ -328,60 +308,13 @@ fun OverviewScreen(
                         modifier = Modifier.weight(1f),
                         insideMargin = PaddingValues(start = 4.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
                     )
-                    // 補錄胶囊的玻璃：不走顶栏按钮那套材质（在页面内容里会被顶栏的
-                    // dynamic 材质带成实心色块），而是与卡片完全同一套 —— 同一个
-                    // KOiLGlassSpec + textureBlur + Colored Thin 混色，只把形状换成 16dp 胶囊。
-                    // 采样目标同样是壁纸层（按钮在页面录制层内，不能采自己那层）。
-                    // 与卡片同一处判定：关壁纸（纯色底）时切官方 puredThinGlass 口径
-                    val glassSpec = rememberEffectiveGlassSpec()
-                    val darkTheme = LocalKOiLDarkTheme.current
-                    val wallpaperBackdrop = LocalWallpaperBackdrop.current
-                    // 与卡片同一条门槛：只看模糊总开关，动态壁纸开关不参与（关壁纸时
-                    // 采到的是 surface 纯色，薄纱效果仍成立）
-                    val backfillGlassActive = wallpaperBackdrop != null &&
-                        glassSpec.enabled &&
-                        LocalBlurEnabled.current &&
-                        isRuntimeShaderSupported()
-                    val backfillShape = remember { GlassShape(CardCornerRadius) }
-                    val backfillStroke: (() -> EdgeStroke?)? = if (
-                        !backfillGlassActive || glassSpec.edgeTier == KOiLGlassEdgeTier.Disabled
-                    ) {
-                        null
-                    } else {
-                        rememberKOiLGlassEdgeStroke(isDark = darkTheme, spec = glassSpec)
-                            .let { st -> remember(st) { { st.value } } }
-                    }
-                    val backfillSurface = if (backfillGlassActive) {
-                        Modifier
-                            .textureBlur(
-                                backdrop = wallpaperBackdrop,
-                                shape = backfillShape,
-                                blurRadius = glassSpec.blurRadius,
-                                noiseCoefficient = glassSpec.noiseCoefficient,
-                                colors = BlurColors(
-                                    blendColors = glassSpec.blendColors(darkTheme),
-                                    brightness = glassSpec.brightness(darkTheme),
-                                    contrast = glassSpec.contrast,
-                                    saturation = glassSpec.saturation,
-                                ),
-                                enabled = true,
-                            )
-                            .then(
-                                if (backfillStroke != null) {
-                                    Modifier.edgeStroke(shape = backfillShape, stroke = backfillStroke)
-                                } else {
-                                    Modifier
-                                },
-                            )
-                    } else {
-                        Modifier.clip(backfillShape).background(KOiLColors.Primary.copy(alpha = 0.12f))
-                    }
-                    Row(
-                        modifier = Modifier
-                            .then(backfillSurface)
-                            .clickable { viewModel.openBackfill() }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    // 全 App 唯一玻璃胶囊：材质、描边、兜底薄纱、按下反馈都收在组件里，
+                    // 与油价明细两个下拉 pill 同一份实现（这里只是兜底色用主色淡底）
+                    KOiLGlassCapsule(
+                        backdrop = LocalWallpaperBackdrop.current,
+                        fallbackColor = KOiLColors.Primary.copy(alpha = 0.12f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        onClick = { viewModel.openBackfill() },
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,

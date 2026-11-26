@@ -36,3 +36,14 @@ fun rememberKOiLGlassEdgeStroke(
         }
     }
 }
+
+/**
+ * 静态版：只按档位取基准描边，不接设备倾斜。给「一打开就整块重组」的覆盖层用
+ * （确认弹窗、底部弹层、顶栏按钮、底栏）—— 它们的 stroke 是普通值参数，
+ * 接 [rememberKOiLGlassEdgeStroke] 会在每次倾斜时重组整个弹层内容。
+ */
+@Composable
+fun rememberKOiLGlassEdgeStrokeStatic(
+    isDark: Boolean,
+    spec: KOiLGlassSpec = LocalKOiLGlassSpec.current,
+): EdgeStroke? = remember(isDark, spec.edgeTier) { spec.edgeTier.resolve(isDark) }

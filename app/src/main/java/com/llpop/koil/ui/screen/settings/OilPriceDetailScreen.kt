@@ -5,7 +5,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -13,8 +12,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
-import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import top.yukonga.miuix.kmp.blur.layerBackdrop
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,12 +33,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.ui.Alignment
@@ -57,7 +52,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
@@ -78,15 +72,12 @@ import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
-import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.BackNavigationIcon
 import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.pageContentPadding
-import com.llpop.koil.ui.component.blur.overScrollVertical
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.gradeLabel
 import com.llpop.koil.ui.component.provinceLabel
@@ -95,7 +86,6 @@ import com.llpop.koil.util.AppClock
 import kotlin.math.roundToInt
 import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
-import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.rememberSnackbar
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
@@ -105,6 +95,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.theme.LocalWallpaperEnabled
 import com.llpop.koil.ui.screen.formatNotice
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import com.llpop.koil.ui.component.KOiLSegmentedTabRow
+import com.llpop.koil.ui.component.KOiLGlassCapsule
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
 private val UpColor = KOiLColors.PriceUp
@@ -346,14 +342,11 @@ fun OilPriceDetailScreen(
             val onGradeSelect: (Int) -> Unit = remember(state.grades) {
                 { idx: Int -> viewModel.selectGrade(state.grades[idx]) }
             }
-            // 本页没有壁纸底：玻璃材质恒定不升起（surfaceAlpha = 0f），控件走官方 resting 纯色，
-            // 形状 / 高度 / 内距与玻璃态完全一致。这里给一个空录层只为满足参数类型，不采样任何东西。
-            GlassSegmentedTabRow(
+            // 全 App 唯一分段控件：与数据总览、导入页签同一套材质、描边、按压与滑动动画
+            KOiLSegmentedTabRow(
                 tabs = state.grades.map { gradeLabel(it) },
                 selectedIndex = gradeIndex,
                 onSelect = onGradeSelect,
-                backdrop = rememberEmptyBackdrop(),
-                surfaceAlpha = 0f,
                 modifier = Modifier.swipeToSwitchTab(
                     tabCount = state.grades.size,
                     selectedIndex = gradeIndex,
@@ -540,23 +533,22 @@ private fun DropdownPill(
     onToggle: () -> Unit,
     anchorHandle: GlassPopupAnchor? = null,
 ) {
-    // 胶囊底与锚面分成两层：官方 glassPopupAnchorValue 会把挂上去的内容包成一块独立的
-    // 玻璃锚面（GlassAnchorSurface，自带采样底）。若整条 pill 都挂上去，展开时会多出
-    // 第二块底，和菜单面板叠在一起。这里只让「文字 + 箭头」进锚面，胶囊底留在外层，
-    // 并在展开期间隐去，避免面板下方露出一条多余的底。
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                if (expanded) Color.Transparent
-                else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f),
-            )
-            .clickable(onClick = onToggle),
+    // 底与锚面分层：只让「文字 + 箭头」挂到锚面，胶囊底留在外层并在展开期间淡出，
+    // 否则菜单面板下方会多出一条底。底本身直接复用全 App 唯一胶囊（KOiLGlassCapsule），
+    // 与数据页「補錄」同一份采样参数、同一条描边、同一条按下推送反馈。
+    val appear by animateFloatAsState(
+        targetValue = if (expanded) 0f else 1f,
+        animationSpec = tween(180),
+        label = "dropdownPillAppear",
+    )
+    KOiLGlassCapsule(
+        surfaceAlpha = appear,
+        onClick = onToggle,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 8.dp)
                 .then(if (anchorHandle != null) Modifier.glassPopupAnchorValue(anchorHandle) else Modifier),
         ) {
             Text(

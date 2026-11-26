@@ -9,11 +9,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.glass.GlassDialog
 import top.yukonga.miuix.kmp.layout.DialogDefaults
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
+import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 
 /**
  * KOiL 玻璃弹窗：直接委托官方 [GlassDialog]。
@@ -42,8 +47,13 @@ fun KOiLGlassDialog(
     widthFraction: Float? = null,
     content: @Composable () -> Unit,
 ) {
+    // 用当前容器宽判宽，而不是 Configuration.screenWidthDp：后者在分屏/折叠屏/宽屏右栏里
+    // 报的是整窗宽，会把弹窗按比实际可用空间更大的基准放大。rail 的双栏判定用的是同一口径。
+    val containerWidthDp = with(LocalDensity.current) {
+        LocalWindowInfo.current.containerSize.width.toDp()
+    }
     val maxWidth = if (widthFraction != null) {
-        (LocalConfiguration.current.screenWidthDp * widthFraction).dp
+        containerWidthDp * widthFraction
     } else {
         DialogDefaults.MaxWidth
     }
@@ -58,8 +68,13 @@ fun KOiLGlassDialog(
         title = title,
         summary = summary,
         maxWidth = maxWidth,
-        // 材质统一从 KOiLGlassOverlayMaterials 取，与底部弹层同一档
+        // 材质统一从 KOiLGlassOverlayMaterials 取，与底部弹层同一档；
+        // 描边同样取全站基准（静态版，避免弹窗内容随设备倾斜重组）
         material = KOiLGlassOverlayMaterials.dialog(),
+        stroke = rememberKOiLGlassEdgeStrokeStatic(
+            isDark = LocalKOiLDarkTheme.current,
+            spec = rememberEffectiveGlassSpec(),
+        ),
         insideMargin = insideMargin ?: DpSize(contentPadding, contentPadding),
     ) {
         // 弹层自身就是玻璃面：同时广播 LocalOnGlassSurface，让内部的提示条/分割线

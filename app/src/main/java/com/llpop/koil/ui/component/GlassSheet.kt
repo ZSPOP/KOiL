@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
 import top.yukonga.miuix.kmp.utils.overScrollVertical
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
+import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 
 /**
  * 弹层的采样源：底色层全量 + 页面层按 [SheetContentAlpha] 合成.
@@ -52,8 +55,8 @@ private fun rememberSheetBackdrop(): Backdrop? = rememberOverlayBackdrop(SheetCo
 fun KOiLFormSheet(
     show: Boolean,
     onDismissRequest: () -> Unit,
-    title: String? = null,
     modifier: Modifier = Modifier,
+    title: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 在函数作用域（= 调用点）先取到页面 backdrop：弹层内容在根弹层宿主里组合，
@@ -66,8 +69,13 @@ fun KOiLFormSheet(
         backdrop = backdrop,
         modifier = modifier,
         title = title,
-        // 材质统一从 KOiLGlassOverlayMaterials 取，与确认弹窗同一档
+        // 材质统一从 KOiLGlassOverlayMaterials 取，与确认弹窗同一档；
+        // 描边取全站基准（静态版：弹层开着时不随倾斜逐帧重组）
         material = KOiLGlassOverlayMaterials.sheet(),
+        stroke = rememberKOiLGlassEdgeStrokeStatic(
+            isDark = LocalKOiLDarkTheme.current,
+            spec = rememberEffectiveGlassSpec(),
+        ),
         insideMargin = DpSize(0.dp, 0.dp),
         renderInRootScaffold = true,
         enableNestedScroll = true,
@@ -120,8 +128,8 @@ fun KOiLFormSheet(
 fun KOiLListSheet(
     show: Boolean,
     onDismissRequest: () -> Unit,
-    title: String? = null,
     modifier: Modifier = Modifier,
+    title: String? = null,
     maxContentHeight: Dp = 480.dp,
     footer: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
@@ -136,6 +144,10 @@ fun KOiLListSheet(
         title = title,
         // 同 KOiLFormSheet：材质统一入口
         material = KOiLGlassOverlayMaterials.sheet(),
+        stroke = rememberKOiLGlassEdgeStrokeStatic(
+            isDark = LocalKOiLDarkTheme.current,
+            spec = rememberEffectiveGlassSpec(),
+        ),
         insideMargin = DpSize(0.dp, 0.dp),
         renderInRootScaffold = true,
         enableNestedScroll = true,
