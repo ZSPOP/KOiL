@@ -222,13 +222,9 @@
     <string name="koil_set_eia_key_title">API (EIA)</string>
     <string name="koil_set_eia_key_sub">Crude source · key editable · blank falls back to Tencent</string>
     <string name="koil_set_export_records">Export records</string>
-    <string name="koil_set_export_records_sub">CSV · derived fields</string>
     <string name="koil_set_import_records">Import records</string>
-    <string name="koil_set_import_records_sub">Import from CSV file</string>
     <string name="koil_set_backup">Full backup</string>
-    <string name="koil_set_backup_sub">JSON · records + settings</string>
     <string name="koil_set_export_price_history">Export price history</string>
-    <string name="koil_set_export_price_history_sub">CSV · full price DB</string>
     <string name="koil_set_crash_log">Crash log</string>
     <string name="koil_set_crash_log_sub">Auto-recorded on crash · local only · keeps 10</string>
     <plurals name="koil_set_crash_count">
@@ -242,7 +238,10 @@
     <string name="koil_set_crash_clear">Clear</string>
     <string name="koil_set_crash_cleared">Cleared</string>
     <string name="koil_set_restore">Restore backup</string>
-    <string name="koil_set_restore_sub">Restore records + settings from JSON</string>
+    <string name="koil_import_tab_short_valid">Valid</string>
+    <string name="koil_import_tab_short_dup">Dup</string>
+    <string name="koil_import_tab_short_conflict">Mileage</string>
+    <string name="koil_import_tab_short_error">Error</string>
     <string name="koil_import_tab_valid">Valid (%1$d)</string>
     <string name="koil_import_tab_dup">Duplicates (%1$d)</string>
     <string name="koil_import_tab_conflict">Mileage conflict (%1$d)</string>

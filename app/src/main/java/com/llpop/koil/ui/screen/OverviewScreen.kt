@@ -109,6 +109,7 @@ import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import com.llpop.koil.ui.component.KOiLGlassCapsule
 
 
 
@@ -328,60 +329,13 @@ fun OverviewScreen(
                         modifier = Modifier.weight(1f),
                         insideMargin = PaddingValues(start = 4.dp, end = 0.dp, top = 8.dp, bottom = 8.dp),
                     )
-                    // 補錄胶囊的玻璃：不走顶栏按钮那套材质（在页面内容里会被顶栏的
-                    // dynamic 材质带成实心色块），而是与卡片完全同一套 —— 同一个
-                    // KOiLGlassSpec + textureBlur + Colored Thin 混色，只把形状换成 16dp 胶囊。
-                    // 采样目标同样是壁纸层（按钮在页面录制层内，不能采自己那层）。
-                    // 与卡片同一处判定：关壁纸（纯色底）时切官方 puredThinGlass 口径
-                    val glassSpec = rememberEffectiveGlassSpec()
-                    val darkTheme = LocalKOiLDarkTheme.current
-                    val wallpaperBackdrop = LocalWallpaperBackdrop.current
-                    // 与卡片同一条门槛：只看模糊总开关，动态壁纸开关不参与（关壁纸时
-                    // 采到的是 surface 纯色，薄纱效果仍成立）
-                    val backfillGlassActive = wallpaperBackdrop != null &&
-                        glassSpec.enabled &&
-                        LocalBlurEnabled.current &&
-                        isRuntimeShaderSupported()
-                    val backfillShape = remember { GlassShape(CardCornerRadius) }
-                    val backfillStroke: (() -> EdgeStroke?)? = if (
-                        !backfillGlassActive || glassSpec.edgeTier == KOiLGlassEdgeTier.Disabled
-                    ) {
-                        null
-                    } else {
-                        rememberKOiLGlassEdgeStroke(isDark = darkTheme, spec = glassSpec)
-                            .let { st -> remember(st) { { st.value } } }
-                    }
-                    val backfillSurface = if (backfillGlassActive) {
-                        Modifier
-                            .textureBlur(
-                                backdrop = wallpaperBackdrop,
-                                shape = backfillShape,
-                                blurRadius = glassSpec.blurRadius,
-                                noiseCoefficient = glassSpec.noiseCoefficient,
-                                colors = BlurColors(
-                                    blendColors = glassSpec.blendColors(darkTheme),
-                                    brightness = glassSpec.brightness(darkTheme),
-                                    contrast = glassSpec.contrast,
-                                    saturation = glassSpec.saturation,
-                                ),
-                                enabled = true,
-                            )
-                            .then(
-                                if (backfillStroke != null) {
-                                    Modifier.edgeStroke(shape = backfillShape, stroke = backfillStroke)
-                                } else {
-                                    Modifier
-                                },
-                            )
-                    } else {
-                        Modifier.clip(backfillShape).background(KOiLColors.Primary.copy(alpha = 0.12f))
-                    }
-                    Row(
-                        modifier = Modifier
-                            .then(backfillSurface)
-                            .clickable { viewModel.openBackfill() }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                    // 全 App 唯一玻璃胶囊：材质、描边、兜底薄纱、按下反馈都收在组件里，
+                    // 与油价明细两个下拉 pill 同一份实现（这里只是兜底色用主色淡底）
+                    KOiLGlassCapsule(
+                        backdrop = LocalWallpaperBackdrop.current,
+                        fallbackColor = KOiLColors.Primary.copy(alpha = 0.12f),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        onClick = { viewModel.openBackfill() },
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,

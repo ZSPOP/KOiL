@@ -31,6 +31,8 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.glass.ChevronBackward
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.util.rememberIsWideScreen
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
 
 /** 起始侧内缩：宽屏/侧栏时把顶栏内容整体右移，不改测量约束的超界判定 */
 private fun Modifier.topBarStartInset(startInset: () -> Dp): Modifier = layout { measurable, constraints ->
@@ -73,7 +75,7 @@ fun AdaptiveTopAppBar(
     scrollBehavior: ScrollBehavior? = null,
     isContentScrolled: Boolean? = null,
     // 宽屏侧边栏收起时胶囊横在顶栏中央：把这条边界交给 GlassTopAppBar，
-    // 中央标题与文字不会被胶囊压住（Mishka 同名参数同义）
+    // 中央标题与文字不会被胶囊压住（官方参考实现 同名参数同义）
     centerObstructionStart: Dp = LocalTopAppBarCenterObstructionStart.current,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
@@ -121,6 +123,11 @@ fun AdaptiveTopAppBar(
         navigationIcon = navigationIcon,
         actions = { Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { actions() } },
         bottomContent = bottomContent,
+        // 描边与全站同一基准（静态版：不随倾斜逐帧重组顶栏）
+        stroke = rememberKOiLGlassEdgeStrokeStatic(
+            isDark = com.llpop.koil.ui.theme.LocalKOiLDarkTheme.current,
+            spec = rememberEffectiveGlassSpec(),
+        ),
     )
 }
 

@@ -153,7 +153,7 @@ class AppSettings(private val context: Context) {
         private val KEY_PAGER_GESTURE_MODE = stringPreferencesKey("KOiL-pager-gesture-mode")
         private val KEY_PREDICTIVE_BACK = booleanPreferencesKey("KOiL-predictive-back")
         private val KEY_SWIPE_DISMISS = booleanPreferencesKey("KOiL-swipe-dismiss")
-        /** 宽屏侧边栏（GlassNavigationRail）展开态，跨进程记住（Mishka StorageKeys.NAV_RAIL_EXPANDED 同义） */
+        /** 宽屏侧边栏（GlassNavigationRail）展开态，跨进程记住（官方参考实现 StorageKeys.NAV_RAIL_EXPANDED 同义） */
         private val KEY_NAV_RAIL_EXPANDED = booleanPreferencesKey("KOiL-nav-rail-expanded")
 
         const val DEFAULT_TANK_CAPACITY = 65f
@@ -789,7 +789,7 @@ class AppSettings(private val context: Context) {
     }
 
     /**
-     * 宽屏侧边栏是否展开。官方把 rail 的展开态作为 UI 偏好持久化（Mishka
+     * 宽屏侧边栏是否展开。官方把 rail 的展开态作为 UI 偏好持久化（官方参考实现
      * `StorageKeys.NAV_RAIL_EXPANDED`），冷启动按上次状态恢复；默认展开。
      */
     val navRailExpanded: Flow<Boolean> =

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import android.app.Application
 import android.content.Context
 import android.net.Uri
+import androidx.core.net.toUri
 import com.llpop.koil.R
 import com.llpop.koil.data.local.RecordStore
 import com.llpop.koil.data.local.dao.KOiLPriceDao
@@ -132,7 +133,7 @@ class SettingsViewModel(
 
     init {
         // Activity 重建（例如从系统文件选择器返回）后重新解析上次选中的文件，恢复导入预览
-        PendingCsvImport.uri?.let { Uri.parse(it) }?.let { previewCsv(it) }
+        PendingCsvImport.uri?.let { it.toUri() }?.let { previewCsv(it) }
         // 库行数变化（后台补全国/立即更新写库）时自动刷新缺口统计，
         // 解决"重装后自动补灌完成但设置页缺口停留旧快照"的问题；
         // loadPriceDbStatus 只读不写库，无循环风险

@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -58,6 +59,12 @@ import com.llpop.koil.R
 import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
 import com.llpop.koil.ui.component.LocalOnGlassSurface
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
+import top.yukonga.miuix.kmp.material.edgeStroke
+import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.KOiLGlassDialog
 import com.llpop.koil.ui.theme.KOiLColors
 import com.llpop.koil.ui.theme.KOiLType
@@ -69,6 +76,12 @@ import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import top.yukonga.miuix.kmp.glass.GlassMotion
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import top.yukonga.miuix.kmp.glass.glassPressScale
+import com.llpop.koil.ui.component.KOiLSegmentedTabRow
+import androidx.compose.runtime.snapshotFlow
 
 /**
  * CSV 导入预览弹窗（M-07 拆分）：valid/duplicate/conflict/error 四页签，不入库。
@@ -87,6 +100,14 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
             stringResource(R.string.koil_import_tab_conflict, preview.mileageConflicts.size) to preview.mileageConflicts,
             stringResource(R.string.koil_import_tab_error, preview.errors.size) to preview.errors,
         )
+        // 页签只放分类名：官方分段控件的左右内距是固定常量，带「(19)」的文案
+        // 在四格布局里会被截成「重複 …」；计数改在每页顶部显示，信息不丢
+        val shortLabels = listOf(
+            stringResource(R.string.koil_import_tab_short_valid),
+            stringResource(R.string.koil_import_tab_short_dup),
+            stringResource(R.string.koil_import_tab_short_conflict),
+            stringResource(R.string.koil_import_tab_short_error),
+        )
         val pagerState = rememberPagerState(initialPage = 0) { tabs.size }
         val scope = rememberCoroutineScope()
         // pagerState.currentPage 只在越过中线的瞬间跳一档，滑动过程中读它拿不到连续位置；
@@ -104,12 +125,25 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
             title = stringResource(R.string.koil_import_title),
         ) {
             Column {
-                // 页签条：与数据总览页的范围轨道同一套外形与手感——胶囊轨道 + 轨道内胶囊指示块，
-                // 指示块在条上拖动时跟手、松手吸附，点击时滑过去；四格等分放得下带计数的长文案。
-                CapsuleTabRow(
-                    labels = tabs.map { it.first },
-                    selectedIndex = tabIndex,
-                    onSelect = { idx -> scope.launch { pagerState.animateScrollToPage(idx) } },
+                // 页签条直接复用全 App 唯一的分段控件：轨道材质、描边、指示块的滑动/跟手/按压
+                // 动画与数据总览、油价明细完全同一套实现，不再自绘一条
+                // 点页签时先把选中值锁到目标格：指示块像数据总览那样一条弹簧滑过去。
+                // 若直接喂 pager 的连续偏移，点击后指示块会被 pager 一路"拖着"走，
+                // 观感偏软 —— 那不是点击跳格该有的手感。松手（pager 停下）再交还跟手值。
+                var clickTarget by remember { mutableStateOf<Int?>(null) }
+                val shownTabIndex = clickTarget ?: tabIndex
+                LaunchedEffect(pagerState) {
+                    snapshotFlow { pagerState.isScrollInProgress }.collect { scrolling ->
+                        if (!scrolling) clickTarget = null
+                    }
+                }
+                KOiLSegmentedTabRow(
+                    tabs = shortLabels,
+                    selectedIndex = shownTabIndex,
+                    onSelect = { idx ->
+                        clickTarget = idx
+                        scope.launch { pagerState.animateScrollToPage(idx) }
+                    },
                 )
                 Spacer(Modifier.height(8.dp))
                 HorizontalPager(
@@ -125,6 +159,12 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState()),
                     ) {
+                        Text(
+                            text = tabs[page].first,
+                            fontSize = KOiLType.Caption,
+                            color = MiuixTheme.colorScheme.onBackgroundVariant,
+                            modifier = Modifier.padding(bottom = 6.dp),
+                        )
                         rows.forEach { r ->
                             // 四列等分（weight）而不是固定 dp：导入预览是用来逐条核对的行，
                             // 列宽一旦固定，系统字体放大或里程到 6 位时数字会换行、四列错位，
@@ -237,231 +277,3 @@ internal fun ImportPreviewDialog(viewModel: SettingsViewModel) {
     }
 }
 
-/**
- * 导入预览页签条：复刻范围轨道的形状与手感。
- *
- * 与官方玻璃分段轨道的差别只有材质（这里用低透明底 + 细描边代替玻璃采样），
- * 形状、格位换算、指示块跟手与吸附的行为按同一套走：
- * - 点击某一格：指示块用弹簧动画滑到该格；
- * - 在条上左右拖：指示块中心跟着手指走，跨过半格就切页；
- * - 内容区被拖到别页时（selectedIndex 变化），指示块同样平滑跟过去。
- */
-@Composable
-private fun CapsuleTabRow(
-    labels: List<String>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-) {
-    val capsule = RoundedCornerShape(percent = 50)
-    val colors = MiuixTheme.colorScheme
-    val density = LocalDensity.current
-    val layoutDirection = LocalLayoutDirection.current
-    var trackWidth by remember { mutableIntStateOf(0) }
-    // 这条轨道没有格间距，一格的宽高比就是轨道内宽等分
-    val slot = if (trackWidth <= 0) 0f else trackWidth.toFloat() / labels.size.coerceAtLeast(1)
-    val indicatorLeft = remember { Animatable(0f) }
-    val indicatorRight = remember { Animatable(0f) }
-    var pressedIndex by remember { mutableIntStateOf(-1) }
-    var dragging by remember { mutableStateOf(false) }
-    var settleGeneration by remember { mutableIntStateOf(0) }
-    val onSelectState = rememberUpdatedState(onSelect)
-    val scope = rememberCoroutineScope()
-
-    // 左右两条边各跑一条 spring：前缘与尾缘用不同曲线，所以拖动时胶囊会先伸后收
-    fun animateIndicator(
-        newLeft: Float,
-        newRight: Float,
-        leftSpring: SpringSpec<Float> = GlassMotion.edgeSpring(newLeft <= indicatorLeft.value),
-        rightSpring: SpringSpec<Float> = GlassMotion.edgeSpring(newLeft > indicatorLeft.value),
-    ) {
-        if (indicatorLeft.targetValue == newLeft && indicatorRight.targetValue == newRight) return
-        scope.launch { indicatorLeft.animateTo(newLeft, leftSpring) }
-        scope.launch { indicatorRight.animateTo(newRight, rightSpring) }
-    }
-
-    LaunchedEffect(selectedIndex, settleGeneration, slot) {
-        if (dragging || slot <= 0f) return@LaunchedEffect
-        val targetLeft = selectedIndex * slot
-        if (indicatorRight.value <= indicatorLeft.value) {
-            indicatorLeft.snapTo(targetLeft)
-            indicatorRight.snapTo(targetLeft + slot)
-        } else {
-            animateIndicator(targetLeft, targetLeft + slot)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(capsule)
-            // 轨道：实色卡上 35% surfaceVariant 是一层浅灰，铺到采样玻璃上（浅色主题
-            // 下 surfaceVariant 接近纯白）会变成一条白杠；玻璃面换成 onSurface 的极低 alpha。
-            .background(
-                if (LocalOnGlassSurface.current) {
-                    colors.onSurface.copy(alpha = 0.05f)
-                } else {
-                    colors.surfaceVariant.copy(alpha = 0.35f)
-                },
-            )
-            .border(1.dp, colors.onSurface.copy(alpha = 0.08f), capsule)
-            .padding(3.dp)
-            .height(IntrinsicSize.Min)
-            .onSizeChanged { trackWidth = it.width }
-            // key 只留真正影响手势语义的两项：格数与本地方向。轨道宽度不进 key——
-            // 字体缩放等导致宽度变化时，拖动逻辑每帧自己读 size.width，不该重启手势、
-            // 把正在拖的那一下丢掉。
-            .pointerInput(labels.size, layoutDirection) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val width = size.width.toFloat()
-                    val currentSlot = width / labels.size.coerceAtLeast(1)
-                    if (width <= 0f || currentSlot <= 0f) return@awaitEachGesture
-                    fun logicalX(x: Float): Float = if (layoutDirection == LayoutDirection.Rtl) width - x else x
-                    fun indexAt(x: Float): Int = (x / currentSlot).toInt().coerceIn(0, labels.lastIndex)
-
-                    val downX = logicalX(down.position.x)
-                    var selectionX = downX
-                    var current = indexAt(downX)
-                    // 按下即把胶囊收到按下那一格，再开始跟手
-                    pressedIndex = current
-                    dragging = true
-                    val pressedLeft = current * currentSlot
-                    animateIndicator(pressedLeft, pressedLeft + currentSlot)
-                    var grabOffset = Float.NaN
-                    try {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (change.isConsumed) break
-                            if (!change.pressed) {
-                                if (change.changedToUp()) {
-                                    val releaseDelta = change.position.x - change.previousPosition.x
-                                    selectionX += if (layoutDirection == LayoutDirection.Rtl) {
-                                        -releaseDelta
-                                    } else {
-                                        releaseDelta
-                                    }
-                                    onSelectState.value(indexAt(selectionX))
-                                    change.consume()
-                                }
-                                break
-                            }
-                            val activeWidth = size.width.toFloat()
-                            val activeSlot = activeWidth / labels.size.coerceAtLeast(1)
-                            val maxLeft = (activeWidth - activeSlot).coerceAtLeast(0f)
-                            val x = logicalX(change.position.x)
-                            val pointerDelta = change.position.x - change.previousPosition.x
-                            val delta = if (layoutDirection == LayoutDirection.Rtl) -pointerDelta else pointerDelta
-                            selectionX += delta
-                            if (grabOffset.isNaN()) {
-                                if (abs(selectionX - downX) < viewConfiguration.touchSlop) {
-                                    pressedIndex = indexAt(selectionX)
-                                    continue
-                                }
-                                grabOffset = downX - pressedLeft
-                            }
-                            val chipLeft = (x - grabOffset).coerceIn(0f, maxLeft)
-                            val next = indexAt(selectionX)
-                            val target = dragTarget(
-                                left = chipLeft,
-                                width = activeSlot,
-                                minLeft = 0f,
-                                maxRight = activeWidth,
-                                delta = delta,
-                                changedItem = next != current,
-                            )
-                            animateIndicator(
-                                target.left,
-                                target.right,
-                                target.leftSpring,
-                                target.rightSpring,
-                            )
-                            current = next
-                            pressedIndex = next
-                            change.consume()
-                        }
-                    } finally {
-                        pressedIndex = -1
-                        dragging = false
-                        settleGeneration++
-                    }
-                }
-            },
-    ) {
-        // 胶囊本体：位置与宽度都由左右两条 Animatable 决定
-        if (slot > 0f) {
-            val leftPx = indicatorLeft.value.coerceIn(0f, (trackWidth - slot).coerceAtLeast(0f))
-            val rightPx = indicatorRight.value.coerceIn(leftPx, trackWidth.toFloat())
-            val pressed = pressedIndex >= 0
-            Box(
-                modifier = Modifier
-                    .offset { IntOffset(leftPx.roundToInt(), 0) }
-                    .width(with(density) { (rightPx - leftPx).toDp() })
-                    .fillMaxHeight()
-                    .clip(capsule)
-                    .background(
-                        colors.onSurface.copy(alpha = if (pressed) 0.22f else 0.14f)
-                    ),
-            )
-        }
-        Row(modifier = Modifier.fillMaxWidth()) {
-            labels.forEachIndexed { idx, label ->
-                val selected = idx == selectedIndex
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(capsule)
-                        .clickable { onSelectState.value(idx) }
-                        .padding(horizontal = 4.dp, vertical = 7.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        fontSize = KOiLType.Caption,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        color = if (selected) {
-                            colors.onSurface
-                        } else {
-                            colors.onBackgroundVariant
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** 拖动目标的左右边与各自弹簧：跨格时直接覆盖目标格，未跨格时按位移拉出拖尾。 */
-private class TabDragTarget(
-    val left: Float,
-    val right: Float,
-    val following: Boolean,
-    val movingRight: Boolean,
-) {
-    val leftSpring: SpringSpec<Float>
-        get() = if (following) GlassMotion.navDragFollow() else GlassMotion.edgeSpring(!movingRight)
-    val rightSpring: SpringSpec<Float>
-        get() = if (following) GlassMotion.navDragFollow() else GlassMotion.edgeSpring(movingRight)
-}
-
-private fun dragTarget(
-    left: Float,
-    width: Float,
-    minLeft: Float,
-    maxRight: Float,
-    delta: Float,
-    changedItem: Boolean,
-): TabDragTarget {
-    val start = left.coerceIn(minLeft, (maxRight - width).coerceAtLeast(minLeft))
-    val end = start + width
-    // 未跨格时尾缘最多拖出 60px 的拖尾；跨格时直接覆盖到目标格，不做拉伸
-    val trail = if (changedItem) 0f else (abs(delta) * 4f).coerceAtMost(60f)
-    return TabDragTarget(
-        left = if (delta > 0f && end < maxRight) start - trail else start,
-        right = if (delta < 0f && start > minLeft) end + trail else end,
-        following = !changedItem,
-        movingRight = delta > 0f,
-    )
-}

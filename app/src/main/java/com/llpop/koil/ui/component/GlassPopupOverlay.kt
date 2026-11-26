@@ -41,11 +41,11 @@ fun GlassPopupOverlay(
     show: Boolean,
     anchorBounds: Rect,
     backdrop: Backdrop?,
-    anchor: GlassPopupAnchor? = null,
     onDismissRequest: () -> Unit,
+    modifier: Modifier = Modifier,
+    anchor: GlassPopupAnchor? = null,
     maxHeight: Dp = 360.dp,
     minWidth: Dp = 200.dp,
-    modifier: Modifier = Modifier,
     // 传 null 用官方默认内容内边距；日历这类需要"整块区域自己吞手势"的场景传 0，
     // 内边距由内容自己加，避免面板边缘那圈仍然能被官方 verticalScroll 拖动
     contentPadding: androidx.compose.foundation.layout.PaddingValues? = null,

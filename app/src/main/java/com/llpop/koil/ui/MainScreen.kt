@@ -98,6 +98,10 @@ import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
+import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.blur.LocalTopBarExtraTopInset
 import com.llpop.koil.ui.component.LocalTopAppBarTitleAlpha
 import com.llpop.koil.ui.component.LocalTopAppBarCenterObstructionStart
@@ -110,6 +114,9 @@ import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
 import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
+import top.yukonga.miuix.kmp.material.GlassMaterials
+import androidx.compose.ui.graphics.luminance
 
 /**
  * 主界面：三 Tab（录入 / 总览 / 设置）+ 底部导航 + 主题三档。
@@ -315,7 +322,7 @@ fun MainScreen(
             } else {
                 null
             }
-            // 收起态胶囊横在顶栏中央时，把它的起始位置交给顶栏做遮挡避让（Mishka 同名 local）
+            // 收起态胶囊横在顶栏中央时，把它的起始位置交给顶栏做遮挡避让（官方参考实现 同名 local）
             val centerObstructionStart = if (
                 railState != null && !railState.expanded && railState.collapsedWidth > 0.dp
             ) {
@@ -495,7 +502,7 @@ fun MainScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 entry<Route.Main>(swipeDismiss = swipeDismiss) {
-            // Mishka 同款：主页面内解除收起胶囊的中央遮挡约束（主页面顶栏自带宽标题布局）
+            // 官方参考实现 同款：主页面内解除收起胶囊的中央遮挡约束（主页面顶栏自带宽标题布局）
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalTopAppBarCenterObstructionStart provides Dp.Unspecified,
             ) {
@@ -542,6 +549,11 @@ fun MainScreen(
                                     scope.launch { pagerState.springAnimateToPage(index) }
                                 },
                                 backdrop = navBarBackdrop,
+                                // 描边取全站同一基准（静态版，底栏不随倾斜重组）
+                                stroke = rememberKOiLGlassEdgeStrokeStatic(
+                                    isDark = LocalKOiLDarkTheme.current,
+                                    spec = rememberEffectiveGlassSpec(),
+                                ),
                                 // 横向 16.dp 对齐官方 demo（demo 用 padding(16.dp)）。
                                 // 底部不自己补：交给组件 defaultWindowInsetsPadding 的
                                 // 系统导航条 inset（16dp 以内给 20dp，见官方 bottomPaddingProvider）。
@@ -742,15 +754,23 @@ fun MainScreen(
                 }
             }
             if (railState != null) {
+                // 与分组卡片同一套描边：材质仍由库按主题生成（模糊 + 三层色层），
+                // 只把边换成全站那条 tilt 驱动描边 —— 展开态面板与收起态胶囊是同一组件的
+                // 两种形态，参数一次注入两边同时生效。
+                val railGlassSpec = rememberEffectiveGlassSpec()
+                val railIsDark = LocalKOiLDarkTheme.current
+                val railEdgeStroke = rememberKOiLGlassEdgeStroke(isDark = railIsDark, spec = railGlassSpec)
+                val railShowsEdge = LocalBlurEnabled.current && railGlassSpec.enabled &&
+                    railGlassSpec.edgeTier != KOiLGlassEdgeTier.Disabled
                 // 库 KDoc：selectedIndex = -1 表示「当前不在任何一级目标」（二级页）；
-                // 从二级页点 tab 时先把栈收回 Main 再切页，与官方 AppNavigation.kt 一致。
+                // 从二级页点 tab 时先把栈收回 Main 再切页。
                 GlassNavigationRail(
                     items = glassNavigationItems,
                     selectedIndex = if (backStack.last() == Route.Main) navBarImmediateIndex ?: selectedTab else -1,
                     onSelect = { index ->
                         if (backStack.last() != Route.Main) nav.popUntil { it is Route.Main }
                         navBarImmediateIndex = index
-                        // Mishka：rail 展开时不做 Pager 动画切页（animatePageChanges = !expanded）
+                        // 官方参考实现：rail 展开时不做 Pager 动画切页（animatePageChanges = !expanded）
                         if (railState.expanded) {
                             scope.launch { pagerState.scrollToPage(index) }
                         } else {
@@ -759,6 +779,19 @@ fun MainScreen(
                     },
                     backdrop = sidebarBackdrop,
                     state = railState,
+                    // 材质必须是静态 puredThinGlass，不能用库默认的 dynamicGlassMaterial：
+                    // rail 正好压在顶栏区域，dynamic 会被顶栏那份「实心按钮材质」带着走，
+                    // 收起胶囊就变成一块不透明灰 —— 与分段控件/分组卡片对不上
+                    material = GlassMaterials.puredThinGlass(isDark = railIsDark),
+                    stroke = if (railShowsEdge) railEdgeStroke.value else null,
+                    // 指示块（收起态被选中的那一格）与分段控件同一口径：
+                    // 暗色 13.3%/按下 26%，亮色 6%/14%
+                    indicatorColor = MiuixTheme.colorScheme.onSurface.copy(
+                        alpha = if (railIsDark) 0.133f else 0.06f,
+                    ),
+                    indicatorPressedColor = MiuixTheme.colorScheme.onSurface.copy(
+                        alpha = if (railIsDark) 0.26f else 0.14f,
+                    ),
                 )
             }
             }

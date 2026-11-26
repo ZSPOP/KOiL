@@ -79,6 +79,10 @@ import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
+import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
+import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
+import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
@@ -101,10 +105,26 @@ import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.SnackbarDuration
+import top.yukonga.miuix.kmp.material.edgeStroke
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.theme.LocalWallpaperEnabled
 import com.llpop.koil.ui.screen.formatNotice
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import top.yukonga.miuix.kmp.utils.SinkFeedback
+import top.yukonga.miuix.kmp.utils.pressable
+import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
+import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRowDefaults
+import com.llpop.koil.ui.component.LocalWallpaperBackdrop
+import com.llpop.koil.ui.component.KOiLSegmentedTabRow
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.material.GlassShape
+import com.llpop.koil.ui.component.CardCornerRadius
+import com.llpop.koil.ui.component.KOiLGlassCapsule
 
 /** 油价上调色（涨红） / 下调色（跌绿） */
 private val UpColor = KOiLColors.PriceUp
@@ -346,14 +366,11 @@ fun OilPriceDetailScreen(
             val onGradeSelect: (Int) -> Unit = remember(state.grades) {
                 { idx: Int -> viewModel.selectGrade(state.grades[idx]) }
             }
-            // 本页没有壁纸底：玻璃材质恒定不升起（surfaceAlpha = 0f），控件走官方 resting 纯色，
-            // 形状 / 高度 / 内距与玻璃态完全一致。这里给一个空录层只为满足参数类型，不采样任何东西。
-            GlassSegmentedTabRow(
+            // 全 App 唯一分段控件：与数据总览、导入页签同一套材质、描边、按压与滑动动画
+            KOiLSegmentedTabRow(
                 tabs = state.grades.map { gradeLabel(it) },
                 selectedIndex = gradeIndex,
                 onSelect = onGradeSelect,
-                backdrop = rememberEmptyBackdrop(),
-                surfaceAlpha = 0f,
                 modifier = Modifier.swipeToSwitchTab(
                     tabCount = state.grades.size,
                     selectedIndex = gradeIndex,
@@ -540,23 +557,22 @@ private fun DropdownPill(
     onToggle: () -> Unit,
     anchorHandle: GlassPopupAnchor? = null,
 ) {
-    // 胶囊底与锚面分成两层：官方 glassPopupAnchorValue 会把挂上去的内容包成一块独立的
-    // 玻璃锚面（GlassAnchorSurface，自带采样底）。若整条 pill 都挂上去，展开时会多出
-    // 第二块底，和菜单面板叠在一起。这里只让「文字 + 箭头」进锚面，胶囊底留在外层，
-    // 并在展开期间隐去，避免面板下方露出一条多余的底。
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(
-                if (expanded) Color.Transparent
-                else MiuixTheme.colorScheme.onBackgroundVariant.copy(alpha = 0.08f),
-            )
-            .clickable(onClick = onToggle),
+    // 底与锚面分层：只让「文字 + 箭头」挂到锚面，胶囊底留在外层并在展开期间淡出，
+    // 否则菜单面板下方会多出一条底。底本身直接复用全 App 唯一胶囊（KOiLGlassCapsule），
+    // 与数据页「補錄」同一份采样参数、同一条描边、同一条按下推送反馈。
+    val appear by animateFloatAsState(
+        targetValue = if (expanded) 0f else 1f,
+        animationSpec = tween(180),
+        label = "dropdownPillAppear",
+    )
+    KOiLGlassCapsule(
+        surfaceAlpha = appear,
+        onClick = onToggle,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .padding(horizontal = 14.dp, vertical = 8.dp)
                 .then(if (anchorHandle != null) Modifier.glassPopupAnchorValue(anchorHandle) else Modifier),
         ) {
             Text(
