@@ -448,8 +448,8 @@ private fun AboutContent(
     // 开源卡已改用官方 GlassCard（不自采样、只铺半透明填充），本组混色不再服务它。
     // 接进全站 spec 会变成 BlurDemo 那套（半径减半、混色换档、叠加亮度对比度饱和度），
     // 等于把「官方关于页」改成「demo 面板」，因此这里保持原样。
-    // 现在只服务两处：更新胶囊按钮的 textureBlur(60f) 与 hero 的 DstIn(150f)；
-    // 信息卡与开源卡已改 GlassCard，不再自采样。
+    // 现在只服务一处：hero 的 DstIn(150f) —— 那是把玻璃当蒙版挖空图标，不是玻璃面，
+    // 不算漏项。更新胶囊已改走全站原语（半径仍传 60f、混色用本组），信息卡与开源卡是 GlassCard。
     val cardBlendColors = remember(isDark) {
         if (isDark) ColorBlendToken.Overlay_Thin_Light
         else ColorBlendToken.Pured_Regular_Light
