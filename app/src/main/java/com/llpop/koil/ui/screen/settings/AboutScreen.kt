@@ -60,8 +60,8 @@ import com.llpop.koil.ui.component.KOiLGlassDialog
 import top.yukonga.miuix.kmp.glass.GlassDialogButton
 import top.yukonga.miuix.kmp.glass.GlassDialogButtonRole
 import com.llpop.koil.ui.component.blur.ColorBlendToken
-import com.llpop.koil.ui.component.blur.LocalTopBarStartInset
 import com.llpop.koil.ui.component.pageScrollModifiers
+import com.llpop.koil.ui.component.pageContentPadding
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.blur.rememberBlurBackdrop
 import com.llpop.koil.ui.component.blur.overScrollVertical
@@ -133,6 +133,11 @@ import androidx.compose.animation.core.animateFloatAsState
 @Composable
 fun AboutScreen(
     onBack: () -> Unit = {},
+    /**
+     * 宽屏设置双栏的右栏用法：本页铺在别人的容器里，不能再自己垫 surface 底，
+     * 否则右栏会出现一块不透明面板、与左栏和外层壁纸对不上。
+     */
+    embedded: Boolean = false,
 ) {
     // 二级页：侧滑 / 系统返回键回到设置页，而不是被 Activity 直接 finish
     val scrollBehavior = MiuixScrollBehavior()
@@ -174,6 +179,7 @@ fun AboutScreen(
     }
 
     Scaffold(
+        containerColor = if (embedded) Color.Transparent else MiuixTheme.colorScheme.surface,
         topBar = {
             Box(modifier = if (barBackdrop != null) Modifier.layerBackdrop(barBackdrop) else Modifier) {
                 // 顶栏底材只承担"收起后才敷纹理"这一半职责，标题的渐进模糊始终由模糊开关控制
@@ -183,7 +189,8 @@ fun AboutScreen(
                         // 二级页不折叠大标题，只做「渐显小标题 + 玻璃按钮」的过渡
                         expandable = false,
                         titleColor = colorScheme.onSurface,
-                        titleAlpha = { titleAlpha },
+                        // 右栏（embedded）里标题常显：本栏不参与整页滚动淡出
+                        titleAlpha = { if (embedded) 1f else titleAlpha },
                         defaultWindowInsetsPadding = false,
                         scrollBehavior = scrollBehavior,
                         navigationIcon = { BackNavigationIcon(onClick = onBack) },
@@ -193,7 +200,13 @@ fun AboutScreen(
         },
         contentWindowInsets = WindowInsets.systemBars
             .add(WindowInsets.displayCutout)
-            .only(WindowInsetsSides.Horizontal),
+            // 双栏右栏时起点不在屏幕边缘：横向只取 End 侧，否则左侧刘海安全区
+            // 会把这栏的内容再往里推一段（官方对应 LocalHorizontalCutoutSides = End）。
+            // 垂直方向的安全区必须保留，否则顶栏会顶进状态栏、内容压到导航条。
+            .only(
+                if (embedded) WindowInsetsSides.End + WindowInsetsSides.Vertical
+                else WindowInsetsSides.Horizontal
+            ),
     ) { innerPadding ->
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             AboutContent(
@@ -505,17 +518,16 @@ private fun AboutContent(
         }
     }
 
-    // 宽屏侧边栏（浮层 rail）占据起始侧：本页横向内距不走 pageContentPadding，
-    // 直接在这里补上 rail 的起始内缩，避免展开的面板压住 logo 与返回按钮
-    val scrollPadding = PaddingValues(
-        top = innerPadding.calculateTopPadding(),
-        start = innerPadding.calculateStartPadding(layoutDirection) + LocalTopBarStartInset.current(),
-        end = innerPadding.calculateEndPadding(layoutDirection),
-    )
+    // 横向内距与三个一级页同一口径：pageContentPadding 把 LocalAppPageInsets.contentInsets
+    // （宽屏含侧栏 overlayStart）并进 start。本页此前手工补 LocalTopBarStartInset，是唯一
+    // 不走这口的页面 —— 侧栏一展开，内容就停在 0dp 被面板压住；而顶栏那边
+    // AdaptiveTopAppBar 已经用 appPageTopBarInsets 消费了同一份 contentInsets，手工再补一次
+    // 还会和顶栏一起双推。统一到 pageContentPadding 后两处都只取一次。
+    val scrollPadding = pageContentPadding(innerPadding)
     val logoPadding = PaddingValues(
-        top = innerPadding.calculateTopPadding() + 40.dp,
-        start = innerPadding.calculateStartPadding(layoutDirection) + LocalTopBarStartInset.current(),
-        end = innerPadding.calculateEndPadding(layoutDirection),
+        top = scrollPadding.calculateTopPadding() + 40.dp,
+        start = scrollPadding.calculateStartPadding(layoutDirection),
+        end = scrollPadding.calculateEndPadding(layoutDirection),
     )
 
     // logo 在 progress 到 0.5 时完全透明（alpha = (progress - 0.35) / 0.15），此后 hero 不再接收点击：
@@ -580,7 +592,20 @@ private fun AboutContent(
                 //    logo + 版本号 + 状态区 + 状态区到胶囊 + 胶囊本身 —— 这里不能再补 statusToCapsule
                 //    和胶囊高度，补一次就多出一整段空白（#81 一轮评审抓到的 114dp 错位就是这个）；
                 // 2) hero 从页面顶端起算，而这一项从 contentPadding 之后起算，两者差 scrollPadding.top，必须抵掉。
-                Spacer(Modifier.height(heroSpacerHeight))
+                Spacer(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(heroSpacerHeight)
+                        // 检查更新的点击落在这里：hero 是列表之上的兄弟节点，它一旦挂 pointerInput
+                        // 就会独占命中、把列表的滚动整个吃掉（宽屏视口矮时 hero 覆盖大半个屏幕，
+                        // 表现成「划不动、一划就检查更新」）。改成由列表第一项接点击，滚动走原生管线。
+                        .clickable(
+                            enabled = heroInteractive,
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = { check() },
+                        ),
+                )
             }
 
 
@@ -749,7 +774,6 @@ private fun AboutContent(
                 )
             },
             interactive = heroInteractive,
-            onClick = { check() },
             onMeasured = { logoHeightDp = it },
         )
 
@@ -796,28 +820,13 @@ private fun BoxScope.AboutHero(
      * hero 总高固定，信息卡不因版本状态上下跳。
      */
     hasCapsule: Boolean,
-    /**
-     * 这一整块是否接收点击。列表滚动后 hero 已经淡出，这时它仍压在上层，
-     * 若继续接收点击会把卡片与滚动一起挡掉。
-     */
+    /** hero 是否仍在可交互区间（滚动未过一半）：只用于决定胶囊要不要继续组合 */
     interactive: Boolean,
-    /** 点 hero 区（胶囊之外的地方）= 检查更新；胶囊自己有点击，内层优先 */
-    onClick: () -> Unit,
     onMeasured: (androidx.compose.ui.unit.Dp) -> Unit,
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(
-                if (interactive) {
-                    Modifier.clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        // indication = null：这块面积很大，默认的水波是一块亮白矩形，太抢眼
-                        indication = null,
-                        onClick = onClick,
-                    )
-                } else Modifier,
-            )
             .padding(
                 top = logoPadding.calculateTopPadding() + 52.dp,
                 start = logoPadding.calculateStartPadding(layoutDirection),

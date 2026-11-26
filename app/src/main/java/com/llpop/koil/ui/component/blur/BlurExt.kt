@@ -34,6 +34,9 @@ val LocalBlurEnabled = compositionLocalOf { true }
 /** 顶栏起始侧额外内缩（宽屏/侧栏场景由外层写入；手机为 0，等同无操作） */
 val LocalTopBarStartInset = staticCompositionLocalOf<() -> Dp> { { 0.dp } }
 
+/** 顶栏内容整体的额外顶部内缩：宽屏设置双栏的从栏用它避开收起的侧栏胶囊。 */
+val LocalTopBarExtraTopInset = staticCompositionLocalOf<() -> Dp> { { 0.dp } }
+
 @Composable
 fun rememberBlurEnabled(): State<Boolean> =
     rememberUpdatedState(isRuntimeShaderSupported() && LocalBlurEnabled.current)

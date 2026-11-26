@@ -2,6 +2,12 @@ package com.llpop.koil.ui.component
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyListState
@@ -59,6 +65,11 @@ fun KOiLScreenScaffold(
     // 只属于三个一级页，二级页若跟着透明就会露出一片纯色（"没底"）。置 true 时
     // 本页自己建壁纸层并铺 surface 底 —— 与官方 AboutPage 的写法一致。
     ownWallpaper: Boolean = false,
+    /**
+     * 宽屏设置双栏的从栏用法：本页起点不在屏幕起始边缘，横向只该吃 End 侧安全区，
+     * 否则左侧刘海安全区会把这栏内容再往里推一段（官方 LocalHorizontalCutoutSides = End 同义）。
+     */
+    startAlreadyReserved: Boolean = false,
     overlay: @Composable (backdrop: Backdrop?, innerPadding: PaddingValues, topPadding: Dp) -> Unit = { _, _, _ -> },
     content: @Composable (
         innerPadding: PaddingValues,
@@ -150,6 +161,13 @@ fun KOiLScreenScaffold(
         // 壁纸层是否建立（关掉「玻璃效果」时 backdrop 为 null、壁纸层不建，若这里仍是
         // 透明就会露出下层壁纸）。故这些页面无条件铺 surface。
         containerColor = if (ownWallpaper) MiuixTheme.colorScheme.surface else Color.Transparent,
+        contentWindowInsets = if (startAlreadyReserved) {
+            WindowInsets.systemBars
+                .union(WindowInsets.displayCutout)
+                .only(WindowInsetsSides.End + WindowInsetsSides.Vertical)
+        } else {
+            WindowInsets.systemBars.union(WindowInsets.displayCutout)
+        },
         topBar = {
             Box(modifier = if (barBackdrop != null) Modifier.layerBackdrop(barBackdrop) else Modifier) {
                 BlurredBar(backdrop = topBarBackdrop, blurActive = blurActive) {

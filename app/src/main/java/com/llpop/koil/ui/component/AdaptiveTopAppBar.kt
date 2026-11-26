@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.offset
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.LocalTopBarExtraTopInset
 import com.llpop.koil.ui.component.blur.LocalTopBarStartInset
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.glass.GlassIconButton
@@ -42,6 +43,15 @@ private fun Modifier.topBarStartInset(startInset: () -> Dp): Modifier = layout {
         layout(placeable.width + insetPx, placeable.height) {
             placeable.placeRelative(insetPx, 0)
         }
+    }
+}
+
+/** 额外顶部内缩：内容整体下移，测量高度同步增加（官方 topBarExtraTopInset 同构） */
+private fun Modifier.topBarExtraTopInset(extraTopInset: () -> Dp): Modifier = layout { measurable, constraints ->
+    val extraPx = extraTopInset().roundToPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height + extraPx) {
+        placeable.placeRelative(0, extraPx)
     }
 }
 
@@ -72,6 +82,7 @@ fun AdaptiveTopAppBar(
     val backdrop = LocalTopAppBarBackdrop.current
     val barTitleAlpha = LocalTopAppBarTitleAlpha.current
     val startInset = LocalTopBarStartInset.current
+    val extraTopInset = LocalTopBarExtraTopInset.current
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bandBrush = remember(surfaceColor) { GlassTopAppBarDefaults.bandBrush(surfaceColor) }
     // 口径照官方 utils/PageUtils.kt 的 AdaptiveTopAppBar：
@@ -93,7 +104,10 @@ fun AdaptiveTopAppBar(
         isContentScrolled = resolvedContentScrolled,
         centerObstructionStart = centerObstructionStart,
         modifier = modifier,
-        contentModifier = contentModifier.topBarStartInset(startInset).then(contentInsetModifier),
+        contentModifier = contentModifier
+            .topBarStartInset(startInset)
+            .topBarExtraTopInset(extraTopInset)
+            .then(contentInsetModifier),
         expandable = expandable,
         subtitle = subtitle,
         progressiveBlur = LocalBlurEnabled.current,
