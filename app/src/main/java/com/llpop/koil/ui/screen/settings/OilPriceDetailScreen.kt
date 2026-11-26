@@ -79,6 +79,7 @@ import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.BackNavigationIcon
@@ -96,8 +97,6 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.rememberSnackbar
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.PullToRefresh
@@ -353,7 +352,7 @@ fun OilPriceDetailScreen(
                 tabs = state.grades.map { gradeLabel(it) },
                 selectedIndex = gradeIndex,
                 onSelect = onGradeSelect,
-                backdrop = rememberLayerBackdrop(),
+                backdrop = rememberEmptyBackdrop(),
                 surfaceAlpha = 0f,
                 modifier = Modifier.swipeToSwitchTab(
                     tabCount = state.grades.size,

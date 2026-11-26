@@ -37,6 +37,14 @@ val LocalTopBarStartInset = staticCompositionLocalOf<() -> Dp> { { 0.dp } }
 /** 顶栏内容整体的额外顶部内缩：宽屏设置双栏的从栏用它避开收起的侧栏胶囊。 */
 val LocalTopBarExtraTopInset = staticCompositionLocalOf<() -> Dp> { { 0.dp } }
 
+/**
+ * 只为满足 [Backdrop] 参数类型而存在的空录层：它不采样任何内容。
+ * 配合 `surfaceAlpha = 0f` 让玻璃控件走官方 resting 纯色路径，
+ * 而不用换成另一个控件（形状、高度、内距都保持一致）。
+ */
+@Composable
+fun rememberEmptyBackdrop(): Backdrop = rememberLayerBackdrop()
+
 @Composable
 fun rememberBlurEnabled(): State<Boolean> =
     rememberUpdatedState(isRuntimeShaderSupported() && LocalBlurEnabled.current)

@@ -49,8 +49,7 @@ import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
+import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -80,15 +79,18 @@ internal fun SummaryGrid(
             // 官方 GlassSegmentedTabRow：一条玻璃轨道 + 轨道内滑动指示块。
             // backdrop 取"背景层"（LocalWallpaperBackdrop），不取页面列表自身的录制层。
             val wallpaper = LocalWallpaperBackdrop.current
-            // 玻璃材质只在「玻璃开 + 有真实壁纸底」时升起：升起来采壁纸，取色与周围玻璃卡片一致；
-            // 否则恒定不升起（surfaceAlpha = 0f），走官方 resting 纯色 —— 形状/高度/内距
-            // 与玻璃态完全一致，不换控件。无壁纸层时给一个空录层占位，只为满足参数类型。
+            // 升起条件：玻璃开且确有壁纸底可采（此时取色与周围玻璃卡片一致）。
+            // 注意这与库里的默认语义不同 —— 库里 surfaceAlpha 升到 1f 的本意是
+            // 「控件被顶栏压住、需要把顶栏内容透出来」；这里是主动让档位轨道在静止态
+            // 也呈玻璃面，属于刻意的观感选择，不是跟随顶栏遮挡。
+            // 不升起时（关玻璃 / 无壁纸底）surfaceAlpha = 0f，走官方 resting 纯色，
+            // 形状、高度、内距与玻璃态完全一致，不换控件。
             val glassOn = LocalBlurEnabled.current
             GlassSegmentedTabRow(
                 tabs = rangeLabels.map { it.second },
                 selectedIndex = rangeIndex,
                 onSelect = onRangeSelect,
-                backdrop = wallpaper ?: rememberLayerBackdrop(),
+                backdrop = wallpaper ?: rememberEmptyBackdrop(),
                 surfaceAlpha = if (wallpaper != null && glassOn) 1f else 0f,
             )
             Spacer(Modifier.height(14.dp))
