@@ -523,4 +523,9 @@
     <string name="koil_a11y_hide_secret">隱藏密碼</string>
     <string name="koil_set_swipe_dismiss">側滑返回</string>
     <string name="koil_set_swipe_dismiss_sub">在二級頁從螢幕邊緣側滑即可返回上一頁</string>
+    <string name="koil_settings_select_item">從左側選擇一項</string>
+    <string name="koil_ptr_pull">下拉重新整理</string>
+    <string name="koil_ptr_release">放開重新整理</string>
+    <string name="koil_ptr_refreshing">正在重新整理…</string>
+    <string name="koil_ptr_done">重新整理完成</string>
 </resources>

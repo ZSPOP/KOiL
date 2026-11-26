@@ -48,6 +48,8 @@ import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
 import com.llpop.koil.ui.component.LocalWallpaperBackdrop
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
@@ -78,25 +80,17 @@ internal fun SummaryGrid(
             // 官方 GlassSegmentedTabRow：一条玻璃轨道 + 轨道内滑动指示块。
             // backdrop 取"背景层"（LocalWallpaperBackdrop），不取页面列表自身的录制层。
             val wallpaper = LocalWallpaperBackdrop.current
-            if (wallpaper != null) {
-                GlassSegmentedTabRow(
-                    tabs = rangeLabels.map { it.second },
-                    selectedIndex = rangeIndex,
-                    onSelect = onRangeSelect,
-                    backdrop = wallpaper,
-                    // 本控件在页面内容里、不在顶栏 bottomContent：静止态轨道应回到纯 trackColor
-                    // （官方语义：surfaceAlpha 只在控件被顶栏压住时才推到 1f），这里恒 0f
-                    surfaceAlpha = 0f,
-                )
-            } else {
-                // 只保留点按切档：整页横滑已经还给 Pager 翻页，标签行上再挂"拖动切档"
-                // 会和翻页手势同时在跑（它不 consume 事件），两个动作一起动很别扭
-                TabRowWithContour(
-                    tabs = rangeLabels.map { it.second },
-                    selectedTabIndex = rangeIndex,
-                    onTabSelected = onRangeSelect,
-                )
-            }
+            // 玻璃材质只在「玻璃开 + 有真实壁纸底」时升起：升起来采壁纸，取色与周围玻璃卡片一致；
+            // 否则恒定不升起（surfaceAlpha = 0f），走官方 resting 纯色 —— 形状/高度/内距
+            // 与玻璃态完全一致，不换控件。无壁纸层时给一个空录层占位，只为满足参数类型。
+            val glassOn = LocalBlurEnabled.current
+            GlassSegmentedTabRow(
+                tabs = rangeLabels.map { it.second },
+                selectedIndex = rangeIndex,
+                onSelect = onRangeSelect,
+                backdrop = wallpaper ?: rememberLayerBackdrop(),
+                surfaceAlpha = if (wallpaper != null && glassOn) 1f else 0f,
+            )
             Spacer(Modifier.height(14.dp))
         }
         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp)) {

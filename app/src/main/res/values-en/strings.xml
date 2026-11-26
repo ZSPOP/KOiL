@@ -545,4 +545,9 @@
     <string name="koil_a11y_hide_secret">Hide password</string>
     <string name="koil_set_swipe_dismiss">Edge swipe back</string>
     <string name="koil_set_swipe_dismiss_sub">Swipe from the screen edge to leave a secondary page</string>
+    <string name="koil_settings_select_item">Select an item on the left</string>
+    <string name="koil_ptr_pull">Pull down to refresh</string>
+    <string name="koil_ptr_release">Release to refresh</string>
+    <string name="koil_ptr_refreshing">Refreshing...</string>
+    <string name="koil_ptr_done">Refreshed successfully</string>
 </resources>
