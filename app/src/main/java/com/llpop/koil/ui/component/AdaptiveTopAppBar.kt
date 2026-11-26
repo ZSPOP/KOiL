@@ -62,6 +62,9 @@ fun AdaptiveTopAppBar(
     defaultWindowInsetsPadding: Boolean = true,
     scrollBehavior: ScrollBehavior? = null,
     isContentScrolled: Boolean? = null,
+    // 宽屏侧边栏收起时胶囊横在顶栏中央：把这条边界交给 GlassTopAppBar，
+    // 中央标题与文字不会被胶囊压住（Mishka 同名参数同义）
+    centerObstructionStart: Dp = LocalTopAppBarCenterObstructionStart.current,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
     bottomContent: @Composable () -> Unit = {},
@@ -88,6 +91,7 @@ fun AdaptiveTopAppBar(
     GlassTopAppBar(
         title = title,
         isContentScrolled = resolvedContentScrolled,
+        centerObstructionStart = centerObstructionStart,
         modifier = modifier,
         contentModifier = contentModifier.topBarStartInset(startInset).then(contentInsetModifier),
         expandable = expandable,

@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -83,6 +84,7 @@ import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
 import com.llpop.koil.ui.component.blur.LocalTopBarStartInset
 import com.llpop.koil.ui.component.LocalTopAppBarTitleAlpha
+import com.llpop.koil.ui.component.LocalTopAppBarCenterObstructionStart
 import com.llpop.koil.util.ContainerSizeProvider
 import com.llpop.koil.util.rememberIsWideScreen
 import com.llpop.koil.util.LocaleManager
@@ -277,6 +279,17 @@ fun MainScreen(
                 // 存储值晚于首帧到达（或主题/语言重建）时，把持久化状态同步回 rail
                 LaunchedEffect(navRailExpanded) { railState.expanded = navRailExpanded }
             }
+            // Mishka 同款：侧栏单独一条录制层（rememberBlurBackdrop），rail 采样它。
+            // 不能复用 navBarBackdrop —— 那层是「壁纸 + Pager 内容」的合成，不含顶栏/二级页。
+            val sidebarBackdrop = if (useRail) rememberBlurBackdrop(blurEnabled) else null
+            // 收起态胶囊横在顶栏中央时，把它的起始位置交给顶栏做遮挡避让（Mishka 同名 local）
+            val centerObstructionStart = if (
+                railState != null && !railState.expanded && railState.collapsedWidth > 0.dp
+            ) {
+                railState.collapsedStart
+            } else {
+                Dp.Unspecified
+            }
             // 三页用 HorizontalPager 承载：
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
@@ -367,6 +380,8 @@ fun MainScreen(
                 LocalAppPageInsets provides appPageInsetsWithRail,
                 LocalTopBarStartInset provides railStartInset,
                 LocalTopAppBarTitleAlpha provides topBarTitleAlpha,
+                // 收起态胶囊压顶栏中央：顶栏据此把标题/按钮让开（未收起时 Unspecified）
+                LocalTopAppBarCenterObstructionStart provides centerObstructionStart,
             ) {
                 // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
                 // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
@@ -389,16 +404,28 @@ fun MainScreen(
                         )
                     },
                 ) {
-            // 官方结构（AppNavigation.kt）：rail 与 NavDisplay 同级、在录制 backdrop 之外。
-            // 这样二级页压栈时侧边栏仍在，且 rail 自身不会被 pageBackdrop 录进去采样到。
-            Box(Modifier.fillMaxSize()) {
+            // Mishka AppNavigation.kt 同款结构：宽屏外壳 clipToBounds → 侧栏录制层 →
+            // NavDisplay 与 rail 同级。rail 采样 sidebarBackdrop（顶栏与二级页也在这一层里）。
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (useRail) Modifier.clipToBounds() else Modifier),
+            ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (sidebarBackdrop != null) Modifier.layerBackdrop(sidebarBackdrop) else Modifier),
+            ) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { nav.pop() },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 entry<Route.Main>(swipeDismiss = swipeDismiss) {
-
+            // Mishka 同款：主页面内解除收起胶囊的中央遮挡约束（主页面顶栏自带宽标题布局）
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalTopAppBarCenterObstructionStart provides Dp.Unspecified,
+            ) {
             Scaffold(
                     // 官方：Scaffold(modifier = Modifier.fillMaxSize().layerBackdrop(pageBackdrop))
                     // 录「顶栏 + 底栏 + 内容」整页，排除弹层与 scrim
@@ -548,6 +575,7 @@ fun MainScreen(
                         }
                     }
                 }
+                }
                 entry<Route.About>(swipeDismiss = swipeDismiss) {
                     AboutScreen(onBack = { nav.pop() })
                 }
@@ -564,11 +592,17 @@ fun MainScreen(
                     onSelect = { index ->
                         if (backStack.last() != Route.Main) nav.popUntil { it is Route.Main }
                         navBarImmediateIndex = index
-                        scope.launch { pagerState.springAnimateToPage(index) }
+                        // Mishka：rail 展开时不做 Pager 动画切页（animatePageChanges = !expanded）
+                        if (railState.expanded) {
+                            scope.launch { pagerState.scrollToPage(index) }
+                        } else {
+                            scope.launch { pagerState.springAnimateToPage(index) }
+                        }
                     },
-                    backdrop = navBarBackdrop,
+                    backdrop = sidebarBackdrop,
                     state = railState,
                 )
+            }
             }
             }
             }
