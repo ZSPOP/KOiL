@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.offset
 import com.llpop.koil.R
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.LocalTopBarExtraTopInset
 import com.llpop.koil.ui.component.blur.LocalTopBarStartInset
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.glass.GlassIconButton
@@ -45,6 +46,15 @@ private fun Modifier.topBarStartInset(startInset: () -> Dp): Modifier = layout {
     }
 }
 
+/** 额外顶部内缩：内容整体下移，测量高度同步增加（官方 topBarExtraTopInset 同构） */
+private fun Modifier.topBarExtraTopInset(extraTopInset: () -> Dp): Modifier = layout { measurable, constraints ->
+    val extraPx = extraTopInset().roundToPx().coerceAtLeast(0)
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height + extraPx) {
+        placeable.placeRelative(0, extraPx)
+    }
+}
+
 /**
  * 顶栏的统一入口：把 backdrop / 模糊开关 / 渐变带这几个"库级默认"收在一处，
  * 页面只传业务参数。宽度与折叠规则仍由调用方决定。
@@ -62,6 +72,9 @@ fun AdaptiveTopAppBar(
     defaultWindowInsetsPadding: Boolean = true,
     scrollBehavior: ScrollBehavior? = null,
     isContentScrolled: Boolean? = null,
+    // 宽屏侧边栏收起时胶囊横在顶栏中央：把这条边界交给 GlassTopAppBar，
+    // 中央标题与文字不会被胶囊压住（Mishka 同名参数同义）
+    centerObstructionStart: Dp = LocalTopAppBarCenterObstructionStart.current,
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
     bottomContent: @Composable () -> Unit = {},
@@ -69,6 +82,7 @@ fun AdaptiveTopAppBar(
     val backdrop = LocalTopAppBarBackdrop.current
     val barTitleAlpha = LocalTopAppBarTitleAlpha.current
     val startInset = LocalTopBarStartInset.current
+    val extraTopInset = LocalTopBarExtraTopInset.current
     val surfaceColor = MiuixTheme.colorScheme.surface
     val bandBrush = remember(surfaceColor) { GlassTopAppBarDefaults.bandBrush(surfaceColor) }
     // 口径照官方 utils/PageUtils.kt 的 AdaptiveTopAppBar：
@@ -88,8 +102,12 @@ fun AdaptiveTopAppBar(
     GlassTopAppBar(
         title = title,
         isContentScrolled = resolvedContentScrolled,
+        centerObstructionStart = centerObstructionStart,
         modifier = modifier,
-        contentModifier = contentModifier.topBarStartInset(startInset).then(contentInsetModifier),
+        contentModifier = contentModifier
+            .topBarStartInset(startInset)
+            .topBarExtraTopInset(extraTopInset)
+            .then(contentInsetModifier),
         expandable = expandable,
         subtitle = subtitle,
         progressiveBlur = LocalBlurEnabled.current,

@@ -11,3 +11,7 @@ sealed interface Route : NavKey {
     data object OilPriceDetail : Route
     data object About : Route
 }
+
+/** 设置页右栏承载的二级页：宽屏双栏时压在右栏栈里，单栏时整页压栈。 */
+val Route.isSettingsPaneRoute: Boolean
+    get() = this is Route.OilPriceDetail || this is Route.About

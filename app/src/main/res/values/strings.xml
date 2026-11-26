@@ -528,4 +528,9 @@
     <string name="koil_a11y_hide_secret">隐藏密码</string>
     <string name="koil_set_swipe_dismiss">侧滑返回</string>
     <string name="koil_set_swipe_dismiss_sub">在二级页从屏幕边缘侧滑即可返回上一页</string>
+    <string name="koil_settings_select_item">从左侧选择一项</string>
+    <string name="koil_ptr_pull">下拉刷新</string>
+    <string name="koil_ptr_release">松开刷新</string>
+    <string name="koil_ptr_refreshing">正在刷新…</string>
+    <string name="koil_ptr_done">刷新完成</string>
 </resources>

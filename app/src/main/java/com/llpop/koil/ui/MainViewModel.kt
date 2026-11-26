@@ -57,6 +57,10 @@ class MainViewModel(
     val swipeDismissEnabled: StateFlow<Boolean> = settings.swipeDismissEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    /** 宽屏侧边栏展开态（持久化，冷启动恢复） */
+    val navRailExpanded: StateFlow<Boolean> = settings.navRailExpanded
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
     fun setThemeMode(mode: AppSettings.ThemeMode) {
         viewModelScope.launch { settings.setThemeMode(mode) }
     }
@@ -75,5 +79,9 @@ class MainViewModel(
 
     fun setBlurEnabled(enabled: Boolean) {
         viewModelScope.launch { settings.setBlurEnabled(enabled) }
+    }
+
+    fun setNavRailExpanded(expanded: Boolean) {
+        viewModelScope.launch { settings.setNavRailExpanded(expanded) }
     }
 }

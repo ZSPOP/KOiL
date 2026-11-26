@@ -7,15 +7,23 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import com.llpop.koil.ui.navigation.Route
+import com.llpop.koil.ui.navigation.isSettingsPaneRoute
 import top.yukonga.miuix.kmp.nav.core.NavController
 import top.yukonga.miuix.kmp.nav.core.NavDisplay
 import top.yukonga.miuix.kmp.nav.core.NavKey
@@ -34,8 +42,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.Text
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.calculateEndPadding
+import kotlinx.coroutines.flow.drop
 import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.ui.component.BlurredBar
@@ -67,6 +86,9 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.glass.GlassNavigationBar
 import top.yukonga.miuix.kmp.glass.GlassNavigationItem
+import top.yukonga.miuix.kmp.glass.GlassNavigationRail
+import top.yukonga.miuix.kmp.glass.GlassNavigationRailDefaults
+import top.yukonga.miuix.kmp.glass.rememberGlassNavigationRailState
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -76,7 +98,11 @@ import top.yukonga.miuix.kmp.icon.glass.SettingsOutline
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.compose.foundation.gestures.Orientation
 import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.LocalTopBarExtraTopInset
+import com.llpop.koil.ui.component.LocalTopAppBarTitleAlpha
+import com.llpop.koil.ui.component.LocalTopAppBarCenterObstructionStart
 import com.llpop.koil.util.ContainerSizeProvider
+import com.llpop.koil.util.rememberIsWideScreen
 import com.llpop.koil.util.LocaleManager
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
@@ -107,6 +133,8 @@ fun MainScreen(
     val wallpaperEnabled by viewModel.wallpaperEnabled.collectAsStateWithLifecycle()
     val pagerGestureMode by viewModel.pagerGestureMode.collectAsStateWithLifecycle()
     val swipeDismissEnabled by viewModel.swipeDismissEnabled.collectAsStateWithLifecycle()
+    // 宽屏侧边栏展开态（持久化）
+    val navRailExpanded by viewModel.navRailExpanded.collectAsStateWithLifecycle()
     // 页面切换手势：与 miuix PagerInterceptionMode 一一对应（cross_axis = 跨轴拦截）
     val pagerInterceptionMode = if (pagerGestureMode == "native") {
         PagerInterceptionMode.Native
@@ -237,6 +265,64 @@ fun MainScreen(
                     }
                 }
             }
+            // ---- 宽屏侧边栏（官方 GlassNavigationRail）----
+            // 库 KDoc 原文：“The rail is an overlay… Place it over the page, outside the
+            // recorded backdrop. Move the page clear of the panel with progress.”
+            // 所以 rail 挂在 NavDisplay 同级（见下方 Box），并且避让按 progress 连续驱动。
+            val useRail = rememberIsWideScreen()
+            val railState = if (useRail) {
+                rememberGlassNavigationRailState(initialExpanded = navRailExpanded)
+            } else {
+                null
+            }
+            // 双栏开关只认「目标态」：展开 = 面板让位，收起 = 0。用动画中的 progress 判定
+            // 会在展开/收起过渡里让布局反复在两栏与单栏之间跳。
+            val targetRailStartInset = if (railState != null && railState.expanded) {
+                GlassNavigationRailDefaults.Margin + GlassNavigationRailDefaults.ExpandedWidth
+            } else {
+                0.dp
+            }
+            val railStartInset: () -> Dp = remember(railState) {
+                {
+                    val state = railState
+                    if (state == null) {
+                        0.dp
+                    } else {
+                        (GlassNavigationRailDefaults.Margin + GlassNavigationRailDefaults.ExpandedWidth) * state.progress
+                    }
+                }
+            }
+            // 收起态胶囊压在顶栏中央：官方按 progress 隐藏标题，展开成左面板后标题重新露出
+            val topBarTitleAlpha: () -> Float = remember(railState) { { railState?.progress ?: 1f } }
+            // 收起态胶囊的整体高度遮挡：官方 56dp × (1 - progress)。
+            // 双栏从栏的顶栏据此整体下移，避免标题与返回键被压在胶囊下面。
+            val collapsedRailTopObstruction: () -> Dp = remember(railState) {
+                { 56.dp * (1f - (railState?.progress ?: 1f)) }
+            }
+            if (railState != null) {
+                // 用户点 rail 内的展开/收起按钮 → 写回设置（drop(1) 跳过首帧初始值）
+                LaunchedEffect(railState) {
+                    snapshotFlow { railState.expanded }.drop(1).collect { viewModel.setNavRailExpanded(it) }
+                }
+                // 存储值晚于首帧到达（或主题/语言重建）时，把持久化状态同步回 rail
+                LaunchedEffect(navRailExpanded) { railState.expanded = navRailExpanded }
+            }
+            // rail 的玻璃底采样「壁纸 + 整页」的合成层：页面容器本身是透明的（底色来自壁纸层），
+            // 只采整页层的话录到的多半是透明像素，玻璃就没有底材、看起来像块实色。
+            // 与底栏同一套取样口径（rememberCombinedBackdrop）。
+            val sidebarBackdrop = if (useRail && blurEnabled && isRuntimeShaderSupported()) {
+                rememberCombinedBackdrop(wallpaperBackdrop, pageBackdrop)
+            } else {
+                null
+            }
+            // 收起态胶囊横在顶栏中央时，把它的起始位置交给顶栏做遮挡避让（Mishka 同名 local）
+            val centerObstructionStart = if (
+                railState != null && !railState.expanded && railState.collapsedWidth > 0.dp
+            ) {
+                railState.collapsedStart
+            } else {
+                Dp.Unspecified
+            }
             // 三页用 HorizontalPager 承载：
             // 页面常驻 + 滑动过渡动画，避免 when 切换整树销毁重建导致的卡顿
             val pagerState = rememberPagerState(pageCount = { 3 })
@@ -257,7 +343,37 @@ fun MainScreen(
             // 二级页（关于 / 调价明细）改由导航层承载：back stack 里 Main 常驻，
             // 二级页作为 entry 压栈，转场与交互式侧滑返回由 NavDisplay 负责
             val backStack = remember { mutableStateListOf<NavKey>(Route.Main) }
+            // 宽屏设置双栏的右栏栈：与官方 AppNavigation 同构（左栏永远留在设置列表，
+            // 二级页只压在这条栈里，不进 backStack）。窄屏时才走 nav.push 的整页打开。
+            val settingsDetailStack = remember { mutableStateListOf<NavKey>() }
             val nav = remember(backStack) { NavController(backStack) }
+            // 双栏开关按「容器宽度 − 目标让位 − 横向安全区」判定（官方 AppNavigation 同一口径），
+            // 不读 Pager 页宽、也不读 rail 动画中的 progress：图 2 那种「收起侧栏后反而退回
+            // 单栏」就是这两个口径叠在一起、卡在 761dp 边界上造成的。
+            val horizontalSafe = rememberHorizontalSafeInsets()
+            val containerWidthDp = with(LocalDensity.current) {
+                LocalWindowInfo.current.containerSize.width.toDp()
+            }
+            val isSettingsDualPane =
+                (containerWidthDp - targetRailStartInset - horizontalSafe.start - horizontalSafe.end) >= 761.dp
+            // 单栏 ↔ 双栏切换时在两条栈之间搬页面，保证二级页不丢也不重复：
+            // 进双栏 → 已 push 的整页二级页收进右栏并回到设置页；退单栏 → 右栏里的二级页
+            // 还原成整页压栈。
+            LaunchedEffect(isSettingsDualPane) {
+                if (isSettingsDualPane) {
+                    val settingsSuffix = backStack.drop(1)
+                        .takeIf { it.isNotEmpty() && it.all { key -> (key as? Route)?.isSettingsPaneRoute == true } }
+                    if (settingsSuffix != null) {
+                        settingsDetailStack.clear()
+                        settingsDetailStack.addAll(settingsSuffix)
+                        while (backStack.size > 1) nav.pop()
+                        pagerState.scrollToPage(2)
+                    }
+                } else if (backStack.size == 1 && pagerState.currentPage == 2 && settingsDetailStack.isNotEmpty()) {
+                    settingsDetailStack.toList().forEach { nav.push(it) }
+                    settingsDetailStack.clear()
+                }
+            }
             // 通知点进来：状态变化才生效（App 已在前台时点通知走 onNewIntent，不重组就不会读到新值）
             LaunchedEffect(openAboutOnLaunch) {
                 if (openAboutOnLaunch) {
@@ -306,6 +422,24 @@ fun MainScreen(
             }
             val swipeDismiss = if (swipeDismissEnabled) swipeBackDirection else null
 
+            // 官方 AppPageInsets 契约：以浮层形式存在的侧栏算进 contentInsets 的起始侧。
+            // overlayStart 在 layout 阶段惰性读（动画期间不触发整页重组），pageContentPadding
+            // 再把它并进每页的 start —— 五个页面不需要各自传 extraStart。
+            val appPageInsetsWithRail = rememberAppPageInsets(
+                hostPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                startAlreadyReserved = false,
+                overlayStart = railStartInset,
+                searchTop = { 0.dp },
+            )
+            // 双栏右栏专用：右栏的起点不在屏幕起始边缘，横向只该吃 End 侧安全区
+            // （官方对应 LocalHorizontalCutoutSides = End），overlayStart 也必须归零。
+            // startAlreadyReserved = true 正是这个语义：safeInsets 丢掉 Start 侧。
+            val appPageInsetsDualPane = rememberAppPageInsets(
+                hostPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
+                startAlreadyReserved = true,
+                overlayStart = { 0.dp },
+                searchTop = { 0.dp },
+            )
             androidx.compose.runtime.CompositionLocalProvider(
                 LocalWallpaperBackdrop provides wallpaperBackdrop,
                 // 滚动闸门交给各页脚手架上报（列表拖拽/惯性滚动）
@@ -313,6 +447,14 @@ fun MainScreen(
                 // 弹层/浮层采样「整页」（对应官方 GlassDialog/GlassBottomSheet 的 backdrop = pageBackdrop）
                 LocalPageBackdrop provides pageBackdrop,
                 LocalSnackbarHostState provides snackbarHostState,
+                // 侧栏起始内缩作用到页面内容与顶栏：前者由 AppPageInsets 并进各页 start，
+                // 后者让顶栏内容右移，避免展开的面板压住标题与返回键
+                LocalAppPageInsets provides appPageInsetsWithRail,
+                // 顶栏由 appPageTopBarInsets() 自己消费 contentInsets（含侧栏 overlayStart），
+                // 页面内容由 pageContentPadding 并入同一份 start —— 两者各取一次，不叠加。
+                LocalTopAppBarTitleAlpha provides topBarTitleAlpha,
+                // 收起态胶囊压顶栏中央：顶栏据此把标题/按钮让开（未收起时 Unspecified）
+                LocalTopAppBarCenterObstructionStart provides centerObstructionStart,
             ) {
                 // 根弹层宿主：官方 example 的 GlassPageHost 就是这个角色。它只负责
                 // popupHost（承载 GlassDialog / GlassBottomSheet / 下拉面板），**不挂
@@ -329,18 +471,34 @@ fun MainScreen(
                             state = snackbarHostState,
                             // 二级页（关于 / 油价明细）没有底栏，提示回到贴底
                             modifier = Modifier.padding(
-                                bottom = if (backStack.last() == Route.Main) snackbarBottomInset else 0.dp,
+                                // 宽屏由侧边栏导航，底栏消失 → 提示回到贴底
+                                bottom = if (backStack.last() == Route.Main && railState == null) snackbarBottomInset else 0.dp,
                             ),
                         )
                     },
                 ) {
+            // 宽屏外壳：外层只裁溢出（clipToBounds），不加底色，壁纸照原样透出来。
+            // NavDisplay 与 rail 同级；rail 不进入任何录制层，玻璃底采样整页录制层
+            // （pageBackdrop，由各页 Scaffold 录制，rail 在其之外，取样不自我包含）。
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (useRail) Modifier.clipToBounds() else Modifier),
+            ) {
+            Box(
+                Modifier
+                    .fillMaxSize(),
+            ) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { nav.pop() },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 entry<Route.Main>(swipeDismiss = swipeDismiss) {
-
+            // Mishka 同款：主页面内解除收起胶囊的中央遮挡约束（主页面顶栏自带宽标题布局）
+            androidx.compose.runtime.CompositionLocalProvider(
+                LocalTopAppBarCenterObstructionStart provides Dp.Unspecified,
+            ) {
             Scaffold(
                     // 官方：Scaffold(modifier = Modifier.fillMaxSize().layerBackdrop(pageBackdrop))
                     // 录「顶栏 + 底栏 + 内容」整页，排除弹层与 scrim
@@ -350,6 +508,8 @@ fun MainScreen(
                     // 弹层会被录进 pageBackdrop，采样即自我包含。
                     popupHost = {},
                     bottomBar = {
+                        // 宽屏走侧边栏（官方形态：rail 替代底栏），底栏槽位整体不摆放
+                        if (railState == null) {
                         val bottomBarDensity = LocalDensity.current
                         // 实测底栏高度：底部 inset 由导航条组件自己算（含 navigationBars），
                         // 量到的就是 Scaffold 摆放 Snackbar 时会用到的那段高度
@@ -389,6 +549,7 @@ fun MainScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),
                             )
+                        }
                         }
                         }
                     },
@@ -476,16 +637,102 @@ fun MainScreen(
                                         // #5 空态「去录入」一键跳转录入页：与底部导航一致走 springAnimateToPage
                                         onNavigateToAdd = { scope.launch { pagerState.springAnimateToPage(0) } },
                                     )
-                                    2 -> SettingsScreen(
-                                        modifier = contentModifier,
-                                        bottomPadding = bottomPad,
-                                        onOpenPriceDetail = { nav.push(Route.OilPriceDetail) },
-                                        onOpenAbout = { nav.push(Route.About) },
-                                    )
+                                    2 -> BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                                        // 设置双栏：阈值与主栏宽度照官方 AppNavigation.kt ——
+                                        // available >= 761dp（主栏 360 起 + 1dp 分隔 + 从栏 400 起）才分栏，
+                                        // 主栏 = available × 0.36 钳在 360..400dp，再补回侧栏与安全区的起始让位。
+                                        val layoutDirection = LocalLayoutDirection.current
+                                        val safePv = WindowInsets.safeDrawing.asPaddingValues()
+                                        val safeStart = safePv.calculateStartPadding(layoutDirection)
+                                        val safeEnd = safePv.calculateEndPadding(layoutDirection)
+                                        val railNow = railStartInset()
+                                        val availableWidth = (maxWidth - railNow - safeStart - safeEnd)
+                                            .coerceAtLeast(0.dp)
+                                        val navigateSettings: (NavKey) -> Unit = { route ->
+                                            if (settingsDetailStack.size != 1 || settingsDetailStack.first() != route) {
+                                                settingsDetailStack.clear()
+                                                settingsDetailStack.add(route)
+                                            }
+                                        }
+                                        if (isSettingsDualPane) {
+                                            val masterWidth =
+                                                (availableWidth * 0.36f).coerceIn(360.dp, 400.dp) + railNow + safeStart
+                                            Row(modifier = Modifier.fillMaxSize()) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(masterWidth)
+                                                        .fillMaxHeight()
+                                                        .clipToBounds(),
+                                                ) {
+                                                    SettingsScreen(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        bottomPadding = bottomPad,
+                                                        onOpenPriceDetail = { navigateSettings(Route.OilPriceDetail) },
+                                                        onOpenAbout = { navigateSettings(Route.About) },
+                                                    )
+                                                }
+                                                Box(
+                                                    modifier = Modifier
+                                                        .width(1.dp)
+                                                        .fillMaxHeight()
+                                                        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .weight(1f)
+                                                        .fillMaxHeight()
+                                                        .clipToBounds(),
+                                                ) {
+                                                    // 右栏已落在侧栏让位之外：overlayStart 归零，
+                                                    // 压缩胶囊的中央遮挡约束也解除（右栏没有胶囊横在上面）。
+                                                    androidx.compose.runtime.CompositionLocalProvider(
+                                                        LocalAppPageInsets provides appPageInsetsDualPane,
+                                                        LocalTopAppBarCenterObstructionStart provides Dp.Unspecified,
+                                                        // 官方右栏把标题透明度交回默认 1：全局那份是按侧栏进度
+                                                        // 淡出的，右栏本来就不在侧栏下面，不能跟着一起消失。
+                                                        LocalTopAppBarTitleAlpha provides { 1f },
+                                                        // 官方右栏同款：顶栏整体下移，避开收起的侧栏胶囊
+                                                        LocalTopBarExtraTopInset provides collapsedRailTopObstruction,
+                                                    ) {
+                                                        when (settingsDetailStack.firstOrNull()) {
+                                                            Route.About -> AboutScreen(
+                                                                onBack = { settingsDetailStack.clear() },
+                                                                embedded = true,
+                                                            )
+                                                            Route.OilPriceDetail -> OilPriceDetailScreen(
+                                                                onBack = { settingsDetailStack.clear() },
+                                                                embedded = true,
+                                                            )
+                                                            else -> Box(
+                                                                modifier = Modifier.fillMaxSize(),
+                                                                contentAlignment = Alignment.Center,
+                                                            ) {
+                                                                Text(
+                                                                    text = stringResource(R.string.koil_settings_select_item),
+                                                                    fontSize = 15.sp,
+                                                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            // 单栏：二级页走整页压栈。右栏栈的搬运由上面
+                                            // isSettingsDualPane 的迁移逻辑统一负责，这里不重复清栈。
+                                            SettingsScreen(
+                                                modifier = contentModifier,
+                                                bottomPadding = bottomPad,
+                                                onOpenPriceDetail = { nav.push(Route.OilPriceDetail) },
+                                                onOpenAbout = { nav.push(Route.About) },
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     }
+                }
                 }
                 entry<Route.About>(swipeDismiss = swipeDismiss) {
                     AboutScreen(onBack = { nav.pop() })
@@ -494,9 +741,44 @@ fun MainScreen(
                     OilPriceDetailScreen(onBack = { nav.pop() })
                 }
             }
+            if (railState != null) {
+                // 库 KDoc：selectedIndex = -1 表示「当前不在任何一级目标」（二级页）；
+                // 从二级页点 tab 时先把栈收回 Main 再切页，与官方 AppNavigation.kt 一致。
+                GlassNavigationRail(
+                    items = glassNavigationItems,
+                    selectedIndex = if (backStack.last() == Route.Main) navBarImmediateIndex ?: selectedTab else -1,
+                    onSelect = { index ->
+                        if (backStack.last() != Route.Main) nav.popUntil { it is Route.Main }
+                        navBarImmediateIndex = index
+                        // Mishka：rail 展开时不做 Pager 动画切页（animatePageChanges = !expanded）
+                        if (railState.expanded) {
+                            scope.launch { pagerState.scrollToPage(index) }
+                        } else {
+                            scope.launch { pagerState.springAnimateToPage(index) }
+                        }
+                    },
+                    backdrop = sidebarBackdrop,
+                    state = railState,
+                )
+            }
+            }
+            }
             }
             }
                 }
         }
         }
     }
+
+private data class HorizontalSafeInsets(val start: Dp, val end: Dp)
+
+/** 横向安全区：刘海 + 导航条（不含状态栏），与官方窗口尺寸判定同一口径。 */
+@Composable
+private fun rememberHorizontalSafeInsets(): HorizontalSafeInsets {
+    val layoutDirection = LocalLayoutDirection.current
+    val padding = WindowInsets.displayCutout.union(WindowInsets.navigationBars).asPaddingValues()
+    return HorizontalSafeInsets(
+        start = padding.calculateStartPadding(layoutDirection),
+        end = padding.calculateEndPadding(layoutDirection),
+    )
+}

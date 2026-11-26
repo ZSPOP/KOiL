@@ -153,6 +153,8 @@ class AppSettings(private val context: Context) {
         private val KEY_PAGER_GESTURE_MODE = stringPreferencesKey("KOiL-pager-gesture-mode")
         private val KEY_PREDICTIVE_BACK = booleanPreferencesKey("KOiL-predictive-back")
         private val KEY_SWIPE_DISMISS = booleanPreferencesKey("KOiL-swipe-dismiss")
+        /** 宽屏侧边栏（GlassNavigationRail）展开态，跨进程记住（Mishka StorageKeys.NAV_RAIL_EXPANDED 同义） */
+        private val KEY_NAV_RAIL_EXPANDED = booleanPreferencesKey("KOiL-nav-rail-expanded")
 
         const val DEFAULT_TANK_CAPACITY = 65f
         const val DEFAULT_ABNORMAL_THRESHOLD = 20.0   // 默认异常油耗阈值 20%（用户要求）
@@ -784,6 +786,16 @@ class AppSettings(private val context: Context) {
         context.KOiLDataStore.data.distinctValue { it[KEY_BLUR_ENABLED] ?: true }
     suspend fun setBlurEnabled(enabled: Boolean) {
         context.KOiLDataStore.edit { it[KEY_BLUR_ENABLED] = enabled }
+    }
+
+    /**
+     * 宽屏侧边栏是否展开。官方把 rail 的展开态作为 UI 偏好持久化（Mishka
+     * `StorageKeys.NAV_RAIL_EXPANDED`），冷启动按上次状态恢复；默认展开。
+     */
+    val navRailExpanded: Flow<Boolean> =
+        context.KOiLDataStore.data.distinctValue { it[KEY_NAV_RAIL_EXPANDED] ?: true }
+    suspend fun setNavRailExpanded(expanded: Boolean) {
+        context.KOiLDataStore.edit { it[KEY_NAV_RAIL_EXPANDED] = expanded }
     }
 
     /**

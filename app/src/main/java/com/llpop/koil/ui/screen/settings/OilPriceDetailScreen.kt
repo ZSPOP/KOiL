@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -77,7 +78,8 @@ import top.yukonga.miuix.kmp.glass.GlassPopupAnchor
 import top.yukonga.miuix.kmp.glass.GlassPopupItem
 import top.yukonga.miuix.kmp.glass.glassPopupAnchorValue
 import top.yukonga.miuix.kmp.glass.rememberGlassPopupAnchor
-import com.llpop.koil.ui.component.LocalWallpaperBackdrop
+import com.llpop.koil.ui.component.blur.LocalBlurEnabled
+import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
 import com.llpop.koil.ui.component.swipeToSwitchTab
 import com.llpop.koil.ui.component.KOiLHorizontalDivider
 import com.llpop.koil.ui.component.BackNavigationIcon
@@ -95,7 +97,6 @@ import org.koin.androidx.compose.koinViewModel
 import top.yukonga.miuix.kmp.basic.Icon
 import com.llpop.koil.ui.component.LocalPageBackdrop
 import com.llpop.koil.ui.component.rememberSnackbar
-import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.PullToRefresh
@@ -124,6 +125,8 @@ private const val TIMELINE_KEY = "oil-price-detail-timeline"
 @Composable
 fun OilPriceDetailScreen(
     onBack: () -> Unit,
+    /** 宽屏设置双栏的右栏用法：只影响横向 insets，不影响底材 —— 本页任何场景都是纯 surface */
+    embedded: Boolean = false,
     viewModel: OilPriceDetailViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -133,12 +136,14 @@ fun OilPriceDetailScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // 明细页不放任何开关：本页固定自建壁纸层、铺 surface 底（顶栏/卡片玻璃照常采样），
-    // 同时把本页的壁纸绘制置为关闭 —— 底层就是纯 surface，页面上没有动态成分。
+    // 本页不画壁纸、也没有任何壁纸开关：恒定关闭壁纸绘制并铺 surface 底。
+    // 顶栏与卡片的玻璃只采本页这层纯 surface，页面上不存在动态成分。
     CompositionLocalProvider(LocalWallpaperEnabled provides false) {
     KOiLScreenScaffold(
         title = stringResource(R.string.koil_pdb_detail_title),
         ownWallpaper = true,
+        // 双栏从栏：横向只吃 End 侧安全区（与关于页 embedded 同口径）
+        startAlreadyReserved = embedded,
         backdrop = backdrop,
         listState = listState,
         navigationIcon = { BackNavigationIcon(onClick = onBack) },
@@ -181,11 +186,33 @@ fun OilPriceDetailScreen(
                 viewModel.consumeRefreshNotice()
             }
         }
+        // 刷新提示的四段文案跟随应用语言：库默认是硬编码英文
+        val refreshTexts = listOf(
+            stringResource(R.string.koil_ptr_pull),
+            stringResource(R.string.koil_ptr_release),
+            stringResource(R.string.koil_ptr_refreshing),
+            stringResource(R.string.koil_ptr_done),
+        )
+        // 刷新指示器由库按「自身容器宽度」居中，容器必须是内容区而不是整屏：
+        // 这一页在宽屏单栏时内容要让开侧栏（contentPadding 的 start 就是让位宽度），
+        // 指示器容器不跟着让位，就会被整屏居中、视觉上偏左半个让位宽度。
+        val layoutDirection = LocalLayoutDirection.current
+        val horizontalPadding = PaddingValues(
+            start = detailContentPadding.calculateLeftPadding(layoutDirection),
+            end = detailContentPadding.calculateRightPadding(layoutDirection),
+        )
+        val verticalPadding = PaddingValues(
+            top = detailContentPadding.calculateTopPadding(),
+            bottom = detailContentPadding.calculateBottomPadding(),
+        )
         PullToRefresh(
             isRefreshing = detailRefreshing,
             onRefresh = { viewModel.refresh() },
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = detailContentPadding,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontalPadding),
+            contentPadding = verticalPadding,
+            refreshTexts = refreshTexts,
         ) {
         LazyColumn(
             state = listState,
@@ -202,7 +229,7 @@ fun OilPriceDetailScreen(
             overscrollEffect = null,
             // 横向边距由四张卡的 outerHorizontalPadding(12dp) 承担；
             // 顶部在顶栏下方再让 12dp 呼吸（extraTop），随顶栏折叠联动
-            contentPadding = detailContentPadding,
+            contentPadding = verticalPadding,
         ) {
             item(key = FILTER_KEY) {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -319,29 +346,21 @@ fun OilPriceDetailScreen(
             val onGradeSelect: (Int) -> Unit = remember(state.grades) {
                 { idx: Int -> viewModel.selectGrade(state.grades[idx]) }
             }
-            val wallpaper = LocalWallpaperBackdrop.current
-            if (wallpaper != null) {
-                GlassSegmentedTabRow(
-                    tabs = state.grades.map { gradeLabel(it) },
+            // 本页没有壁纸底：玻璃材质恒定不升起（surfaceAlpha = 0f），控件走官方 resting 纯色，
+            // 形状 / 高度 / 内距与玻璃态完全一致。这里给一个空录层只为满足参数类型，不采样任何东西。
+            GlassSegmentedTabRow(
+                tabs = state.grades.map { gradeLabel(it) },
+                selectedIndex = gradeIndex,
+                onSelect = onGradeSelect,
+                backdrop = rememberEmptyBackdrop(),
+                surfaceAlpha = 0f,
+                modifier = Modifier.swipeToSwitchTab(
+                    tabCount = state.grades.size,
                     selectedIndex = gradeIndex,
                     onSelect = onGradeSelect,
-                    backdrop = wallpaper,
-                    // 同数据总览页：控件在页面内容里，静止态回到纯 trackColor，恒 0f
-                    surfaceAlpha = 0f,
-                )
-            } else {
-                TabRowWithContour(
-                    tabs = state.grades.map { gradeLabel(it) },
-                    selectedTabIndex = gradeIndex,
-                    onTabSelected = onGradeSelect,
-                    modifier = Modifier.swipeToSwitchTab(
-                        tabCount = state.grades.size,
-                        selectedIndex = gradeIndex,
-                        onSelect = onGradeSelect,
-                        itemSpacing = 5.dp,
-                    ),
-                )
-            }
+                    itemSpacing = 5.dp,
+                ),
+            )
             }
             // 轨道与下方卡片之间留白：玻璃轨道贴边会显得和卡片粘在一起
             Spacer(Modifier.height(12.dp))
