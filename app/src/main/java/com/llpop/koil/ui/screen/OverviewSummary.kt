@@ -22,9 +22,7 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -47,18 +45,13 @@ import com.llpop.koil.ui.screen.overview.OverviewUiState
 import com.llpop.koil.ui.theme.KOiLColors
 import kotlin.math.abs
 import top.yukonga.miuix.kmp.basic.Icon
-import com.llpop.koil.ui.component.LocalWallpaperBackdrop
-import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import com.llpop.koil.ui.component.blur.rememberEmptyBackdrop
-import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
-import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
-import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
-import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import top.yukonga.miuix.kmp.glass.GlassSegmentedTabRow
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import com.llpop.koil.ui.theme.KOiLType
 import com.llpop.koil.ui.component.KOiLSegmentedTabRow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 
 

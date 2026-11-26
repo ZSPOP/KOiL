@@ -15,22 +15,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
 import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
-import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
-import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.material.GlassShape
-import top.yukonga.miuix.kmp.material.edgeStroke
-import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.SinkFeedback
 import top.yukonga.miuix.kmp.utils.pressable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * 全 App 唯一的玻璃胶囊（数据页「補錄」、油价明细两个下拉 pill 都用它）。
@@ -54,16 +47,14 @@ fun KOiLGlassCapsule(
     onClick: (() -> Unit)? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
-    val glassSpec = rememberEffectiveGlassSpec()
-    val isDark = LocalKOiLDarkTheme.current
-    val edgeStroke = rememberKOiLGlassEdgeStroke(isDark = isDark, spec = glassSpec)
     val capsuleShape = remember { GlassShape(CardCornerRadius) }
-    val glassActive = backdrop != null &&
-        LocalBlurEnabled.current &&
-        glassSpec.enabled &&
-        isRuntimeShaderSupported()
-    val showsEdge = glassActive && glassSpec.edgeTier != KOiLGlassEdgeTier.Disabled
-
+    // 底与边都走全 App 唯一原语（与分组卡片同一份采样参数、同一条描边）；
+    // 不能玻璃时由这里给薄纱兜底 + 1dp 细线，轮廓不变。
+    val panelSurface = Modifier.koilGlassPanelSurface(
+        shape = capsuleShape,
+        backdrop = backdrop,
+        surfaceAlpha = surfaceAlpha,
+    )
     val interaction = remember { MutableInteractionSource() }
     val pressFeedback = remember { SinkFeedback() }
     val clickableModifier = if (onClick != null) {
@@ -77,45 +68,19 @@ fun KOiLGlassCapsule(
     } else {
         Modifier
     }
-
-    val surface: Modifier = if (glassActive) {
-        Modifier
-            .graphicsLayer { alpha = surfaceAlpha }
-            .textureBlur(
-                backdrop = backdrop!!,
-                shape = capsuleShape,
-                blurRadius = glassSpec.blurRadius,
-                noiseCoefficient = glassSpec.noiseCoefficient,
-                colors = BlurColors(
-                    blendColors = glassSpec.blendColors(isDark),
-                    brightness = glassSpec.brightness(isDark),
-                    contrast = glassSpec.contrast,
-                    saturation = glassSpec.saturation,
-                ),
-                enabled = true,
-            )
-            .then(
-                if (showsEdge) {
-                    Modifier.edgeStroke(shape = capsuleShape, stroke = { edgeStroke.value })
-                } else {
-                    Modifier
-                },
-            )
-    } else {
-        Modifier
-            .clip(capsuleShape)
-            .background(fallbackColor.copy(alpha = fallbackColor.alpha * surfaceAlpha))
-            .then(
-                if (surfaceAlpha >= 1f) {
-                    Modifier.border(
-                        BorderStroke(1.dp, MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
-                        capsuleShape,
-                    )
-                } else {
-                    Modifier
-                },
-            )
-    }
+    val surface: Modifier = panelSurface ?: Modifier
+        .clip(capsuleShape)
+        .background(fallbackColor.copy(alpha = fallbackColor.alpha * surfaceAlpha))
+        .then(
+            if (surfaceAlpha >= 1f) {
+                Modifier.border(
+                    BorderStroke(1.dp, MiuixTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+                    capsuleShape,
+                )
+            } else {
+                Modifier
+            },
+        )
 
     Row(
         modifier = modifier

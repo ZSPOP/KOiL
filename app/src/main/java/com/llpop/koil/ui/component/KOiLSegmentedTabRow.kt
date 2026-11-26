@@ -51,10 +51,7 @@ fun KOiLSegmentedTabRow(
     val isDark = LocalKOiLDarkTheme.current
     val edgeStroke = rememberKOiLGlassEdgeStroke(isDark = isDark, spec = glassSpec)
     // 与分组卡片同一门槛：采得到底 + 模糊总开关 + 规格启用 + 设备能画 textureBlur
-    val glassActive = backdrop != null &&
-        LocalBlurEnabled.current &&
-        glassSpec.enabled &&
-        isRuntimeShaderSupported()
+    val glassActive = rememberGlassActive(backdrop)
     val showsEdge = glassActive && glassSpec.edgeTier != KOiLGlassEdgeTier.Disabled
     val fallbackShape = GlassSegmentedTabRowDefaults.shape(height)
 

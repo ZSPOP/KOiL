@@ -13,7 +13,6 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
@@ -23,21 +22,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.llpop.koil.ui.component.blur.LocalBlurEnabled
-import com.llpop.koil.ui.component.effect.KOiLGlassEdgeTier
-import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
-import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStroke
-import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.interfaces.HoldDownInteraction
-import top.yukonga.miuix.kmp.material.EdgeStroke
 import top.yukonga.miuix.kmp.material.GlassShape
 import top.yukonga.miuix.kmp.material.edgeStroke
-import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.squircle.squircleSurface
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.SinkFeedback
@@ -45,6 +36,8 @@ import top.yukonga.miuix.kmp.utils.TiltFeedback
 import top.yukonga.miuix.kmp.utils.pressable
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 /**
  * 一段独立 lazy item，靠分角 squircle 背景与相邻段拼成一张视觉连续的卡片：首段圆顶角、
@@ -108,35 +101,18 @@ fun CardSegment(
     val glassShape = remember(topCornerRadius, bottomCornerRadius) {
         GlassShape(topCornerRadius, topCornerRadius, bottomCornerRadius, bottomCornerRadius)
     }
-    // 按底材取参数：动态壁纸关（纯色底）时自动切官方 puredThinGlass 口径，
-    // 与 補錄胶囊等其它自绘玻璃共用同一处判定（rememberEffectiveGlassSpec）。
-    val glassSpec = rememberEffectiveGlassSpec()
-    val isDark = LocalKOiLDarkTheme.current
-    // 玻璃只看「模糊总开关」：关掉动态壁纸只是底层不再流动，壁纸层仍是一块 surface 纯色，
-    // 采样它得到的是一层薄纱 + 描边，玻璃照样成立（这是设计意图，不要把两个开关绑在一起）。
-    // 只有当模糊总开关关掉、或老系统/GPU 不支持 RuntimeShader（textureBlur 画不出来，
-    // 库内不做兜底）时才回落实色。
-    val glassBackdrop = if (
-        glass &&
-        glassSpec.enabled &&
-        LocalBlurEnabled.current &&
-        isRuntimeShaderSupported()
-    ) {
-        LocalWallpaperBackdrop.current
+    // 统一原语：底与边都从 KOiLGlassPanel 取一处（null = 玻璃不成立，回落实色段）。
+    // 卡片只在「首段且末段」（整卡一块轮廓）时才画边：多段逐段画会在卡中间拉出亮线。
+    // 是否成立仍由「模糊总开关 + 规格启用 + 设备支持 RuntimeShader」决定，与胶囊同一判据；
+    // 关掉动态壁纸不算不能玻璃 —— 壁纸层那时是一块 surface 纯色，采它仍是薄纱 + 边。
+    val glassSurface = if (glass) {
+        Modifier.koilGlassPanelSurface(
+            shape = glassShape,
+            backdrop = LocalWallpaperBackdrop.current,
+            drawEdge = isFirst && isLast,
+        )
     } else {
         null
-    }
-    // 官方描边：基准按档位取，双光源随设备倾斜偏移（绘制阶段读取，不触发重组）。
-    // 只在「整卡就这一段」时画，多段逐段画会在卡片中间拉出一圈圈亮线。
-    val edgeStrokeProvider: (() -> EdgeStroke?)? = if (
-        glassBackdrop == null ||
-        glassSpec.edgeTier == KOiLGlassEdgeTier.Disabled ||
-        !(isFirst && isLast)
-    ) {
-        null
-    } else {
-        rememberKOiLGlassEdgeStroke(isDark = isDark, spec = glassSpec)
-            .let { strokeState -> remember(strokeState) { { strokeState.value } } }
     }
     // 分段拼接防缝：非末段的底角为 0，两段边界上 0.5x 降采样会产生一条抗锯齿黑缝。
     // 按官方指导在实色段向下多画 2px 同色（玻璃段是采样绘制，不吃这条）。
@@ -154,22 +130,8 @@ fun CardSegment(
             Modifier
         }
     val background = when {
-        // 毛玻璃段：不再自绘 surface（那层实色会把采样结果盖掉），交给 textureBlur 采样背景
-        glassBackdrop != null -> Modifier
-            .textureBlur(
-                backdrop = glassBackdrop,
-                shape = glassShape,
-                blurRadius = glassSpec.blurRadius,
-                noiseCoefficient = glassSpec.noiseCoefficient,
-                colors = BlurColors(
-                    blendColors = glassSpec.blendColors(isDark),
-                    brightness = glassSpec.brightness(isDark),
-                    contrast = glassSpec.contrast,
-                    saturation = glassSpec.saturation,
-                ),
-                enabled = true,
-            )
-            .then(if (edgeStrokeProvider != null) Modifier.edgeStroke(shape = glassShape, stroke = edgeStrokeProvider) else Modifier)
+        // 毛玻璃段：不再自绘 surface（那层实色会把采样结果盖掉），交给原语的 textureBlur
+        glassSurface != null -> glassSurface
         topCornerRadius == 0.dp && bottomCornerRadius == 0.dp ->
             seamExtension.then(Modifier.background(color))
         else -> seamExtension.then(Modifier.squircleSurface(color, topCornerRadius, topCornerRadius, bottomCornerRadius, bottomCornerRadius))
@@ -222,7 +184,7 @@ fun CardSegment(
     // 玻璃真正生效时向子级广播「在玻璃上」，让分割线等按实色卡设计的交界色自动换掉
     CompositionLocalProvider(
         LocalContentColor provides contentColor,
-        LocalOnGlassSurface provides (glassBackdrop != null),
+        LocalOnGlassSurface provides (glassSurface != null),
     ) {
         Column(
             modifier = modifier

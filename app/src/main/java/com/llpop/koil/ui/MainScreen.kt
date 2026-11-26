@@ -117,6 +117,8 @@ import top.yukonga.miuix.kmp.material.isRuntimeShaderSupported
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
 import top.yukonga.miuix.kmp.material.GlassMaterials
 import androidx.compose.ui.graphics.luminance
+import com.llpop.koil.ui.component.KOiLIndicatorAlpha
+import com.llpop.koil.ui.component.rememberGlassActive
 
 /**
  * 主界面：三 Tab（录入 / 总览 / 设置）+ 底部导航 + 主题三档。
@@ -760,7 +762,9 @@ fun MainScreen(
                 val railGlassSpec = rememberEffectiveGlassSpec()
                 val railIsDark = LocalKOiLDarkTheme.current
                 val railEdgeStroke = rememberKOiLGlassEdgeStroke(isDark = railIsDark, spec = railGlassSpec)
-                val railShowsEdge = LocalBlurEnabled.current && railGlassSpec.enabled &&
+                // 与分段控件/胶囊同一门槛（含 isRuntimeShaderSupported），别少写一条
+                val railGlassActive = rememberGlassActive(sidebarBackdrop)
+                val railShowsEdge = railGlassActive &&
                     railGlassSpec.edgeTier != KOiLGlassEdgeTier.Disabled
                 // 库 KDoc：selectedIndex = -1 表示「当前不在任何一级目标」（二级页）；
                 // 从二级页点 tab 时先把栈收回 Main 再切页。
@@ -787,10 +791,10 @@ fun MainScreen(
                     // 指示块（收起态被选中的那一格）与分段控件同一口径：
                     // 暗色 13.3%/按下 26%，亮色 6%/14%
                     indicatorColor = MiuixTheme.colorScheme.onSurface.copy(
-                        alpha = if (railIsDark) 0.133f else 0.06f,
+                        alpha = KOiLIndicatorAlpha.rest(railIsDark),
                     ),
                     indicatorPressedColor = MiuixTheme.colorScheme.onSurface.copy(
-                        alpha = if (railIsDark) 0.26f else 0.14f,
+                        alpha = KOiLIndicatorAlpha.pressed(railIsDark),
                     ),
                 )
             }
