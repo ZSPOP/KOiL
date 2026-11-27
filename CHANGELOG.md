@@ -14,7 +14,7 @@
 
 - 二进制 API diff 核实 rc02 删除项（`rememberGlassWindowBounds`、`getTopColor` 与 `rememberLayerBackdrop` 旧重载）在仓内零命中，编译、437 条单测与 lint 全绿
 - baseline profile 重采结果与现有文件逐字节一致，继续沿用，不新增提交
-- 三模式冷启动复测（None 6,758 / Partial 6,438 / Full 6,750 ms）无显著退化
+- 三模式冷启动复测（None 6,758 / Partial 6,438 / Full 6,750 ms）三组未拉开差距，本次未复现 baseline profile 收益；模拟器噪声大，结论待真机复测确认
 
 ## 1.3.9
 
