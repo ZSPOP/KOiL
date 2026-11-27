@@ -61,12 +61,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import com.llpop.koil.ui.theme.KOiLType
 
-
-
-// 原 OverviewScreen.kt 里的 file-private enum，已无人引用（死代码）。
-// 按「纯搬运」原则原样保留，建议后续单独一个提交删掉，别混进重构 PR。
-internal enum class SwipeActionValue { CLOSED, OPEN }
-
 // ===== 三段式记录卡（对齐 Web） =====
 @Composable
 internal fun RecordCard(

@@ -392,7 +392,9 @@ class CloudSyncManager(
             BackupCodec.parse(cloudJson)
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // 解析失败会直接跳过合并、随后可能被本地快照覆盖：留一条日志，别让云端坏文件静默消失
+            android.util.Log.w("KOiL", "cloud snapshot unparsable, merge skipped: ${e.javaClass.simpleName} ${e.message}")
             return 0
         }
         if (parsed.records.isEmpty() && parsed.deleted.isEmpty()) return 0

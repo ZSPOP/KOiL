@@ -638,6 +638,8 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
     val preview by viewModel.reconcile.collectAsStateWithLifecycle()
     val corrupt by viewModel.reconcileCorrupt.collectAsStateWithLifecycle()
     var pendingDestructive by remember { mutableStateOf<SyncReconcile.Mode?>(null) }
+    // 委托属性读不出智能转换，先取局部快照供 when 分支使用（同一帧内取值，与原先判断一致）
+    val reconcilePreview = preview
 
     when {
         // ① 云端那份读不懂：只说「没动数据」，覆盖入口放在次要位置
@@ -725,8 +727,8 @@ internal fun SyncReconcileDialog(viewModel: SyncViewModel) {
         }
 
         // ③ 对账面板本体
-        preview != null -> {
-            val st = preview!!.stats
+        reconcilePreview != null -> {
+            val st = reconcilePreview.stats
             KOiLGlassDialog(
                 show = true,
                 onDismissRequest = viewModel::dismissReconcile,
