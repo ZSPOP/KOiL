@@ -645,6 +645,9 @@ class OilPriceDbSyncer(
             // 只回报「真正插入」的条数：遍历核验数不等于插入数，
             // 0 条插入也会返回 4，导致结果页虚报「已入库 4 条」并把 lastUpdateDate 写成检查日。
             toInsert.size to 0
+        } catch (e: CancellationException) {
+            // 这是 suspend 函数：取消信号必须原样抛出，不能被下面的通用 catch 吞掉继续跑
+            throw e
         } catch (e: Exception) {
             // 结果页只会显示「失败」，原因留在日志里
             Log.w("KOiL", "verify window insert failed: ${e.javaClass.simpleName} ${e.message}")
