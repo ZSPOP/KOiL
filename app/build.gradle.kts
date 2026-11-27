@@ -135,6 +135,9 @@ ksp {
 }
 
 dependencies {
+    // 录制模块的产物来源：缺这一行插件会认为没有 profile 提供者，
+    // generateReleaseBaselineProfile 只会建个空目录然后显示 SUCCESSFUL
+    baselineProfile(project(":baselineprofile"))
     implementation(libs.androidx.core.ktx)
     // 显式声明：APK 里要装 assets/dexopt/baseline.prof，靠它把 profile 交给系统 dexopt
     implementation(libs.androidx.profileinstaller)
