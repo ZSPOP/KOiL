@@ -107,7 +107,9 @@ jobs:
       # 包装脚本：依赖解析/网络抖动导致的失败自动重试一次（Build #73 事故的防再发），
       # 编译/测试等真实失败不重试，边界见 .github/scripts/gradle-with-retry.sh 头注释
       - name: Compile + Unit tests + Lint
-        run: .github/scripts/gradle-with-retry.sh ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug --no-daemon --console=plain
+        # :baselineprofile 是 com.android.test 模块，不参与 APK，但它的编译错误同样要拦：
+        # 只跑 :app 三件套时，录制模块写崩了 CI 是绿的
+        run: .github/scripts/gradle-with-retry.sh ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest :app:lintDebug :baselineprofile:compileBenchmarkBenchmarkKotlin --no-daemon --console=plain
 
   build-apk:
     name: Build APK
