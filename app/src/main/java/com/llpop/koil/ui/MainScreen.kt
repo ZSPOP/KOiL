@@ -236,7 +236,8 @@ fun MainScreen(
         val wallpaperBackdrop = rememberLayerBackdrop()
         val contentBackdrop = rememberBlurBackdrop()
         val pageBackdrop = rememberLayerBackdrop()
-        // 滚动闸门：任一页列表在滚时暂停壁纸着色器的时间推进（见 WallpaperScrollGate）
+        // 滚动闸门：页面内的列表滚动时暂停壁纸着色器的时间推进（见 WallpaperScrollGate）。
+        // 根层 pager 自身的拖拽不在闸门覆盖范围内（pagerState 未上报），原因与取舍见该类 KDoc。
         val wallpaperScrollGate = remember { WallpaperScrollGate() }
         // 官方底栏是 `GlassNavigationBar(backdrop = backdrop)` —— 采「壁纸 + 内容」那一层，
         // 内容从底栏下面滚过时底栏会有真实折射。这里用同一语义：壁纸层 + Pager 内容层。
