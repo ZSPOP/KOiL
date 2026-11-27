@@ -14,6 +14,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kotlin.serialization)
+    // Baseline Profile：消费 :baselineprofile 模块录制出的 profile，合并进 release 包
+    alias(libs.plugins.baselineprofile)
 }
 
 android {
@@ -134,6 +136,8 @@ ksp {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    // 显式声明：APK 里要装 assets/dexopt/baseline.prof，靠它把 profile 交给系统 dexopt
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
