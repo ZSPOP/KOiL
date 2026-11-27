@@ -1,5 +1,21 @@
 # KOiL CHANGELOG
 
+## 1.3.10
+
+**性能**
+
+- miuix 升级到 0.9.5-rc02：圆角玻璃跳过冗余离屏遮罩 pass、`GlassShadow` 改离屏缓存、`GlassShader` 采样与螺旋偏移预计算，`LayerBackdrop` 支持单遍录制并由顶栏与底部弹层复用已录制内容层
+
+**变化**
+
+- 顶栏玻璃外溢带跟随上游默认值由 32dp 收窄为 10dp；底部弹层渐进模糊默认关闭，渐进模糊半径同步由 80dp 降到 32dp
+
+**内部**
+
+- 二进制 API diff 核实 rc02 删除项（`rememberGlassWindowBounds`、`getTopColor` 与 `rememberLayerBackdrop` 旧重载）在仓内零命中，编译、437 条单测与 lint 全绿
+- baseline profile 重采结果与现有文件逐字节一致，继续沿用，不新增提交
+- 三模式冷启动复测（None 6,758 / Partial 6,438 / Full 6,750 ms）无显著退化
+
 ## 1.3.9
 
 **性能**
