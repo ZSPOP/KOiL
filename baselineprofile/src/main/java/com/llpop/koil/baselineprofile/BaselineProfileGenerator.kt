@@ -1,7 +1,9 @@
 package com.llpop.koil.baselineprofile
 
+import android.os.ParcelFileDescriptor
 import androidx.benchmark.macro.junit4.BaselineProfileRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
 import org.junit.Rule
@@ -30,11 +32,16 @@ class BaselineProfileGenerator {
     @Test
     fun generate() {
         rule.collect(packageName = PACKAGE) {
+            // 录制环境是全新安装：首启必然弹权限请求，弹窗把前台抢走后首屏根节点就对不上了。
+            // 先授予运行时权限，让录制起点等于「用户长期使用」的状态。
+            grantRuntimePermissions()
+
             pressHome()
             startActivityAndWait()
             // 等 KOiL 自己的窗口真正出现，而不是系统桌面残留。
-            // 冷启动在软件渲染模拟器上要十几秒，5s 会误判成超时；失败时给出可读原因。
-            check(device.wait(Until.hasObject(By.pkg(PACKAGE).depth(0)), 20_000)) {
+            // 冷启动在软件渲染模拟器上要十几秒（实测首帧 +11s233ms），5s 会误判成超时；
+            // 不限定 depth，避免窗口被系统浮层部分遮挡时匹配不到。
+            check(device.wait(Until.hasObject(By.pkg(PACKAGE)), 20_000)) {
                 "KOiL 首屏 20s 内没出现：可能启动崩溃、包名不匹配或应用没装上"
             }
             device.waitForIdle(FOREGROUND_IDLE_MS)
@@ -61,9 +68,30 @@ class BaselineProfileGenerator {
         }
     }
 
+    /**
+     * 用 shell 身份授予运行时权限。
+     *
+     * 目标包已由 benchmark 规则在 collect 开始时装好，所以在 lambda 里执行即刻生效。
+     * 只处理 KOiL manifest 里那两个运行时权限，其余（INTERNET 等）安装即授予。
+     */
+    private fun grantRuntimePermissions() {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        RUNTIME_PERMISSIONS.forEach { permission ->
+            // 读掉命令输出再关，避免缓冲区残留
+            automation.executeShellCommand("pm grant $PACKAGE $permission").use { pfd ->
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
+            }
+        }
+    }
+
     private companion object {
         const val PACKAGE = "com.llpop.koil"
         // idle 等待上限：模拟器上 Compose 的持续动画/帧回调容易让默认 10s 卡在边界
         const val FOREGROUND_IDLE_MS = 10_000L
+        // KOiL manifest 里仅有的两个运行时权限；不授就会在首启弹窗挡住前台
+        val RUNTIME_PERMISSIONS = listOf(
+            "android.permission.ACCESS_COARSE_LOCATION",
+            "android.permission.POST_NOTIFICATIONS",
+        )
     }
 }
