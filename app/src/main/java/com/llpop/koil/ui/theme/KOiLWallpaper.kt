@@ -31,8 +31,8 @@ val LocalWallpaperPlaying = compositionLocalOf { true }
  * 多页同时挂在 pager 里，所以用引用计数而不是直接赋值：任一页还在滚就算「滚动中」。
  *
  * 已知边界：根层 `HorizontalPager` 自身的拖拽**不上报**（MainScreen 不向闸门 report
- * `pagerState`）。pager 滑动是整页位移，不产生列表滚动回调，因此切换页面期间闸门保持关闭、
- * 壁纸继续推进——这是当前有意保留的行为。若将来需要覆盖，应在 pager 的 nestedScroll
+ * `pagerState`）。pager 滑动是整页位移，不产生列表滚动回调，因此切换页面期间闸门不置位
+ * （`scrolling` 保持 false）、壁纸继续推进——这是当前有意保留的行为。若将来需要覆盖，应在 pager 的 nestedScroll
  * 连接上补 `report(...)`，而不是在别处加第二套开关。
  */
 @Stable
