@@ -55,6 +55,11 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       # 只跑 StartupBenchmark，不碰 BaselineProfileGenerator（避免顺手重录 profile）
+      #
+      # 两个 benchmark 参数都是必需的，缺一个测试就会被 assumption 跳过（表面 success，实则零数据）：
+      # - enabledRules：官方文档写明「默认未指定」，未指定时 MacrobenchmarkRule 的
+      #   assumeTrue(contains(Macrobenchmark)) 直接失败 —— 第一跑就是这么空转的；
+      # - suppressErrors=EMULATOR：模拟器上不声明会被 benchmark 当错误抛出。
       - name: Measure startup on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -63,13 +68,36 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew :baselineprofile:connectedNonMinifiedReleaseAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.llpop.koil.baselineprofile.StartupBenchmark --no-daemon --console=plain
+          script: >-
+            ./gradlew :baselineprofile:connectedNonMinifiedReleaseAndroidTest
+            -Pandroid.testInstrumentationRunnerArguments.class=com.llpop.koil.baselineprofile.StartupBenchmark
+            -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark
+            -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+            --no-daemon --console=plain
 
       - name: Locate benchmark output
         if: always()
         run: |
           echo "== benchmark data =="
           find baselineprofile/build -name "*benchmarkData.json" -o -name "*.json" -path "*additional*" 2>/dev/null | sort
+
+      # 空跑不能伪装成功：测试被 assumption 跳过时 Gradle 仍报 success、exit code 0，
+      # 上一跑三个用例全部 skipped 却整条 job 绿，所以这里显式把关
+      - name: Fail if tests were skipped
+        if: always()
+        run: |
+          XML=$(find baselineprofile/build -name "TEST-*.xml" -path "*androidTest-results*" | head -1)
+          echo "result xml: $XML"
+          if [ -z "$XML" ]; then
+            echo "::error::找不到测试结果 XML"
+            exit 1
+          fi
+          if grep -q "AssumptionViolatedException" "$XML"; then
+            echo "::error::StartupBenchmark 被 assumption 跳过，本次没有任何测量数据"
+            grep -o 'name="coldStartup[A-Za-z]*"' "$XML" | sort -u
+            exit 1
+          fi
+          echo "用例已真实执行"
 
       - name: Upload reports and benchmark data
         if: always()
