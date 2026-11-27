@@ -210,6 +210,10 @@ dependencies {
     testImplementation(libs.ktor.client.mock)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.robolectric)
+    // Compose UI test：Robolectric 下跑组合/交互，不需要模拟器
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    // 给 unit test 提供 ComponentActivity 等宿主声明
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // Instrumented tests（真机性能基线等）
     androidTestImplementation(libs.junit)
