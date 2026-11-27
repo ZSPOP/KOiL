@@ -179,6 +179,8 @@ internal fun PriceDbSection(
             val strandedKeptDate = priceDbStatus.strandedKeptDate
             val strandedKeptPrice = priceDbStatus.strandedKeptPrice
             val delta = priceDbStatus.adjustWindowDelta?.takeIf { kotlin.math.abs(it) >= 0.005 }
+            // 先取局部快照：可空属性在 when 分支里无法智能转换，原先只能再断言一次
+            val adjustPrice = priceDbStatus.adjustWindowPrice
             val line1Base = when {
                 // 缺数据必须排在搁浅前面：库内没有该窗口记录 ≠ 发改委确认维持，
                 // 两者共用搁浅文案会把"还没补灌"说成"官方搁浅"。
@@ -188,8 +190,8 @@ internal fun PriceDbSection(
                     stringResource(R.string.koil_pdb_line_stranded, w1Short, strandedKeptDate, strandedKeptPrice)
                 w1Short != null && priceDbStatus.windowStranded ->
                     stringResource(R.string.koil_pdb_line_stranded_short, w1Short)
-                w1Short != null && priceDbStatus.adjustWindowPrice != null ->
-                    stringResource(R.string.koil_pdb_line_adjusted, w1EffectiveShort, priceDbStatus.adjustWindowPrice!!)
+                w1Short != null && adjustPrice != null ->
+                    stringResource(R.string.koil_pdb_line_adjusted, w1EffectiveShort, adjustPrice)
                 w1Short != null -> stringResource(R.string.koil_pdb_line_missing, w1Short)
                 else -> stringResource(R.string.koil_pdb_not_checked)
             }

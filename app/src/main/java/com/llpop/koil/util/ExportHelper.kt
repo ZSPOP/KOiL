@@ -44,7 +44,9 @@ object ExportHelper {
                     }
             }.getOrNull() ?: fileName
             "Download/KOiL/$actualName"
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // 失败原因别吞掉：上层只会拿到 null 弹「导出失败」，没这条日志排查只能靠猜
+            android.util.Log.w("KOiL", "export failed: ${e.javaClass.simpleName} ${e.message}")
             inserted?.let { runCatching { resolver.delete(it, null, null) } }
             null
         }
