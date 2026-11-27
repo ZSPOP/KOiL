@@ -1,0 +1,87 @@
+# KOiL Baseline Profile
+#
+# 手动触发（workflow_dispatch），刻意不进 PR 必经流程：
+# 模拟器录制要烧十几分钟，每轮 PR 都跑不划算。只在改了启动路径 / 首页组合结构、
+# 或距上次录制已明显漂移时才点一次（KDoc 见 :baselineprofile 的 BaselineProfileGenerator）。
+#
+# 产物：生成出的 baseline profile 规则，上传为 artifact「baseline-profile」。
+# 由维护者取回并提交进 app 模块的 baselineProfiles 目录，随后随 release 包打进
+# assets/dexopt/baseline.prof，交系统在安装后做 AOT。
+#
+# 全程只读：本 workflow 不 push、不建 tag、不发 Release，产物只进 artifact。
+name: Baseline Profile
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate on emulator
+    runs-on: ubuntu-latest
+    # 冷跑实测：emulator 启动 2-3 分钟 + release 打包 10 分钟 + 录制 3-5 分钟
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # 与 android-build.yml 同口径：runner 预装 SDK，补 platform 37.0 + build-tools 37.0.0，
+      # 并把 37.0 链接成 37（miuix 要求 compileSdk 37 的 minorApiLevel）
+      - name: Install SDK packages
+        run: |
+          SDKMANAGER="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" --install "platforms;android-37.0" "build-tools;37.0.0" "platform-tools"
+          ln -sfn "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37.0" "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Grant execute permission
+        run: chmod +x gradlew
+
+      # emulator 要 KVM；GitHub ubuntu runner 的 /dev/kvm 默认对当前用户不可写
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # 无 GPU 的 runner 用软件渲染；关动画是 macrobenchmark 的前提（否则帧数据被动画污染）
+      - name: Generate baseline profile on emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: ./gradlew :app:generateReleaseBaselineProfile --no-daemon --console=plain
+
+      # 产物路径由插件决定，先打印清楚再上传，避免 artifact 空着还显示成功
+      - name: Locate generated profile
+        run: |
+          echo "== baselineProfiles =="
+          find app \( -path "*baselineProfiles*" -o -name "baseline-prof.txt" \) | sort
+
+      - name: Upload profile
+        uses: actions/upload-artifact@v7
+        with:
+          name: baseline-profile
+          # 没产物直接失败：空跑成功会让人误以为已经录过
+          if-no-files-found: error
+          path: |
+            app/src/**/baselineProfiles/**
+            app/build/generated/**/baselineProfiles/**
