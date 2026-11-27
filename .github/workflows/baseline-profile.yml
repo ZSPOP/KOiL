@@ -70,11 +70,26 @@ jobs:
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: ./gradlew :app:generateReleaseBaselineProfile --no-daemon --console=plain
 
-      # 产物路径由插件决定，先打印清楚再上传，避免 artifact 空着还显示成功
+      # 产物路径由插件决定，先打印清楚再上传，避免 artifact 空着还显示成功。
+      # always：失败时也要看到底生成了什么，这才是排查用的第一手材料
       - name: Locate generated profile
+        if: always()
         run: |
           echo "== baselineProfiles =="
           find app \( -path "*baselineProfiles*" -o -name "baseline-prof.txt" \) | sort
+
+      # 录制失败时 Gradle 只会说 "There were failing tests"，原因在报告里；
+      # 不加这一步，失败一次就得再烧十几分钟重跑才能看到错误信息
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: baseline-profile-test-reports
+          if-no-files-found: ignore
+          path: |
+            baselineprofile/build/reports/androidTests/**
+            baselineprofile/build/outputs/androidTest-results/**
+            baselineprofile/build/outputs/connected_android_test_additional_output/**
 
       - name: Upload profile
         uses: actions/upload-artifact@v7
