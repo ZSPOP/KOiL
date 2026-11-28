@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
-import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
@@ -175,13 +174,8 @@ private val SheetTopGap = 16.dp
 /** 键盘把屏幕占满时的最矮内容区，低于这个高度表单就没法看了 */
 private val MinContentHeight = 200.dp
 
-/**
- * 键盘 inset 读不出来时的兜底比例（按屏高估键盘高）。
- *
- * 正常机型走 `WindowInsets.ime` 真实值；这条只在「键盘可见但整机从未报过非零 ime」的异常路径生效。
- * 取 0.45 是常见全键盘占比（QWERTY 约屏高 40–45%），估小一点只是面板矮一截，估大才会压扁内容。
- */
-private const val ImeFallbackRatio = 0.45f
+/** 键盘收起时底部在导航栏之外多让出的空间，与页面列表的底部节奏一致 */
+private val IdleExtraGap = 16.dp
 
 /**
  * 跨帧记住 ime 峰值（px），作为键盘进度的分母。只在测量阶段读写，不进快照状态。
@@ -221,29 +215,22 @@ private fun Modifier.imeAwareContent(
         memory.maxImePx = maxOf(memory.maxImePx, memory.peakImePx)
         memory.peakImePx = 0
     }
-    val windowPx = windowInfo.containerSize.height
-    // 键盘进度：0 = 完全收起，1 = 完全弹出。第一次弹键盘时还没有实测最大值，先按屏高估一个
-    // 分母，等测到真实值就换成真实值；兜底估值只在这条异常路径上起作用
-    val denominator = if (memory.maxImePx > 0) memory.maxImePx else (windowPx * ImeFallbackRatio).toInt()
-    // ime 归零就是键盘已经不在（不管 isImeVisible 那一帧还挂着什么），否则会先按收起的留白
-    // 算一帧、下一帧再跳回键盘留白，正是那个「往下收再上弹一点点」。只有整机从未报过非零 ime
-    // 的异常机型、且 isImeVisible 为 true 时，才当键盘还在
-    val progress = when {
-        imePx > 0 -> (imePx.toFloat() / denominator).coerceIn(0f, 1f)
-        imeVisible && memory.maxImePx == 0 -> 1f
-        else -> 0f
-    }
-    val idleBottomPx = navInsets.getBottom(this) + 16.dp.roundToPx()
-    val keyboardBottomPx = ImeGap.roundToPx()
-    val bottomSpacePx = (idleBottomPx + (keyboardBottomPx - idleBottomPx) * progress).roundToInt()
-    val capPx = if (imePx > 0 || (imeVisible && memory.maxImePx == 0)) {
-        val imeForCap = if (imePx > 0) imePx else (windowPx * ImeFallbackRatio).toInt()
-        (windowPx - imeForCap - topInset.roundToPx() - SheetTopGap.roundToPx() - bottomSpacePx)
-            .coerceAtLeast(MinContentHeight.roundToPx())
-            .coerceAtMost(constraints.maxHeight)
-    } else {
-        constraints.maxHeight
-    }
+    // 几何本身放进纯函数 [sheetImeGeometry]：这里只负责读 inset 和量 px，算的部分有单测兜着
+    val geometry = sheetImeGeometry(
+        imePx = imePx,
+        imeVisible = imeVisible,
+        maxImePx = memory.maxImePx,
+        windowPx = windowInfo.containerSize.height,
+        topInsetPx = topInset.roundToPx(),
+        navBottomPx = navInsets.getBottom(this),
+        imeGapPx = ImeGap.roundToPx(),
+        idleExtraPx = IdleExtraGap.roundToPx(),
+        minContentPx = MinContentHeight.roundToPx(),
+        topGapPx = SheetTopGap.roundToPx(),
+        maxHeightPx = constraints.maxHeight,
+    )
+    val capPx = geometry.contentCapPx
+    val bottomSpacePx = geometry.bottomSpacePx
     val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = capPx))
     layout(placeable.width, placeable.height + bottomSpacePx) {
         placeable.placeRelative(0, 0)
