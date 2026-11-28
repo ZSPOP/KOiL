@@ -85,7 +85,10 @@ import com.llpop.koil.ui.component.GlassDialogTextButton
 import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
 import com.llpop.koil.ui.component.pageContentPadding
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.ui.focus.onFocusChanged
 import com.llpop.koil.ui.component.rememberPageBackdropForGlass
+import com.llpop.koil.ui.component.rememberImeFieldScrollRequester
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import com.llpop.koil.ui.screen.settings.SettingsViewModel
@@ -646,6 +649,9 @@ fun SettingsScreen(
                                             Spacer(Modifier.height(8.dp))
                                             var showKey by remember { mutableStateOf(false) }
                                             val eiaState = rememberTextFieldState(eiaKey)
+                                            // 键盘弹出后只把本字段滚进可视区（全站同一口径）
+                                            var eiaFieldFocused by remember { mutableStateOf(false) }
+                                            val eiaBringIntoView = rememberImeFieldScrollRequester(eiaFieldFocused)
                                             // DataStore 侧的值异步到达时回填；内容一致就不动，不打断正在输入的光标
                                             LaunchedEffect(eiaKey) {
                                                 if (eiaState.text.toString() != eiaKey) {
@@ -662,6 +668,8 @@ fun SettingsScreen(
                                                 state = eiaState,
                                                 modifier = Modifier
                                                     .fillMaxWidth()
+                                                    .bringIntoViewRequester(eiaBringIntoView)
+                                                    .onFocusChanged { eiaFieldFocused = it.isFocused }
                                                     // 外接键盘的回车从这里进来，软键盘走下面的键盘动作 / 字符提交两条路
                                                     .onPreviewKeyEvent { event ->
                                                         if (event.type == KeyEventType.KeyDown &&

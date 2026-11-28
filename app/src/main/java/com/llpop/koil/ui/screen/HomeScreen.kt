@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -93,6 +92,7 @@ import com.llpop.koil.domain.logic.NumberFormat
 import com.llpop.koil.ui.component.gradeValueLabel
 import com.llpop.koil.ui.component.fieldSurfaceColor
 import com.llpop.koil.ui.component.groupedCardItems
+import com.llpop.koil.ui.component.rememberImeFieldScrollRequester
 import com.llpop.koil.ui.component.CardItem
 import com.llpop.koil.ui.component.LocalOnGlassSurface
 import com.llpop.koil.ui.component.CardSegment
@@ -210,20 +210,9 @@ fun HomeScreen(
         listState = listState,
     ) { innerPadding, topPadding, scrollBehavior, pageBackdrop ->
         val imeVisible = WindowInsets.isImeVisible
-        // 首页所有输入框都在同一张录入卡里：键盘一弹就让整张卡完整落进可视区（列表可视区已被 imePadding 切到键盘上沿）。
-        // 走 bringIntoView 而不是 scrollToItem/scrollBy：前者和"手指点进输入框"是同一条滚动路径，
-        // 会经过顶栏的嵌套滚动，顶栏才会照常折叠、模糊态才成立；程序化跳转不经过那条路径，
-        // 顶栏会停在展开态（大标题还在左边、也没有模糊）。
-        val formBringIntoView = remember { BringIntoViewRequester() }
-        // 只在"首页自己的输入框拿到焦点"时抬卡：别的页面（补录/编辑弹层）把键盘弹起来时，
-        // 首页仍被 Pager 组合着，若无条件 bringIntoView，请求会顺着 Pager 的滚动链把当前页滚回首页。
-        var homeFieldFocused by remember { mutableStateOf(false) }
-        LaunchedEffect(imeVisible, homeFieldFocused) {
-            if (!imeVisible || !homeFieldFocused) return@LaunchedEffect
-            // 键盘动画期间 inset 连续变化，等它稳定再定位
-            delay(240)
-            formBringIntoView.bringIntoView()
-        }
+        // 键盘弹出后的滚动定位统一由 FormField 自己承担（rememberImeFieldScrollRequester）：
+        // 只把当前聚焦字段滚进可视区，不再做整卡请求——矮视口下整卡比可视区高，
+        // 整卡请求只能贴顶，点第一个字段也会跟着跳。
 
         LazyColumn(
             state = listState,
@@ -288,9 +277,7 @@ fun HomeScreen(
                 outerBottomPadding = 12.dp,
                 items = listOf(
                     CardItem("form") {
-                    Column(
-                        modifier = Modifier.bringIntoViewRequester(formBringIntoView),
-                    ) {
+                    Column {
                         // 表单三行：底部 12dp = 块模型 ①「上方内容 → 块上缘」，留在高亮之外——
                         // 上距若塞进行内 insideMargin，高亮会一路铺到上一字段下方、看起来「贴住」上一行。
                         Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp)) {
@@ -320,7 +307,6 @@ fun HomeScreen(
                                     value = uiState.mileage,
                                     onValueChange = viewModel::setMileage,
                                     keyboardType = KeyboardType.Number,
-                                    onFieldFocusChange = { homeFieldFocused = it },
                                     error = uiState.precheck.mileageDecreased || uiState.precheck.isDuplicate,
                                 )
                                 Spacer(Modifier.width(12.dp))
@@ -331,7 +317,6 @@ fun HomeScreen(
                                     value = uiState.oilAmount,
                                     onValueChange = viewModel::setOilAmount,
                                     keyboardType = KeyboardType.Decimal,
-                                    onFieldFocusChange = { homeFieldFocused = it },
                                     error = uiState.precheck.oilOverTank,
                                 )
                             }
@@ -346,7 +331,6 @@ fun HomeScreen(
                                     value = uiState.payableAmount,
                                     onValueChange = {},
                                     keyboardType = KeyboardType.Decimal,
-                                    onFieldFocusChange = { homeFieldFocused = it },
                                     readOnly = true,
                                     placeholder = stringResource(R.string.koil_ov_payable_pending),
                                 )
@@ -359,7 +343,6 @@ fun HomeScreen(
                                     isLastField = true,
                                     onValueChange = viewModel::setActualAmount,
                                     keyboardType = KeyboardType.Decimal,
-                                    onFieldFocusChange = { homeFieldFocused = it },
                                     error = uiState.precheck.priceDeviationExceeded || uiState.precheck.amountOverPayable,
                                 )
                             }
@@ -1020,7 +1003,6 @@ private fun FormField(
     readOnly: Boolean = false,
     error: Boolean = false,
     placeholder: String? = null,
-    onFieldFocusChange: ((Boolean) -> Unit)? = null,
     /** 本窗口最后一个可编辑字段：回车=收键盘，而不是跳下一项 */
     isLastField: Boolean = false,
 ) {
@@ -1042,15 +1024,9 @@ private fun FormField(
     }
     val state = rememberTextFieldState(value)
     var fieldFocused by remember { mutableStateOf(false) }
-    // 卡片级 bringIntoView 只能保证整卡顶部进入；卡的字段比可视区还高时（矮视口/分屏），
-    // 焦点字段仍会压在键盘上沿。这里补一次字段级请求，只把当前字段滚到可见区。
-    val fieldBringIntoView = remember { BringIntoViewRequester() }
-    val imeVisible = WindowInsets.isImeVisible
-    LaunchedEffect(imeVisible, fieldFocused) {
-        if (!imeVisible || !fieldFocused) return@LaunchedEffect
-        delay(240)
-        fieldBringIntoView.bringIntoView()
-    }
+    // 键盘弹出后只把本字段滚进可视区（全站同一口径）。首页此前是整卡请求：
+    // 矮视口下整卡比可视区高、只能贴顶，点第一个字段也跟着跳，已改字段级。
+    val fieldBringIntoView = rememberImeFieldScrollRequester(fieldFocused)
     // 外部值变更时回填；只在未聚焦时覆盖，避免打断正在输入的光标
     LaunchedEffect(value, fieldFocused) {
         if (!fieldFocused && state.text.toString() != value) {
@@ -1103,7 +1079,6 @@ private fun FormField(
                     }
                     .onFocusChanged {
                         fieldFocused = it.isFocused
-                        onFieldFocusChange?.invoke(it.isFocused)
                     },
                 readOnly = readOnly,
                 lineLimits = TextFieldLineLimits.SingleLine,

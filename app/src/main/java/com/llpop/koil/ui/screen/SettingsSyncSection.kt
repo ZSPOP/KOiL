@@ -1,12 +1,9 @@
 package com.llpop.koil.ui.screen
 
-import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
+import com.llpop.koil.ui.component.rememberImeFieldScrollRequester
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -170,24 +167,14 @@ internal fun SyncPanelBody(
         val urlFocus = remember { FocusRequester() }
         val usernameFocus = remember { FocusRequester() }
         val pwdFocus = remember { FocusRequester() }
-        // 三个框各自一个滚动请求：整块请求会让整块对齐到可视区顶部——矮视口（分屏/横屏）
-        // 下三框总高超过可视区，整块顶上去后点第一个框也会跟着跳；改成谁聚焦只请求谁，
-        // 滚动量最小，焦点框刚好露在键盘上方即可。
-        val urlBringIntoView = remember { BringIntoViewRequester() }
-        val usernameBringIntoView = remember { BringIntoViewRequester() }
-        val pwdBringIntoView = remember { BringIntoViewRequester() }
-        // 0=无焦点 / 1=URL / 2=账号 / 3=密码
-        var focusedSyncField by remember { mutableStateOf(0) }
-        val imeVisible = WindowInsets.isImeVisible
-        LaunchedEffect(imeVisible, focusedSyncField) {
-            if (!imeVisible || focusedSyncField == 0) return@LaunchedEffect
-            delay(240)
-            when (focusedSyncField) {
-                1 -> urlBringIntoView
-                2 -> usernameBringIntoView
-                else -> pwdBringIntoView
-            }.bringIntoView()
-        }
+        // 三个框各自一个字段级滚动请求（全站同一口径）：整块请求会让整块对齐到可视区顶部——
+        // 矮视口（分屏/横屏）下三框总高超过可视区，点第一个框也会跟着跳；字段级只动需要的距离。
+        var urlFocused by remember { mutableStateOf(false) }
+        var usernameFocused by remember { mutableStateOf(false) }
+        var pwdFocused by remember { mutableStateOf(false) }
+        val urlBringIntoView = rememberImeFieldScrollRequester(urlFocused)
+        val usernameBringIntoView = rememberImeFieldScrollRequester(usernameFocused)
+        val pwdBringIntoView = rememberImeFieldScrollRequester(pwdFocused)
 
         // 状态判定放在开关行之前：徽章挂在「云同步」标题右侧，与开关键同一行。
         // 只认数据层算好的 configured（三项有效配置），界面不再自己拼判定。
@@ -376,8 +363,7 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                if (focusState.isFocused) focusedSyncField = 1
-                                else if (focusedSyncField == 1) focusedSyncField = 0
+                                urlFocused = focusState.isFocused
                                 val v = urlState.text.toString()
                                 if (!focusState.isFocused && v != syncUi.url) syncVm.setUrl(v)
                             },
@@ -411,8 +397,7 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                if (focusState.isFocused) focusedSyncField = 2
-                                else if (focusedSyncField == 2) focusedSyncField = 0
+                                usernameFocused = focusState.isFocused
                                 val v = usernameState.text.toString()
                                 if (!focusState.isFocused && v != syncUi.username) syncVm.setUsername(v)
                             },
@@ -446,8 +431,7 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                if (focusState.isFocused) focusedSyncField = 3
-                                else if (focusedSyncField == 3) focusedSyncField = 0
+                                pwdFocused = focusState.isFocused
                                 val v = pwdState.text.toString()
                                 if (!focusState.isFocused && v.isNotBlank() && v != syncUi.password) {
                                     syncVm.setPassword(v)
