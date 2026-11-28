@@ -1,8 +1,10 @@
 # KOiL Baseline Profile
 #
-# 手动触发（workflow_dispatch），刻意不进 PR 必经流程：
-# 模拟器录制要烧十几分钟，每轮 PR 都跑不划算。只在改了启动路径 / 首页组合结构、
-# 或距上次录制已明显漂移时才点一次（KDoc 见 :baselineprofile 的 BaselineProfileGenerator）。
+# 两种触发：手动（workflow_dispatch）与每月定时（schedule）。
+# 刻意不进 PR 必经流程：模拟器录制要烧十几分钟，每轮 PR 都跑不划算。
+# 定时这条只在「最近 32 天启动路径真的动过」时才录（见 gate 步骤）：
+# 没改动就重录只会得到与仓库内一模一样的 profile，纯浪费模拟器额度。
+# KDoc 见 :baselineprofile 的 BaselineProfileGenerator。
 #
 # 产物：生成出的 baseline profile 规则，上传为 artifact「baseline-profile」。
 # 由维护者取回并提交进 app 模块的 baselineProfiles 目录，随后随 release 包打进
@@ -13,6 +15,9 @@ name: Baseline Profile
 
 on:
   workflow_dispatch:
+  schedule:
+    # 每月 1 号 03:00 UTC（北京时间 11:00）自动跑一次
+    - cron: "0 3 1 * *"
 
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref }}"
@@ -30,6 +35,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # gate 要用 git log 查 32 天窗口，浅克隆只看得到 1 个提交
+          fetch-depth: 0
+
+      # 定时触发时先判断最近这段窗口内启动路径有没有真的动过；手动触发一律放行。
+      # 窗口取 32 天：cron 相邻间隔在 28～31 天之间浮动，用 30 天会在 31 天的月份漏掉月初那两天
+      - name: Decide whether recording is needed
+        id: gate
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "手动触发，直接录制"
+            exit 0
+          fi
+          CHANGED=$(git log --since="32 days ago" --oneline -- app/src app/build.gradle.kts settings.gradle.kts baselineprofile gradle/libs.versions.toml)
+          if [ -n "$CHANGED" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "最近 32 天有改动，需要重录："
+            echo "$CHANGED"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "最近 32 天启动路径无改动，跳过本轮录制"
+          fi
+
+      - name: Note skipped
+        if: steps.gate.outputs.run == 'false'
+        run: echo "::notice::最近 32 天 app/src / 构建脚本 / baselineprofile / libs.versions.toml 无改动，本次不重录"
 
       - name: Set up JDK 21
         uses: actions/setup-java@v6
@@ -40,6 +72,7 @@ jobs:
       # 与 android-build.yml 同口径：runner 预装 SDK，补 platform 37.0 + build-tools 37.0.0，
       # 并把 37.0 链接成 37（miuix 要求 compileSdk 37 的 minorApiLevel）
       - name: Install SDK packages
+        if: steps.gate.outputs.run == 'true'
         run: |
           SDKMANAGER="${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
@@ -47,13 +80,16 @@ jobs:
           ln -sfn "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37.0" "${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}/platforms/android-37"
 
       - name: Set up Gradle
+        if: steps.gate.outputs.run == 'true'
         uses: gradle/actions/setup-gradle@v6
 
       - name: Grant execute permission
+        if: steps.gate.outputs.run == 'true'
         run: chmod +x gradlew
 
       # emulator 要 KVM；GitHub ubuntu runner 的 /dev/kvm 默认对当前用户不可写
       - name: Enable KVM
+        if: steps.gate.outputs.run == 'true'
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
@@ -61,6 +97,7 @@ jobs:
 
       # 无 GPU 的 runner 用软件渲染；关动画是 macrobenchmark 的前提（否则帧数据被动画污染）
       - name: Generate baseline profile on emulator
+        if: steps.gate.outputs.run == 'true'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 33
@@ -73,7 +110,7 @@ jobs:
       # 产物路径由插件决定，先打印清楚再上传，避免 artifact 空着还显示成功。
       # always：失败时也要看到底生成了什么，这才是排查用的第一手材料
       - name: Locate generated profile
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         run: |
           echo "== baselineProfiles =="
           find app \( -path "*baselineProfiles*" -o -name "baseline-prof.txt" \) | sort
@@ -81,7 +118,7 @@ jobs:
       # 录制失败时 Gradle 只会说 "There were failing tests"，原因在报告里；
       # 不加这一步，失败一次就得再烧十几分钟重跑才能看到错误信息
       - name: Upload test reports
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: baseline-profile-test-reports
@@ -92,6 +129,7 @@ jobs:
             baselineprofile/build/outputs/connected_android_test_additional_output/**
 
       - name: Upload profile
+        if: steps.gate.outputs.run == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: baseline-profile
