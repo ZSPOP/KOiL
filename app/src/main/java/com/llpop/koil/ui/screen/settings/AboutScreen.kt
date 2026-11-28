@@ -697,7 +697,6 @@ private fun AboutContent(
             KOiLGlassDialog(
                 show = true,
                 onDismissRequest = { sheet = "" },
-                contentPadding = 16.dp,
                 scrollable = true,
                 title = stringResource(titleRes),
             ) {

@@ -512,7 +512,6 @@ fun OverviewScreen(
         KOiLGlassDialog(
             show = true,
             onDismissRequest = { pendingDelete = null },
-            contentPadding = 20.dp,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
