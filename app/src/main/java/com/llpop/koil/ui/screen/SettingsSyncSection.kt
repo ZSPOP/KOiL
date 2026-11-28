@@ -170,15 +170,23 @@ internal fun SyncPanelBody(
         val urlFocus = remember { FocusRequester() }
         val usernameFocus = remember { FocusRequester() }
         val pwdFocus = remember { FocusRequester() }
-        // 三项 WebDAV 配置框整体抬到键盘上方：请求挂在包住三个框的那个 Column 上，
-        // 只有当其中某个框真的拿到焦点时才发请求（避免别的页面弹键盘时被牵连滚动）。
-        val webdavBringIntoView = remember { BringIntoViewRequester() }
-        var webdavFieldFocused by remember { mutableStateOf(false) }
+        // 三个框各自一个滚动请求：整块请求会让整块对齐到可视区顶部——矮视口（分屏/横屏）
+        // 下三框总高超过可视区，整块顶上去后点第一个框也会跟着跳；改成谁聚焦只请求谁，
+        // 滚动量最小，焦点框刚好露在键盘上方即可。
+        val urlBringIntoView = remember { BringIntoViewRequester() }
+        val usernameBringIntoView = remember { BringIntoViewRequester() }
+        val pwdBringIntoView = remember { BringIntoViewRequester() }
+        // 0=无焦点 / 1=URL / 2=账号 / 3=密码
+        var focusedSyncField by remember { mutableStateOf(0) }
         val imeVisible = WindowInsets.isImeVisible
-        LaunchedEffect(imeVisible, webdavFieldFocused) {
-            if (!imeVisible || !webdavFieldFocused) return@LaunchedEffect
+        LaunchedEffect(imeVisible, focusedSyncField) {
+            if (!imeVisible || focusedSyncField == 0) return@LaunchedEffect
             delay(240)
-            webdavBringIntoView.bringIntoView()
+            when (focusedSyncField) {
+                1 -> urlBringIntoView
+                2 -> usernameBringIntoView
+                else -> pwdBringIntoView
+            }.bringIntoView()
         }
 
         // 状态判定放在开关行之前：徽章挂在「云同步」标题右侧，与开关键同一行。
@@ -345,13 +353,15 @@ internal fun SyncPanelBody(
 
                 // —— 表单：点「管理」才展开（改地址/账号/密码时用）——
                 if (formExpanded) {
-                    Column(modifier = Modifier.bringIntoViewRequester(webdavBringIntoView)) {
+                    // 包住三框的容器只负责间距；滚动请求由各框自己承担（见上方 requester）
+                    Column {
                     Spacer(Modifier.height(14.dp))
                     GlassTextField(
                         state = urlState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(urlFocus)
+                            .bringIntoViewRequester(urlBringIntoView)
                             // IME 只给「字符」不给 action 时（部分中文输入法把回车当上屏/换行提交），
                             // onKeyboardAction 收不到，所以就地在键事件层面拦 Enter。
                             .onPreviewKeyEvent { event ->
@@ -366,7 +376,8 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                webdavFieldFocused = focusState.isFocused
+                                if (focusState.isFocused) focusedSyncField = 1
+                                else if (focusedSyncField == 1) focusedSyncField = 0
                                 val v = urlState.text.toString()
                                 if (!focusState.isFocused && v != syncUi.url) syncVm.setUrl(v)
                             },
@@ -387,6 +398,7 @@ internal fun SyncPanelBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(usernameFocus)
+                            .bringIntoViewRequester(usernameBringIntoView)
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -399,7 +411,8 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                webdavFieldFocused = focusState.isFocused
+                                if (focusState.isFocused) focusedSyncField = 2
+                                else if (focusedSyncField == 2) focusedSyncField = 0
                                 val v = usernameState.text.toString()
                                 if (!focusState.isFocused && v != syncUi.username) syncVm.setUsername(v)
                             },
@@ -420,6 +433,7 @@ internal fun SyncPanelBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(pwdFocus)
+                            .bringIntoViewRequester(pwdBringIntoView)
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -432,7 +446,8 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                webdavFieldFocused = focusState.isFocused
+                                if (focusState.isFocused) focusedSyncField = 3
+                                else if (focusedSyncField == 3) focusedSyncField = 0
                                 val v = pwdState.text.toString()
                                 if (!focusState.isFocused && v.isNotBlank() && v != syncUi.password) {
                                     syncVm.setPassword(v)
