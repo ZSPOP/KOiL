@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
@@ -31,6 +32,7 @@ import top.yukonga.miuix.kmp.glass.GlassBottomSheet
 import top.yukonga.miuix.kmp.glass.GlassIconButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.glass.Close
+import top.yukonga.miuix.kmp.icon.glass.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
@@ -68,6 +70,8 @@ fun KOiLFormSheet(
     title: String? = null,
     startAction: (@Composable () -> Unit)? = null,
     endAction: (@Composable () -> Unit)? = null,
+    onConfirm: (() -> Unit)? = null,
+    confirmEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 在函数作用域（= 调用点）先取到页面 backdrop：弹层内容在根弹层宿主里组合，
@@ -91,6 +95,13 @@ fun KOiLFormSheet(
     } else {
         Dp.Unspecified
     }
+    // header 右槽的勾：调用点只给「保存这件事」，按钮形态/采样源与左槽的叉保持同款
+    val confirmAction: (@Composable () -> Unit)? = if (onConfirm == null) {
+        null
+    } else {
+        val onClick = onConfirm
+        { SheetConfirmAction(onClick, confirmEnabled, backdrop) }
+    }
     GlassBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
@@ -104,7 +115,7 @@ fun KOiLFormSheet(
         // header 主行两侧交给官方排布；左槽默认给关闭按钮（官方 demo 同款圆形玻璃图标按钮），
         // 右槽留给业务（保存/确认），不传就不显示
         startAction = startAction ?: { SheetCloseAction(onDismissRequest, backdrop) },
-        endAction = endAction,
+        endAction = endAction ?: confirmAction,
         // 描边是全站基准（静态版：弹层开着时不随倾斜逐帧重组）；其余材质/内距/宿主开关
         // 全部走官方默认，与 demo 一致
         stroke = rememberKOiLGlassEdgeStrokeStatic(
@@ -238,6 +249,34 @@ fun KOiLListSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * header 右槽的确认动作：官方 demo 同款圆形玻璃图标按钮（勾），点击等同内容底部的储存。
+ *
+ * 采样源与左槽的叉同一份 backdrop，两个圆圈的亮度才一致；置灰（[enabled] = false）时
+ * 不响应点击并压暗，语义与底部储存按钮的 `enabled` 保持一致，避免出现「按钮亮着但点不动」。
+ */
+@Composable
+private fun SheetConfirmAction(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    backdrop: Backdrop?,
+) {
+    GlassIconButton(
+        onClick = { if (enabled) onClick() },
+        // 官方 demo 同款：右槽留 12dp
+        modifier = Modifier
+            .padding(end = 12.dp)
+            .alpha(if (enabled) 1f else 0.4f),
+        backdrop = backdrop,
+    ) {
+        Icon(
+            imageVector = MiuixIcons.Glass.Ok,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurface,
+        )
     }
 }
 
