@@ -91,7 +91,10 @@ fun KOiLFormSheet(
     // 多出来的部分交给内部滚动 —— 这是唯一偏离官方的补丁，其余结构全部照官方
     val bottomGap = if (imeVisible) ImeGap else 16.dp
     val contentMaxHeight = if (imeVisible) {
-        (windowHeight - topInset - imeBottom - SheetTopGap - bottomGap).coerceAtLeast(200.dp)
+        // 少数 OEM 在 adjustResize + edge-to-edge 下把 ime inset 报成 0（isImeVisible 仍为 true）：
+        // 此时按屏高比例估一个键盘高度兜底，宁可面板矮一点也不让它再冲顶
+        val imeForCap = if (imeBottom > 0.dp) imeBottom else windowHeight * ImeFallbackRatio
+        (windowHeight - topInset - imeForCap - SheetTopGap - bottomGap).coerceAtLeast(200.dp)
     } else {
         Dp.Unspecified
     }
@@ -173,6 +176,14 @@ fun KOiLFormSheet(
 private val SheetTopGap = 16.dp
 
 /**
+ * 键盘 inset 读不出来时的兜底比例（按屏高估键盘高）。
+ *
+ * 正常机型走 `WindowInsets.ime` 真实值；这条只在「键盘可见但 inset 报 0」的异常路径生效。
+ * 取 0.45 是常见全键盘占比（QWERTY 约屏高 40–45%），估小一点只是面板矮一截，估大才会压扁内容。
+ */
+private const val ImeFallbackRatio = 0.45f
+
+/**
  * KOiL 玻璃底部列表弹层：标题 + 可滚动内容 + 钉在底部的按钮区。
  *
  * 与 [KOiLFormSheet] 的分工：表单页整页滚动、按钮跟着内容走，靠「读完再点」；
@@ -228,11 +239,13 @@ fun KOiLListSheet(
                 // 越界修饰符同样挂在滚动容器外层：内层挂它看不到容器外的手势，
                 // 下拉回弹与「内容拉到头再交给面板」的交接都会失效
                 // 官方写法：innerPadding 给在滚动容器内侧，列表从标题下穿过；底部按钮区
-                // 在滚动区之外，钉在面板底部的前提不变
+                // 在滚动区之外，钉在面板底部的前提不变。
+                // 封顶按「列表本身的高」算：header 高度含在滚动内容里，所以要把
+                // innerPadding 的 top 加回来，[maxContentHeight] 才是可见的列表高度
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = maxContentHeight)
+                        .heightIn(max = maxContentHeight + innerPadding.calculateTopPadding())
                         .overScrollVertical()
                         .verticalScroll(rememberScrollState())
                         .padding(innerPadding),

@@ -292,7 +292,6 @@ internal fun StepperInputRow(
             onDismissRequest = { pickerOpen = false },
             title = title,
             summary = summary,
-            contentPadding = 16.dp,
         ) {
             Column {
                 NumberPicker(
