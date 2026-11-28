@@ -1,12 +1,9 @@
 package com.llpop.koil.ui.screen
 
-import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
+import com.llpop.koil.ui.component.rememberImeFieldScrollRequester
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -170,16 +167,14 @@ internal fun SyncPanelBody(
         val urlFocus = remember { FocusRequester() }
         val usernameFocus = remember { FocusRequester() }
         val pwdFocus = remember { FocusRequester() }
-        // 三项 WebDAV 配置框整体抬到键盘上方：请求挂在包住三个框的那个 Column 上，
-        // 只有当其中某个框真的拿到焦点时才发请求（避免别的页面弹键盘时被牵连滚动）。
-        val webdavBringIntoView = remember { BringIntoViewRequester() }
-        var webdavFieldFocused by remember { mutableStateOf(false) }
-        val imeVisible = WindowInsets.isImeVisible
-        LaunchedEffect(imeVisible, webdavFieldFocused) {
-            if (!imeVisible || !webdavFieldFocused) return@LaunchedEffect
-            delay(240)
-            webdavBringIntoView.bringIntoView()
-        }
+        // 三个框各自一个字段级滚动请求（全站同一口径）：整块请求会让整块对齐到可视区顶部——
+        // 矮视口（分屏/横屏）下三框总高超过可视区，点第一个框也会跟着跳；字段级只动需要的距离。
+        var urlFocused by remember { mutableStateOf(false) }
+        var usernameFocused by remember { mutableStateOf(false) }
+        var pwdFocused by remember { mutableStateOf(false) }
+        val urlBringIntoView = rememberImeFieldScrollRequester(urlFocused)
+        val usernameBringIntoView = rememberImeFieldScrollRequester(usernameFocused)
+        val pwdBringIntoView = rememberImeFieldScrollRequester(pwdFocused)
 
         // 状态判定放在开关行之前：徽章挂在「云同步」标题右侧，与开关键同一行。
         // 只认数据层算好的 configured（三项有效配置），界面不再自己拼判定。
@@ -345,13 +340,15 @@ internal fun SyncPanelBody(
 
                 // —— 表单：点「管理」才展开（改地址/账号/密码时用）——
                 if (formExpanded) {
-                    Column(modifier = Modifier.bringIntoViewRequester(webdavBringIntoView)) {
+                    // 包住三框的容器只负责间距；滚动请求由各框自己承担（见上方 requester）
+                    Column {
                     Spacer(Modifier.height(14.dp))
                     GlassTextField(
                         state = urlState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(urlFocus)
+                            .bringIntoViewRequester(urlBringIntoView)
                             // IME 只给「字符」不给 action 时（部分中文输入法把回车当上屏/换行提交），
                             // onKeyboardAction 收不到，所以就地在键事件层面拦 Enter。
                             .onPreviewKeyEvent { event ->
@@ -366,7 +363,7 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                webdavFieldFocused = focusState.isFocused
+                                urlFocused = focusState.isFocused
                                 val v = urlState.text.toString()
                                 if (!focusState.isFocused && v != syncUi.url) syncVm.setUrl(v)
                             },
@@ -387,6 +384,7 @@ internal fun SyncPanelBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(usernameFocus)
+                            .bringIntoViewRequester(usernameBringIntoView)
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -399,7 +397,7 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                webdavFieldFocused = focusState.isFocused
+                                usernameFocused = focusState.isFocused
                                 val v = usernameState.text.toString()
                                 if (!focusState.isFocused && v != syncUi.username) syncVm.setUsername(v)
                             },
@@ -420,6 +418,7 @@ internal fun SyncPanelBody(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(pwdFocus)
+                            .bringIntoViewRequester(pwdBringIntoView)
                             .onPreviewKeyEvent { event ->
                                 if (event.type == KeyEventType.KeyDown &&
                                     (event.key == Key.Enter || event.key == Key.NumPadEnter)
@@ -432,7 +431,7 @@ internal fun SyncPanelBody(
                             }
                             .onFocusChanged { focusState ->
                                 tappedOnField.value = focusState.isFocused
-                                webdavFieldFocused = focusState.isFocused
+                                pwdFocused = focusState.isFocused
                                 val v = pwdState.text.toString()
                                 if (!focusState.isFocused && v.isNotBlank() && v != syncUi.password) {
                                     syncVm.setPassword(v)

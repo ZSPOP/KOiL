@@ -1,8 +1,11 @@
 package com.llpop.koil.ui.screen
 
 import com.llpop.koil.ui.component.rememberPopupBackdrop
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -85,6 +88,7 @@ import com.llpop.koil.ui.component.GlassPopupOverlay
 import com.llpop.koil.ui.component.FullTankSwitchRow
 import com.llpop.koil.ui.component.KOiLDateField
 import com.llpop.koil.ui.component.KOiLFormSheet
+import com.llpop.koil.ui.component.rememberImeFieldScrollRequester
 
 
 
@@ -597,6 +601,7 @@ internal fun hasPrecheckHint(
     deviationExceeded || overPayable || overTank || ready
 
 /** 补录弹窗字段（对齐首页录入卡 FormField：图标 + 标签行，红色错误态边框/图标/标签） */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun EditField(
     label: String,
@@ -623,6 +628,9 @@ internal fun EditField(
     }
     val state = rememberTextFieldState(value)
     var fieldFocused by remember { mutableStateOf(false) }
+    // 键盘弹出后把本字段滚进可视区（全站同一口径）：弹层只由库把面板抬到键盘顶，
+    // 矮视口（分屏/横屏）里面板可视高度被压，抬升那一下不够，字段会卡在边界只露一半。
+    val fieldBringIntoView = rememberImeFieldScrollRequester(fieldFocused)
     // 外部值变更时回填；只在未聚焦时覆盖，避免打断正在输入的光标
     LaunchedEffect(value, fieldFocused) {
         if (!fieldFocused && state.text.toString() != value) {
@@ -638,7 +646,7 @@ internal fun EditField(
     } else {
         GlassTextFieldDefaults.textFieldColors()
     }
-    Column(modifier = modifier) {
+    Column(modifier = modifier.bringIntoViewRequester(fieldBringIntoView)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = icon,
