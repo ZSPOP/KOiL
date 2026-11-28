@@ -1,5 +1,19 @@
 # KOiL CHANGELOG
 
+## 1.3.12
+
+**修复**
+
+- 输入框在键盘弹出后会把自身滚进可视区，首页记账卡、概览新增/补录弹层、设置页云同步与 EIA Key 全部按字段处理：不再出现「点任意一个框就整块顶上去」，也不会在分屏/横屏的矮视口里被键盘压住一半
+- 新增/补录弹层在键盘可见时封顶内容高度，面板整体抬升后不再冲出屏幕顶部（竖屏键盘占近半屏时此前会整块顶走）
+
+**内部**
+
+- 抽出 `rememberImeFieldScrollRequester`（`ui/component/FieldImeScroll.kt`），四处输入框共用一套口径；删掉首页整卡请求与云同步的索引式请求
+- `KOiLFormSheet` 内容高度取「窗口高 − ime − statusBars − 16dp − header」，下界 200dp，键盘收起回到不限制
+- `androidx.benchmark` 1.4.1 → 1.5.0（稳定版里唯一可升项）；用 1.5.0 重录 baseline profile 与仓库版本逐字节一致，沿用现值
+- Baseline Profile workflow 加每月定时重录，32 天内启动路径无改动则跳过整轮录制
+
 ## 1.3.11
 
 **修复**
