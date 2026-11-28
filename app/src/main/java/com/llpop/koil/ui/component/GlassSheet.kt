@@ -1,7 +1,5 @@
 package com.llpop.koil.ui.component
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -24,7 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
 import com.llpop.koil.ui.theme.LocalKOiLDarkTheme
+import kotlin.math.roundToInt
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
@@ -96,25 +94,12 @@ fun KOiLFormSheet(
     val imeVisible = WindowInsets.isImeVisible
     // 这里只取 insets 对象（对象本身稳定），具体像素值在测量阶段读
     val imeInsets = WindowInsets.ime
+    val navInsets = WindowInsets.navigationBars
     val density = LocalDensity.current
     val windowInfo = LocalWindowInfo.current
     val topInset = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
-    val navBottom = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
-    // 官方 GlassBottomSheet 只按「窗口高 − 状态栏」给面板封顶（BottomSheetContentLayout 里的
-    // windowHeight - topInset），没扣键盘：键盘一弹把面板整体抬到键盘上沿，长表单的顶就会
-    // 直接冲出屏幕，官方 demo 的结构也一样。这里把内容高度压回「键盘以上、状态栏以下」的可视区，
-    // 多出来的部分交给内部滚动 —— 这是唯一偏离官方的补丁，其余结构全部照官方
-    val bottomGap = if (imeVisible) ImeGap else 16.dp
-    // 底部让位：横向的导航栏让位常驻（横屏侧栏时不贴边），竖向按键盘态渐变 ——
-    // 收起时从 ImeGap 直接跳到「导航栏 + 16dp」是约 40dp 的阶跃，落在键盘动画末尾会顶一下内容
-    val bottomPad by animateDpAsState(
-        targetValue = if (imeVisible) ImeGap else navBottom + 16.dp,
-        animationSpec = tween(durationMillis = 150),
-        label = "sheetBottomPad",
-    )
-    // 最近一次读到的非零 ime 高度：收键盘时最后几帧 ime 会先归零、isImeVisible 还挂着 true，
-    // 那一帧若拿估算值顶上去，封顶会突然变矮 → 面板先「往下收」，下一帧解除封顶再「往上弹一下」。
-    // 按屏高估算的兜底只留给「整机从没读到过非零 ime」的异常机型
+    // 封顶与底部留白都按 ime 的真实进度算，键盘动画期间逐帧连续变化，不再有「某一帧突然
+    // 判定成键盘收起 → 封顶解除 / 底部留白跳一档」的阶跃，面板不会先下收再回弹
     val imeMemory = remember { ImeMemory() }
     // header 右槽的勾：调用点只给「保存这件事」，按钮形态/采样源与左槽的叉保持同款
     val confirmAction: (@Composable () -> Unit)? = if (onConfirm == null) {
@@ -155,21 +140,20 @@ fun KOiLFormSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    // 横向导航栏让位常驻；竖向底部让位见上面的 bottomPad
-                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
-                    .padding(bottom = bottomPad),
+                    // 横向导航栏让位常驻（横屏侧栏时不贴边）；竖向留白随键盘进度在下面算
+                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        // 键盘可见时封顶（测量阶段算，不随每帧 ime 值重组），抬升后正好落在状态栏下
-                        .imeContentCap(
+                        // 键盘态封顶 + 底部留白，都在测量阶段按 ime 进度连续计算
+                        .imeAwareContent(
                             imeInsets = imeInsets,
+                            navInsets = navInsets,
                             imeVisible = imeVisible,
                             memory = imeMemory,
                             windowInfo = windowInfo,
                             topInset = topInset,
-                            bottomGap = bottomGap,
                         )
                         // 越界修饰符必须挂在滚动容器外层（与页面列表同一写法）：
                         // 放内层时它看不到滚动容器之外的手势，越界与交接都不会触发
@@ -199,44 +183,71 @@ private val MinContentHeight = 200.dp
  */
 private const val ImeFallbackRatio = 0.45f
 
-/** 跨帧记住最近一次非零 ime 高度（px）。只在测量阶段读写，不进快照状态，不会触发重组 */
+/**
+ * 跨帧记住 ime 峰值（px），作为键盘进度的分母。只在测量阶段读写，不进快照状态。
+ *
+ * 分母必须在一次键盘动画里保持不变：每帧都把「本帧 ime」当分母会让进度恒等于 1，
+ * 底部留白会在一帧之内从 40dp 跳到 12dp，反而制造出新的突跳。所以本轮峰值先记进 [peakImePx]，
+ * 等键盘完全收起（ime 归零）才提交到 [maxImePx]，下一轮用它做分母。
+ */
 private class ImeMemory {
-    var lastImePx: Int = 0
+    /** 上一轮键盘实测高度，本轮键盘动画期间作为分母 */
+    var maxImePx: Int = 0
+    /** 本轮键盘正在进行的峰值，收起时提交 */
+    var peakImePx: Int = 0
 }
 
 /**
- * 键盘态内容封顶，在**测量阶段**读取 ime，避免键盘动画期间每帧重组整棵子树。
+ * 键盘态内容封顶 + 底部留白，全部在**测量阶段**按 ime 的真实进度连续计算。
  *
- * 官方 `BottomSheetContentLayout` 的封顶是 `windowHeight - topInset`，不含键盘，所以长表单
- * 弹起键盘会冲顶；这里按「窗口高 − 状态栏 − 键盘 − 顶部让位 − 底部让位」限制内容高度，
- * 剩余交给内部滚动。键盘收起（[imeVisible] 为 false）时不封顶。
+ * 两件事都要连续，否则收键盘时会「先往下收、再往上弹一点点」：
+ * - 封顶：官方 `BottomSheetContentLayout` 只按 `windowHeight - topInset` 封顶、不含键盘，
+ *   长表单弹起键盘会冲顶。这里按「窗口高 − 状态栏 − 键盘 − 顶部让位 − 底部留白」限制高度，
+ *   键盘高度是逐帧变化的真实值，封顶也跟着逐帧收放，不做「可见/不可见」二值切换。
+ * - 底部留白：键盘全出时只要 [ImeGap]，键盘全收时要让出导航栏 + 16dp。按 ime/最大 ime 的比例
+ *   线性插值，留白跟着键盘一起长/收；不插值的话收起末尾会一次性多出约 40dp，面板顶上一下。
  */
-private fun Modifier.imeContentCap(
+private fun Modifier.imeAwareContent(
     imeInsets: WindowInsets,
+    navInsets: WindowInsets,
     imeVisible: Boolean,
     memory: ImeMemory,
     windowInfo: WindowInfo,
     topInset: Dp,
-    bottomGap: Dp,
 ): Modifier = layout { measurable, constraints ->
     val imePx = imeInsets.getBottom(this)
-    if (imePx > 0) memory.lastImePx = imePx
-    val maxHeightPx = if (!imeVisible) {
-        constraints.maxHeight
-    } else {
-        val windowPx = windowInfo.containerSize.height
-        val imeForCap = when {
-            imePx > 0 -> imePx
-            memory.lastImePx > 0 -> memory.lastImePx
-            else -> (windowPx * ImeFallbackRatio).toInt()
-        }
-        val reserved = topInset.roundToPx() + SheetTopGap.roundToPx() + bottomGap.roundToPx()
-        (windowPx - imeForCap - reserved)
+    if (imePx > memory.peakImePx) memory.peakImePx = imePx
+    if (imePx == 0 && memory.peakImePx > 0) {
+        memory.maxImePx = maxOf(memory.maxImePx, memory.peakImePx)
+        memory.peakImePx = 0
+    }
+    val windowPx = windowInfo.containerSize.height
+    // 键盘进度：0 = 完全收起，1 = 完全弹出。第一次弹键盘时还没有实测最大值，先按屏高估一个
+    // 分母，等测到真实值就换成真实值；兜底估值只在这条异常路径上起作用
+    val denominator = if (memory.maxImePx > 0) memory.maxImePx else (windowPx * ImeFallbackRatio).toInt()
+    // ime 归零就是键盘已经不在（不管 isImeVisible 那一帧还挂着什么），否则会先按收起的留白
+    // 算一帧、下一帧再跳回键盘留白，正是那个「往下收再上弹一点点」。只有整机从未报过非零 ime
+    // 的异常机型、且 isImeVisible 为 true 时，才当键盘还在
+    val progress = when {
+        imePx > 0 -> (imePx.toFloat() / denominator).coerceIn(0f, 1f)
+        imeVisible && memory.maxImePx == 0 -> 1f
+        else -> 0f
+    }
+    val idleBottomPx = navInsets.getBottom(this) + 16.dp.roundToPx()
+    val keyboardBottomPx = ImeGap.roundToPx()
+    val bottomSpacePx = (idleBottomPx + (keyboardBottomPx - idleBottomPx) * progress).roundToInt()
+    val capPx = if (imePx > 0 || (imeVisible && memory.maxImePx == 0)) {
+        val imeForCap = if (imePx > 0) imePx else (windowPx * ImeFallbackRatio).toInt()
+        (windowPx - imeForCap - topInset.roundToPx() - SheetTopGap.roundToPx() - bottomSpacePx)
             .coerceAtLeast(MinContentHeight.roundToPx())
             .coerceAtMost(constraints.maxHeight)
+    } else {
+        constraints.maxHeight
     }
-    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = maxHeightPx))
-    layout(placeable.width, placeable.height) { placeable.placeRelative(0, 0) }
+    val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = capPx))
+    layout(placeable.width, placeable.height + bottomSpacePx) {
+        placeable.placeRelative(0, 0)
+    }
 }
 
 /**
