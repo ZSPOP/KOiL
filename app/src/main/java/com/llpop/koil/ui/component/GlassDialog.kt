@@ -35,7 +35,9 @@ fun KOiLGlassDialog(
     onDismissRequest: () -> Unit,
     title: String? = null,
     summary: String? = null,
-    contentPadding: Dp = 20.dp,
+    // 默认取官方 DialogDefaults.insideMargin（24dp）：弹窗内距只在这一处定，调用点不再各传各的，
+    // 全站弹窗的上下左右白由同一个数决定
+    contentPadding: Dp = 24.dp,
     /**
      * 面板内边距直接按四边给，优先于 [contentPadding]。
      * 横向给 0 时内容列贴到面板边，行节点的按下高亮就能横向铺满，四个角由面板自己的

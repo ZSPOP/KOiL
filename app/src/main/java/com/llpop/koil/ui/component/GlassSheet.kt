@@ -7,26 +7,33 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.glass.GlassBottomSheet
+import top.yukonga.miuix.kmp.glass.GlassIconButton
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.glass.Close
+import top.yukonga.miuix.kmp.icon.glass.Ok
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import com.llpop.koil.ui.component.effect.rememberEffectiveGlassSpec
 import com.llpop.koil.ui.component.effect.rememberKOiLGlassEdgeStrokeStatic
@@ -61,49 +68,65 @@ fun KOiLFormSheet(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     title: String? = null,
+    startAction: (@Composable () -> Unit)? = null,
+    endAction: (@Composable () -> Unit)? = null,
+    onConfirm: (() -> Unit)? = null,
+    confirmEnabled: Boolean = true,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     // 在函数作用域（= 调用点）先取到页面 backdrop：弹层内容在根弹层宿主里组合，
     // 那里读 LocalPageBackdrop 是 null，必须在这里捕获后重新下发，否则里面的
     // 下拉面板/日历只能回落成纯色
     val backdrop = rememberSheetBackdrop()
+    // 键盘/状态栏的 inset 同样必须在调用点（页面树）取：弹层正文的 lambda 在根宿主里组合，
+    // 那一层读 WindowInsets.ime / statusBars 常拿到 0，封顶就会算成整屏、等于没封
+    val imeVisible = WindowInsets.isImeVisible
+    val density = LocalDensity.current
+    val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
+    val topInset = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+    val imeBottom = with(density) { WindowInsets.ime.getBottom(density).toDp() }
+    // 官方 GlassBottomSheet 只按「窗口高 − 状态栏」给面板封顶（BottomSheetContentLayout 里的
+    // windowHeight - topInset），没扣键盘：键盘一弹把面板整体抬到键盘上沿，长表单的顶就会
+    // 直接冲出屏幕，官方 demo 的结构也一样。这里把内容高度压回「键盘以上、状态栏以下」的可视区，
+    // 多出来的部分交给内部滚动 —— 这是唯一偏离官方的补丁，其余结构全部照官方
+    val bottomGap = if (imeVisible) ImeGap else 16.dp
+    val contentMaxHeight = if (imeVisible) {
+        // 少数 OEM 在 adjustResize + edge-to-edge 下把 ime inset 报成 0（isImeVisible 仍为 true）：
+        // 此时按屏高比例估一个键盘高度兜底，宁可面板矮一点也不让它再冲顶
+        val imeForCap = if (imeBottom > 0.dp) imeBottom else windowHeight * ImeFallbackRatio
+        (windowHeight - topInset - imeForCap - SheetTopGap - bottomGap).coerceAtLeast(200.dp)
+    } else {
+        Dp.Unspecified
+    }
+    // header 右槽的勾：调用点只给「保存这件事」，按钮形态/采样源与左槽的叉保持同款
+    val confirmAction: (@Composable () -> Unit)? = if (onConfirm == null) {
+        null
+    } else {
+        val onClick = onConfirm
+        { SheetConfirmAction(onClick, confirmEnabled) }
+    }
     GlassBottomSheet(
         show = show,
         onDismissRequest = onDismissRequest,
         backdrop = backdrop,
         modifier = modifier,
+        // 官方 demo 同款：header（把手 + 标题 + 两侧 action）浮在正文之上，滚动时正文从标题下穿过，
+        // 渐变模糊带压在穿过的那截上。不传（默认 false）时 header 独占一行，正文永远在标题下方，
+        // 看不到内容穿过标题的效果
+        progressiveBlur = true,
         title = title,
-        // 材质统一从 KOiLGlassOverlayMaterials 取，与确认弹窗同一档；
-        // 描边取全站基准（静态版：弹层开着时不随倾斜逐帧重组）
-        material = KOiLGlassOverlayMaterials.sheet(),
+        // header 主行两侧交给官方排布；左槽默认给关闭按钮（官方 demo 同款圆形玻璃图标按钮），
+        // 右槽留给业务（保存/确认），不传就不显示
+        startAction = startAction ?: { SheetCloseAction(onDismissRequest) },
+        endAction = endAction ?: confirmAction,
+        // 描边是全站基准（静态版：弹层开着时不随倾斜逐帧重组）；其余材质/内距/宿主开关
+        // 全部走官方默认，与 demo 一致
         stroke = rememberKOiLGlassEdgeStrokeStatic(
             isDark = LocalKOiLDarkTheme.current,
             spec = rememberEffectiveGlassSpec(),
         ),
         insideMargin = DpSize(0.dp, 0.dp),
-        renderInRootScaffold = true,
-        enableNestedScroll = true,
     ) { innerPadding ->
-        // 面板本身由库抬到键盘顶；键盘可见时底部只留 ImeGap，
-        // 收起时才让出系统导航栏 + 16dp（那时它是真实占位）
-        val imeVisible = WindowInsets.isImeVisible
-        // 面板高度封顶：库在键盘可见时给面板整体加 imePadding（defaultWindowInsetsPadding），
-        // 把面板底顶到键盘上沿；内容比可视区高时，面板会跟着抬出屏幕顶部。
-        // 这里把内容高度限制到「窗口高 − 键盘 − 状态栏 − 余量」，抬升后正好完整落在屏幕内，
-        // 超出的部分交给内部滚动；键盘收起时不限（Dp.Unspecified）。
-        val density = LocalDensity.current
-        val headerHeight = innerPadding.calculateTopPadding()
-        val sheetContentMaxHeight = if (imeVisible) {
-            val windowPx = LocalWindowInfo.current.containerSize.height
-            val imePx = WindowInsets.ime.getBottom(density)
-            val topPx = WindowInsets.statusBars.getTop(density)
-            val available = with(density) {
-                (windowPx - imePx - topPx - 16.dp.roundToPx()).toDp()
-            }
-            (available - headerHeight).coerceAtLeast(200.dp)
-        } else {
-            Dp.Unspecified
-        }
         // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
         CompositionLocalProvider(
@@ -111,37 +134,54 @@ fun KOiLFormSheet(
             LocalOverlayBackdropApplied provides (backdrop != null),
             LocalOnGlassSurface provides (backdrop != null),
         ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                // rc01 起 header（拖拽把手 + 标题）浮在正文之上，库把 header 高度
-                // 作为 PaddingValues 传下来（insideMargin 传 0 时由正文自己消费）：
-                // 不接这一趟，正文首行会被标题压住
-                .padding(top = headerHeight)
-                // 键盘可见时封顶：面板被库抬到键盘顶后不再冲出屏幕顶部（见上方推导）
-                .then(
-                    if (sheetContentMaxHeight != Dp.Unspecified) {
-                        Modifier.heightIn(max = sheetContentMaxHeight)
-                    } else {
-                        Modifier
-                    },
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    // 底部让位放在滚动区外面：键盘可见时只在键盘上方留 ImeGap，
+                    // 收起时才让出系统导航栏 + 16dp（同官方 demo 正文尾部写法）
+                    .then(
+                        if (imeVisible) {
+                            Modifier.padding(bottom = ImeGap)
+                        } else {
+                            Modifier.navigationBarsPadding().padding(bottom = 16.dp)
+                        },
+                    ),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // 键盘可见时封顶，抬升后正好落在状态栏下；收起时不限
+                        .then(
+                            if (contentMaxHeight != Dp.Unspecified) {
+                                Modifier.heightIn(max = contentMaxHeight)
+                            } else {
+                                Modifier
+                            },
+                        )
+                        // 越界修饰符必须挂在滚动容器外层（与页面列表同一写法）：
+                        // 放内层时它看不到滚动容器之外的手势，越界与交接都不会触发
+                        .overScrollVertical()
+                        .verticalScroll(rememberScrollState())
+                        // 官方写法：innerPadding 给在滚动容器内侧，header 高度算进滚动内容，
+                        // 正文才是从标题下「穿过」而不是被裁在标题下方
+                        .padding(innerPadding),
+                    content = content,
                 )
-                // 越界修饰符必须挂在滚动容器外层（与页面列表同一写法）：
-                // 放内层时它看不到滚动容器之外的手势，越界与交接都不会触发
-                .overScrollVertical()
-                .verticalScroll(rememberScrollState())
-                .then(
-                    if (imeVisible) {
-                        Modifier.padding(bottom = ImeGap)
-                    } else {
-                        Modifier.navigationBarsPadding().padding(bottom = 16.dp)
-                    },
-                ),
-            content = content,
-        )
+            }
         }
     }
 }
+
+/** 弹层顶边与状态栏之间保留的余量，与外面的 16dp 视觉节奏一致 */
+private val SheetTopGap = 16.dp
+
+/**
+ * 键盘 inset 读不出来时的兜底比例（按屏高估键盘高）。
+ *
+ * 正常机型走 `WindowInsets.ime` 真实值；这条只在「键盘可见但 inset 报 0」的异常路径生效。
+ * 取 0.45 是常见全键盘占比（QWERTY 约屏高 40–45%），估小一点只是面板矮一截，估大才会压扁内容。
+ */
+private const val ImeFallbackRatio = 0.45f
 
 /**
  * KOiL 玻璃底部列表弹层：标题 + 可滚动内容 + 钉在底部的按钮区。
@@ -170,16 +210,18 @@ fun KOiLListSheet(
         onDismissRequest = onDismissRequest,
         backdrop = backdrop,
         modifier = modifier,
+        // 同 KOiLFormSheet：header 浮在正文上，列表滚过标题时走官方渐变模糊带
+        progressiveBlur = true,
         title = title,
-        // 同 KOiLFormSheet：材质统一入口
-        material = KOiLGlassOverlayMaterials.sheet(),
+        // 同 KOiLFormSheet：左槽给关闭按钮，形态与表单弹层完全一致；右槽留空
+        // （明细弹层没有"确认"这件事，底部已有钉住的按钮区）
+        startAction = { SheetCloseAction(onDismissRequest) },
+        // 描边同上；其余材质/内距/宿主开关全部走官方默认
         stroke = rememberKOiLGlassEdgeStrokeStatic(
             isDark = LocalKOiLDarkTheme.current,
             spec = rememberEffectiveGlassSpec(),
         ),
         insideMargin = DpSize(0.dp, 0.dp),
-        renderInRootScaffold = true,
-        enableNestedScroll = true,
     ) { innerPadding ->
         // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
@@ -196,15 +238,17 @@ fun KOiLListSheet(
             ) {
                 // 越界修饰符同样挂在滚动容器外层：内层挂它看不到容器外的手势，
                 // 下拉回弹与「内容拉到头再交给面板」的交接都会失效
-                // rc01 起 header 浮在正文上，这里只在滚动区顶部让出 header 高度，
-                // 底部按钮区不受影响（钉在面板底部的前提不变）
+                // 官方写法：innerPadding 给在滚动容器内侧，列表从标题下穿过；底部按钮区
+                // 在滚动区之外，钉在面板底部的前提不变。
+                // 封顶按「列表本身的高」算：header 高度含在滚动内容里，所以要把
+                // innerPadding 的 top 加回来，[maxContentHeight] 才是可见的列表高度
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .heightIn(max = maxContentHeight)
-                        .padding(top = innerPadding.calculateTopPadding())
+                        .heightIn(max = maxContentHeight + innerPadding.calculateTopPadding())
                         .overScrollVertical()
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(rememberScrollState())
+                        .padding(innerPadding),
                     content = content,
                 )
                 if (footer != null) {
@@ -220,5 +264,54 @@ fun KOiLListSheet(
                 }
             }
         }
+    }
+}
+
+/**
+ * header 右槽的确认动作：官方 demo 同款圆形玻璃图标按钮（勾），点击等同内容底部的储存。
+ *
+ * 不显式传 backdrop：`GlassIconButton` 在 header 语境里默认 `inheritTopBarMaterial = true`，
+ * 会直接吃 header 下发的采样层（与左槽的叉同一份），自己再传一份反而会被忽略。
+ * 置灰（[enabled] = false）时压暗且不响应点击，语义与底部储存按钮的 `enabled` 一致。
+ */
+@Composable
+private fun SheetConfirmAction(
+    onClick: () -> Unit,
+    enabled: Boolean,
+) {
+    GlassIconButton(
+        onClick = { if (enabled) onClick() },
+        // 官方 demo 同款：右槽留 12dp
+        modifier = Modifier
+            .padding(end = 12.dp)
+            .alpha(if (enabled) 1f else 0.4f),
+    ) {
+        Icon(
+            imageVector = MiuixIcons.Glass.Ok,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/**
+ * header 左槽的默认动作：官方 demo 同款圆形玻璃图标按钮，点击即关闭。
+ *
+ * 采样源同 [SheetConfirmAction]：不显式传，由 header 下发，两个圆圈天然一致。
+ */
+@Composable
+private fun SheetCloseAction(
+    onDismissRequest: () -> Unit,
+) {
+    GlassIconButton(
+        onClick = onDismissRequest,
+        // 官方 demo 同款：按钮不贴边，左槽留 12dp
+        modifier = Modifier.padding(start = 12.dp),
+    ) {
+        Icon(
+            imageVector = MiuixIcons.Glass.Close,
+            contentDescription = null,
+            tint = MiuixTheme.colorScheme.onSurface,
+        )
     }
 }

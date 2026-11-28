@@ -110,6 +110,9 @@ internal fun EditRecordDialog(
         show = true,
         onDismissRequest = onDismiss,
         title = stringResource(R.string.koil_ov_edit_title),
+        // header 右槽的勾等同底部储存，可用条件与储存按钮完全同一套判据
+        onConfirm = onSave,
+        confirmEnabled = uiState.editReady && !uiState.isSavingEdit,
     ) {
         Column {
             Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)) {

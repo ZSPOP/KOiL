@@ -62,7 +62,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.Manifest
@@ -81,6 +80,7 @@ import com.llpop.koil.R
 import com.llpop.koil.data.settings.AppSettings
 import com.llpop.koil.data.sync.SyncConfig
 import com.llpop.koil.ui.component.KOiLGlassDialog
+import com.llpop.koil.ui.component.KOiLFormSheet
 import com.llpop.koil.ui.component.GlassDialogTextButton
 import com.llpop.koil.ui.component.pageScrollModifiers
 import com.llpop.koil.ui.component.KOiLScreenScaffold
@@ -800,16 +800,14 @@ fun SettingsScreen(
 
             item {
                 if (showDataIoDialog.value) {
-                    KOiLGlassDialog(
+                    // 和编辑卡/补录卡同一形态：底部弹层、左上圆叉关、标题居中，
+                    // 行节点仍铺满面板宽（insideMargin 为 0），高亮横向满宽由面板自己裁角。
+                    KOiLFormSheet(
                         show = true,
                         onDismissRequest = { showDataIoDialog.value = false },
-                        // 标题与入口行同名，让弹窗自己说清「这是哪几个动作」，
+                        // 标题与入口行同名，让弹层自己说清「这是哪几个动作」，
                         // 内容里就不再重复顶一个大标题。
                         title = stringResource(R.string.koil_set_data_io_title),
-                        // 横向内边距归零 → 行节点铺满面板宽，按下高亮横向满宽，
-                        // 四个角由面板自己的 squircle 裁切；纵向 24 留出上下白。
-                        // 不再包 CardSegment：那层圆角裁剪会把短行裁成胶囊，比面板直接裁更“厚”。
-                        insideMargin = DpSize(0.dp, 24.dp),
                     ) {
                         // 行内边距 24/12：横向 24 是文字缩进、行节点仍然铺满面板宽，
                         // 所以高亮满宽；纵向 12 撑出的行高让 5 条选项排满一屏又不互相黏住。
@@ -866,7 +864,7 @@ fun SettingsScreen(
                                 backupLauncher.launch(arrayOf("application/json", "*/*"))
                             },
                         )
-                        // 取消：横向 24、顶部 12。弹窗也能点外部或返回关闭，
+                        // 取消：横向 24、顶部 12。弹层也能点外部、下拉或返回关闭，
                         // 这里是给「一项都不想选」一个明确的出口。
                         GlassDialogTextButton(
                             text = stringResource(R.string.koil_common_cancel),
@@ -882,7 +880,6 @@ fun SettingsScreen(
             KOiLGlassDialog(
                 show = true,
                 onDismissRequest = { showCrashDialog = false },
-                contentPadding = 16.dp,
                 scrollable = true,
                 title = stringResource(R.string.koil_set_crash_log),
                 summary = if (crashCount > 0) {
