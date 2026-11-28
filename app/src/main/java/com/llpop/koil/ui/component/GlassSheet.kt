@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.isImeVisible
@@ -83,6 +87,23 @@ fun KOiLFormSheet(
         // 面板本身由库抬到键盘顶；键盘可见时底部只留 ImeGap，
         // 收起时才让出系统导航栏 + 16dp（那时它是真实占位）
         val imeVisible = WindowInsets.isImeVisible
+        // 面板高度封顶：库在键盘可见时给面板整体加 imePadding（defaultWindowInsetsPadding），
+        // 把面板底顶到键盘上沿；内容比可视区高时，面板会跟着抬出屏幕顶部。
+        // 这里把内容高度限制到「窗口高 − 键盘 − 状态栏 − 余量」，抬升后正好完整落在屏幕内，
+        // 超出的部分交给内部滚动；键盘收起时不限（Dp.Unspecified）。
+        val density = LocalDensity.current
+        val headerHeight = innerPadding.calculateTopPadding()
+        val sheetContentMaxHeight = if (imeVisible) {
+            val windowPx = LocalWindowInfo.current.containerSize.height
+            val imePx = WindowInsets.ime.getBottom(density)
+            val topPx = WindowInsets.statusBars.getTop(density)
+            val available = with(density) {
+                (windowPx - imePx - topPx - 16.dp.roundToPx()).toDp()
+            }
+            (available - headerHeight).coerceAtLeast(200.dp)
+        } else {
+            Dp.Unspecified
+        }
         // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
         CompositionLocalProvider(
@@ -96,7 +117,15 @@ fun KOiLFormSheet(
                 // rc01 起 header（拖拽把手 + 标题）浮在正文之上，库把 header 高度
                 // 作为 PaddingValues 传下来（insideMargin 传 0 时由正文自己消费）：
                 // 不接这一趟，正文首行会被标题压住
-                .padding(top = innerPadding.calculateTopPadding())
+                .padding(top = headerHeight)
+                // 键盘可见时封顶：面板被库抬到键盘顶后不再冲出屏幕顶部（见上方推导）
+                .then(
+                    if (sheetContentMaxHeight != Dp.Unspecified) {
+                        Modifier.heightIn(max = sheetContentMaxHeight)
+                    } else {
+                        Modifier
+                    },
+                )
                 // 越界修饰符必须挂在滚动容器外层（与页面列表同一写法）：
                 // 放内层时它看不到滚动容器之外的手势，越界与交接都不会触发
                 .overScrollVertical()
