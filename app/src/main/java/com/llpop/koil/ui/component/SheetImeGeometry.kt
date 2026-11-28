@@ -1,5 +1,7 @@
 package com.llpop.koil.ui.component
 
+import kotlin.math.roundToInt
+
 /**
  * 弹层随键盘变化的两处尺寸（px）：内容区封顶、底部让位。
  *
@@ -63,7 +65,9 @@ internal fun sheetImeGeometry(
         windowPx = windowPx,
     )
     val idleBottomPx = navBottomPx + idleExtraPx
-    val bottomSpacePx = (idleBottomPx + (imeGapPx - idleBottomPx) * progress).toInt()
+    // 取整沿用小数点四舍五入：向零截断会让进度非整时的留白系统性偏小 1px，
+    // 和 vc662 那一版对不上，也会让「留白跟着键盘长」在末段差一像素
+    val bottomSpacePx = (idleBottomPx + (imeGapPx - idleBottomPx) * progress).roundToInt()
 
     val keyboardOn = imePx > 0 || (imeVisible && maxImePx == 0)
     if (!keyboardOn) return SheetImeGeometry(contentCapPx = maxHeightPx, bottomSpacePx = bottomSpacePx)
