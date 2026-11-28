@@ -545,9 +545,10 @@ private fun AboutContent(
         logoPadding.calculateTopPadding() - scrollPadding.calculateTopPadding() + heroToCard
 
     // 列表尾部补量：滚到底时不再白给一整屏空白（原先的 fillParentMaxHeight 会撑满一屏）。
-    // 补的是「Box(Spacer, Column)」的高度，Box 取子级最大而非相加：Spacer 取「视口 − 上一项」
-    // 正好等于「到视口底部还差多少」，内容比它矮时 Box 收满，比它高时以内容为准（本来就会滚）。
-    // 早先多减了一次本项内容高，内容矮于补量时反而差一截才收满（大屏/大字号折叠才可见）。
+    // 补的是「Box(Spacer, Column)」的高度，Box 取子级最大而非相加，所以 Spacer 只能补
+    // 「内容底到视口底」的差值 = 视口 − 信息卡 − 本项内容高，三项缺一不可。
+    // 少减内容高，Spacer 会把尾项撑到「视口 − 信息卡」那么高，内容之后就是一段空白
+    // （1.3.9 去掉这一项后底部留白变大，1.3.10 继续带着）；内容已高过可用高度时补量取 0，交给列表正常滚动。
     var viewportHeightDp by remember { mutableStateOf(0.dp) }
     var infoItemHeightDp by remember { mutableStateOf(0.dp) }
     var aboutContentHeightDp by remember { mutableStateOf(0.dp) }
@@ -555,7 +556,7 @@ private fun AboutContent(
     val tailFillHeight = if (infoItemHeightDp <= 0.dp || aboutContentHeightDp <= 0.dp) {
         0.dp
     } else {
-        (viewportHeightDp - infoItemHeightDp).coerceAtLeast(0.dp)
+        (viewportHeightDp - infoItemHeightDp - aboutContentHeightDp).coerceAtLeast(0.dp)
     }
 
     BgEffectBackground(
