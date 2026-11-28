@@ -199,16 +199,18 @@ fun KOiLListSheet(
         onDismissRequest = onDismissRequest,
         backdrop = backdrop,
         modifier = modifier,
+        // 同 KOiLFormSheet：header 浮在正文上，列表滚过标题时走官方渐变模糊带
+        progressiveBlur = true,
         title = title,
-        // 同 KOiLFormSheet：材质统一入口
-        material = KOiLGlassOverlayMaterials.sheet(),
+        // 同 KOiLFormSheet：左槽给关闭按钮，形态与表单弹层完全一致；右槽留空
+        // （明细弹层没有"确认"这件事，底部已有钉住的按钮区）
+        startAction = { SheetCloseAction(onDismissRequest, backdrop) },
+        // 描边同上；其余材质/内距/宿主开关全部走官方默认
         stroke = rememberKOiLGlassEdgeStrokeStatic(
             isDark = LocalKOiLDarkTheme.current,
             spec = rememberEffectiveGlassSpec(),
         ),
         insideMargin = DpSize(0.dp, 0.dp),
-        renderInRootScaffold = true,
-        enableNestedScroll = true,
     ) { innerPadding ->
         // 弹层自身是玻璃面：连同 LocalOnGlassSurface 一起广播，内部提示条/分割线
         // 才知道该按采样底取色（实色 surfaceContainer 的 tint 在玻璃上会显成色片）
@@ -225,15 +227,15 @@ fun KOiLListSheet(
             ) {
                 // 越界修饰符同样挂在滚动容器外层：内层挂它看不到容器外的手势，
                 // 下拉回弹与「内容拉到头再交给面板」的交接都会失效
-                // rc01 起 header 浮在正文上，这里只在滚动区顶部让出 header 高度，
-                // 底部按钮区不受影响（钉在面板底部的前提不变）
+                // 官方写法：innerPadding 给在滚动容器内侧，列表从标题下穿过；底部按钮区
+                // 在滚动区之外，钉在面板底部的前提不变
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = maxContentHeight)
-                        .padding(top = innerPadding.calculateTopPadding())
                         .overScrollVertical()
-                        .verticalScroll(rememberScrollState()),
+                        .verticalScroll(rememberScrollState())
+                        .padding(innerPadding),
                     content = content,
                 )
                 if (footer != null) {
