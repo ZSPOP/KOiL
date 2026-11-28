@@ -1008,6 +1008,7 @@ private fun FormRow(content: @Composable RowScope.() -> Unit) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun FormField(
     modifier: Modifier = Modifier,
@@ -1041,6 +1042,15 @@ private fun FormField(
     }
     val state = rememberTextFieldState(value)
     var fieldFocused by remember { mutableStateOf(false) }
+    // 卡片级 bringIntoView 只能保证整卡顶部进入；卡的字段比可视区还高时（矮视口/分屏），
+    // 焦点字段仍会压在键盘上沿。这里补一次字段级请求，只把当前字段滚到可见区。
+    val fieldBringIntoView = remember { BringIntoViewRequester() }
+    val imeVisible = WindowInsets.isImeVisible
+    LaunchedEffect(imeVisible, fieldFocused) {
+        if (!imeVisible || !fieldFocused) return@LaunchedEffect
+        delay(240)
+        fieldBringIntoView.bringIntoView()
+    }
     // 外部值变更时回填；只在未聚焦时覆盖，避免打断正在输入的光标
     LaunchedEffect(value, fieldFocused) {
         if (!fieldFocused && state.text.toString() != value) {
@@ -1057,7 +1067,7 @@ private fun FormField(
     } else {
         GlassTextFieldDefaults.textFieldColors()
     }
-    Column(modifier = modifier) {
+    Column(modifier = modifier.bringIntoViewRequester(fieldBringIntoView)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = icon,
