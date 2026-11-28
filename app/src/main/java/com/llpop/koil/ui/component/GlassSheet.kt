@@ -100,7 +100,7 @@ fun KOiLFormSheet(
         null
     } else {
         val onClick = onConfirm
-        { SheetConfirmAction(onClick, confirmEnabled, backdrop) }
+        { SheetConfirmAction(onClick, confirmEnabled) }
     }
     GlassBottomSheet(
         show = show,
@@ -114,7 +114,7 @@ fun KOiLFormSheet(
         title = title,
         // header 主行两侧交给官方排布；左槽默认给关闭按钮（官方 demo 同款圆形玻璃图标按钮），
         // 右槽留给业务（保存/确认），不传就不显示
-        startAction = startAction ?: { SheetCloseAction(onDismissRequest, backdrop) },
+        startAction = startAction ?: { SheetCloseAction(onDismissRequest) },
         endAction = endAction ?: confirmAction,
         // 描边是全站基准（静态版：弹层开着时不随倾斜逐帧重组）；其余材质/内距/宿主开关
         // 全部走官方默认，与 demo 一致
@@ -204,7 +204,7 @@ fun KOiLListSheet(
         title = title,
         // 同 KOiLFormSheet：左槽给关闭按钮，形态与表单弹层完全一致；右槽留空
         // （明细弹层没有"确认"这件事，底部已有钉住的按钮区）
-        startAction = { SheetCloseAction(onDismissRequest, backdrop) },
+        startAction = { SheetCloseAction(onDismissRequest) },
         // 描边同上；其余材质/内距/宿主开关全部走官方默认
         stroke = rememberKOiLGlassEdgeStrokeStatic(
             isDark = LocalKOiLDarkTheme.current,
@@ -257,14 +257,14 @@ fun KOiLListSheet(
 /**
  * header 右槽的确认动作：官方 demo 同款圆形玻璃图标按钮（勾），点击等同内容底部的储存。
  *
- * 采样源与左槽的叉同一份 backdrop，两个圆圈的亮度才一致；置灰（[enabled] = false）时
- * 不响应点击并压暗，语义与底部储存按钮的 `enabled` 保持一致，避免出现「按钮亮着但点不动」。
+ * 不显式传 backdrop：`GlassIconButton` 在 header 语境里默认 `inheritTopBarMaterial = true`，
+ * 会直接吃 header 下发的采样层（与左槽的叉同一份），自己再传一份反而会被忽略。
+ * 置灰（[enabled] = false）时压暗且不响应点击，语义与底部储存按钮的 `enabled` 一致。
  */
 @Composable
 private fun SheetConfirmAction(
     onClick: () -> Unit,
     enabled: Boolean,
-    backdrop: Backdrop?,
 ) {
     GlassIconButton(
         onClick = { if (enabled) onClick() },
@@ -272,7 +272,6 @@ private fun SheetConfirmAction(
         modifier = Modifier
             .padding(end = 12.dp)
             .alpha(if (enabled) 1f else 0.4f),
-        backdrop = backdrop,
     ) {
         Icon(
             imageVector = MiuixIcons.Glass.Ok,
@@ -285,18 +284,16 @@ private fun SheetConfirmAction(
 /**
  * header 左槽的默认动作：官方 demo 同款圆形玻璃图标按钮，点击即关闭。
  *
- * 采样源取弹层自己那份 backdrop，与面板同一层，圆圈不会因为另起采样而比面板更亮或更暗。
+ * 采样源同 [SheetConfirmAction]：不显式传，由 header 下发，两个圆圈天然一致。
  */
 @Composable
 private fun SheetCloseAction(
     onDismissRequest: () -> Unit,
-    backdrop: Backdrop?,
 ) {
     GlassIconButton(
         onClick = onDismissRequest,
         // 官方 demo 同款：按钮不贴边，左槽留 12dp
         modifier = Modifier.padding(start = 12.dp),
-        backdrop = backdrop,
     ) {
         Icon(
             imageVector = MiuixIcons.Glass.Close,
